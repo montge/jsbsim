@@ -19,18 +19,35 @@ jobs:
         with:
           fetch-depth: 0  # Shallow clones disabled for better analysis
 
+      - name: Install Ubuntu packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install cxxtest
+
       - name: Install build-wrapper
         uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v6
 
-      - name: Configure JSBSim
+      - name: Configure JSBSim with coverage
         run: |
           mkdir -p build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_PYTHON_MODULE=OFF -DBUILD_DOCS=OFF ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON -DBUILD_PYTHON_MODULE=OFF -DBUILD_DOCS=OFF ..
 
       - name: Build with build-wrapper
         run: |
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} \
             cmake --build build --parallel $(nproc)
+
+      - name: Run tests for coverage
+        working-directory: build
+        run: ctest -R Test1 --output-on-failure
+
+      - name: Generate gcov reports
+        run: |
+          # Find all .gcda files and run gcov on them
+          mkdir -p gcov_reports
+          find build -name "*.gcda" -exec gcov -p {} \; 2>/dev/null || true
+          # Move .gcov files to a central location
+          find . -maxdepth 1 -name "*.gcov" -exec mv {} gcov_reports/ \;
 
       - name: Run SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@v6
@@ -40,3 +57,4 @@ jobs:
         with:
           args: >
             -Dsonar.cfamily.compile-commands=${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json
+            -Dsonar.cfamily.gcov.reportsPath=gcov_reports
