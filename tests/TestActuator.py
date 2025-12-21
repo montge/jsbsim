@@ -75,7 +75,9 @@ class TestActuator(JSBSimTestCase):
         # value is following a slope equal to the rate limit. The correlation
         # coefficient r_value is also checked to verify that the output is
         # evolving linearly.
-        slope, intercept, r_value, p_value, std_err = stats.linregress(aileron_course)
+        times = [t for t, v in aileron_course]
+        values = [v for t, v in aileron_course]
+        slope, intercept, r_value, p_value, std_err = stats.linregress(times, values)
         self.assertTrue(abs(slope - rate_value) < 1E-9 and abs(1.0 - abs(r_value)) < 1E-9,
                         msg="The actuator rate is not linear")
 
