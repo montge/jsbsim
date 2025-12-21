@@ -208,9 +208,12 @@ class TestInputSocket(JSBSimTestCase):
         # tested
         self.assertEqual(
             sorted(
-                map(
-                    lambda x: x.split("{")[0].strip(),
-                    out.split("\n")[2:-1],
+                filter(
+                    bool,  # Filter out empty strings
+                    map(
+                        lambda x: x.split("{")[0].strip(),
+                        out.split("\n")[2:-1],
+                    ),
                 )
             ),
             ["get", "help", "hold", "info", "iterate", "quit", "resume", "set"],
