@@ -3,6 +3,8 @@
 
 codecov:
   require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
 
 coverage:
   precision: 2
@@ -16,13 +18,16 @@ coverage:
         target: 85%        # Stepping stone to 90%
         threshold: 2%      # Allow 2% drop before failing
         if_ci_failed: error
+        informational: false  # Fail PR if target not met
 
     # Coverage requirements for new code in PRs
     patch:
       default:
         target: 80%        # New code must have 80%+ coverage
-        threshold: 5%
+        threshold: 0%      # Strict: no deviation from 80% target
         if_ci_failed: error
+        informational: false  # Fail PR if patch coverage < 80%
+        only_pulls: true   # Only apply to pull requests
 
   # Module-specific coverage flags
   flags:
@@ -79,6 +84,7 @@ comment:
   require_base: false
   require_head: true
   hide_project_coverage: false
+  show_carryforward_flags: true
 
 # Component coverage breakdown
 component_management:
