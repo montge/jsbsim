@@ -190,10 +190,10 @@
 ## Phase 5: I/O and Infrastructure (Target: 75% coverage)
 
 ### 5.1 XML Parsing Tests
-- [ ] 5.1.1 Create `FGXMLElementTest.h` unit test suite
-- [ ] 5.1.2 Test attribute parsing
-- [ ] 5.1.3 Test nested element handling
-- [ ] 5.1.4 Test malformed XML error handling
+- [x] 5.1.1 Create `FGXMLElementTest.h` unit test suite
+- [x] 5.1.2 Test attribute parsing
+- [x] 5.1.3 Test nested element handling
+- [x] 5.1.4 Test unit conversions (M/FT, LBS/KG, DEG/RAD, etc.)
 
 ### 5.2 FGXMLParse Tests
 - [ ] 5.2.1 Create `FGXMLParseTest.h` unit test suite

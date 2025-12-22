@@ -33,7 +33,8 @@ set(UNIT_TESTS FGColumnVector3Test
                FGPIDTest
                FGSensorTest
                FGFilterTest
-               FGActuatorTest)
+               FGActuatorTest
+               FGXMLElementTest)
 
 
 foreach(test ${UNIT_TESTS})
