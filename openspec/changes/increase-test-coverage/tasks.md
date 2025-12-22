@@ -7,7 +7,7 @@
 - [x] 0.1.2 Update `.github/workflows/coverage.yml` with branch coverage
 - [x] 0.1.3 Create `.codecov.yml` with module flags and targets
 - [ ] 0.1.4 Configure SonarCloud quality gates for coverage thresholds
-- [ ] 0.1.5 Add coverage badges to README.md
+- [x] 0.1.5 Add coverage badges to README.md
 
 ### 0.2 Test Infrastructure
 - [x] 0.2.1 Create `tests/fixtures/` directory for shared test data
@@ -36,10 +36,10 @@
 - [x] 1.2.8 Compare RK4 vs Fehlberg accuracy
 
 ### 1.3 FGFunction Tests
-- [ ] 1.3.1 Add tests for all function types (sum, product, difference, etc.)
-- [ ] 1.3.2 Add tests for nested function evaluation
-- [ ] 1.3.3 Add tests for property binding
-- [ ] 1.3.4 Add edge case tests (division by zero, overflow)
+- [x] 1.3.1 Add tests for all function types (sum, product, difference, etc.)
+- [x] 1.3.2 Add tests for nested function evaluation
+- [x] 1.3.3 Add tests for property binding
+- [x] 1.3.4 Add edge case tests (division by zero, overflow)
 
 ### 1.4 FGRealValue Tests
 - [x] 1.4.1 Expand `FGRealValueTest.h` unit test suite
@@ -259,8 +259,8 @@
 - [ ] 7.1.3 Add coverage check to PR template
 
 ### 7.2 Documentation
-- [ ] 7.2.1 Update CONTRIBUTING.md with testing requirements
-- [ ] 7.2.2 Create test writing guide
+- [x] 7.2.1 Update CONTRIBUTING.md with testing requirements
+- [x] 7.2.2 Create test writing guide
 - [ ] 7.2.3 Document coverage targets per module
 - [ ] 7.2.4 Add testing FAQ
 
