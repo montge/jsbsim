@@ -37,9 +37,9 @@ jobs:
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} \
             cmake --build build --parallel $(nproc)
 
-      - name: Run tests for coverage
+      - name: Run tests for coverage (parallel execution)
         working-directory: build
-        run: ctest -R Test1 --output-on-failure
+        run: ctest -R Test1 --output-on-failure --parallel $(nproc)
 
       - name: Generate gcov reports
         run: |

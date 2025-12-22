@@ -56,11 +56,30 @@ set(UNIT_TESTS FGColumnVector3Test
                FGTransmissionTest)
 
 
+# Fast test suite - core math and fundamental tests for quick PR checks
+set(FAST_TESTS FGColumnVector3Test
+               FGMatrix33Test
+               FGQuaternionTest
+               FGLocationTest
+               FGRealValueTest
+               FGTableTest
+               FGConditionTest
+               FGPropertyValueTest)
+
 foreach(test ${UNIT_TESTS})
   cxxtest_add_test(${test}1 ${test}.cpp ${CMAKE_CURRENT_SOURCE_DIR}/${test}.h)
   target_link_libraries(${test}1 libJSBSim)
   target_include_directories(${test}1 PUBLIC ${CXXTEST_INCLUDE_DIR})
   add_coverage(${test}1)
+
+  # Add test labels for ctest -L filtering
+  # Fast tests: core math, run quickly for PR checks
+  # Comprehensive tests: full suite for nightly runs
+  if(${test} IN_LIST FAST_TESTS)
+    set_tests_properties(${test}1 PROPERTIES LABELS "quick;unit")
+  else()
+    set_tests_properties(${test}1 PROPERTIES LABELS "comprehensive;unit")
+  endif()
 endforeach()
 
 if(WIN32 AND BUILD_SHARED_LIBS)
