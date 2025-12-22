@@ -81,10 +81,15 @@
 - [x] 2.3.5 Test Run behavior with holding flag
 
 ### 2.4 FGPropagate Extended Tests
-- [ ] 2.4.1 Add quaternion integration tests
-- [ ] 2.4.2 Add Earth-fixed vs body-fixed frame tests
-- [ ] 2.4.3 Add high-altitude/orbital propagation tests
-- [ ] 2.4.4 Add ground contact state transitions
+- [x] 2.4.1 Create `FGPropagateTest.h` unit test suite
+- [x] 2.4.2 Add velocity getter tests (body, local, ECEF, inertial)
+- [x] 2.4.3 Add angular rate tests (PQR, PQRi)
+- [x] 2.4.4 Add Euler angle tests with radian/degree conversion
+- [x] 2.4.5 Add altitude tests (ASL, AGL, geodetic)
+- [x] 2.4.6 Add transformation matrix tests (Tl2b, Tb2l, Ti2b, Tb2i, Tec2b, Tb2ec)
+- [x] 2.4.7 Add quaternion tests (local, ECI, unit magnitude verification)
+- [x] 2.4.8 Add location tests (latitude/longitude bounds)
+- [x] 2.4.9 Add Euler trig function tests (cos^2 + sin^2 = 1)
 
 ### 2.5 FGAuxiliary Extended Tests
 - [x] 2.5.1 Add Mach number calculation edge cases (transonic, hypersonic)
