@@ -66,7 +66,7 @@ DataFile::DataFile(string fname) {
   cout << "Done parsing names. Reading data ..." << endl;
 
   int row=0, column=0;
-  char scratch[10];
+  string scratch;
 
   while (1) {
     column = 0;
