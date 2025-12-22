@@ -148,9 +148,9 @@
 - [x] 3.7.4 Test rotor RPM governing
 
 ### 3.8 Other Propulsion Components
-- [ ] 3.8.1 Create `FGNozzleTest.h` for nozzle thrust calculations
+- [x] 3.8.1 Create `FGNozzleTest.h` for nozzle thrust calculations
 - [x] 3.8.2 Create `FGThrusterTest.h` for generic thruster tests
-- [ ] 3.8.3 Create `FGTransmissionTest.h` for gearbox tests
+- [x] 3.8.3 Create `FGTransmissionTest.h` for gearbox tests
 - [x] 3.8.4 Create `FGTankTest.h` with fuel density and tank calculation tests
 - [x] 3.8.5 Create `FGForceTest.h` for force/moment transformations
 
@@ -171,10 +171,10 @@
 - [x] 4.2.5 Test failure modes
 
 ### 4.3 FGGyro Tests
-- [ ] 4.3.1 Create `FGGyroTest.h` unit test suite
-- [ ] 4.3.2 Test rate sensing accuracy
-- [ ] 4.3.3 Test drift characteristics
-- [ ] 4.3.4 Test spin axis orientation
+- [x] 4.3.1 Create `FGGyroTest.h` unit test suite
+- [x] 4.3.2 Test rate sensing accuracy
+- [x] 4.3.3 Test drift characteristics
+- [x] 4.3.4 Test spin axis orientation
 
 ### 4.4 Actuator Extended Tests
 - [x] 4.4.1 Add rate limiting tests
@@ -196,10 +196,10 @@
 - [x] 5.1.4 Test unit conversions (M/FT, LBS/KG, DEG/RAD, etc.)
 
 ### 5.2 FGXMLParse Tests
-- [ ] 5.2.1 Create `FGXMLParseTest.h` unit test suite
-- [ ] 5.2.2 Test file loading
-- [ ] 5.2.3 Test include directive processing
-- [ ] 5.2.4 Test encoding handling
+- [x] 5.2.1 Create `FGXMLParseTest.h` unit test suite
+- [x] 5.2.2 Test file loading
+- [x] 5.2.3 Test include directive processing
+- [x] 5.2.4 Test encoding handling
 
 ### 5.3 FGScript Tests
 - [x] 5.3.1 Expand script execution tests
@@ -214,9 +214,9 @@
 - [x] 5.4.4 Test output rate scheduling
 
 ### 5.5 FGInput Tests
-- [ ] 5.5.1 Create `FGInputTest.h` unit test suite
-- [ ] 5.5.2 Test socket input handling
-- [ ] 5.5.3 Test property input mapping
+- [x] 5.5.1 Create `FGInputTest.h` unit test suite
+- [x] 5.5.2 Test socket input handling
+- [x] 5.5.3 Test property input mapping
 
 ## Phase 6: Specialized Models (Target: 80% coverage)
 
@@ -242,14 +242,14 @@
 - [x] 6.3.5 Add hydroplaning and crosswind tests
 
 ### 6.4 FGExternalForce Tests
-- [ ] 6.4.1 Create `FGExternalForceTest.h` unit test suite
-- [ ] 6.4.2 Test force application points
-- [ ] 6.4.3 Test force frame transformations
+- [x] 6.4.1 Create `FGExternalForceTest.h` unit test suite
+- [x] 6.4.2 Test force application points
+- [x] 6.4.3 Test force frame transformations
 
 ### 6.5 FGSurface Tests
-- [ ] 6.5.1 Create `FGSurfaceTest.h` unit test suite
-- [ ] 6.5.2 Test surface contact detection
-- [ ] 6.5.3 Test friction coefficient lookup
+- [x] 6.5.1 Create `FGSurfaceTest.h` unit test suite
+- [x] 6.5.2 Test surface contact detection
+- [x] 6.5.3 Test friction coefficient lookup
 
 ## Phase 7: Quality Gates & Documentation
 
