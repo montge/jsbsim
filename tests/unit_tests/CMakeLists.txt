@@ -28,24 +28,31 @@ set(UNIT_TESTS FGColumnVector3Test
                FGModelTest
                FGPropagateTest
                FGForceTest
+               FGExternalForceTest
                FGThrusterTest
                FGTankTest
                FGPIDTest
                FGSensorTest
                FGFilterTest
+               FGGyroTest
                FGActuatorTest
                FGXMLElementTest
+               FGXMLParseTest
                FGBuoyantForcesTest
                FGGroundReactionsTest
+               FGSurfaceTest
                FGEngineTest
                FGElectricTest
                FGPropellerTest
                FGScriptTest
                FGOutputTest
+               FGInputTest
                FGPistonTest
                FGTurbineTest
                FGRocketTest
-               FGRotorTest)
+               FGRotorTest
+               FGNozzleTest
+               FGTransmissionTest)
 
 
 foreach(test ${UNIT_TESTS})
