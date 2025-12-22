@@ -700,4 +700,131 @@ public:
       }
     }
   }
+
+  // ============ Polar Coordinate Edge Cases ============
+
+  void testDateLineCrossing() {
+    // GIVEN: Location near the date line (±180° longitude)
+    JSBSim::FGLocation l1(M_PI - 0.01, 0.0, 1.0);  // Just before +180°
+    JSBSim::FGLocation l2(-M_PI + 0.01, 0.0, 1.0); // Just after -180°
+
+    // THEN: Longitudes should be close to ±π
+    TS_ASSERT_DELTA(M_PI - 0.01, l1.GetLongitude(), epsilon);
+    TS_ASSERT_DELTA(-M_PI + 0.01, l2.GetLongitude(), epsilon);
+
+    // Check that positions are near each other (across date line)
+    TS_ASSERT_DELTA(l1(1), l2(1), 0.1);  // X coords should be similar
+    TS_ASSERT_DELTA(l1(3), l2(3), epsilon); // Z coords should be equal (both at equator)
+  }
+
+  void testEquatorEdgeCases() {
+    // GIVEN: Locations exactly on the equator
+    JSBSim::FGLocation l1(0.0, 0.0, 1.0);
+    JSBSim::FGLocation l2(M_PI * 0.5, 0.0, 1.0);
+    JSBSim::FGLocation l3(M_PI, 0.0, 1.0);
+
+    // THEN: Latitude should be exactly zero
+    TS_ASSERT_EQUALS(l1.GetLatitude(), 0.0);
+    TS_ASSERT_EQUALS(l2.GetLatitude(), 0.0);
+    TS_ASSERT_DELTA(l3.GetLatitude(), 0.0, epsilon);
+
+    // Z component should be zero for equatorial positions
+    TS_ASSERT_EQUALS(l1(3), 0.0);
+    TS_ASSERT_EQUALS(l2(3), 0.0);
+    TS_ASSERT_DELTA(l3(3), 0.0, epsilon);
+  }
+
+  void testCardinalDirections() {
+    // GIVEN: Locations at cardinal longitudes (0°, 90°, 180°, 270°)
+    double r = 1.0;
+    JSBSim::FGLocation lEast(0.0, 0.0, r);        // 0° longitude
+    JSBSim::FGLocation lNorth(M_PI * 0.5, 0.0, r); // 90° East
+    JSBSim::FGLocation lWest(M_PI, 0.0, r);        // 180°
+    JSBSim::FGLocation lSouth(-M_PI * 0.5, 0.0, r); // 90° West
+
+    // THEN: Positions should be at expected Cartesian coordinates
+    // At equator: x = r*cos(lon), y = r*sin(lon), z = 0
+    TS_ASSERT_DELTA(lEast(1), r, epsilon);   // (1, 0, 0)
+    TS_ASSERT_DELTA(lEast(2), 0.0, epsilon);
+
+    TS_ASSERT_DELTA(lNorth(1), 0.0, epsilon); // (0, 1, 0)
+    TS_ASSERT_DELTA(lNorth(2), r, epsilon);
+
+    TS_ASSERT_DELTA(lWest(1), -r, epsilon);   // (-1, 0, 0)
+    TS_ASSERT_DELTA(lWest(2), 0.0, epsilon);
+
+    TS_ASSERT_DELTA(lSouth(1), 0.0, epsilon); // (0, -1, 0)
+    TS_ASSERT_DELTA(lSouth(2), -r, epsilon);
+  }
+
+  void testVerySmallRadius() {
+    // GIVEN: A location with very small radius
+    JSBSim::FGLocation l(M_PI / 4.0, M_PI / 6.0, 1e-10);
+
+    // THEN: Radius should be preserved
+    TS_ASSERT_DELTA(l.GetRadius(), 1e-10, 1e-20);
+
+    // Latitude and longitude should still be valid
+    TS_ASSERT_DELTA(l.GetLongitude(), M_PI / 4.0, epsilon);
+    TS_ASSERT_DELTA(l.GetLatitude(), M_PI / 6.0, epsilon);
+  }
+
+  void testExactDegreeValues() {
+    // GIVEN: Location at exactly 45° lat, 45° lon
+    double lat45 = M_PI / 4.0;
+    double lon45 = M_PI / 4.0;
+    JSBSim::FGLocation l(lon45, lat45, 1.0);
+
+    // THEN: Degree conversions should be exact
+    TS_ASSERT_DELTA(l.GetLongitudeDeg(), 45.0, epsilon);
+    TS_ASSERT_DELTA(l.GetLatitudeDeg(), 45.0, epsilon);
+
+    // Check sin/cos values
+    double expected = sqrt(2.0) / 2.0;
+    TS_ASSERT_DELTA(l.GetSinLongitude(), expected, epsilon);
+    TS_ASSERT_DELTA(l.GetCosLongitude(), expected, epsilon);
+  }
+
+  void testLongitudeWrapAround() {
+    // GIVEN: Setting longitude beyond ±π range
+    JSBSim::FGLocation l;
+
+    // WHEN: Setting various longitude values
+    l.SetLongitude(0.0);
+    TS_ASSERT_DELTA(l.GetLongitude(), 0.0, epsilon);
+
+    l.SetLongitude(M_PI);
+    TS_ASSERT_DELTA(std::abs(l.GetLongitude()), M_PI, epsilon);
+
+    l.SetLongitude(-M_PI);
+    TS_ASSERT_DELTA(std::abs(l.GetLongitude()), M_PI, epsilon);
+  }
+
+  void testLatitudeExtremes() {
+    // GIVEN: Locations at extreme latitudes (±90° minus a small epsilon)
+    double nearPole = M_PI * 0.5 - 1e-10;
+    JSBSim::FGLocation lNearNorth(0.0, nearPole, 1.0);
+    JSBSim::FGLocation lNearSouth(0.0, -nearPole, 1.0);
+
+    // THEN: Latitudes should be close to ±90°
+    TS_ASSERT_DELTA(lNearNorth.GetLatitude(), nearPole, epsilon);
+    TS_ASSERT_DELTA(lNearSouth.GetLatitude(), -nearPole, epsilon);
+
+    // Z component should dominate
+    TS_ASSERT(std::abs(lNearNorth(3)) > 0.99);
+    TS_ASSERT(std::abs(lNearSouth(3)) > 0.99);
+  }
+
+  void testPrimeMeridian() {
+    // GIVEN: Location on prime meridian (longitude = 0)
+    JSBSim::FGLocation l(0.0, M_PI / 6.0, 1.0);  // 0° lon, 30° lat
+
+    // THEN: Y component should be zero
+    TS_ASSERT_EQUALS(l(2), 0.0);
+
+    // X and Z should follow spherical coordinates
+    double lat = M_PI / 6.0;
+    TS_ASSERT_DELTA(l(1), cos(lat), epsilon);
+    TS_ASSERT_DELTA(l(3), sin(lat), epsilon);
+  }
 };
