@@ -149,25 +149,26 @@
 
 ### 3.8 Other Propulsion Components
 - [ ] 3.8.1 Create `FGNozzleTest.h` for nozzle thrust calculations
-- [ ] 3.8.2 Create `FGThrusterTest.h` for generic thruster tests
+- [x] 3.8.2 Create `FGThrusterTest.h` for generic thruster tests
 - [ ] 3.8.3 Create `FGTransmissionTest.h` for gearbox tests
-- [ ] 3.8.4 Expand `FGTankTest.h` with fuel transfer tests
+- [x] 3.8.4 Create `FGTankTest.h` with fuel density and tank calculation tests
+- [x] 3.8.5 Create `FGForceTest.h` for force/moment transformations
 
 ## Phase 4: Flight Control (Target: 85% coverage)
 
 ### 4.1 FGPID Tests
-- [ ] 4.1.1 Create `FGPIDTest.h` unit test suite
-- [ ] 4.1.2 Test proportional response
-- [ ] 4.1.3 Test integral windup and anti-windup
-- [ ] 4.1.4 Test derivative kick prevention
-- [ ] 4.1.5 Test output limiting
+- [x] 4.1.1 Create `FGPIDTest.h` unit test suite
+- [x] 4.1.2 Test proportional response
+- [x] 4.1.3 Test integral windup and anti-windup
+- [x] 4.1.4 Test derivative kick prevention
+- [x] 4.1.5 Test output limiting
 
 ### 4.2 FGSensor Base Tests
-- [ ] 4.2.1 Create `FGSensorTest.h` unit test suite
-- [ ] 4.2.2 Test noise injection
-- [ ] 4.2.3 Test quantization effects
-- [ ] 4.2.4 Test sensor lag modeling
-- [ ] 4.2.5 Test failure modes
+- [x] 4.2.1 Create `FGSensorTest.h` unit test suite
+- [x] 4.2.2 Test noise injection
+- [x] 4.2.3 Test quantization effects
+- [x] 4.2.4 Test sensor lag modeling
+- [x] 4.2.5 Test failure modes
 
 ### 4.3 FGGyro Tests
 - [ ] 4.3.1 Create `FGGyroTest.h` unit test suite
@@ -176,15 +177,15 @@
 - [ ] 4.3.4 Test spin axis orientation
 
 ### 4.4 Actuator Extended Tests
-- [ ] 4.4.1 Add rate limiting tests
-- [ ] 4.4.2 Add position limiting tests
-- [ ] 4.4.3 Add hysteresis tests
-- [ ] 4.4.4 Add actuator failure modes
+- [x] 4.4.1 Add rate limiting tests
+- [x] 4.4.2 Add position limiting tests
+- [x] 4.4.3 Add hysteresis tests
+- [x] 4.4.4 Add actuator failure modes
 
 ### 4.5 Filter Extended Tests
-- [ ] 4.5.1 Add all filter types (lag, lead-lag, washout, etc.)
-- [ ] 4.5.2 Add frequency response validation
-- [ ] 4.5.3 Add step response tests
+- [x] 4.5.1 Add all filter types (lag, lead-lag, washout, etc.)
+- [x] 4.5.2 Add frequency response validation
+- [x] 4.5.3 Add step response tests
 
 ## Phase 5: I/O and Infrastructure (Target: 75% coverage)
 
