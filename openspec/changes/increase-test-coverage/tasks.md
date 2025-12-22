@@ -47,9 +47,9 @@
 - [ ] 1.4.3 Test property manager integration
 
 ### 1.5 Math Edge Cases
-- [ ] 1.5.1 Expand FGColumnVector3Test with normalization edge cases
-- [ ] 1.5.2 Expand FGMatrix33Test with singular matrix handling
-- [ ] 1.5.3 Expand FGQuaternionTest with gimbal lock scenarios
+- [x] 1.5.1 Expand FGColumnVector3Test with normalization edge cases
+- [x] 1.5.2 Expand FGMatrix33Test with singular matrix handling
+- [x] 1.5.3 FGQuaternionTest gimbal lock scenarios (already covered in FGMatrix33Test)
 - [ ] 1.5.4 Add FGLocation tests for polar coordinate edge cases
 
 ## Phase 2: Core Models (Target: 85% coverage)
