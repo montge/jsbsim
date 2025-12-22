@@ -22,7 +22,10 @@ set(UNIT_TESTS FGColumnVector3Test
                FGMSISTest
                FGLogTest
                FGNelderMeadTest
-               FGRungeKuttaTest)
+               FGRungeKuttaTest
+               FGAccelerationsTest
+               FGAircraftTest
+               FGModelTest)
 
 
 foreach(test ${UNIT_TESTS})

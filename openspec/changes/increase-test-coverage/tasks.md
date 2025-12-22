@@ -42,34 +42,43 @@
 - [ ] 1.3.4 Add edge case tests (division by zero, overflow)
 
 ### 1.4 FGRealValue Tests
-- [ ] 1.4.1 Create `FGRealValueTest.h` unit test suite
-- [ ] 1.4.2 Test value binding and evaluation
-- [ ] 1.4.3 Test property manager integration
+- [x] 1.4.1 Expand `FGRealValueTest.h` unit test suite
+- [x] 1.4.2 Test positive, negative, zero values
+- [x] 1.4.3 Test very small/large values
+- [x] 1.4.4 Test special IEEE values (max, min, denorm)
+- [x] 1.4.5 Test IsConstant and GetValue idempotency
+- [x] 1.4.6 Test GetName format
 
 ### 1.5 Math Edge Cases
 - [x] 1.5.1 Expand FGColumnVector3Test with normalization edge cases
 - [x] 1.5.2 Expand FGMatrix33Test with singular matrix handling
 - [x] 1.5.3 FGQuaternionTest gimbal lock scenarios (already covered in FGMatrix33Test)
-- [ ] 1.5.4 Add FGLocation tests for polar coordinate edge cases
+- [x] 1.5.4 Add FGLocation tests for polar coordinate edge cases
 
 ## Phase 2: Core Models (Target: 85% coverage)
 
 ### 2.1 FGAccelerations Tests
-- [ ] 2.1.1 Create `FGAccelerationsTest.h` unit test suite
-- [ ] 2.1.2 Test force/moment accumulation
-- [ ] 2.1.3 Test body-to-inertial transformations
-- [ ] 2.1.4 Test gravity gradient effects
+- [x] 2.1.1 Create `FGAccelerationsTest.h` unit test suite
+- [x] 2.1.2 Test force/moment accumulation
+- [x] 2.1.3 Test body-to-inertial transformations
+- [x] 2.1.4 Test Newton's second law (F=ma)
+- [x] 2.1.5 Test hold-down functionality
+- [x] 2.1.6 Test gravity acceleration
 
 ### 2.2 FGAircraft Tests
-- [ ] 2.2.1 Create `FGAircraftTest.h` unit test suite
-- [ ] 2.2.2 Test aircraft configuration loading
-- [ ] 2.2.3 Test wing area and reference calculations
-- [ ] 2.2.4 Test CG position updates
+- [x] 2.2.1 Create `FGAircraftTest.h` unit test suite
+- [x] 2.2.2 Test wing area and reference calculations
+- [x] 2.2.3 Test reference point getters/setters
+- [x] 2.2.4 Test force aggregation from subsystems
+- [x] 2.2.5 Test moment aggregation from subsystems
+- [x] 2.2.6 Test buoyant forces (lighter-than-air)
 
 ### 2.3 FGModel Base Tests
-- [ ] 2.3.1 Create `FGModelTest.h` for base model functionality
-- [ ] 2.3.2 Test model rate scheduling
-- [ ] 2.3.3 Test model initialization sequence
+- [x] 2.3.1 Create `FGModelTest.h` for base model functionality
+- [x] 2.3.2 Test model rate scheduling
+- [x] 2.3.3 Test model initialization sequence
+- [x] 2.3.4 Test GetExec and GetName accessors
+- [x] 2.3.5 Test Run behavior with holding flag
 
 ### 2.4 FGPropagate Extended Tests
 - [ ] 2.4.1 Add quaternion integration tests
@@ -78,9 +87,15 @@
 - [ ] 2.4.4 Add ground contact state transitions
 
 ### 2.5 FGAuxiliary Extended Tests
-- [ ] 2.5.1 Add Mach number calculation edge cases
-- [ ] 2.5.2 Add dynamic pressure at extreme altitudes
-- [ ] 2.5.3 Add pilot acceleration (Nz) calculations
+- [x] 2.5.1 Add Mach number calculation edge cases (transonic, hypersonic)
+- [x] 2.5.2 Add dynamic pressure tests
+- [x] 2.5.3 Add pilot acceleration (Nz, Nx, Ny) tests
+- [x] 2.5.4 Add alpha/beta tests
+- [x] 2.5.5 Add true/calibrated/equivalent airspeed tests
+- [x] 2.5.6 Add total temperature tests
+- [x] 2.5.7 Add Reynolds number tests
+- [x] 2.5.8 Add wind-to-body transformation tests
+- [x] 2.5.9 Add altitude-based Mach tests
 
 ## Phase 3: Propulsion (Target: 80% coverage)
 
