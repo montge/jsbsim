@@ -673,4 +673,180 @@ public:
     TS_ASSERT_DELTA(angles(2), theta, 1E-8);
     TS_ASSERT_DELTA(angles(3), 0.0, 1E-8);
   }
+
+  // ============ Edge Case Tests for Singular Matrices ============
+
+  void testSingularZeroMatrix() {
+    // GIVEN: A zero matrix (all elements zero)
+    JSBSim::FGMatrix33 m;  // Default constructor gives zero matrix
+
+    // THEN: Determinant should be zero, not invertible
+    TS_ASSERT_EQUALS(m.Determinant(), 0.0);
+    TS_ASSERT(!m.Invertible());
+
+    // Inverse should return zero matrix
+    JSBSim::FGMatrix33 inv = m.Inverse();
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(inv(i, j), 0.0);
+  }
+
+  void testSingularRank1Matrix() {
+    // GIVEN: A rank-1 matrix (all rows are multiples of each other)
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          2.0, 4.0, 6.0,
+                          3.0, 6.0, 9.0);
+
+    // THEN: Determinant should be zero, not invertible
+    TS_ASSERT_DELTA(m.Determinant(), 0.0, 1E-10);
+    TS_ASSERT(!m.Invertible());
+  }
+
+  void testSingularRank2Matrix() {
+    // GIVEN: A rank-2 matrix (third row is sum of first two)
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          5.0, 7.0, 9.0);  // Row 3 = Row 1 + Row 2
+
+    // THEN: Determinant should be zero, not invertible
+    TS_ASSERT_DELTA(m.Determinant(), 0.0, 1E-10);
+    TS_ASSERT(!m.Invertible());
+  }
+
+  void testSingularColumnDependent() {
+    // GIVEN: A matrix where column 3 = column 1 + column 2
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          4.0, 5.0, 9.0,
+                          7.0, 8.0, 15.0);
+
+    // THEN: Determinant should be zero
+    TS_ASSERT_DELTA(m.Determinant(), 0.0, 1E-10);
+    TS_ASSERT(!m.Invertible());
+  }
+
+  void testDeterminantPositive() {
+    // GIVEN: A matrix with positive determinant
+    JSBSim::FGMatrix33 m(1.0, 0.0, 0.0,
+                          0.0, 2.0, 0.0,
+                          0.0, 0.0, 3.0);  // Diagonal matrix, det = 6
+
+    // THEN: Determinant should be 6
+    TS_ASSERT_EQUALS(m.Determinant(), 6.0);
+    TS_ASSERT(m.Invertible());
+  }
+
+  void testDeterminantNegative() {
+    // GIVEN: A matrix with negative determinant (reflection)
+    JSBSim::FGMatrix33 m(-1.0, 0.0, 0.0,
+                          0.0, 1.0, 0.0,
+                          0.0, 0.0, 1.0);  // Reflection, det = -1
+
+    // THEN: Determinant should be -1
+    TS_ASSERT_EQUALS(m.Determinant(), -1.0);
+    TS_ASSERT(m.Invertible());
+  }
+
+  void testInverseOfDiagonalMatrix() {
+    // GIVEN: A diagonal matrix
+    JSBSim::FGMatrix33 m(2.0, 0.0, 0.0,
+                          0.0, 4.0, 0.0,
+                          0.0, 0.0, 5.0);
+
+    // WHEN: Computing inverse
+    JSBSim::FGMatrix33 inv = m.Inverse();
+
+    // THEN: Inverse should have reciprocals on diagonal
+    TS_ASSERT_DELTA(inv(1, 1), 0.5, 1E-10);
+    TS_ASSERT_DELTA(inv(2, 2), 0.25, 1E-10);
+    TS_ASSERT_DELTA(inv(3, 3), 0.2, 1E-10);
+    TS_ASSERT_EQUALS(inv(1, 2), 0.0);
+    TS_ASSERT_EQUALS(inv(1, 3), 0.0);
+    TS_ASSERT_EQUALS(inv(2, 1), 0.0);
+    TS_ASSERT_EQUALS(inv(2, 3), 0.0);
+    TS_ASSERT_EQUALS(inv(3, 1), 0.0);
+    TS_ASSERT_EQUALS(inv(3, 2), 0.0);
+
+    // Verify M * M^-1 = I
+    JSBSim::FGMatrix33 product = m * inv;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(product(i, j), (i == j ? 1.0 : 0.0), 1E-10);
+  }
+
+  void testInverseSymmetricMatrix() {
+    // GIVEN: A symmetric positive definite matrix
+    JSBSim::FGMatrix33 m(4.0, 2.0, 1.0,
+                          2.0, 5.0, 2.0,
+                          1.0, 2.0, 6.0);
+
+    // WHEN: Computing inverse
+    JSBSim::FGMatrix33 inv = m.Inverse();
+
+    // THEN: Inverse should also be symmetric
+    TS_ASSERT_DELTA(inv(1, 2), inv(2, 1), 1E-10);
+    TS_ASSERT_DELTA(inv(1, 3), inv(3, 1), 1E-10);
+    TS_ASSERT_DELTA(inv(2, 3), inv(3, 2), 1E-10);
+
+    // Verify M * M^-1 = I
+    JSBSim::FGMatrix33 product = m * inv;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(product(i, j), (i == j ? 1.0 : 0.0), 1E-10);
+  }
+
+  void testMatrixMultiplicationWithZero() {
+    // GIVEN: Any matrix and zero matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    JSBSim::FGMatrix33 zero;
+
+    // WHEN: Multiplying with zero matrix
+    JSBSim::FGMatrix33 result1 = m * zero;
+    JSBSim::FGMatrix33 result2 = zero * m;
+
+    // THEN: Result should be zero matrix
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_EQUALS(result1(i, j), 0.0);
+        TS_ASSERT_EQUALS(result2(i, j), 0.0);
+      }
+  }
+
+  void testTransposedTwiceIsOriginal() {
+    // GIVEN: A matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+
+    // WHEN: Transposing twice
+    JSBSim::FGMatrix33 mTT = m.Transposed().Transposed();
+
+    // THEN: Should equal original
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(mTT(i, j), m(i, j));
+  }
+
+  void testDivisionByZeroReturnsOriginal() {
+    // GIVEN: A matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+
+    // WHEN: Dividing by zero
+    JSBSim::FGMatrix33 result = m / 0.0;
+
+    // THEN: Result should be unchanged (based on safe division behavior)
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(result(i, j), m(i, j));
+  }
+
+  void testScaleByOne() {
+    // GIVEN: A matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+
+    // WHEN: Scaling by 1
+    JSBSim::FGMatrix33 result = m * 1.0;
+
+    // THEN: Result should equal original
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(result(i, j), m(i, j));
+  }
 };

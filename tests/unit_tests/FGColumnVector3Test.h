@@ -627,4 +627,191 @@ public:
     TS_ASSERT_EQUALS(v1(2), 0.0);
     TS_ASSERT_EQUALS(v1(3), -2.0);
   }
+
+  // Edge case tests for normalization
+  void testNormalizeVerySmallVector(void) {
+    // GIVEN: A very small vector that should still normalize correctly
+    JSBSim::FGColumnVector3 v(1e-10, 0.0, 0.0);
+
+    // WHEN: Normalizing
+    v.Normalize();
+
+    // THEN: Result should be a unit vector along x-axis
+    TS_ASSERT_DELTA(v(1), 1.0, 1e-9);
+    TS_ASSERT_EQUALS(v(2), 0.0);
+    TS_ASSERT_EQUALS(v(3), 0.0);
+  }
+
+  void testNormalizeLargeVector(void) {
+    // GIVEN: A large vector
+    JSBSim::FGColumnVector3 v(1e10, 0.0, 0.0);
+
+    // WHEN: Normalizing
+    v.Normalize();
+
+    // THEN: Result should be a unit vector along x-axis
+    TS_ASSERT_DELTA(v(1), 1.0, 1e-9);
+    TS_ASSERT_DELTA(v(2), 0.0, 1e-9);
+    TS_ASSERT_DELTA(v(3), 0.0, 1e-9);
+  }
+
+  void testNormalizeAlreadyNormalized(void) {
+    // GIVEN: An already normalized vector
+    JSBSim::FGColumnVector3 v(0.6, 0.8, 0.0);
+
+    // WHEN: Normalizing
+    v.Normalize();
+
+    // THEN: Result should remain unchanged
+    TS_ASSERT_DELTA(v(1), 0.6, 1e-9);
+    TS_ASSERT_DELTA(v(2), 0.8, 1e-9);
+    TS_ASSERT_EQUALS(v(3), 0.0);
+    TS_ASSERT_DELTA(v.Magnitude(), 1.0, 1e-9);
+  }
+
+  void testNormalizeNegativeComponents(void) {
+    // GIVEN: A vector with negative components
+    JSBSim::FGColumnVector3 v(-3.0, -4.0, 0.0);
+
+    // WHEN: Normalizing
+    v.Normalize();
+
+    // THEN: Components should be negative but unit length
+    TS_ASSERT_DELTA(v(1), -0.6, 1e-9);
+    TS_ASSERT_DELTA(v(2), -0.8, 1e-9);
+    TS_ASSERT_EQUALS(v(3), 0.0);
+    TS_ASSERT_DELTA(v.Magnitude(), 1.0, 1e-9);
+  }
+
+  void testNormalize3DVector(void) {
+    // GIVEN: A 3D vector with all components non-zero
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 2.0);  // Magnitude = 3
+
+    // WHEN: Normalizing
+    v.Normalize();
+
+    // THEN: Each component should be scaled correctly
+    TS_ASSERT_DELTA(v(1), 1.0/3.0, 1e-9);
+    TS_ASSERT_DELTA(v(2), 2.0/3.0, 1e-9);
+    TS_ASSERT_DELTA(v(3), 2.0/3.0, 1e-9);
+    TS_ASSERT_DELTA(v.Magnitude(), 1.0, 1e-9);
+  }
+
+  // Edge case tests for magnitude
+  void testMagnitudeSingleAxisVectors(void) {
+    // GIVEN: Unit vectors along each axis
+    JSBSim::FGColumnVector3 vx(5.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 vy(0.0, 7.0, 0.0);
+    JSBSim::FGColumnVector3 vz(0.0, 0.0, 3.0);
+
+    // THEN: Magnitude should equal the absolute value of the non-zero component
+    TS_ASSERT_EQUALS(vx.Magnitude(), 5.0);
+    TS_ASSERT_EQUALS(vy.Magnitude(), 7.0);
+    TS_ASSERT_EQUALS(vz.Magnitude(), 3.0);
+  }
+
+  void testMagnitudeNegativeComponents(void) {
+    // GIVEN: A vector with negative components
+    JSBSim::FGColumnVector3 v(-3.0, -4.0, 0.0);
+
+    // THEN: Magnitude should still be 5 (positive)
+    TS_ASSERT_EQUALS(v.Magnitude(), 5.0);
+  }
+
+  // Edge case tests for cross product
+  void testCrossProductParallelVectors(void) {
+    // GIVEN: Parallel vectors (cross product should be zero)
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(2.0, 4.0, 6.0);  // v2 = 2*v1
+
+    // WHEN: Computing cross product
+    JSBSim::FGColumnVector3 result = v1 * v2;
+
+    // THEN: Result should be zero vector
+    TS_ASSERT_DELTA(result(1), 0.0, 1e-9);
+    TS_ASSERT_DELTA(result(2), 0.0, 1e-9);
+    TS_ASSERT_DELTA(result(3), 0.0, 1e-9);
+  }
+
+  void testCrossProductAntiParallelVectors(void) {
+    // GIVEN: Anti-parallel vectors (cross product should be zero)
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(-1.0, -2.0, -3.0);  // v2 = -v1
+
+    // WHEN: Computing cross product
+    JSBSim::FGColumnVector3 result = v1 * v2;
+
+    // THEN: Result should be zero vector
+    TS_ASSERT_DELTA(result(1), 0.0, 1e-9);
+    TS_ASSERT_DELTA(result(2), 0.0, 1e-9);
+    TS_ASSERT_DELTA(result(3), 0.0, 1e-9);
+  }
+
+  // Edge case tests for dot product
+  void testDotProductPerpendicular(void) {
+    // GIVEN: Perpendicular vectors
+    JSBSim::FGColumnVector3 v1(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 v2(0.0, 1.0, 0.0);
+
+    // THEN: Dot product should be zero
+    TS_ASSERT_EQUALS(DotProduct(v1, v2), 0.0);
+  }
+
+  void testDotProductSameDirection(void) {
+    // GIVEN: Vectors in the same direction
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(2.0, 4.0, 6.0);
+
+    // THEN: Dot product should equal |v1| * |v2|
+    double expected = v1.Magnitude() * v2.Magnitude();
+    TS_ASSERT_DELTA(DotProduct(v1, v2), expected, 1e-9);
+  }
+
+  void testDotProductOppositeDirection(void) {
+    // GIVEN: Vectors in opposite directions
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(-1.0, -2.0, -3.0);
+
+    // THEN: Dot product should equal -|v1| * |v2|
+    double expected = -v1.Magnitude() * v2.Magnitude();
+    TS_ASSERT_DELTA(DotProduct(v1, v2), expected, 1e-9);
+  }
+
+  // Numerical precision edge cases
+  void testScalarMultiplicationByZero(void) {
+    // GIVEN: A non-zero vector
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 3.0);
+
+    // WHEN: Multiplying by zero
+    JSBSim::FGColumnVector3 result = 0.0 * v;
+
+    // THEN: Result should be zero vector
+    TS_ASSERT_EQUALS(result(1), 0.0);
+    TS_ASSERT_EQUALS(result(2), 0.0);
+    TS_ASSERT_EQUALS(result(3), 0.0);
+  }
+
+  void testScalarMultiplicationByNegativeOne(void) {
+    // GIVEN: A vector
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 3.0);
+
+    // WHEN: Multiplying by -1
+    JSBSim::FGColumnVector3 result = -1.0 * v;
+
+    // THEN: Result should be negated vector
+    TS_ASSERT_EQUALS(result(1), -1.0);
+    TS_ASSERT_EQUALS(result(2), -2.0);
+    TS_ASSERT_EQUALS(result(3), -3.0);
+  }
+
+  void testMagnitudePartialComponents(void) {
+    // GIVEN: A 3D vector v = (3, 4, 12)
+    JSBSim::FGColumnVector3 v(3.0, 4.0, 12.0);  // Full magnitude = 13
+
+    // THEN: Partial magnitudes (using only components idx1 and idx2) should be correct
+    TS_ASSERT_EQUALS(v.Magnitude(1, 2), 5.0);   // sqrt(3^2 + 4^2) = 5
+    TS_ASSERT_DELTA(v.Magnitude(1, 3), sqrt(9.0 + 144.0), 1e-9);   // sqrt(3^2 + 12^2)
+    TS_ASSERT_DELTA(v.Magnitude(2, 3), sqrt(16.0 + 144.0), 1e-9);  // sqrt(4^2 + 12^2)
+    TS_ASSERT_EQUALS(v.Magnitude(), 13.0);  // Full magnitude = 13
+  }
 };
