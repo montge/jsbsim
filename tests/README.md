@@ -4,14 +4,127 @@ This directory contains the test suite for JSBSim, including both C++ unit tests
 
 ## Coverage Targets
 
-| Component | Target Coverage |
-|-----------|----------------|
-| Overall | 90%+ |
-| Math (`src/math/`) | 95% |
-| Core Models (`src/models/`) | 85% |
-| Propulsion (`src/models/propulsion/`) | 80% |
-| Flight Control (`src/models/flight_control/`) | 85% |
-| I/O (`src/input_output/`) | 75% |
+### Target Summary by Phase
+
+| Phase | Component | Target Coverage | Path |
+|-------|-----------|----------------|------|
+| Overall | All Components | 90%+ | `src/` |
+| Phase 1 | Math Foundation | 95% | `src/math/` |
+| Phase 2 | Core Models | 85% | `src/models/` (excluding propulsion, flight_control) |
+| Phase 3 | Propulsion | 80% | `src/models/propulsion/` |
+| Phase 4 | Flight Control | 85% | `src/models/flight_control/` |
+| Phase 5 | I/O Infrastructure | 75% | `src/input_output/`, `src/initialization/` |
+| Phase 6 | Specialized Models | 80% | Atmosphere, GroundReactions, BuoyantForces |
+
+### Component Categories
+
+**Phase 1: Math Foundation (95% target)**
+- `FGColumnVector3`, `FGMatrix33`, `FGQuaternion` - Vector/matrix math
+- `FGLocation` - Geographic position handling
+- `FGFunction`, `FGTable`, `FGPropertyValue` - Mathematical functions
+- `FGCondition`, `FGParameter` - Conditional logic
+- **Rationale**: Math is foundational and deterministic; should have highest coverage
+
+**Phase 2: Core Models (85% target)**
+- `FGPropagate` - State propagation (position, velocity, orientation)
+- `FGAccelerations` - Acceleration computations
+- `FGAuxiliary` - Auxiliary flight parameters
+- `FGMassBalance` - Mass, CG, and inertia
+- `FGInertial` - Gravity and rotating Earth
+- `FGAerodynamics` - Aerodynamic forces
+- **Rationale**: Critical simulation models; high coverage but some complex physics edge cases
+
+**Phase 3: Propulsion (80% target)**
+- `FGEngine`, `FGThruster`, `FGTank` - Propulsion base classes
+- `FGForce` - Force application
+- Engine types: Piston, Turbine, Turboprop, Electric, Rocket
+- Propeller and Nozzle models
+- **Rationale**: Complex domain with many engine-specific paths; slightly lower target
+
+**Phase 4: Flight Control (85% target)**
+- `FGFCS` - Flight Control System
+- Control components: Actuator, Switch, Gain, Filter, etc.
+- Sensors and PID controllers
+- **Rationale**: Critical for simulation behavior; needs high coverage
+
+**Phase 5: I/O Infrastructure (75% target)**
+- `FGXMLElement`, `FGXMLParse` - XML parsing
+- `FGPropertyManager` - Property tree
+- `FGScript` - Script execution
+- `FGInitialCondition`, `FGTrim` - Initialization
+- Output classes: `FGOutputSocket`, `FGOutputTextFile`, etc.
+- **Rationale**: I/O has many external dependencies; lower target acceptable
+
+**Phase 6: Specialized Models (80% target)**
+- `FGAtmosphere` and variants (MSIS, Mars)
+- `FGGroundReactions`, `FGLGear` - Landing gear
+- `FGBuoyantForces`, `FGGasCell` - Lighter-than-air
+- **Rationale**: Domain-specific models with reasonable complexity
+
+### Why These Targets Were Chosen
+
+1. **Overall 90%+**: Industry best practice for safety-critical simulation software
+2. **Math 95%**: Foundational layer must be rock-solid; deterministic and fully testable
+3. **Core/FCS 85%**: Critical simulation behavior; balance between thoroughness and practicality
+4. **Propulsion/Specialized 80%**: Complex domain models with many variants; some paths hard to exercise
+5. **I/O 75%**: External dependencies (files, XML, sockets) make 100% coverage impractical
+
+### How to Check Current Coverage
+
+#### Generate Coverage Report
+
+```bash
+# Configure with coverage enabled
+cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON ..
+make
+
+# Run tests
+ctest -j4
+
+# Generate coverage report (requires lcov)
+make lcov
+
+# View HTML report
+open coverage/index.html  # macOS
+xdg-open coverage/index.html  # Linux
+```
+
+#### Check Coverage for Specific Module
+
+```bash
+# After generating coverage
+lcov --list coverage.info | grep "src/math/"
+lcov --list coverage.info | grep "src/models/propulsion/"
+```
+
+#### Per-Phase Coverage Analysis
+
+```bash
+# Math Foundation (Phase 1)
+lcov --extract coverage.info "*/src/math/*" -o math_coverage.info
+lcov --summary math_coverage.info
+
+# Core Models (Phase 2) - exclude propulsion and flight_control
+lcov --extract coverage.info "*/src/models/*" -o models_all.info
+lcov --remove models_all.info "*/src/models/propulsion/*" "*/src/models/flight_control/*" -o core_models.info
+lcov --summary core_models.info
+
+# Propulsion (Phase 3)
+lcov --extract coverage.info "*/src/models/propulsion/*" -o propulsion_coverage.info
+lcov --summary propulsion_coverage.info
+
+# Flight Control (Phase 4)
+lcov --extract coverage.info "*/src/models/flight_control/*" -o fcs_coverage.info
+lcov --summary fcs_coverage.info
+
+# I/O Infrastructure (Phase 5)
+lcov --extract coverage.info "*/src/input_output/*" "*/src/initialization/*" -o io_coverage.info
+lcov --summary io_coverage.info
+
+# Specialized Models (Phase 6)
+lcov --extract coverage.info "*/src/models/atmosphere/*" "*/src/models/FGGroundReactions.*" "*/src/models/FGLGear.*" "*/src/models/FGBuoyantForces.*" "*/src/models/FGGasCell.*" -o specialized_coverage.info
+lcov --summary specialized_coverage.info
+```
 
 ## Directory Structure
 
