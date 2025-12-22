@@ -111,23 +111,23 @@
 - [x] 3.1.4 Test thrust vector orientation
 
 ### 3.2 FGPiston Tests
-- [ ] 3.2.1 Create `FGPistonTest.h` unit test suite
-- [ ] 3.2.2 Test manifold pressure calculations
-- [ ] 3.2.3 Test mixture effects on power
-- [ ] 3.2.4 Test altitude performance degradation
-- [ ] 3.2.5 Test engine temperature dynamics
+- [x] 3.2.1 Create `FGPistonTest.h` unit test suite
+- [x] 3.2.2 Test manifold pressure calculations
+- [x] 3.2.3 Test mixture effects on power
+- [x] 3.2.4 Test altitude performance degradation
+- [x] 3.2.5 Test engine temperature dynamics
 
 ### 3.3 FGTurbine Extended Tests
-- [ ] 3.3.1 Add compressor stall tests
-- [ ] 3.3.2 Add afterburner engagement tests
-- [ ] 3.3.3 Add fuel flow at various N1/N2 settings
-- [ ] 3.3.4 Add bleed air extraction effects
+- [x] 3.3.1 Add compressor stall tests
+- [x] 3.3.2 Add afterburner engagement tests
+- [x] 3.3.3 Add fuel flow at various N1/N2 settings
+- [x] 3.3.4 Add bleed air extraction effects
 
 ### 3.4 FGRocket Tests
-- [ ] 3.4.1 Create `FGRocketTest.h` unit test suite
-- [ ] 3.4.2 Test solid propellant burn profiles
-- [ ] 3.4.3 Test liquid engine throttling
-- [ ] 3.4.4 Test nozzle expansion effects
+- [x] 3.4.1 Create `FGRocketTest.h` unit test suite
+- [x] 3.4.2 Test solid propellant burn profiles
+- [x] 3.4.3 Test liquid engine throttling
+- [x] 3.4.4 Test nozzle expansion effects
 
 ### 3.5 FGElectric Tests
 - [x] 3.5.1 Create `FGElectricTest.h` unit test suite
