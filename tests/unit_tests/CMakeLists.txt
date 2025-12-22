@@ -34,7 +34,9 @@ set(UNIT_TESTS FGColumnVector3Test
                FGSensorTest
                FGFilterTest
                FGActuatorTest
-               FGXMLElementTest)
+               FGXMLElementTest
+               FGBuoyantForcesTest
+               FGGroundReactionsTest)
 
 
 foreach(test ${UNIT_TESTS})
