@@ -36,7 +36,10 @@ set(UNIT_TESTS FGColumnVector3Test
                FGActuatorTest
                FGXMLElementTest
                FGBuoyantForcesTest
-               FGGroundReactionsTest)
+               FGGroundReactionsTest
+               FGEngineTest
+               FGElectricTest
+               FGPropellerTest)
 
 
 foreach(test ${UNIT_TESTS})

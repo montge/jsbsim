@@ -105,10 +105,10 @@
 ## Phase 3: Propulsion (Target: 80% coverage)
 
 ### 3.1 FGEngine Base Tests
-- [ ] 3.1.1 Create `FGEngineTest.h` unit test suite
-- [ ] 3.1.2 Test engine state machine (start, run, shutdown)
-- [ ] 3.1.3 Test fuel consumption calculations
-- [ ] 3.1.4 Test thrust vector orientation
+- [x] 3.1.1 Create `FGEngineTest.h` unit test suite
+- [x] 3.1.2 Test engine state machine (start, run, shutdown)
+- [x] 3.1.3 Test fuel consumption calculations
+- [x] 3.1.4 Test thrust vector orientation
 
 ### 3.2 FGPiston Tests
 - [ ] 3.2.1 Create `FGPistonTest.h` unit test suite
@@ -130,16 +130,16 @@
 - [ ] 3.4.4 Test nozzle expansion effects
 
 ### 3.5 FGElectric Tests
-- [ ] 3.5.1 Create `FGElectricTest.h` unit test suite
-- [ ] 3.5.2 Test motor torque curves
-- [ ] 3.5.3 Test battery discharge modeling
-- [ ] 3.5.4 Test regenerative braking
+- [x] 3.5.1 Create `FGElectricTest.h` unit test suite
+- [x] 3.5.2 Test motor torque curves
+- [x] 3.5.3 Test battery discharge modeling
+- [x] 3.5.4 Test regenerative braking
 
 ### 3.6 FGPropeller Tests
-- [ ] 3.6.1 Create `FGPropellerTest.h` unit test suite
-- [ ] 3.6.2 Test variable pitch calculations
-- [ ] 3.6.3 Test advance ratio effects
-- [ ] 3.6.4 Test propeller efficiency maps
+- [x] 3.6.1 Create `FGPropellerTest.h` unit test suite
+- [x] 3.6.2 Test variable pitch calculations
+- [x] 3.6.3 Test advance ratio effects
+- [x] 3.6.4 Test propeller efficiency maps
 
 ### 3.7 FGRotor Tests
 - [ ] 3.7.1 Create `FGRotorTest.h` unit test suite
