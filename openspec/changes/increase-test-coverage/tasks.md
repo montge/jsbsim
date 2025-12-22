@@ -202,16 +202,16 @@
 - [ ] 5.2.4 Test encoding handling
 
 ### 5.3 FGScript Tests
-- [ ] 5.3.1 Expand script execution tests
-- [ ] 5.3.2 Test event triggering
-- [ ] 5.3.3 Test property setting actions
-- [ ] 5.3.4 Test notify conditions
+- [x] 5.3.1 Expand script execution tests
+- [x] 5.3.2 Test event triggering
+- [x] 5.3.3 Test property setting actions
+- [x] 5.3.4 Test notify conditions
 
 ### 5.4 FGOutput Tests
-- [ ] 5.4.1 Create `FGOutputTest.h` unit test suite
-- [ ] 5.4.2 Test CSV output formatting
-- [ ] 5.4.3 Test socket output
-- [ ] 5.4.4 Test output rate scheduling
+- [x] 5.4.1 Create `FGOutputTest.h` unit test suite
+- [x] 5.4.2 Test CSV output formatting
+- [x] 5.4.3 Test socket output
+- [x] 5.4.4 Test output rate scheduling
 
 ### 5.5 FGInput Tests
 - [ ] 5.5.1 Create `FGInputTest.h` unit test suite

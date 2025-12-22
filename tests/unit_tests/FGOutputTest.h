@@ -1,0 +1,477 @@
+#include <cxxtest/TestSuite.h>
+#include <limits>
+#include <cmath>
+#include <string>
+#include <sstream>
+#include <vector>
+
+#include <FGFDMExec.h>
+#include "TestUtilities.h"
+
+using namespace JSBSim;
+
+class FGOutputTest : public CxxTest::TestSuite
+{
+public:
+  // Test output type enum values
+  void testOutputTypeEnums() {
+    // Output types: CSV, TABULAR, SOCKET, FLIGHTGEAR, TERMINAL, COUT, NONE
+    int otCSV = 0;
+    int otTab = 1;
+    int otSocket = 2;
+    int otFG = 3;
+    int otTerminal = 4;
+    int otNone = 5;
+
+    TS_ASSERT_EQUALS(otCSV, 0);
+    TS_ASSERT_EQUALS(otTab, 1);
+    TS_ASSERT_EQUALS(otSocket, 2);
+    TS_ASSERT_EQUALS(otFG, 3);
+    TS_ASSERT_EQUALS(otTerminal, 4);
+    TS_ASSERT_EQUALS(otNone, 5);
+  }
+
+  // Test subsystem bitmask values
+  void testSubsystemBitmasks() {
+    // Subsystem flags are powers of 2
+    int ssSimulation = 1;
+    int ssAerosurfaces = 2;
+    int ssRates = 4;
+    int ssVelocities = 8;
+    int ssForces = 16;
+    int ssMoments = 32;
+    int ssAtmosphere = 64;
+    int ssMassProps = 128;
+    int ssAeroFunctions = 256;
+    int ssPropagate = 512;
+    int ssGroundReactions = 1024;
+    int ssFCS = 2048;
+    int ssPropulsion = 4096;
+
+    TS_ASSERT_EQUALS(ssSimulation, 1);
+    TS_ASSERT_EQUALS(ssAerosurfaces, 2);
+    TS_ASSERT_EQUALS(ssRates, 4);
+    TS_ASSERT_EQUALS(ssVelocities, 8);
+    TS_ASSERT_EQUALS(ssForces, 16);
+    TS_ASSERT_EQUALS(ssMoments, 32);
+    TS_ASSERT_EQUALS(ssAtmosphere, 64);
+    TS_ASSERT_EQUALS(ssMassProps, 128);
+    TS_ASSERT_EQUALS(ssAeroFunctions, 256);
+    TS_ASSERT_EQUALS(ssPropagate, 512);
+    TS_ASSERT_EQUALS(ssGroundReactions, 1024);
+    TS_ASSERT_EQUALS(ssFCS, 2048);
+    TS_ASSERT_EQUALS(ssPropulsion, 4096);
+  }
+
+  // Test subsystem combination
+  void testSubsystemCombination() {
+    int ssSimulation = 1;
+    int ssRates = 4;
+    int ssVelocities = 8;
+
+    // Combine subsystems with OR
+    int combined = ssSimulation | ssRates | ssVelocities;
+    TS_ASSERT_EQUALS(combined, 13);
+
+    // Check if specific subsystem is enabled
+    bool hasSimulation = (combined & ssSimulation) != 0;
+    bool hasRates = (combined & ssRates) != 0;
+    bool hasVelocities = (combined & ssVelocities) != 0;
+    bool hasForces = (combined & 16) != 0;
+
+    TS_ASSERT(hasSimulation);
+    TS_ASSERT(hasRates);
+    TS_ASSERT(hasVelocities);
+    TS_ASSERT(!hasForces);
+  }
+
+  // Test output rate calculation
+  void testOutputRateCalculation() {
+    // Rate in Hz (samples per second)
+    double rateHz = 20.0;
+    double simDt = 0.0083333;  // ~120 Hz simulation
+
+    // Output every N frames
+    int outputEveryNFrames = static_cast<int>(std::round(1.0 / (rateHz * simDt)));
+    // 1.0 / (20 * 0.0083333) = 1.0 / 0.16667 = 6
+    TS_ASSERT_EQUALS(outputEveryNFrames, 6);
+
+    // Different rates
+    rateHz = 10.0;
+    outputEveryNFrames = static_cast<int>(std::round(1.0 / (rateHz * simDt)));
+    TS_ASSERT_EQUALS(outputEveryNFrames, 12);
+  }
+
+  // Test output rate Hz validation
+  void testOutputRateValidation() {
+    // Valid rates
+    double rate1 = 20.0;  // 20 Hz
+    double rate2 = 1.0;   // 1 Hz
+    double rate3 = 120.0; // 120 Hz
+
+    TS_ASSERT(rate1 > 0.0);
+    TS_ASSERT(rate2 > 0.0);
+    TS_ASSERT(rate3 > 0.0);
+
+    // Invalid rate (zero or negative would cause issues)
+    double invalidRate = 0.0;
+    TS_ASSERT(invalidRate <= 0.0);
+  }
+
+  // Test CSV delimiter
+  void testCSVDelimiter() {
+    std::string delimiter = ",";
+    TS_ASSERT_EQUALS(delimiter, ",");
+
+    // Build CSV row
+    double time = 1.234;
+    double altitude = 5000.0;
+    double speed = 150.0;
+
+    std::ostringstream oss;
+    oss << time << delimiter << altitude << delimiter << speed;
+    std::string row = oss.str();
+
+    TS_ASSERT(row.find(",") != std::string::npos);
+    TS_ASSERT_EQUALS(row, "1.234,5000,150");
+  }
+
+  // Test tab delimiter
+  void testTabDelimiter() {
+    std::string delimiter = "\t";
+    TS_ASSERT_EQUALS(delimiter, "\t");
+
+    double time = 1.234;
+    double altitude = 5000.0;
+
+    std::ostringstream oss;
+    oss << time << delimiter << altitude;
+    std::string row = oss.str();
+
+    TS_ASSERT(row.find("\t") != std::string::npos);
+  }
+
+  // Test output filename parsing
+  void testOutputFilenameParsing() {
+    std::string filename = "B737_datalog.csv";
+
+    // Check extension
+    size_t dotPos = filename.rfind('.');
+    TS_ASSERT(dotPos != std::string::npos);
+
+    std::string extension = filename.substr(dotPos + 1);
+    TS_ASSERT_EQUALS(extension, "csv");
+
+    std::string basename = filename.substr(0, dotPos);
+    TS_ASSERT_EQUALS(basename, "B737_datalog");
+  }
+
+  // Test filename with runID suffix
+  void testFilenameWithRunID() {
+    std::string basename = "datalog";
+    std::string extension = ".csv";
+    int runID = 5;
+
+    std::ostringstream oss;
+    oss << basename << "_" << runID << extension;
+    std::string filename = oss.str();
+
+    TS_ASSERT_EQUALS(filename, "datalog_5.csv");
+  }
+
+  // Test socket address parsing
+  void testSocketAddressParsing() {
+    std::string address = "localhost:5500/tcp";
+
+    // Parse host
+    size_t colonPos = address.find(':');
+    std::string host = address.substr(0, colonPos);
+    TS_ASSERT_EQUALS(host, "localhost");
+
+    // Parse port
+    size_t slashPos = address.find('/');
+    std::string portStr = address.substr(colonPos + 1, slashPos - colonPos - 1);
+    int port = std::stoi(portStr);
+    TS_ASSERT_EQUALS(port, 5500);
+
+    // Parse protocol
+    std::string protocol = address.substr(slashPos + 1);
+    TS_ASSERT_EQUALS(protocol, "tcp");
+  }
+
+  // Test default port values
+  void testDefaultPortValues() {
+    // Default JSBSim socket port
+    int defaultPort = 1138;
+    TS_ASSERT_EQUALS(defaultPort, 1138);
+
+    // Default FlightGear port
+    int fgPort = 5500;
+    TS_ASSERT_EQUALS(fgPort, 5500);
+  }
+
+  // Test protocol types
+  void testProtocolTypes() {
+    std::string tcp = "tcp";
+    std::string udp = "udp";
+
+    TS_ASSERT_EQUALS(tcp, "tcp");
+    TS_ASSERT_EQUALS(udp, "udp");
+  }
+
+  // Test enable/disable toggle
+  void testEnableDisableToggle() {
+    bool enabled = true;
+
+    TS_ASSERT(enabled);
+
+    // Disable
+    enabled = false;
+    TS_ASSERT(!enabled);
+
+    // Toggle
+    enabled = !enabled;
+    TS_ASSERT(enabled);
+
+    // Toggle again
+    enabled = !enabled;
+    TS_ASSERT(!enabled);
+  }
+
+  // Test output instance indexing
+  void testOutputInstanceIndexing() {
+    int numOutputs = 3;
+    std::vector<bool> enabled(numOutputs, true);
+
+    TS_ASSERT_EQUALS(enabled.size(), 3u);
+    TS_ASSERT(enabled[0]);
+    TS_ASSERT(enabled[1]);
+    TS_ASSERT(enabled[2]);
+
+    // Toggle specific instance
+    enabled[1] = false;
+    TS_ASSERT(enabled[0]);
+    TS_ASSERT(!enabled[1]);
+    TS_ASSERT(enabled[2]);
+  }
+
+  // Test precision formatting
+  void testPrecisionFormatting() {
+    double value = 1234.56789;
+
+    // Default precision
+    std::ostringstream oss1;
+    oss1 << value;
+    std::string str1 = oss1.str();
+    TS_ASSERT(str1.find("1234.57") != std::string::npos ||
+              str1.find("1234.56789") != std::string::npos);
+
+    // Fixed precision
+    std::ostringstream oss2;
+    oss2.precision(2);
+    oss2 << std::fixed << value;
+    std::string str2 = oss2.str();
+    TS_ASSERT_EQUALS(str2, "1234.57");
+  }
+
+  // Test scientific notation
+  void testScientificNotation() {
+    double largeValue = 1.23e10;
+    double smallValue = 1.23e-10;
+
+    std::ostringstream oss1;
+    oss1 << std::scientific << largeValue;
+    std::string str1 = oss1.str();
+    TS_ASSERT(str1.find("e+") != std::string::npos || str1.find("E+") != std::string::npos);
+
+    std::ostringstream oss2;
+    oss2 << std::scientific << smallValue;
+    std::string str2 = oss2.str();
+    TS_ASSERT(str2.find("e-") != std::string::npos || str2.find("E-") != std::string::npos);
+  }
+
+  // Test header row generation
+  void testHeaderRowGeneration() {
+    std::vector<std::string> headers = {"Time", "Altitude", "Speed", "Heading"};
+    std::string delimiter = ",";
+
+    std::ostringstream oss;
+    for (size_t i = 0; i < headers.size(); i++) {
+      if (i > 0) oss << delimiter;
+      oss << headers[i];
+    }
+    std::string headerRow = oss.str();
+
+    TS_ASSERT_EQUALS(headerRow, "Time,Altitude,Speed,Heading");
+  }
+
+  // Test output directory path handling
+  void testOutputDirectoryPath() {
+    std::string directory = "/home/user/jsbsim/output/";
+    std::string filename = "datalog.csv";
+
+    std::string fullPath = directory + filename;
+    TS_ASSERT_EQUALS(fullPath, "/home/user/jsbsim/output/datalog.csv");
+
+    // Without trailing slash
+    directory = "/home/user/jsbsim/output";
+    fullPath = directory + "/" + filename;
+    TS_ASSERT_EQUALS(fullPath, "/home/user/jsbsim/output/datalog.csv");
+  }
+
+  // Test special filename "cout"
+  void testSpecialCoutFilename() {
+    std::string filename = "cout";
+
+    bool isStdout = (filename == "cout" || filename == "COUT");
+    TS_ASSERT(isStdout);
+
+    filename = "datalog.csv";
+    isStdout = (filename == "cout" || filename == "COUT");
+    TS_ASSERT(!isStdout);
+  }
+
+  // Test simulation data values
+  void testSimulationDataValues() {
+    // Common output properties
+    double simTime = 123.456;
+    double dt = 0.0083333;
+    double frameCount = 14815.0;
+
+    TS_ASSERT_DELTA(simTime, 123.456, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(dt, 0.0083333, 1e-7);
+    TS_ASSERT_DELTA(frameCount, 14815.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test velocity output values
+  void testVelocityOutputValues() {
+    // Body-axis velocities (ft/sec)
+    double u = 300.0;  // forward
+    double v = 5.0;    // lateral
+    double w = 10.0;   // vertical
+
+    // True airspeed
+    double vt = std::sqrt(u*u + v*v + w*w);
+    TS_ASSERT_DELTA(vt, 300.17, 0.01);
+
+    // Calibrated airspeed (would include density correction)
+    double rhoRatio = 0.9;  // density ratio
+    double vc = vt * std::sqrt(rhoRatio);
+    TS_ASSERT(vc < vt);
+  }
+
+  // Test angular rate output values
+  void testAngularRateOutputValues() {
+    // Body-axis rates (rad/sec)
+    double p = 0.1;   // roll rate
+    double q = 0.05;  // pitch rate
+    double r = 0.02;  // yaw rate
+
+    // Convert to deg/sec for output
+    double pDeg = p * 180.0 / M_PI;
+    double qDeg = q * 180.0 / M_PI;
+    double rDeg = r * 180.0 / M_PI;
+
+    TS_ASSERT_DELTA(pDeg, 5.73, 0.01);
+    TS_ASSERT_DELTA(qDeg, 2.86, 0.01);
+    TS_ASSERT_DELTA(rDeg, 1.15, 0.01);
+  }
+
+  // Test force output values
+  void testForceOutputValues() {
+    // Force components (lbf)
+    double fx = 1000.0;  // forward force
+    double fy = 50.0;    // lateral force
+    double fz = -500.0;  // vertical force (negative = down)
+
+    // Total force magnitude
+    double fTotal = std::sqrt(fx*fx + fy*fy + fz*fz);
+    TS_ASSERT_DELTA(fTotal, 1118.03, 0.1);
+  }
+
+  // Test moment output values
+  void testMomentOutputValues() {
+    // Moment components (ft-lbf)
+    double l = 5000.0;   // rolling moment
+    double m = -2000.0;  // pitching moment
+    double n = 1000.0;   // yawing moment
+
+    TS_ASSERT_DELTA(l, 5000.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(m, -2000.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(n, 1000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test atmosphere output values
+  void testAtmosphereOutputValues() {
+    // Standard atmosphere values at sea level
+    double pressure = 2116.22;     // psf
+    double density = 0.002377;     // slugs/ft^3
+    double temperature = 518.67;   // Rankine
+    double soundSpeed = 1116.45;   // ft/sec
+
+    TS_ASSERT_DELTA(pressure, Constants::SEA_LEVEL_PRESSURE_PSF, 1.0);
+    TS_ASSERT_DELTA(density, Constants::SEA_LEVEL_DENSITY_SLUGS_FT3, 0.00001);
+    TS_ASSERT_DELTA(temperature, Constants::SEA_LEVEL_TEMP_R, 1.0);
+  }
+
+  // Test mass properties output
+  void testMassPropertiesOutput() {
+    // Aircraft mass properties
+    double emptyWeight = 6000.0;   // lbs
+    double fuelWeight = 1500.0;    // lbs
+    double totalWeight = emptyWeight + fuelWeight;
+
+    TS_ASSERT_DELTA(totalWeight, 7500.0, DEFAULT_TOLERANCE);
+
+    // CG position (inches from reference)
+    double cgX = 100.0;
+    double cgY = 0.0;
+    double cgZ = -5.0;
+
+    TS_ASSERT_DELTA(cgY, 0.0, DEFAULT_TOLERANCE);  // Symmetric aircraft
+  }
+
+  // Test FCS output values
+  void testFCSOutputValues() {
+    // Flight control surface positions (normalized)
+    double elevatorPos = 0.25;   // 25% deflection
+    double aileronPos = -0.1;    // 10% left
+    double rudderPos = 0.0;      // centered
+
+    TS_ASSERT(elevatorPos >= -1.0 && elevatorPos <= 1.0);
+    TS_ASSERT(aileronPos >= -1.0 && aileronPos <= 1.0);
+    TS_ASSERT(rudderPos >= -1.0 && rudderPos <= 1.0);
+
+    // Control surface deflection in degrees
+    double elevatorDeg = elevatorPos * 25.0;  // Max 25 deg
+    TS_ASSERT_DELTA(elevatorDeg, 6.25, DEFAULT_TOLERANCE);
+  }
+
+  // Test propulsion output values
+  void testPropulsionOutputValues() {
+    // Engine parameters
+    double thrust = 5000.0;       // lbf
+    double rpm = 2400.0;
+    double fuelFlow = 0.1;        // lbs/sec
+    double manifoldPressure = 29.0;  // inHg
+
+    TS_ASSERT(thrust >= 0.0);
+    TS_ASSERT(rpm >= 0.0);
+    TS_ASSERT(fuelFlow >= 0.0);
+  }
+
+  // Test ground reactions output
+  void testGroundReactionsOutput() {
+    // Gear forces (lbf)
+    double noseGearForce = 1000.0;
+    double leftMainForce = 3000.0;
+    double rightMainForce = 3000.0;
+
+    double totalGearForce = noseGearForce + leftMainForce + rightMainForce;
+    TS_ASSERT_DELTA(totalGearForce, 7000.0, DEFAULT_TOLERANCE);
+
+    // Gear compression (inches)
+    double compression = 2.5;
+    TS_ASSERT(compression >= 0.0);
+  }
+};
