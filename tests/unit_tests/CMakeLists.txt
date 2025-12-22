@@ -16,6 +16,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGParameterTest
                FGParameterValueTest
                FGConditionTest
+               FGFunctionTest
                FGPropertyManagerTest
                FGAtmosphereTest
                FGAuxiliaryTest
