@@ -3,16 +3,16 @@
 ## Phase 0: Infrastructure Setup
 
 ### 0.1 Coverage Tooling
-- [ ] 0.1.1 Enable branch coverage in LCOV (`--rc lcov_branch_coverage=1`)
-- [ ] 0.1.2 Update `.github/workflows/coverage.yml` with branch coverage
-- [ ] 0.1.3 Create `.codecov.yml` with module flags and targets
+- [x] 0.1.1 Enable branch coverage in LCOV (`--rc lcov_branch_coverage=1`)
+- [x] 0.1.2 Update `.github/workflows/coverage.yml` with branch coverage
+- [x] 0.1.3 Create `.codecov.yml` with module flags and targets
 - [ ] 0.1.4 Configure SonarCloud quality gates for coverage thresholds
 - [ ] 0.1.5 Add coverage badges to README.md
 
 ### 0.2 Test Infrastructure
-- [ ] 0.2.1 Create `tests/fixtures/` directory for shared test data
-- [ ] 0.2.2 Create shared test utilities header `tests/unit_tests/TestUtilities.h`
-- [ ] 0.2.3 Document test patterns in `tests/README.md`
+- [x] 0.2.1 Create `tests/fixtures/` directory for shared test data
+- [x] 0.2.2 Create shared test utilities header `tests/unit_tests/TestUtilities.h`
+- [x] 0.2.3 Document test patterns in `tests/README.md`
 
 ## Phase 1: Math Foundation (Target: 95% coverage)
 
