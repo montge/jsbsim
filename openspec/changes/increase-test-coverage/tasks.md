@@ -6,7 +6,7 @@
 - [x] 0.1.1 Enable branch coverage in LCOV (`--rc lcov_branch_coverage=1`)
 - [x] 0.1.2 Update `.github/workflows/coverage.yml` with branch coverage
 - [x] 0.1.3 Create `.codecov.yml` with module flags and targets
-- [ ] 0.1.4 Configure SonarCloud quality gates for coverage thresholds
+- [x] 0.1.4 Configure SonarCloud quality gates for coverage thresholds
 - [x] 0.1.5 Add coverage badges to README.md
 
 ### 0.2 Test Infrastructure
@@ -255,7 +255,7 @@
 
 ### 7.1 Coverage Enforcement
 - [x] 7.1.1 Enable Codecov PR checks with 80% patch coverage requirement
-- [ ] 7.1.2 Configure SonarCloud quality gate for coverage
+- [x] 7.1.2 Configure SonarCloud quality gate for coverage
 - [x] 7.1.3 Add coverage check to PR template
 
 ### 7.2 Documentation
@@ -265,10 +265,10 @@
 - [x] 7.2.4 Add testing FAQ
 
 ### 7.3 CI Optimization
-- [ ] 7.3.1 Parallelize test execution
-- [ ] 7.3.2 Create fast test suite for quick PR checks
-- [ ] 7.3.3 Create comprehensive test suite for nightly runs
-- [ ] 7.3.4 Optimize test fixture loading
+- [x] 7.3.1 Parallelize test execution
+- [x] 7.3.2 Create fast test suite for quick PR checks
+- [x] 7.3.3 Create comprehensive test suite for nightly runs
+- [x] 7.3.4 Optimize test fixture loading
 
 ## Verification Checkpoints
 
