@@ -16,22 +16,41 @@
 
 ## Phase 1: Math Foundation (Target: 95% coverage)
 
-### 1.1 FGFunction Tests
-- [ ] 1.1.1 Add tests for all function types (sum, product, difference, etc.)
-- [ ] 1.1.2 Add tests for nested function evaluation
-- [ ] 1.1.3 Add tests for property binding
-- [ ] 1.1.4 Add edge case tests (division by zero, overflow)
+### 1.1 FGNelderMead Tests
+- [x] 1.1.1 Create `FGNelderMeadTest.h` unit test suite
+- [x] 1.1.2 Test 1D parabola optimization
+- [x] 1.1.3 Test 2D quadratic optimization
+- [x] 1.1.4 Test Rosenbrock function (challenging case)
+- [x] 1.1.5 Test bound constraints
+- [x] 1.1.6 Test status and getSolution methods
+- [x] 1.1.7 Test max iterations handling
 
-### 1.2 FGRealValue Tests
-- [ ] 1.2.1 Create `FGRealValueTest.h` unit test suite
-- [ ] 1.2.2 Test value binding and evaluation
-- [ ] 1.2.3 Test property manager integration
+### 1.2 FGRungeKutta Tests
+- [x] 1.2.1 Create `FGRungeKuttaTest.h` unit test suite for FGRK4 and FGRKFehlberg
+- [x] 1.2.2 Test exponential growth/decay ODEs
+- [x] 1.2.3 Test linear and polynomial ODEs
+- [x] 1.2.4 Test sinusoidal ODEs
+- [x] 1.2.5 Test logistic growth (nonlinear ODE)
+- [x] 1.2.6 Test init/status/iteration methods
+- [x] 1.2.7 Test Fehlberg adaptive parameters (epsilon, shrinkAvail)
+- [x] 1.2.8 Compare RK4 vs Fehlberg accuracy
 
-### 1.3 Math Edge Cases
-- [ ] 1.3.1 Expand FGColumnVector3Test with normalization edge cases
-- [ ] 1.3.2 Expand FGMatrix33Test with singular matrix handling
-- [ ] 1.3.3 Expand FGQuaternionTest with gimbal lock scenarios
-- [ ] 1.3.4 Add FGLocation tests for polar coordinate edge cases
+### 1.3 FGFunction Tests
+- [ ] 1.3.1 Add tests for all function types (sum, product, difference, etc.)
+- [ ] 1.3.2 Add tests for nested function evaluation
+- [ ] 1.3.3 Add tests for property binding
+- [ ] 1.3.4 Add edge case tests (division by zero, overflow)
+
+### 1.4 FGRealValue Tests
+- [ ] 1.4.1 Create `FGRealValueTest.h` unit test suite
+- [ ] 1.4.2 Test value binding and evaluation
+- [ ] 1.4.3 Test property manager integration
+
+### 1.5 Math Edge Cases
+- [ ] 1.5.1 Expand FGColumnVector3Test with normalization edge cases
+- [ ] 1.5.2 Expand FGMatrix33Test with singular matrix handling
+- [ ] 1.5.3 Expand FGQuaternionTest with gimbal lock scenarios
+- [ ] 1.5.4 Add FGLocation tests for polar coordinate edge cases
 
 ## Phase 2: Core Models (Target: 85% coverage)
 
