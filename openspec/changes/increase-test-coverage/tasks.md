@@ -142,10 +142,10 @@
 - [x] 3.6.4 Test propeller efficiency maps
 
 ### 3.7 FGRotor Tests
-- [ ] 3.7.1 Create `FGRotorTest.h` unit test suite
-- [ ] 3.7.2 Test collective pitch response
-- [ ] 3.7.3 Test cyclic pitch effects
-- [ ] 3.7.4 Test rotor RPM governing
+- [x] 3.7.1 Create `FGRotorTest.h` unit test suite
+- [x] 3.7.2 Test collective pitch response
+- [x] 3.7.3 Test cyclic pitch effects
+- [x] 3.7.4 Test rotor RPM governing
 
 ### 3.8 Other Propulsion Components
 - [ ] 3.8.1 Create `FGNozzleTest.h` for nozzle thrust calculations
