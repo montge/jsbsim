@@ -48,6 +48,8 @@ set(UNIT_TESTS FGColumnVector3Test
                FGAccelerometerTest
                FGMagnetometerTest
                FGWaypointTest
+               FGDistributorTest
+               FGLinearActuatorTest
                FGActuatorTest
                FGXMLElementTest
                FGXMLParseTest
