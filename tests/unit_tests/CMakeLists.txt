@@ -28,6 +28,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGAccelerationsTest
                FGAircraftTest
                FGMassBalanceTest
+               FGAerodynamicsTest
                FGModelTest
                FGPropagateTest
                FGForceTest
