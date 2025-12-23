@@ -68,9 +68,9 @@ private:
 public:
   void setUp() {
     fdmex = std::make_shared<FGFDMExec>();
-    fdmex->GetPropertyManager()->Tie("test/x", 0.0);
-    fdmex->GetPropertyManager()->Tie("test/y", 0.0);
-    fdmex->GetPropertyManager()->Tie("test/z", 0.0);
+    fdmex->GetPropertyManager()->GetNode("test/x", true);
+    fdmex->GetPropertyManager()->GetNode("test/y", true);
+    fdmex->GetPropertyManager()->GetNode("test/z", true);
   }
 
   void tearDown() {

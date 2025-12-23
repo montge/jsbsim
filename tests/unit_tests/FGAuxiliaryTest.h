@@ -6,6 +6,7 @@
 #include <models/FGAuxiliary.h>
 
 const double epsilon = 100. * std::numeric_limits<double>::epsilon();
+constexpr double radtodeg = 180. / M_PI;
 
 using namespace JSBSim;
 
@@ -563,5 +564,782 @@ public:
     TS_ASSERT(!std::isnan(hOverB));
     // h/b = AGL / wingspan
     TS_ASSERT_DELTA(hOverB, 100.0 / 35.0, 0.1);
+  }
+
+  // Test Mach calculation at various speeds
+  void testMachCalculation() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double a = atm->GetSoundSpeedSL();  // Speed of sound at sea level
+
+    // Test subsonic
+    double V_subsonic = 0.5 * a;
+    aux->in.vUVW = FGColumnVector3(V_subsonic, 0.0, 0.0);
+    aux->in.SoundSpeed = a;
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+    TS_ASSERT_DELTA(aux->GetMach(), 0.5, 1e-6);
+
+    // Test sonic
+    aux->in.vUVW = FGColumnVector3(a, 0.0, 0.0);
+    aux->Run(false);
+    TS_ASSERT_DELTA(aux->GetMach(), 1.0, 1e-6);
+
+    // Test supersonic
+    aux->in.vUVW = FGColumnVector3(2.0 * a, 0.0, 0.0);
+    aux->Run(false);
+    TS_ASSERT_DELTA(aux->GetMach(), 2.0, 1e-6);
+  }
+
+  // Test dynamic pressure (qbar) at various speeds
+  void testQbarVariousSpeeds() {
+    auto aux = fdmex.GetAuxiliary();
+    double rho = atm->GetDensitySL();
+
+    // Test at different speeds
+    for (double V = 100.0; V <= 1000.0; V += 100.0) {
+      aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+      aux->in.Density = rho;
+      aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+      aux->in.Pressure = atm->GetPressureSL();
+      aux->in.Temperature = atm->GetTemperatureSL();
+
+      aux->Run(false);
+
+      double expected_qbar = 0.5 * rho * V * V;
+      TS_ASSERT_DELTA(aux->Getqbar(), expected_qbar, 1.0);
+    }
+  }
+
+  // Test angle of attack with non-zero vertical velocity
+  void testAlphaWithVerticalVelocity() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double u = 500.0;  // Forward velocity
+    double w = 50.0;   // Downward velocity
+
+    aux->in.vUVW = FGColumnVector3(u, 0.0, w);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_alpha = atan2(w, u);
+    TS_ASSERT_DELTA(aux->Getalpha(), expected_alpha, 1e-6);
+    TS_ASSERT_DELTA(aux->Getalpha(FGJSBBase::inDegrees), expected_alpha * radtodeg, 1e-6);
+  }
+
+  // Test sideslip angle with lateral velocity
+  void testBetaWithLateralVelocity() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double u = 500.0;  // Forward velocity
+    double v = 50.0;   // Lateral velocity
+
+    aux->in.vUVW = FGColumnVector3(u, v, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_beta = atan2(v, u);
+    TS_ASSERT_DELTA(aux->Getbeta(), expected_beta, 1e-6);
+    TS_ASSERT_DELTA(aux->Getbeta(FGJSBBase::inDegrees), expected_beta * radtodeg, 1e-6);
+  }
+
+  // Test combined alpha and beta
+  void testAlphaBetaCombined() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double u = 400.0;
+    double v = 40.0;
+    double w = 80.0;
+
+    aux->in.vUVW = FGColumnVector3(u, v, w);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double muw = u*u + w*w;
+    double expected_alpha = atan2(w, u);
+    double expected_beta = atan2(v, sqrt(muw));
+
+    TS_ASSERT_DELTA(aux->Getalpha(), expected_alpha, 1e-6);
+    TS_ASSERT_DELTA(aux->Getbeta(), expected_beta, 1e-6);
+  }
+
+  // Test total pressure at subsonic and supersonic speeds
+  void testTotalPressureSubsonicSupersonic() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double p = atm->GetPressureSL();
+    double T = atm->GetTemperatureSL();
+    double a = atm->GetSoundSpeedSL();
+
+    // Subsonic - M = 0.5
+    double V_sub = 0.5 * a;
+    aux->in.vUVW = FGColumnVector3(V_sub, 0.0, 0.0);
+    aux->in.Pressure = p;
+    aux->in.Temperature = T;
+    aux->in.SoundSpeed = a;
+    aux->in.Density = atm->GetDensitySL();
+
+    aux->Run(false);
+    double pt_sub = aux->GetTotalPressure();
+    TS_ASSERT(pt_sub > p);  // Total pressure should be greater than static
+
+    // Supersonic - M = 2.0
+    double V_sup = 2.0 * a;
+    aux->in.vUVW = FGColumnVector3(V_sup, 0.0, 0.0);
+
+    aux->Run(false);
+    double pt_sup = aux->GetTotalPressure();
+    TS_ASSERT(pt_sup > pt_sub);  // Supersonic total pressure should be higher
+  }
+
+  // Test total temperature at various Mach numbers
+  void testTotalTemperatureVariousMach() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double T = atm->GetTemperatureSL();
+    double a = atm->GetSoundSpeedSL();
+    double p = atm->GetPressureSL();
+    double rho = atm->GetDensitySL();
+
+    for (double M = 0.0; M <= 3.0; M += 0.5) {
+      double V = M * a;
+      aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+      aux->in.Temperature = T;
+      aux->in.SoundSpeed = a;
+      aux->in.Pressure = p;
+      aux->in.Density = rho;
+
+      aux->Run(false);
+
+      double expected_tat = T * (1.0 + 0.2 * M * M);
+      TS_ASSERT_DELTA(aux->GetTotalTemperature(), expected_tat, 1.0);
+    }
+  }
+
+  // Test pilot acceleration with rotation
+  void testPilotAccelWithRotation() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Set up rotation
+    aux->in.vPQR = FGColumnVector3(0.1, 0.05, 0.02);  // rad/s
+    aux->in.vPQRidot = FGColumnVector3(0.01, 0.01, 0.01);  // rad/s^2
+    aux->in.ToEyePt = FGColumnVector3(15.0, 0.0, -3.0);  // ft from CG to pilot
+    aux->in.vBodyAccel = FGColumnVector3(5.0, 2.0, 32.174);
+    aux->in.StandardGravity = 32.174;
+    aux->in.vPQRi = aux->in.vPQR;  // Assume inertial = body for this test
+
+    aux->Run(false);
+
+    FGColumnVector3 pilotAccel = aux->GetPilotAccel();
+
+    // Pilot acceleration should include centripetal and angular acceleration effects
+    TS_ASSERT(!std::isnan(pilotAccel(1)));
+    TS_ASSERT(!std::isnan(pilotAccel(2)));
+    TS_ASSERT(!std::isnan(pilotAccel(3)));
+
+    // Should be different from CG acceleration due to rotation
+    TS_ASSERT(fabs(pilotAccel(1) - aux->in.vBodyAccel(1)) > 0.001 ||
+              fabs(pilotAccel(2) - aux->in.vBodyAccel(2)) > 0.001 ||
+              fabs(pilotAccel(3) - aux->in.vBodyAccel(3)) > 0.001);
+  }
+
+  // Test load factors Nx, Ny, Nz in level flight
+  void testLoadFactorsLevelFlight() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Level flight at constant speed - only gravity acting
+    aux->in.vBodyAccel = FGColumnVector3(0.0, 0.0, 32.174);  // 1g upward
+    aux->in.StandardGravity = 32.174;
+    aux->in.Tl2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+
+    aux->Run(false);
+
+    // In level flight with 1g lift
+    TS_ASSERT_DELTA(aux->GetNx(), 0.0, 0.01);
+    TS_ASSERT_DELTA(aux->GetNy(), 0.0, 0.01);
+    TS_ASSERT_DELTA(aux->GetNz(), -1.0, 0.01);  // -1g (note sign convention)
+  }
+
+  // Test load factors in accelerated flight
+  void testLoadFactorsAccelerated() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Forward acceleration + gravity
+    aux->in.vBodyAccel = FGColumnVector3(32.174, 0.0, 32.174);  // 1g forward, 1g up
+    aux->in.StandardGravity = 32.174;
+    aux->in.Tl2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+
+    aux->Run(false);
+
+    TS_ASSERT_DELTA(aux->GetNx(), 1.0, 0.01);
+    TS_ASSERT_DELTA(aux->GetNy(), 0.0, 0.01);
+    TS_ASSERT_DELTA(aux->GetNz(), -1.0, 0.01);
+  }
+
+  // Test GetVcalibratedFPS and GetVcalibratedKTS consistency
+  void testCalibratedAirspeedConversion() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 300.0;  // fps
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+    aux->in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    aux->Run(false);
+
+    double vcas_fps = aux->GetVcalibratedFPS();
+    double vcas_kts = aux->GetVcalibratedKTS();
+
+    // Verify conversion: 1 fps = 0.592484 kts
+    TS_ASSERT_DELTA(vcas_kts, vcas_fps * 0.592483801, 0.01);
+  }
+
+  // Test GetVequivalentFPS and GetVequivalentKTS consistency
+  void testEquivalentAirspeedConversion() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 400.0;  // fps
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double veas_fps = aux->GetVequivalentFPS();
+    double veas_kts = aux->GetVequivalentKTS();
+
+    // Verify conversion: 1 fps = 0.592484 kts
+    TS_ASSERT_DELTA(veas_kts, veas_fps * 0.592483801, 0.01);
+  }
+
+  // Test equivalent airspeed at altitude
+  void testEquivalentAirspeedAtAltitude() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // At 10,000 ft altitude
+    double rho_alt = atm->GetDensity(10000.0);
+    double rho_sl = atm->GetDensitySL();
+    double V = 500.0;  // fps
+
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = rho_alt;
+    aux->in.SoundSpeed = atm->GetSoundSpeed(10000.0);
+    aux->in.Pressure = atm->GetPressure(10000.0);
+    aux->in.Temperature = atm->GetTemperature(10000.0);
+
+    aux->Run(false);
+
+    // VEAS = VTAS * sqrt(rho / rho_sl)
+    double expected_veas = V * sqrt(rho_alt / rho_sl);
+    TS_ASSERT_DELTA(aux->GetVequivalentFPS(), expected_veas, 2.0);
+  }
+
+  // Test flight path angle in climb
+  void testFlightPathAngleClimb() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Climbing flight
+    aux->in.vUVW = FGColumnVector3(500.0, 0.0, -50.0);  // Climbing (negative w)
+    aux->in.Tb2l = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    aux->in.vVel = FGColumnVector3(500.0, 0.0, -50.0);  // NED velocity (negative down = up)
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    // Gamma should be positive for climb
+    TS_ASSERT(aux->GetGamma() > 0.0);
+    TS_ASSERT(aux->GetGamma(FGJSBBase::inDegrees) > 0.0);
+  }
+
+  // Test flight path angle in descent
+  void testFlightPathAngleDescent() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Descending flight
+    aux->in.vUVW = FGColumnVector3(500.0, 0.0, 0.0);
+    aux->in.Tb2l = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    aux->in.vVel = FGColumnVector3(500.0, 0.0, 50.0);  // NED velocity (positive down)
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    // Gamma should be negative for descent
+    TS_ASSERT(aux->GetGamma() < 0.0);
+    TS_ASSERT(aux->GetGamma(FGJSBBase::inDegrees) < 0.0);
+  }
+
+  // Test qbarUW (dynamic pressure in u-w plane)
+  void testQbarUW() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double rho = atm->GetDensitySL();
+    double u = 400.0;
+    double w = 100.0;
+
+    aux->in.vUVW = FGColumnVector3(u, 0.0, w);
+    aux->in.Density = rho;
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_qbarUW = 0.5 * rho * (u*u + w*w);
+    TS_ASSERT_DELTA(aux->GetqbarUW(), expected_qbarUW, 1.0);
+  }
+
+  // Test qbarUV (dynamic pressure in u-v plane)
+  void testQbarUV() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double rho = atm->GetDensitySL();
+    double u = 400.0;
+    double v = 80.0;
+
+    aux->in.vUVW = FGColumnVector3(u, v, 0.0);
+    aux->in.Density = rho;
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_qbarUV = 0.5 * rho * (u*u + v*v);
+    TS_ASSERT_DELTA(aux->GetqbarUV(), expected_qbarUV, 1.0);
+  }
+
+  // Test MachU (Mach number based on u component)
+  void testMachU() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double a = atm->GetSoundSpeedSL();
+    double u = 0.8 * a;
+
+    aux->in.vUVW = FGColumnVector3(u, 50.0, 30.0);  // Non-zero v and w
+    aux->in.SoundSpeed = a;
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_MachU = u / a;
+    TS_ASSERT_DELTA(aux->GetMachU(), expected_MachU, 1e-6);
+  }
+
+  // Test ground speed calculation
+  void testGroundSpeed() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double v_north = 300.0;
+    double v_east = 400.0;
+
+    aux->in.vVel = FGColumnVector3(v_north, v_east, -50.0);  // NED
+    aux->in.vUVW = FGColumnVector3(500.0, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    double expected_Vground = sqrt(v_north*v_north + v_east*v_east);
+    TS_ASSERT_DELTA(aux->GetVground(), expected_Vground, 0.1);
+  }
+
+  // Test ground track angle
+  void testGroundTrack() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Northeast heading
+    aux->in.vVel = FGColumnVector3(300.0, 300.0, 0.0);  // NED - 45 degrees
+    aux->in.vUVW = FGColumnVector3(400.0, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    double psi_gt = aux->GetGroundTrack();
+
+    // Should be 45 degrees (pi/4 radians)
+    TS_ASSERT_DELTA(psi_gt, M_PI / 4.0, 0.01);
+  }
+
+  // Test wind-to-body transformation with non-zero alpha
+  void testWindToBodyTransformWithAlpha() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Create angle of attack
+    double u = 500.0;
+    double w = 100.0;  // About 11 degrees alpha
+
+    aux->in.vUVW = FGColumnVector3(u, 0.0, w);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    const FGMatrix33& Tw2b = aux->GetTw2b();
+    const FGMatrix33& Tb2w = aux->GetTb2w();
+
+    // Verify they are inverses (Tw2b * Tb2w = I)
+    FGMatrix33 product = Tw2b * Tb2w;
+    TS_ASSERT_DELTA(product(1,1), 1.0, 1e-6);
+    TS_ASSERT_DELTA(product(2,2), 1.0, 1e-6);
+    TS_ASSERT_DELTA(product(3,3), 1.0, 1e-6);
+    TS_ASSERT_DELTA(product(1,2), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(1,3), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(2,1), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(2,3), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(3,1), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(3,2), 0.0, 1e-6);
+  }
+
+  // Test wind-to-body transformation with non-zero beta
+  void testWindToBodyTransformWithBeta() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Create sideslip angle
+    double u = 500.0;
+    double v = 80.0;  // About 9 degrees beta
+
+    aux->in.vUVW = FGColumnVector3(u, v, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    const FGMatrix33& Tw2b = aux->GetTw2b();
+    const FGMatrix33& Tb2w = aux->GetTb2w();
+
+    // Verify orthogonality (transpose = inverse)
+    FGMatrix33 product = Tw2b * Tb2w;
+    FGMatrix33 identity(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(product(i,j), identity(i,j), 1e-6);
+      }
+    }
+  }
+
+  // Test Reynolds number calculation
+  void testReynoldsNumberVariousConditions() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double chord = 6.0;  // ft
+    double nu = 1.5e-4;  // ft^2/s (approximate at sea level)
+
+    // Test at different velocities
+    for (double V = 100.0; V <= 800.0; V += 100.0) {
+      aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+      aux->in.Wingchord = chord;
+      aux->in.KinematicViscosity = nu;
+      aux->in.Density = atm->GetDensitySL();
+      aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+      aux->Run(false);
+
+      double expected_Re = V * chord / nu;
+      TS_ASSERT_DELTA(aux->GetReynoldsNumber(), expected_Re, expected_Re * 0.01);
+    }
+  }
+
+  // Test GetMagBeta (magnitude of beta)
+  void testMagBeta() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Positive beta
+    aux->in.vUVW = FGColumnVector3(500.0, 50.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+    double beta = aux->Getbeta();
+    TS_ASSERT_DELTA(aux->GetMagBeta(), fabs(beta), 1e-10);
+
+    // Negative beta
+    aux->in.vUVW = FGColumnVector3(500.0, -50.0, 0.0);
+    aux->Run(false);
+    beta = aux->Getbeta();
+    TS_ASSERT_DELTA(aux->GetMagBeta(), fabs(beta), 1e-10);
+    TS_ASSERT(aux->GetMagBeta() >= 0.0);  // Magnitude is always positive
+  }
+
+  // Test alpha and beta dot (rates of change)
+  void testAlphaBetaDot() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Set up conditions with changing velocities
+    aux->in.vUVW = FGColumnVector3(500.0, 50.0, 80.0);
+    aux->in.vUVWdot = FGColumnVector3(10.0, 5.0, 15.0);  // Accelerations
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double adot = aux->Getadot();
+    double bdot = aux->Getbdot();
+
+    // Should be non-zero with acceleration
+    TS_ASSERT(!std::isnan(adot));
+    TS_ASSERT(!std::isnan(bdot));
+
+    // Test unit conversion
+    double adot_deg = aux->Getadot(FGJSBBase::inDegrees);
+    double bdot_deg = aux->Getbdot(FGJSBBase::inDegrees);
+    TS_ASSERT_DELTA(adot_deg, adot * radtodeg, 1e-6);
+    TS_ASSERT_DELTA(bdot_deg, bdot * radtodeg, 1e-6);
+  }
+
+  // Test GetNcg (load factor vector at CG)
+  void testNcgVector() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vBodyAccel = FGColumnVector3(16.087, 8.0435, 32.174);  // 0.5g, 0.25g, 1g
+    aux->in.StandardGravity = 32.174;
+    aux->in.Tl2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+
+    aux->Run(false);
+
+    const FGColumnVector3& Ncg = aux->GetNcg();
+
+    TS_ASSERT_DELTA(Ncg(1), 0.5, 0.01);
+    TS_ASSERT_DELTA(Ncg(2), 0.25, 0.01);
+    TS_ASSERT_DELTA(Ncg(3), 1.0, 0.01);
+
+    // Test indexed getter
+    TS_ASSERT_DELTA(aux->GetNcg(1), 0.5, 0.01);
+    TS_ASSERT_DELTA(aux->GetNcg(2), 0.25, 0.01);
+    TS_ASSERT_DELTA(aux->GetNcg(3), 1.0, 0.01);
+  }
+
+  // Test GetNpilot with indexed access
+  void testNpilotIndexed() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vBodyAccel = FGColumnVector3(10.0, 5.0, 32.174);
+    aux->in.StandardGravity = 32.174;
+    aux->in.ToEyePt = FGColumnVector3(0.0, 0.0, 0.0);
+    aux->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    aux->in.vPQRidot = FGColumnVector3(0.0, 0.0, 0.0);
+    aux->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aux->Run(false);
+
+    // Test both vector and indexed getters
+    const FGColumnVector3& Npilot_vec = aux->GetNpilot();
+    TS_ASSERT_DELTA(aux->GetNpilot(1), Npilot_vec(1), 1e-10);
+    TS_ASSERT_DELTA(aux->GetNpilot(2), Npilot_vec(2), 1e-10);
+    TS_ASSERT_DELTA(aux->GetNpilot(3), Npilot_vec(3), 1e-10);
+  }
+
+  // Test GetPilotAccel with indexed access
+  void testPilotAccelIndexed() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vBodyAccel = FGColumnVector3(15.0, 8.0, 30.0);
+    aux->in.StandardGravity = 32.174;
+    aux->in.ToEyePt = FGColumnVector3(10.0, 0.0, -2.0);
+    aux->in.vPQR = FGColumnVector3(0.05, 0.03, 0.01);
+    aux->in.vPQRidot = FGColumnVector3(0.0, 0.0, 0.0);
+    aux->in.vPQRi = aux->in.vPQR;
+
+    aux->Run(false);
+
+    // Test both vector and indexed getters
+    const FGColumnVector3& pilotAccel_vec = aux->GetPilotAccel();
+    TS_ASSERT_DELTA(aux->GetPilotAccel(1), pilotAccel_vec(1), 1e-10);
+    TS_ASSERT_DELTA(aux->GetPilotAccel(2), pilotAccel_vec(2), 1e-10);
+    TS_ASSERT_DELTA(aux->GetPilotAccel(3), pilotAccel_vec(3), 1e-10);
+  }
+
+  // Test GetAeroUVW vector and indexed access
+  void testAeroUVW() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Body velocities with wind
+    aux->in.vUVW = FGColumnVector3(500.0, 30.0, 50.0);
+    aux->in.TotalWindNED = FGColumnVector3(10.0, 5.0, 0.0);  // Wind in NED
+    aux->in.Tl2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    const FGColumnVector3& aeroUVW = aux->GetAeroUVW();
+    TS_ASSERT_DELTA(aux->GetAeroUVW(1), aeroUVW(1), 1e-10);
+    TS_ASSERT_DELTA(aux->GetAeroUVW(2), aeroUVW(2), 1e-10);
+    TS_ASSERT_DELTA(aux->GetAeroUVW(3), aeroUVW(3), 1e-10);
+  }
+
+  // Test GetAeroPQR vector and indexed access
+  void testAeroPQRIndexed() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vPQR = FGColumnVector3(0.1, 0.05, 0.02);
+    aux->in.TurbPQR = FGColumnVector3(0.01, 0.005, 0.002);
+    aux->in.vUVW = FGColumnVector3(500.0, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    const FGColumnVector3& aeroPQR = aux->GetAeroPQR();
+    TS_ASSERT_DELTA(aux->GetAeroPQR(1), aeroPQR(1), 1e-10);
+    TS_ASSERT_DELTA(aux->GetAeroPQR(2), aeroPQR(2), 1e-10);
+    TS_ASSERT_DELTA(aux->GetAeroPQR(3), aeroPQR(3), 1e-10);
+
+    // Aero rotation should be body rotation minus turbulence
+    TS_ASSERT_DELTA(aeroPQR(1), 0.09, 1e-6);
+    TS_ASSERT_DELTA(aeroPQR(2), 0.045, 1e-6);
+    TS_ASSERT_DELTA(aeroPQR(3), 0.018, 1e-6);
+  }
+
+  // Test GetEulerRates vector and indexed access
+  void testEulerRatesIndexed() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vPQR = FGColumnVector3(0.1, 0.05, 0.02);
+    aux->in.CosPhi = 1.0;
+    aux->in.SinPhi = 0.0;
+    aux->in.CosTht = 0.9848;  // cos(10 degrees)
+    aux->in.SinTht = 0.1736;  // sin(10 degrees)
+    aux->in.vUVW = FGColumnVector3(500.0, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+
+    aux->Run(false);
+
+    const FGColumnVector3& eulerRates = aux->GetEulerRates();
+    TS_ASSERT_DELTA(aux->GetEulerRates(1), eulerRates(1), 1e-10);
+    TS_ASSERT_DELTA(aux->GetEulerRates(2), eulerRates(2), 1e-10);
+    TS_ASSERT_DELTA(aux->GetEulerRates(3), eulerRates(3), 1e-10);
+  }
+
+  // Test GetVt (total velocity)
+  void testGetVt() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double u = 300.0;
+    double v = 40.0;
+    double w = 60.0;
+
+    aux->in.vUVW = FGColumnVector3(u, v, w);
+    aux->in.TotalWindNED = FGColumnVector3(0.0, 0.0, 0.0);  // No wind
+    aux->in.Tl2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_Vt = sqrt(u*u + v*v + w*w);
+    TS_ASSERT_DELTA(aux->GetVt(), expected_Vt, 0.01);
+  }
+
+  // Test HOverBMAC (height over span at MAC)
+  void testHOverBMAC() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.Wingspan = 40.0;
+    aux->in.DistanceAGL = 120.0;
+    aux->in.RPBody = FGColumnVector3(10.0, 0.0, -5.0);  // Reference point
+    aux->in.Tb2l = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+
+    aux->Run(false);
+
+    double hOverBMAC = aux->GetHOverBMAC();
+    TS_ASSERT(!std::isnan(hOverBMAC));
+    // Should account for vertical offset of reference point
+    TS_ASSERT(fabs(hOverBMAC - aux->GetHOverBCG()) > 0.01);
+  }
+
+  // Test TAT in Celsius
+  void testTATCelsius() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double T = atm->GetTemperatureSL();  // Rankine
+    double V = 500.0;
+    double a = atm->GetSoundSpeedSL();
+
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Temperature = T;
+    aux->in.SoundSpeed = a;
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.Pressure = atm->GetPressureSL();
+
+    aux->Run(false);
+
+    double tat_r = aux->GetTotalTemperature();
+    double tat_c = aux->GetTAT_C();
+
+    // Convert Rankine to Celsius: C = (R - 491.67) * 5/9
+    double expected_tat_c = (tat_r - 491.67) * 5.0 / 9.0;
+    TS_ASSERT_DELTA(tat_c, expected_tat_c, 0.1);
+  }
+
+  // Test zero velocity edge case
+  void testZeroVelocityEdgeCase() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    aux->in.TotalWindNED = FGColumnVector3(0.0, 0.0, 0.0);  // No wind
+    aux->in.Tl2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    // At zero velocity, many parameters should be zero
+    TS_ASSERT_DELTA(aux->GetVt(), 0.0, 1e-10);
+    TS_ASSERT_DELTA(aux->GetMach(), 0.0, 1e-10);
+    TS_ASSERT_DELTA(aux->Getqbar(), 0.0, 1e-10);
+    TS_ASSERT_DELTA(aux->Getalpha(), 0.0, 1e-10);
+    TS_ASSERT_DELTA(aux->Getbeta(), 0.0, 1e-10);
+  }
+
+  // Test very low velocity edge case
+  void testVeryLowVelocity() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Velocity just above threshold (0.001 fps)
+    aux->in.vUVW = FGColumnVector3(0.002, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    // Should have valid (non-NaN) results
+    TS_ASSERT(!std::isnan(aux->GetMach()));
+    TS_ASSERT(!std::isnan(aux->Getalpha()));
+    TS_ASSERT(!std::isnan(aux->Getbeta()));
   }
 };

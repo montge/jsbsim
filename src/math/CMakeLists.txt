@@ -2,6 +2,7 @@ set(SOURCES FGColumnVector3.cpp
             FGFunction.cpp
             FGLocation.cpp
             FGMatrix33.cpp
+            FGNelderMead.cpp
             FGPropertyValue.cpp
             FGQuaternion.cpp
             FGRealValue.cpp
@@ -16,6 +17,7 @@ set(HEADERS FGColumnVector3.h
             FGFunction.h
             FGLocation.h
             FGMatrix33.h
+            FGNelderMead.h
             FGParameter.h
             FGPropertyValue.h
             FGQuaternion.h

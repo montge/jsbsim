@@ -8,6 +8,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 class FGScriptTest : public CxxTest::TestSuite
 {

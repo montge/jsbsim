@@ -131,6 +131,8 @@ DECLARATION: FGRK4
 */
 
 class FGRK4 : public FGRungeKutta {
+  public:
+    FGRK4() : FGRungeKutta() {}
     virtual ~FGRK4();
   private:
     double approximate(double x, double y);

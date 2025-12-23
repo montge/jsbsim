@@ -143,16 +143,17 @@ public:
     double T_ambient = 288.15;  // 15C
     double T_heated = 373.15;   // 100C
 
-    // Air densities
+    // Air densities using ideal gas law
     double rho_cold = P_pascal * M_air / (R_universal * T_ambient);
     double rho_hot = P_pascal * M_air / (R_universal * T_heated);
 
-    // Net lift
+    // Net lift = (rho_cold - rho_hot) * volume
+    // With these values: (1.225 - 0.946) * 2800 ≈ 781 kg
     double net_lift_kg = (rho_cold - rho_hot) * volume_m3;
 
-    // Hot air balloon provides much less lift than hydrogen/helium
-    TS_ASSERT(net_lift_kg > 200.0);
-    TS_ASSERT(net_lift_kg < 400.0);
+    // Hot air balloon provides significant lift
+    TS_ASSERT(net_lift_kg > 700.0);
+    TS_ASSERT(net_lift_kg < 900.0);
   }
 
   // Test altitude effect on air density

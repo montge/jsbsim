@@ -7,6 +7,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
 

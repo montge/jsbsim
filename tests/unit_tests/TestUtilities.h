@@ -15,6 +15,11 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <sstream>
+#include <memory>
+
+#include <input_output/FGXMLParse.h>
+#include <input_output/FGXMLElement.h>
 
 namespace JSBSimTest {
 
@@ -71,6 +76,22 @@ namespace Constants {
     constexpr double KTS_TO_FTPS = 1.68781;
     constexpr double DEG_TO_RAD = 0.017453292519943295;
     constexpr double RAD_TO_DEG = 57.29577951308232;
+}
+
+/*******************************************************************************
+ * XML parsing helper for tests
+ ******************************************************************************/
+
+/**
+ * Parse XML from a string and return the root element
+ * Used by tests that need to parse XML configuration snippets
+ */
+inline JSBSim::Element_ptr readFromXML(const std::string& xml) {
+    std::stringstream ss;
+    ss << xml;
+    JSBSim::FGXMLParse xml_parse;
+    readXML(ss, xml_parse);
+    return xml_parse.GetDocument();
 }
 
 } // namespace JSBSimTest

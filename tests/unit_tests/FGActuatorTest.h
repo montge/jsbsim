@@ -126,14 +126,13 @@ public:
   void testHysteresisRising() {
     double hysteresis_width = 0.5;
     double last_output = 0.0;
-    bool rising = true;
 
-    // Rising: output changes when input exceeds threshold
-    double input = 0.3;  // Below threshold
+    // Rising: output changes when input exceeds threshold (last_output + width/2 = 0.25)
+    double input = 0.2;  // Below threshold (0.2 < 0.25)
     double output = (input > last_output + hysteresis_width/2) ? input : last_output;
     TS_ASSERT_DELTA(output, 0.0, epsilon);  // No change
 
-    input = 0.6;  // Above threshold
+    input = 0.6;  // Above threshold (0.6 > 0.25)
     output = (input > last_output + hysteresis_width/2) ? input : last_output;
     TS_ASSERT_DELTA(output, 0.6, epsilon);  // Changed
   }

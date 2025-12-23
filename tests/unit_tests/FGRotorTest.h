@@ -7,6 +7,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 class FGRotorTest : public CxxTest::TestSuite
 {
@@ -143,10 +144,10 @@ public:
     double a = 5.7;       // 1/rad
     double chord = 1.5;   // ft
     double radius = 17.5; // ft
-    double Ib = 1500.0;   // slug-ft^2
+    double Ib = 250.0;    // slug-ft^2 (typical for rotor blade)
 
     double gamma = (rho * a * chord * pow(radius, 4)) / Ib;
-    // Typical Lock number is 6-10
+    // Lock number: (0.002377 * 5.7 * 1.5 * 93789) / 250 = 7.6
     TS_ASSERT(gamma > 5.0);
     TS_ASSERT(gamma < 12.0);
   }

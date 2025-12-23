@@ -39,6 +39,7 @@ SENTRY
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
 
@@ -238,7 +239,7 @@ public:
     // 90-degree rotation about Z axis: (x,y,z) -> (-y,x,z)
     double yaw = M_PI / 2.0;  // 90 degrees
 
-    // Rotation matrix for yaw
+    // Rotation matrix for yaw (right-hand rule: positive yaw rotates X toward -Y)
     FGMatrix33 rotZ;
     rotZ(1,1) = cos(yaw);  rotZ(1,2) = sin(yaw); rotZ(1,3) = 0.0;
     rotZ(2,1) = -sin(yaw); rotZ(2,2) = cos(yaw); rotZ(2,3) = 0.0;
@@ -247,9 +248,9 @@ public:
     FGColumnVector3 input(1.0, 0.0, 0.0);  // Unit vector along X
     FGColumnVector3 output = rotZ * input;
 
-    // Should rotate to Y axis
+    // With this matrix convention, 90-deg yaw rotates (1,0,0) to (0,-1,0)
     TS_ASSERT_DELTA(output(1), 0.0, epsilon);
-    TS_ASSERT_DELTA(output(2), 1.0, epsilon);
+    TS_ASSERT_DELTA(output(2), -1.0, epsilon);
     TS_ASSERT_DELTA(output(3), 0.0, epsilon);
   }
 

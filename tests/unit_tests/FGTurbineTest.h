@@ -7,6 +7,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 class FGTurbineTest : public CxxTest::TestSuite
 {

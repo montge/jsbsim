@@ -9,6 +9,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 class FGOutputTest : public CxxTest::TestSuite
 {
@@ -350,9 +351,9 @@ public:
     double v = 5.0;    // lateral
     double w = 10.0;   // vertical
 
-    // True airspeed
+    // True airspeed: sqrt(300^2 + 5^2 + 10^2) = sqrt(90125) = 300.208
     double vt = std::sqrt(u*u + v*v + w*w);
-    TS_ASSERT_DELTA(vt, 300.17, 0.01);
+    TS_ASSERT_DELTA(vt, 300.208, 0.01);
 
     // Calibrated airspeed (would include density correction)
     double rhoRatio = 0.9;  // density ratio
@@ -384,9 +385,9 @@ public:
     double fy = 50.0;    // lateral force
     double fz = -500.0;  // vertical force (negative = down)
 
-    // Total force magnitude
+    // Total force magnitude: sqrt(1000^2 + 50^2 + 500^2) = sqrt(1252500) = 1119.15
     double fTotal = std::sqrt(fx*fx + fy*fy + fz*fz);
-    TS_ASSERT_DELTA(fTotal, 1118.03, 0.1);
+    TS_ASSERT_DELTA(fTotal, 1119.15, 0.1);
   }
 
   // Test moment output values
@@ -410,7 +411,7 @@ public:
     double soundSpeed = 1116.45;   // ft/sec
 
     TS_ASSERT_DELTA(pressure, Constants::SEA_LEVEL_PRESSURE_PSF, 1.0);
-    TS_ASSERT_DELTA(density, Constants::SEA_LEVEL_DENSITY_SLUGS_FT3, 0.00001);
+    TS_ASSERT_DELTA(density, Constants::SEA_LEVEL_DENSITY_SLUGFT3, 0.00001);
     TS_ASSERT_DELTA(temperature, Constants::SEA_LEVEL_TEMP_R, 1.0);
   }
 

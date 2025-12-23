@@ -293,12 +293,13 @@ public:
     double dt = 0.1;
     double drift = 0.0;
 
-    // Simulate 10 seconds of drift
+    // Simulate 10 seconds of drift: 100 iterations * 0.1s = 10s
+    // drift = drift_rate * dt * iterations = 0.01 * 0.1 * 100 = 0.1
     for (int i = 0; i < 100; i++) {
       drift += drift_rate * dt;
     }
 
-    TS_ASSERT_DELTA(drift, 1.0, 0.001);  // 0.01 * 10 = 1.0
+    TS_ASSERT_DELTA(drift, 0.1, 0.001);  // 0.01 * 0.1 * 100 = 0.1
   }
 
   // Test drift applied to signal
@@ -471,15 +472,19 @@ public:
     double ca = std::exp(-C1 * dt);
     double cb = 1.0 - ca;
 
-    double prev_output = input;
-
     // Process through full chain
     double after_gain = input * gain;
     double after_bias = after_gain + bias;
-    double after_lag = ca * prev_output + cb * after_bias;
+
+    // Run lag filter multiple times to converge
+    double after_lag = input;
+    for (int i = 0; i < 100; i++) {
+      after_lag = ca * after_lag + cb * after_bias;
+    }
     double after_noise = after_lag + noise_dist(gen);
 
-    // Should be close to after_bias (lag converges quickly with high C1)
-    TS_ASSERT(std::abs(after_noise - after_bias) < 5.0);
+    // After convergence, lag output should be very close to after_bias
+    // Noise std=0.5, so should be within ~2 at 99% confidence
+    TS_ASSERT(std::abs(after_noise - after_bias) < 3.0);
   }
 };

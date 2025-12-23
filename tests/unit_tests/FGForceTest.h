@@ -10,8 +10,27 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
+
+// Testable wrapper that exposes protected members for testing
+class TestableFGForce : public FGForce {
+public:
+  explicit TestableFGForce(FGFDMExec* fdm) : FGForce(fdm) {}
+
+  // Provide access to protected vFn and vMn for testing
+  void SetNativeForces(const FGColumnVector3& f) { vFn = f; }
+  void SetNativeForces(double x, double y, double z) {
+    vFn(1) = x; vFn(2) = y; vFn(3) = z;
+  }
+  void SetNativeMoments(const FGColumnVector3& m) { vMn = m; }
+  void SetNativeMoments(double x, double y, double z) {
+    vMn(1) = x; vMn(2) = y; vMn(3) = z;
+  }
+  const FGColumnVector3& GetNativeForces() const { return vFn; }
+  const FGColumnVector3& GetNativeMoments() const { return vMn; }
+};
 
 class FGForceTest : public CxxTest::TestSuite
 {
@@ -19,7 +38,7 @@ public:
   // Test construction
   void testConstruction() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     // Should be constructed successfully
     TS_ASSERT(true);
@@ -28,7 +47,7 @@ public:
   // Test setting location
   void testSetLocation() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     double x = 100.0, y = 50.0, z = -25.0;
     force.SetLocation(x, y, z);
@@ -41,7 +60,7 @@ public:
   // Test setting location with vector
   void testSetLocationVector() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     FGColumnVector3 loc(150.0, -30.0, 10.0);
     force.SetLocation(loc);
@@ -55,7 +74,7 @@ public:
   // Test individual location setters
   void testSetLocationIndividual() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetLocationX(10.0);
     force.SetLocationY(20.0);
@@ -69,7 +88,7 @@ public:
   // Test acting location
   void testActingLocation() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetActingLocation(50.0, 25.0, -10.0);
 
@@ -81,7 +100,7 @@ public:
   // Test individual acting location setters
   void testSetActingLocationIndividual() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetActingLocationX(5.0);
     force.SetActingLocationY(15.0);
@@ -95,7 +114,7 @@ public:
   // Test that SetLocation also sets acting location
   void testSetLocationSetsActingLocation() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetLocation(100.0, 200.0, 300.0);
 
@@ -105,10 +124,13 @@ public:
     TS_ASSERT_DELTA(force.GetActingLocationZ(), 300.0, epsilon);
   }
 
-  // Test angles to body
+  // Test angles to body (requires tCustom transform type)
   void testAnglesToBody() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
+
+    // SetAnglesToBody only works when transform type is tCustom
+    force.SetTransformType(FGForce::tCustom);
 
     double roll = 0.1, pitch = 0.2, yaw = 0.3;
     force.SetAnglesToBody(roll, pitch, yaw);
@@ -127,7 +149,7 @@ public:
   // Test pitch getter/setter
   void testPitch() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetPitch(0.5);
     TS_ASSERT_DELTA(force.GetPitch(), 0.5, epsilon);
@@ -136,7 +158,7 @@ public:
   // Test yaw getter/setter
   void testYaw() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetYaw(-0.3);
     TS_ASSERT_DELTA(force.GetYaw(), -0.3, epsilon);
@@ -154,7 +176,7 @@ public:
   // Test set transform type
   void testSetTransformType() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     TS_ASSERT_EQUALS(force.GetTransformType(), FGForce::tNone);
@@ -172,7 +194,7 @@ public:
   // Test body forces with no transform (tNone)
   void testBodyForcesNoTransform() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     FGColumnVector3 nativeForce(100.0, 50.0, -25.0);
@@ -189,7 +211,7 @@ public:
   // Test body force component getters
   void testBodyForceComponents() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     force.SetNativeForces(200.0, 100.0, -50.0);
@@ -204,7 +226,7 @@ public:
   // Test native forces with individual values
   void testSetNativeForcesIndividual() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     force.SetNativeForces(10.0, 20.0, 30.0);
@@ -219,7 +241,7 @@ public:
   // Test native moments
   void testNativeMoments() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     FGColumnVector3 moments(500.0, -200.0, 100.0);
     force.SetNativeMoments(moments);
@@ -238,7 +260,7 @@ public:
   // Test native moments with individual values
   void testSetNativeMomentsIndividual() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetNativeMoments(100.0, 200.0, 300.0);
     force.SetTransformType(FGForce::tNone);
@@ -253,7 +275,7 @@ public:
   // Test zero forces produce zero body forces
   void testZeroForces() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     force.SetNativeForces(0.0, 0.0, 0.0);
@@ -268,7 +290,7 @@ public:
   // Test large forces
   void testLargeForces() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     double large = 1e6;
@@ -284,7 +306,7 @@ public:
   // Test negative forces
   void testNegativeForces() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tNone);
     force.SetNativeForces(-100.0, -200.0, -300.0);
@@ -299,7 +321,7 @@ public:
   // Test custom transform with zero angles (should be identity)
   void testCustomTransformZeroAngles() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tCustom);
     force.SetAnglesToBody(0.0, 0.0, 0.0);
@@ -316,7 +338,7 @@ public:
   // Test update custom transform matrix
   void testUpdateCustomTransformMatrix() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetTransformType(FGForce::tCustom);
     force.SetAnglesToBody(0.0, 0.0, 0.0);
@@ -335,7 +357,7 @@ public:
   // Test location at origin produces zero offset moments
   void testLocationOrigin() {
     FGFDMExec fdmex;
-    FGForce force(&fdmex);
+    TestableFGForce force(&fdmex);
 
     force.SetLocation(0.0, 0.0, 0.0);
     force.SetTransformType(FGForce::tNone);

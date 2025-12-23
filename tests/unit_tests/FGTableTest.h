@@ -8,6 +8,7 @@
 const double epsilon = 100. * std::numeric_limits<double>::epsilon();
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 
 class FGTable1DTest : public CxxTest::TestSuite
@@ -1951,5 +1952,624 @@ public:
     Element* el_table = elm->FindElement("table");
 
     TS_ASSERT_THROWS(FGTable t_2x2x2(pm, el_table), BaseException&);
+  }
+
+  void test1DInsufficientData() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"test\" type=\"internal\">"
+                                  "    <tableData>"
+                                  "      1.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    TS_ASSERT_THROWS(FGTable t(pm, el_table), BaseException&);
+  }
+
+  void test2DInconsistentColumns() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"test\" type=\"internal\">"
+                                  "    <tableData>"
+                                  "            1.0  2.0\n"
+                                  "      3.0   4.0  5.0\n"
+                                  "      6.0   7.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    TS_ASSERT_THROWS(FGTable t(pm, el_table), BaseException&);
+  }
+};
+
+class FGTableAdditionalTest : public CxxTest::TestSuite
+{
+public:
+  void test1DInterpolationEdgeCases() {
+    FGTable t(5);
+    t << 0.0 << 10.0
+      << 1.0 << 20.0
+      << 2.0 << 15.0
+      << 3.0 << 30.0
+      << 4.0 << 25.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 10.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.5), 15.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.0), 20.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.5), 17.5);
+    TS_ASSERT_EQUALS(t.GetValue(2.0), 15.0);
+    TS_ASSERT_EQUALS(t.GetValue(2.5), 22.5);
+    TS_ASSERT_EQUALS(t.GetValue(3.0), 30.0);
+    TS_ASSERT_EQUALS(t.GetValue(3.5), 27.5);
+    TS_ASSERT_EQUALS(t.GetValue(4.0), 25.0);
+    TS_ASSERT_EQUALS(t.GetValue(-10.0), 10.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0), 25.0);
+  }
+
+  void test1DNegativeValues() {
+    FGTable t(3);
+    t << -10.0 << -5.0
+      << -5.0  << -2.5
+      << 0.0   << 0.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(-15.0), -5.0);
+    TS_ASSERT_EQUALS(t.GetValue(-10.0), -5.0);
+    TS_ASSERT_EQUALS(t.GetValue(-7.5), -3.75);
+    TS_ASSERT_EQUALS(t.GetValue(-5.0), -2.5);
+    TS_ASSERT_EQUALS(t.GetValue(-2.5), -1.25);
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(5.0), 0.0);
+  }
+
+  void test1DLargeTable() {
+    FGTable t(10);
+    for (int i = 0; i < 10; i++) {
+      t << static_cast<double>(i) << static_cast<double>(i * i);
+    }
+
+    for (int i = 0; i < 10; i++) {
+      TS_ASSERT_EQUALS(t.GetValue(static_cast<double>(i)), static_cast<double>(i * i));
+    }
+
+    TS_ASSERT_EQUALS(t.GetValue(4.5), 20.5);
+    TS_ASSERT_EQUALS(t.GetValue(-1.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(15.0), 81.0);
+  }
+
+  void test2DBilinearInterpolation() {
+    FGTable t(3, 3);
+    t << 0.0 << 1.0 << 2.0
+      << 0.0 << 0.0 << 1.0 << 2.0
+      << 1.0 << 1.0 << 2.0 << 3.0
+      << 2.0 << 2.0 << 3.0 << 4.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 0.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.0, 1.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(2.0, 2.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.5, 0.5), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.5, 1.5), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.5, 1.5), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.5, 0.5), 2.0);
+  }
+
+  void test2DAsymmetricTable() {
+    FGTable t(2, 4);
+    t << 10.0 << 20.0 << 30.0 << 40.0
+      << 100.0 << 1.0 << 2.0 << 3.0 << 4.0
+      << 200.0 << 2.0 << 4.0 << 6.0 << 8.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 10.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(200.0, 40.0), 8.0);
+    TS_ASSERT_EQUALS(t.GetValue(150.0, 25.0), 3.75);
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 25.0), 2.5);
+    TS_ASSERT_EQUALS(t.GetValue(200.0, 25.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(150.0, 10.0), 1.5);
+    TS_ASSERT_EQUALS(t.GetValue(150.0, 40.0), 6.0);
+  }
+
+  void test2DSingleRowInterpolation() {
+    FGTable t(1, 3);
+    t << 0.0 << 10.0 << 20.0
+      << 5.0 << 1.0 << 2.0 << 3.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 0.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 5.0), 1.5);
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 10.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 15.0), 2.5);
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 20.0), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0, 5.0), 1.5);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 10.0), 2.0);
+  }
+
+  void test2DExtrapolation() {
+    FGTable t(2, 2);
+    t << 10.0 << 20.0
+      << 100.0 << 1.0 << 2.0
+      << 200.0 << 3.0 << 4.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(50.0, 5.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(250.0, 25.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(50.0, 25.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(250.0, 5.0), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(50.0, 15.0), 1.5);
+    TS_ASSERT_EQUALS(t.GetValue(250.0, 15.0), 3.5);
+    TS_ASSERT_EQUALS(t.GetValue(150.0, 5.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(150.0, 25.0), 3.0);
+  }
+
+  void test2DNegativeRowsAndColumns() {
+    FGTable t(2, 2);
+    t << -20.0 << -10.0
+      << -200.0 << 4.0 << 3.0
+      << -100.0 << 2.0 << 1.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(-200.0, -20.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(-100.0, -10.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(-150.0, -15.0), 2.5);
+    TS_ASSERT_EQUALS(t.GetValue(-200.0, -10.0), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(-100.0, -20.0), 2.0);
+  }
+
+  void test3DBasicInterpolation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+    auto y = pm->GetNode("y", true);
+    auto z = pm->GetNode("z", true);
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"test3d\">"
+                                  "    <independentVar lookup=\"row\">x</independentVar>"
+                                  "    <independentVar lookup=\"column\">y</independentVar>"
+                                  "    <independentVar lookup=\"table\">z</independentVar>"
+                                  "    <tableData breakPoint=\"0.0\">"
+                                  "            0.0  10.0\n"
+                                  "      0.0   0.0   1.0\n"
+                                  "     10.0  10.0  11.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"10.0\">"
+                                  "            0.0  10.0\n"
+                                  "      0.0   2.0   3.0\n"
+                                  "     10.0  12.0  13.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 0.0);
+
+    x->setDoubleValue(10.0);
+    y->setDoubleValue(10.0);
+    z->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 11.0);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(10.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 2.0);
+
+    x->setDoubleValue(10.0);
+    y->setDoubleValue(10.0);
+    z->setDoubleValue(10.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 13.0);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(5.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+
+    x->setDoubleValue(5.0);
+    y->setDoubleValue(5.0);
+    z->setDoubleValue(5.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 6.5);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(-5.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 0.0);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(15.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 2.0);
+  }
+
+  void test3DMultipleBreakpoints() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+    auto y = pm->GetNode("y", true);
+    auto z = pm->GetNode("z", true);
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"test3d\">"
+                                  "    <independentVar lookup=\"row\">x</independentVar>"
+                                  "    <independentVar lookup=\"column\">y</independentVar>"
+                                  "    <independentVar lookup=\"table\">z</independentVar>"
+                                  "    <tableData breakPoint=\"0.0\">"
+                                  "            0.0\n"
+                                  "      0.0   1.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"1.0\">"
+                                  "            0.0\n"
+                                  "      0.0   2.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"2.0\">"
+                                  "            0.0\n"
+                                  "      0.0   4.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"3.0\">"
+                                  "            0.0\n"
+                                  "      0.0   8.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+
+    z->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+
+    z->setDoubleValue(1.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 2.0);
+
+    z->setDoubleValue(2.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 4.0);
+
+    z->setDoubleValue(3.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 8.0);
+
+    z->setDoubleValue(0.5);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.5);
+
+    z->setDoubleValue(1.5);
+    TS_ASSERT_EQUALS(t.GetValue(), 3.0);
+
+    z->setDoubleValue(2.5);
+    TS_ASSERT_EQUALS(t.GetValue(), 6.0);
+
+    z->setDoubleValue(-1.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+
+    z->setDoubleValue(5.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 8.0);
+  }
+
+  void test1DStreamOperator() {
+    FGTable t(3);
+    std::stringstream ss;
+    ss << "1.0 10.0 2.0 20.0 3.0 30.0";
+    t << ss;
+
+    TS_ASSERT_EQUALS(t.GetValue(1.0), 10.0);
+    TS_ASSERT_EQUALS(t.GetValue(2.0), 20.0);
+    TS_ASSERT_EQUALS(t.GetValue(3.0), 30.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.5), 15.0);
+  }
+
+  void test2DStreamOperator() {
+    FGTable t(2, 2);
+    std::stringstream ss;
+    ss << "10.0 20.0 100.0 1.0 2.0 200.0 3.0 4.0";
+    t << ss;
+
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 10.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(200.0, 20.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(150.0, 15.0), 2.5);
+  }
+
+  void testXML1DWithLookupProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("alpha", true);
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"CL\">"
+                                  "    <independentVar>alpha</independentVar>"
+                                  "    <tableData>"
+                                  "      -0.5  -0.1\n"
+                                  "       0.0   0.0\n"
+                                  "       0.5   0.8\n"
+                                  "       1.0   1.2\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    x->setDoubleValue(-0.5);
+    TS_ASSERT_EQUALS(t.GetValue(), -0.1);
+    x->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 0.0);
+    x->setDoubleValue(0.25);
+    TS_ASSERT_EQUALS(t.GetValue(), 0.4);
+    x->setDoubleValue(0.5);
+    TS_ASSERT_EQUALS(t.GetValue(), 0.8);
+    x->setDoubleValue(0.75);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+    x->setDoubleValue(1.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.2);
+  }
+
+  void testXML2DComplexInterpolation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto alpha = pm->GetNode("alpha", true);
+    auto beta = pm->GetNode("beta", true);
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"complex\">"
+                                  "    <independentVar lookup=\"row\">alpha</independentVar>"
+                                  "    <independentVar lookup=\"column\">beta</independentVar>"
+                                  "    <tableData>"
+                                  "            -10.0   0.0   10.0\n"
+                                  "     -5.0     1.0   2.0    3.0\n"
+                                  "      0.0     4.0   5.0    6.0\n"
+                                  "      5.0     7.0   8.0    9.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    alpha->setDoubleValue(-5.0);
+    beta->setDoubleValue(-10.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+
+    alpha->setDoubleValue(0.0);
+    beta->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 5.0);
+
+    alpha->setDoubleValue(5.0);
+    beta->setDoubleValue(10.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 9.0);
+
+    alpha->setDoubleValue(-2.5);
+    beta->setDoubleValue(-5.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 3.0);
+
+    alpha->setDoubleValue(2.5);
+    beta->setDoubleValue(5.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 7.0);
+  }
+
+  void test3DCopyConstructorDeepCopy() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+    auto y = pm->GetNode("y", true);
+    auto z = pm->GetNode("z", true);
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"test3d\">"
+                                  "    <independentVar lookup=\"row\">x</independentVar>"
+                                  "    <independentVar lookup=\"column\">y</independentVar>"
+                                  "    <independentVar lookup=\"table\">z</independentVar>"
+                                  "    <tableData breakPoint=\"0.0\">"
+                                  "            0.0\n"
+                                  "      0.0   1.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"1.0\">"
+                                  "            0.0\n"
+                                  "      0.0   2.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t1(pm, el_table);
+
+    FGTable t2(t1);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t2.GetValue(), 1.0);
+
+    z->setDoubleValue(1.0);
+    TS_ASSERT_EQUALS(t2.GetValue(), 2.0);
+
+    z->setDoubleValue(0.5);
+    TS_ASSERT_EQUALS(t2.GetValue(), 1.5);
+  }
+
+  void test1DWithDecreasingValues() {
+    FGTable t(3);
+    t << 1.0 << 100.0
+      << 2.0 << 50.0
+      << 3.0 << 25.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(1.0), 100.0);
+    TS_ASSERT_EQUALS(t.GetValue(2.0), 50.0);
+    TS_ASSERT_EQUALS(t.GetValue(3.0), 25.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.5), 75.0);
+    TS_ASSERT_EQUALS(t.GetValue(2.5), 37.5);
+  }
+
+  void test2DWithMixedValues() {
+    FGTable t(3, 3);
+    t << -1.0 << 0.0 << 1.0
+      << -1.0 << 1.0 << 0.0 << -1.0
+      << 0.0 << 0.0 << 2.0 << 0.0
+      << 1.0 << -1.0 << 0.0 << 1.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(-1.0, -1.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 0.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.0, 1.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, -1.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 1.0), 0.0);
+  }
+
+  void testXML1DInternal() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table type=\"internal\">"
+                                  "    <tableData>"
+                                  "      0.0   1.0\n"
+                                  "      10.0  2.0\n"
+                                  "      20.0  4.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(20.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(5.0), 1.5);
+    TS_ASSERT_EQUALS(t.GetValue(15.0), 3.0);
+  }
+
+  void testXML2DInternal() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table type=\"internal\">"
+                                  "    <tableData>"
+                                  "            10.0  20.0\n"
+                                  "      0.0    1.0   2.0\n"
+                                  "     10.0    3.0   4.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 10.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 20.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0, 10.0), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0, 20.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 15.0), 2.5);
+  }
+
+  void test1DPrecisionInterpolation() {
+    FGTable t(2);
+    t << 0.0 << 1.0
+      << 1.0 << 2.0;
+
+    for (int i = 0; i <= 100; i++) {
+      double x = i * 0.01;
+      double expected = 1.0 + x;
+      TS_ASSERT_DELTA(t.GetValue(x), expected, epsilon);
+    }
+  }
+
+  void test2DPrecisionInterpolation() {
+    FGTable t(2, 2);
+    t << 0.0 << 1.0
+      << 0.0 << 0.0 << 1.0
+      << 1.0 << 1.0 << 2.0;
+
+    for (int i = 0; i <= 10; i++) {
+      for (int j = 0; j <= 10; j++) {
+        double row = i * 0.1;
+        double col = j * 0.1;
+        double expected = row + col;
+        TS_ASSERT_DELTA(t.GetValue(row, col), expected, epsilon);
+      }
+    }
+  }
+
+  void testGetElementBoundaryAccess() {
+    FGTable t1(3);
+    t1 << 0.0 << 1.0
+       << 1.0 << 2.0
+       << 2.0 << 3.0;
+
+    TS_ASSERT_EQUALS(t1.GetElement(1, 0), 0.0);
+    TS_ASSERT_EQUALS(t1.GetElement(1, 1), 1.0);
+    TS_ASSERT_EQUALS(t1.GetElement(2, 0), 1.0);
+    TS_ASSERT_EQUALS(t1.GetElement(2, 1), 2.0);
+    TS_ASSERT_EQUALS(t1.GetElement(3, 0), 2.0);
+    TS_ASSERT_EQUALS(t1.GetElement(3, 1), 3.0);
+
+    FGTable t2(2, 2);
+    t2 << 0.0 << 1.0
+       << 0.0 << 1.0 << 2.0
+       << 1.0 << 3.0 << 4.0;
+
+    TS_ASSERT_EQUALS(t2.GetElement(0, 1), 0.0);
+    TS_ASSERT_EQUALS(t2.GetElement(0, 2), 1.0);
+    TS_ASSERT_EQUALS(t2.GetElement(1, 0), 0.0);
+    TS_ASSERT_EQUALS(t2.GetElement(1, 1), 1.0);
+    TS_ASSERT_EQUALS(t2.GetElement(1, 2), 2.0);
+    TS_ASSERT_EQUALS(t2.GetElement(2, 0), 1.0);
+    TS_ASSERT_EQUALS(t2.GetElement(2, 1), 3.0);
+    TS_ASSERT_EQUALS(t2.GetElement(2, 2), 4.0);
+  }
+
+  void test3DEdgeCases() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+    auto y = pm->GetNode("y", true);
+    auto z = pm->GetNode("z", true);
+    Element_ptr elm = readFromXML("<dummy>"
+                                  "  <table name=\"test3d\">"
+                                  "    <independentVar lookup=\"row\">x</independentVar>"
+                                  "    <independentVar lookup=\"column\">y</independentVar>"
+                                  "    <independentVar lookup=\"table\">z</independentVar>"
+                                  "    <tableData breakPoint=\"-10.0\">"
+                                  "            -5.0   5.0\n"
+                                  "     -5.0    1.0   2.0\n"
+                                  "      5.0    3.0   4.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"0.0\">"
+                                  "            -5.0   5.0\n"
+                                  "     -5.0    5.0   6.0\n"
+                                  "      5.0    7.0   8.0\n"
+                                  "    </tableData>"
+                                  "    <tableData breakPoint=\"10.0\">"
+                                  "            -5.0   5.0\n"
+                                  "     -5.0    9.0  10.0\n"
+                                  "      5.0   11.0  12.0\n"
+                                  "    </tableData>"
+                                  "  </table>"
+                                  "</dummy>");
+    Element* el_table = elm->FindElement("table");
+    FGTable t(pm, el_table);
+
+    x->setDoubleValue(-5.0);
+    y->setDoubleValue(-5.0);
+    z->setDoubleValue(-10.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+
+    x->setDoubleValue(5.0);
+    y->setDoubleValue(5.0);
+    z->setDoubleValue(10.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 12.0);
+
+    x->setDoubleValue(0.0);
+    y->setDoubleValue(0.0);
+    z->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 6.5);
+
+    x->setDoubleValue(-5.0);
+    y->setDoubleValue(-5.0);
+    z->setDoubleValue(-20.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 1.0);
+
+    x->setDoubleValue(5.0);
+    y->setDoubleValue(5.0);
+    z->setDoubleValue(20.0);
+    TS_ASSERT_EQUALS(t.GetValue(), 12.0);
+  }
+
+  void test1DWithVerySmallValues() {
+    FGTable t(3);
+    t << 0.0 << 1e-10
+      << 1e-6 << 2e-10
+      << 1e-3 << 3e-10;
+
+    TS_ASSERT_DELTA(t.GetValue(0.0), 1e-10, 1e-15);
+    TS_ASSERT_DELTA(t.GetValue(1e-6), 2e-10, 1e-15);
+    TS_ASSERT_DELTA(t.GetValue(1e-3), 3e-10, 1e-15);
+  }
+
+  void test1DWithVeryLargeValues() {
+    FGTable t(3);
+    t << 0.0 << 1e10
+      << 1e6 << 2e10
+      << 1e9 << 3e10;
+
+    TS_ASSERT_DELTA(t.GetValue(0.0), 1e10, 1e5);
+    TS_ASSERT_DELTA(t.GetValue(1e6), 2e10, 1e5);
+    TS_ASSERT_DELTA(t.GetValue(1e9), 3e10, 1e5);
   }
 };

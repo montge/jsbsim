@@ -7,6 +7,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 class FGEngineTest : public CxxTest::TestSuite
 {
@@ -167,7 +168,7 @@ public:
     // Verify sea level atmosphere values
     TS_ASSERT_DELTA(inputs.Pressure, Constants::SEA_LEVEL_PRESSURE_PSF, 1.0);
     TS_ASSERT_DELTA(inputs.Temperature, Constants::SEA_LEVEL_TEMP_R, 1.0);
-    TS_ASSERT_DELTA(inputs.Density, Constants::SEA_LEVEL_DENSITY_SLUGS_FT3, 0.00001);
+    TS_ASSERT_DELTA(inputs.Density, Constants::SEA_LEVEL_DENSITY_SLUGFT3, 0.00001);
   }
 
   // Test throttle command vectors

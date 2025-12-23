@@ -827,4 +827,664 @@ public:
     TS_ASSERT_DELTA(l(1), cos(lat), epsilon);
     TS_ASSERT_DELTA(l(3), sin(lat), epsilon);
   }
+
+  // ============ Additional Coverage Tests ============
+
+  void testGetTi2ecAndGetTec2i() {
+    // GIVEN: A location with known position
+    double lat = M_PI / 6.0;  // 30 degrees
+    double lon = M_PI / 4.0;  // 45 degrees
+    JSBSim::FGLocation l(lon, lat, 1.0);
+    l.SetEllipse(1.0, 1.0);
+
+    // THEN: Transformation matrices should be transposes of each other
+    const JSBSim::FGMatrix33& Tec2l = l.GetTec2l();
+    const JSBSim::FGMatrix33& Tl2ec = l.GetTl2ec();
+
+    // Verify they are transposes
+    TS_ASSERT_MATRIX_EQUALS(Tec2l, Tl2ec.Transposed());
+    TS_ASSERT_MATRIX_EQUALS(Tl2ec, Tec2l.Transposed());
+
+    // Verify they are orthogonal (transpose = inverse)
+    JSBSim::FGMatrix33 identity;
+    identity.InitMatrix(1.0, 0.0, 0.0,
+                        0.0, 1.0, 0.0,
+                        0.0, 0.0, 1.0);
+    JSBSim::FGMatrix33 product = Tec2l * Tl2ec;
+    TS_ASSERT_MATRIX_EQUALS(product, identity);
+  }
+
+  void testDistanceCalculations() {
+    // GIVEN: Two locations on a spherical Earth
+    const double a = 20925646.32546;
+    const double b = 20925646.32546;  // Sphere
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a, b);
+    l2.SetEllipse(a, b);
+
+    // WHEN: Setting up location at equator, prime meridian
+    l1.SetPositionGeodetic(0.0, 0.0, 0.0);
+
+    // Test distance to same point
+    TS_ASSERT_DELTA(l1.GetDistanceTo(0.0, 0.0), 0.0, 1e-6);
+
+    // Test distance to 90 degrees away (quarter circumference)
+    double quarter_circ = 0.25 * 2.0 * M_PI * a;
+    TS_ASSERT_DELTA(l1.GetDistanceTo(M_PI * 0.5, 0.0), quarter_circ, 100.0);
+  }
+
+  void testBearingCalculations() {
+    // GIVEN: Two locations
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // WHEN: At equator, prime meridian
+    l.SetPositionGeodetic(0.0, 0.0, 0.0);
+
+    // THEN: Heading due east should be 90 degrees
+    double heading_east = l.GetHeadingTo(M_PI / 6.0, 0.0);
+    TS_ASSERT_DELTA(heading_east, M_PI * 0.5, 1e-3);
+
+    // Heading due west should be -90 degrees
+    double heading_west = l.GetHeadingTo(-M_PI / 6.0, 0.0);
+    TS_ASSERT_DELTA(heading_west, -M_PI * 0.5, 1e-3);
+
+    // Heading due north should be 0 degrees
+    double heading_north = l.GetHeadingTo(0.0, M_PI / 6.0);
+    TS_ASSERT_DELTA(heading_north, 0.0, 1e-3);
+  }
+
+  void testGetSeaLevelRadius() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // WHEN: At equator
+    l.SetPositionGeodetic(0.0, 0.0, 0.0);
+
+    // THEN: Sea level radius should be semimajor axis
+    TS_ASSERT_DELTA(l.GetSeaLevelRadius(), a, 1.0);
+
+    // WHEN: At pole
+    l.SetPositionGeodetic(0.0, M_PI * 0.5, 0.0);
+
+    // THEN: Sea level radius should be semiminor axis
+    TS_ASSERT_DELTA(l.GetSeaLevelRadius(), b, 1.0);
+
+    // WHEN: At 45 degrees latitude
+    l.SetPositionGeodetic(0.0, M_PI / 4.0, 0.0);
+
+    // THEN: Sea level radius should be between a and b
+    double slr = l.GetSeaLevelRadius();
+    TS_ASSERT(slr > b && slr < a);
+  }
+
+  void testGeodeticAltitudeWithVariousHeights() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // Test various altitudes at equator
+    for (double h = 0.0; h <= 10000.0; h += 1000.0) {
+      l.SetPositionGeodetic(0.0, 0.0, h);
+      TS_ASSERT_DELTA(l.GetGeodAltitude(), h, 1e-6);
+    }
+
+    // Test various altitudes at 45 degrees
+    for (double h = 0.0; h <= 10000.0; h += 1000.0) {
+      l.SetPositionGeodetic(M_PI / 4.0, M_PI / 4.0, h);
+      TS_ASSERT_DELTA(l.GetGeodAltitude(), h, 1e-6);
+    }
+
+    // Test various altitudes at pole
+    for (double h = 0.0; h <= 10000.0; h += 1000.0) {
+      l.SetPositionGeodetic(0.0, M_PI * 0.5, h);
+      TS_ASSERT_DELTA(l.GetGeodAltitude(), h, 1e-6);
+    }
+  }
+
+  void testLocalToLocationAndBack() {
+    // GIVEN: A location
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l0;
+    l0.SetEllipse(a, b);
+    l0.SetPositionGeodetic(M_PI / 6.0, M_PI / 4.0, 1000.0);
+
+    // Test various local vectors
+    JSBSim::FGColumnVector3 local_vectors[] = {
+      JSBSim::FGColumnVector3(100.0, 0.0, 0.0),    // North
+      JSBSim::FGColumnVector3(0.0, 100.0, 0.0),    // East
+      JSBSim::FGColumnVector3(0.0, 0.0, 100.0),    // Down
+      JSBSim::FGColumnVector3(100.0, 50.0, -25.0), // Mixed
+      JSBSim::FGColumnVector3(-50.0, -75.0, 30.0)  // Mixed
+    };
+
+    for (const auto& local : local_vectors) {
+      // Convert to ECEF location and back
+      JSBSim::FGLocation l_ecef = l0.LocalToLocation(local);
+      JSBSim::FGColumnVector3 local_back = l0.LocationToLocal(l_ecef);
+
+      // Should get back the same vector (with tolerance for numerical precision)
+      TS_ASSERT_DELTA(local_back(1), local(1), 1e-8);
+      TS_ASSERT_DELTA(local_back(2), local(2), 1e-8);
+      TS_ASSERT_DELTA(local_back(3), local(3), 1e-8);
+    }
+  }
+
+  void testSetPositionWithNegativeRadius() {
+    // GIVEN: A location
+    JSBSim::FGLocation l;
+
+    // WHEN: Setting radius to a small positive value
+    l.SetRadius(0.001);
+
+    // THEN: Radius should be set correctly
+    TS_ASSERT_DELTA(l.GetRadius(), 0.001, epsilon);
+
+    // Position components should be valid
+    TS_ASSERT(std::isfinite(l(1)));
+    TS_ASSERT(std::isfinite(l(2)));
+    TS_ASSERT(std::isfinite(l(3)));
+  }
+
+  void testMultipleSetEllipseCalls() {
+    // GIVEN: A location
+    JSBSim::FGLocation l;
+    const double a1 = 20925646.32546;
+    const double b1 = 20855486.5951;
+    const double a2 = 10000000.0;
+    const double b2 = 9900000.0;
+
+    // WHEN: Setting ellipse parameters multiple times
+    l.SetEllipse(a1, b1);
+    l.SetPositionGeodetic(0.0, M_PI / 4.0, 1000.0);
+    double alt1 = l.GetGeodAltitude();
+
+    l.SetEllipse(a2, b2);
+    l.SetPositionGeodetic(0.0, M_PI / 4.0, 1000.0);
+    double alt2 = l.GetGeodAltitude();
+
+    // THEN: Both should give correct altitude
+    TS_ASSERT_DELTA(alt1, 1000.0, 1e-6);
+    TS_ASSERT_DELTA(alt2, 1000.0, 1e-6);
+  }
+
+  void testGeodeticLatitudeConversions() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // Test geodetic latitude in both radians and degrees
+    for (int ilat = -5; ilat <= 5; ilat++) {
+      double glat = ilat * M_PI / 12.0;
+      l.SetPositionGeodetic(0.0, glat, 0.0);
+
+      // Check radian conversion
+      TS_ASSERT_DELTA(l.GetGeodLatitudeRad(), glat, epsilon);
+
+      // Check degree conversion
+      double glat_deg = glat * 180.0 / M_PI;
+      TS_ASSERT_DELTA(l.GetGeodLatitudeDeg(), glat_deg, epsilon);
+    }
+  }
+
+  void testCopyConstructorWithEllipse() {
+    // GIVEN: A location with ellipse set
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l1;
+    l1.SetEllipse(a, b);
+    l1.SetPositionGeodetic(M_PI / 6.0, M_PI / 4.0, 5000.0);
+
+    // WHEN: Copy constructing
+    JSBSim::FGLocation l2(l1);
+
+    // THEN: All properties should match
+    TS_ASSERT_DELTA(l2.GetLongitude(), l1.GetLongitude(), epsilon);
+    TS_ASSERT_DELTA(l2.GetLatitude(), l1.GetLatitude(), epsilon);
+    TS_ASSERT_DELTA(l2.GetRadius(), l1.GetRadius(), epsilon);
+    TS_ASSERT_DELTA(l2.GetGeodLatitudeRad(), l1.GetGeodLatitudeRad(), epsilon);
+    TS_ASSERT_DELTA(l2.GetGeodAltitude(), l1.GetGeodAltitude(), epsilon);
+    TS_ASSERT_DELTA(l2.GetSeaLevelRadius(), l1.GetSeaLevelRadius(), epsilon);
+
+    // Transformation matrices should match
+    TS_ASSERT_MATRIX_EQUALS(l2.GetTec2l(), l1.GetTec2l());
+    TS_ASSERT_MATRIX_EQUALS(l2.GetTl2ec(), l1.GetTl2ec());
+  }
+
+  void testAssignmentWithEllipse() {
+    // GIVEN: Two locations with different ellipse parameters
+    const double a1 = 20925646.32546;
+    const double b1 = 20855486.5951;
+    const double a2 = 10000000.0;
+    const double b2 = 9900000.0;
+
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a1, b1);
+    l1.SetPositionGeodetic(M_PI / 6.0, M_PI / 4.0, 5000.0);
+
+    l2.SetEllipse(a2, b2);
+    l2.SetPositionGeodetic(0.0, 0.0, 0.0);
+
+    // WHEN: Assigning l1 to l2
+    l2 = l1;
+
+    // THEN: l2 should have all properties of l1
+    TS_ASSERT_DELTA(l2.GetLongitude(), l1.GetLongitude(), epsilon);
+    TS_ASSERT_DELTA(l2.GetLatitude(), l1.GetLatitude(), epsilon);
+    TS_ASSERT_DELTA(l2.GetRadius(), l1.GetRadius(), epsilon);
+    TS_ASSERT_DELTA(l2.GetGeodLatitudeRad(), l1.GetGeodLatitudeRad(), epsilon);
+    TS_ASSERT_DELTA(l2.GetGeodAltitude(), l1.GetGeodAltitude(), epsilon);
+    TS_ASSERT_DELTA(l2.GetSeaLevelRadius(), l1.GetSeaLevelRadius(), epsilon);
+  }
+
+  void testRadiusExtremes() {
+    // GIVEN: A location
+    JSBSim::FGLocation l;
+
+    // Test very large radius
+    double large_radius = 1e12;
+    l.SetRadius(large_radius);
+    TS_ASSERT_DELTA(l.GetRadius(), large_radius, large_radius * epsilon);
+
+    // Test very small radius
+    double small_radius = 1e-12;
+    l.SetRadius(small_radius);
+    TS_ASSERT_DELTA(l.GetRadius(), small_radius, epsilon);
+  }
+
+  void testSetPositionPreservesEllipse() {
+    // GIVEN: A location with ellipse set
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+    l.SetPositionGeodetic(0.0, 0.0, 0.0);
+
+    // WHEN: Using SetPosition (geocentric)
+    l.SetPosition(M_PI / 4.0, M_PI / 6.0, a);
+
+    // THEN: Geodetic methods should still work
+    double glat = l.GetGeodLatitudeRad();
+    TS_ASSERT(std::isfinite(glat));
+
+    double galt = l.GetGeodAltitude();
+    TS_ASSERT(std::isfinite(galt));
+  }
+
+  void testOperatorPlusWithEllipse() {
+    // GIVEN: Two locations with ellipse parameters
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a, b);
+    l1.SetPositionGeodetic(0.0, 0.0, 1000.0);
+
+    l2.SetEllipse(a, b);
+    l2.SetPositionGeodetic(M_PI / 6.0, M_PI / 6.0, 2000.0);
+
+    // WHEN: Adding the locations
+    JSBSim::FGLocation l3 = l1 + l2;
+
+    // THEN: Result should preserve ellipse and have sum of ECEF coordinates
+    TS_ASSERT_DELTA(l3(1), l1(1) + l2(1), epsilon * a);
+    TS_ASSERT_DELTA(l3(2), l1(2) + l2(2), epsilon * a);
+    TS_ASSERT_DELTA(l3(3), l1(3) + l2(3), epsilon * a);
+
+    // Geodetic methods should work
+    double galt = l3.GetGeodAltitude();
+    TS_ASSERT(std::isfinite(galt));
+  }
+
+  void testOperatorMinusWithEllipse() {
+    // GIVEN: Two locations with ellipse parameters
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a, b);
+    l1.SetPositionGeodetic(M_PI / 6.0, M_PI / 6.0, 2000.0);
+
+    l2.SetEllipse(a, b);
+    l2.SetPositionGeodetic(M_PI / 12.0, M_PI / 12.0, 1000.0);
+
+    // WHEN: Subtracting the locations
+    JSBSim::FGLocation l3 = l1 - l2;
+
+    // THEN: Result should preserve ellipse and have difference of ECEF coordinates
+    TS_ASSERT_DELTA(l3(1), l1(1) - l2(1), epsilon * a);
+    TS_ASSERT_DELTA(l3(2), l1(2) - l2(2), epsilon * a);
+    TS_ASSERT_DELTA(l3(3), l1(3) - l2(3), epsilon * a);
+  }
+
+  void testOperatorScalarMultiply() {
+    // GIVEN: A location with ellipse
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l1;
+    l1.SetEllipse(a, b);
+    l1.SetPositionGeodetic(M_PI / 6.0, M_PI / 4.0, 1000.0);
+
+    double scalar = 2.5;
+
+    // WHEN: Multiplying by scalar (both forms)
+    JSBSim::FGLocation l2 = l1 * scalar;
+    JSBSim::FGLocation l3 = scalar * l1;
+
+    // THEN: Both should give same result
+    TS_ASSERT_DELTA(l2(1), l3(1), epsilon * a);
+    TS_ASSERT_DELTA(l2(2), l3(2), epsilon * a);
+    TS_ASSERT_DELTA(l2(3), l3(3), epsilon * a);
+
+    // And should be scaled properly
+    TS_ASSERT_DELTA(l2(1), l1(1) * scalar, epsilon * a);
+    TS_ASSERT_DELTA(l2(2), l1(2) * scalar, epsilon * a);
+    TS_ASSERT_DELTA(l2(3), l1(3) * scalar, epsilon * a);
+
+    // Geodetic methods should work
+    TS_ASSERT(std::isfinite(l2.GetGeodAltitude()));
+  }
+
+  void testCastToColumnVector() {
+    // GIVEN: A location
+    JSBSim::FGLocation l(M_PI / 6.0, M_PI / 4.0, 1000.0);
+
+    // WHEN: Casting to FGColumnVector3
+    const JSBSim::FGColumnVector3& v = l;
+
+    // THEN: Vector components should match location components
+    TS_ASSERT_EQUALS(v(1), l(1));
+    TS_ASSERT_EQUALS(v(2), l(2));
+    TS_ASSERT_EQUALS(v(3), l(3));
+
+    // Should maintain values
+    JSBSim::FGColumnVector3 v2 = static_cast<const JSBSim::FGColumnVector3&>(l);
+    TS_ASSERT_EQUALS(v2(1), l(1));
+    TS_ASSERT_EQUALS(v2(2), l(2));
+    TS_ASSERT_EQUALS(v2(3), l(3));
+  }
+
+  void testEntryAccessorConsistency() {
+    // GIVEN: A location
+    JSBSim::FGColumnVector3 vec(1.5, -2.0, 3.0);
+    JSBSim::FGLocation l(vec);
+
+    // THEN: Entry() and operator() should be consistent
+    for (unsigned int i = 1; i <= 3; i++) {
+      TS_ASSERT_EQUALS(l.Entry(i), l(i));
+      TS_ASSERT_EQUALS(l.Entry(i), vec(i));
+    }
+
+    // Test write access
+    l.Entry(1) = 10.0;
+    TS_ASSERT_EQUALS(l(1), 10.0);
+
+    l(2) = 20.0;
+    TS_ASSERT_EQUALS(l.Entry(2), 20.0);
+  }
+
+  void testZeroRadiusHandling() {
+    // GIVEN: A location at the Earth's center
+    JSBSim::FGLocation l;
+    JSBSim::FGColumnVector3 zero(0.0, 0.0, 0.0);
+    l = zero;
+
+    // THEN: Should have zero radius
+    TS_ASSERT_DELTA(l.GetRadius(), 0.0, epsilon);
+
+    // WHEN: Setting latitude (should set radius to 1)
+    l.SetLatitude(M_PI / 4.0);
+
+    // THEN: Radius should now be 1
+    TS_ASSERT_DELTA(l.GetRadius(), 1.0, epsilon);
+    TS_ASSERT_DELTA(l.GetLatitude(), M_PI / 4.0, epsilon);
+
+    // Reset to zero
+    l = zero;
+    TS_ASSERT_DELTA(l.GetRadius(), 0.0, epsilon);
+
+    // WHEN: Setting longitude (should set radius to 1)
+    l.SetLongitude(M_PI / 3.0);
+
+    // THEN: Radius should now be 1
+    TS_ASSERT_DELTA(l.GetRadius(), 1.0, epsilon);
+    TS_ASSERT_DELTA(l.GetLongitude(), M_PI / 3.0, epsilon);
+  }
+
+  void testLatitudeLimits() {
+    // GIVEN: A location
+    JSBSim::FGLocation l;
+
+    // Test at exactly +90 degrees
+    l.SetLatitude(M_PI * 0.5);
+    TS_ASSERT_DELTA(l.GetLatitude(), M_PI * 0.5, epsilon);
+    TS_ASSERT_DELTA(l.GetLatitudeDeg(), 90.0, epsilon);
+
+    // Test at exactly -90 degrees
+    l.SetLatitude(-M_PI * 0.5);
+    TS_ASSERT_DELTA(l.GetLatitude(), -M_PI * 0.5, epsilon);
+    TS_ASSERT_DELTA(l.GetLatitudeDeg(), -90.0, epsilon);
+
+    // Test just below +90 degrees
+    l.SetLatitude(M_PI * 0.5 - 1e-10);
+    TS_ASSERT_DELTA(l.GetLatitude(), M_PI * 0.5 - 1e-10, epsilon);
+  }
+
+  void testLongitudeNormalization() {
+    // GIVEN: A location
+    JSBSim::FGLocation l;
+
+    // Test various longitude values
+    l.SetLongitude(0.0);
+    TS_ASSERT_DELTA(l.GetLongitude(), 0.0, epsilon);
+
+    l.SetLongitude(M_PI);
+    TS_ASSERT_DELTA(std::abs(l.GetLongitude()), M_PI, epsilon);
+
+    l.SetLongitude(-M_PI);
+    TS_ASSERT_DELTA(std::abs(l.GetLongitude()), M_PI, epsilon);
+
+    // Test intermediate values
+    l.SetLongitude(M_PI / 2.0);
+    TS_ASSERT_DELTA(l.GetLongitude(), M_PI / 2.0, epsilon);
+    TS_ASSERT_DELTA(l.GetLongitudeDeg(), 90.0, epsilon);
+
+    l.SetLongitude(-M_PI / 2.0);
+    TS_ASSERT_DELTA(l.GetLongitude(), -M_PI / 2.0, epsilon);
+    TS_ASSERT_DELTA(l.GetLongitudeDeg(), -90.0, epsilon);
+  }
+
+  void testGeodeticNearEquator() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // Test locations very near equator
+    for (int i = -10; i <= 10; i++) {
+      double glat = i * 1e-6;  // Very small latitude
+      double h = 1000.0;
+      l.SetPositionGeodetic(0.0, glat, h);
+
+      TS_ASSERT_DELTA(l.GetGeodLatitudeRad(), glat, 1e-9);
+      TS_ASSERT_DELTA(l.GetGeodAltitude(), h, 1e-6);
+    }
+  }
+
+  void testTransformationMatrixProperties() {
+    // GIVEN: Various locations
+    for (int ilat = -5; ilat <= 5; ilat++) {
+      double lat = ilat * M_PI / 12.0;
+      for (int ilon = 0; ilon < 12; ilon++) {
+        double lon = NormalizedAngle(ilon * M_PI / 6.0);
+        JSBSim::FGLocation l(lon, lat, 1.0);
+
+        // THEN: Transformation matrices should be orthogonal
+        const JSBSim::FGMatrix33& Tec2l = l.GetTec2l();
+        const JSBSim::FGMatrix33& Tl2ec = l.GetTl2ec();
+
+        // Check orthogonality: T * T^T = I
+        JSBSim::FGMatrix33 I1 = Tec2l * Tl2ec;
+        JSBSim::FGMatrix33 I2 = Tl2ec * Tec2l;
+
+        // Diagonal elements should be 1
+        TS_ASSERT_DELTA(I1(1,1), 1.0, epsilon);
+        TS_ASSERT_DELTA(I1(2,2), 1.0, epsilon);
+        TS_ASSERT_DELTA(I1(3,3), 1.0, epsilon);
+
+        TS_ASSERT_DELTA(I2(1,1), 1.0, epsilon);
+        TS_ASSERT_DELTA(I2(2,2), 1.0, epsilon);
+        TS_ASSERT_DELTA(I2(3,3), 1.0, epsilon);
+
+        // Off-diagonal elements should be 0
+        TS_ASSERT_DELTA(I1(1,2), 0.0, epsilon);
+        TS_ASSERT_DELTA(I1(1,3), 0.0, epsilon);
+        TS_ASSERT_DELTA(I1(2,1), 0.0, epsilon);
+        TS_ASSERT_DELTA(I1(2,3), 0.0, epsilon);
+        TS_ASSERT_DELTA(I1(3,1), 0.0, epsilon);
+        TS_ASSERT_DELTA(I1(3,2), 0.0, epsilon);
+      }
+    }
+  }
+
+  void testLocalCoordinateVectors() {
+    // GIVEN: A location
+    JSBSim::FGLocation l(M_PI / 6.0, M_PI / 4.0, 20000000.0);
+
+    // WHEN: Creating unit vectors in local frame
+    JSBSim::FGColumnVector3 north(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 east(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 down(0.0, 0.0, 1.0);
+
+    // THEN: Converting to ECEF and back should preserve them
+    JSBSim::FGLocation l_north = l.LocalToLocation(north);
+    JSBSim::FGLocation l_east = l.LocalToLocation(east);
+    JSBSim::FGLocation l_down = l.LocalToLocation(down);
+
+    JSBSim::FGColumnVector3 north_back = l.LocationToLocal(l_north);
+    JSBSim::FGColumnVector3 east_back = l.LocationToLocal(l_east);
+    JSBSim::FGColumnVector3 down_back = l.LocationToLocal(l_down);
+
+    // Use tolerance for numerical precision
+    TS_ASSERT_DELTA(north_back(1), north(1), 1e-8);
+    TS_ASSERT_DELTA(north_back(2), north(2), 1e-8);
+    TS_ASSERT_DELTA(north_back(3), north(3), 1e-8);
+
+    TS_ASSERT_DELTA(east_back(1), east(1), 1e-8);
+    TS_ASSERT_DELTA(east_back(2), east(2), 1e-8);
+    TS_ASSERT_DELTA(east_back(3), east(3), 1e-8);
+
+    TS_ASSERT_DELTA(down_back(1), down(1), 1e-8);
+    TS_ASSERT_DELTA(down_back(2), down(2), 1e-8);
+    TS_ASSERT_DELTA(down_back(3), down(3), 1e-8);
+  }
+
+  void testSinCosLongitudeConsistency() {
+    // GIVEN: Various longitudes
+    for (int ilon = -12; ilon <= 12; ilon++) {
+      double lon = NormalizedAngle(ilon * M_PI / 6.0);
+      JSBSim::FGLocation l(lon, 0.0, 1.0);
+
+      // THEN: Sin and cos should match the longitude
+      TS_ASSERT_DELTA(l.GetSinLongitude(), sin(lon), epsilon);
+      TS_ASSERT_DELTA(l.GetCosLongitude(), cos(lon), epsilon);
+
+      // And should satisfy trig identity
+      double sin_lon = l.GetSinLongitude();
+      double cos_lon = l.GetCosLongitude();
+      TS_ASSERT_DELTA(sin_lon * sin_lon + cos_lon * cos_lon, 1.0, epsilon);
+    }
+  }
+
+  void testGeodeticAtNegativeAltitude() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // WHEN: Setting negative altitude (below sea level)
+    double h = -1000.0;
+    l.SetPositionGeodetic(0.0, M_PI / 4.0, h);
+
+    // THEN: Should handle it correctly
+    TS_ASSERT_DELTA(l.GetGeodAltitude(), h, 1e-6);
+    TS_ASSERT(std::isfinite(l.GetGeodLatitudeRad()));
+    TS_ASSERT(l.GetRadius() > 0.0);
+  }
+
+  void testCompoundOperations() {
+    // GIVEN: Locations
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a, b);
+    l2.SetEllipse(a, b);
+
+    l1.SetPositionGeodetic(0.0, M_PI / 6.0, 1000.0);
+    l2.SetPositionGeodetic(M_PI / 6.0, M_PI / 4.0, 2000.0);
+
+    // WHEN: Performing compound operations
+    JSBSim::FGLocation l3 = 2.0 * l1 + 0.5 * l2;
+
+    // THEN: Result should be correct
+    TS_ASSERT_DELTA(l3(1), 2.0 * l1(1) + 0.5 * l2(1), epsilon * a);
+    TS_ASSERT_DELTA(l3(2), 2.0 * l1(2) + 0.5 * l2(2), epsilon * a);
+    TS_ASSERT_DELTA(l3(3), 2.0 * l1(3) + 0.5 * l2(3), epsilon * a);
+  }
+
+  void testDistanceSymmetry() {
+    // GIVEN: Two locations
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a, b);
+    l2.SetEllipse(a, b);
+
+    double lon1 = M_PI / 6.0, lat1 = M_PI / 4.0;
+    double lon2 = M_PI / 3.0, lat2 = M_PI / 6.0;
+
+    l1.SetPositionGeodetic(lon1, lat1, 0.0);
+    l2.SetPositionGeodetic(lon2, lat2, 0.0);
+
+    // THEN: Distance should be symmetric
+    double dist12 = l1.GetDistanceTo(lon2, lat2);
+    double dist21 = l2.GetDistanceTo(lon1, lat1);
+
+    TS_ASSERT_DELTA(dist12, dist21, 1.0);
+  }
+
+  void testDefaultConstructorState() {
+    // GIVEN: Default constructed location
+    JSBSim::FGLocation l;
+
+    // THEN: Should be at (1, 0, 0) in ECEF
+    TS_ASSERT_EQUALS(l(1), 1.0);
+    TS_ASSERT_EQUALS(l(2), 0.0);
+    TS_ASSERT_EQUALS(l(3), 0.0);
+
+    // Longitude and latitude should be zero
+    TS_ASSERT_EQUALS(l.GetLongitude(), 0.0);
+    TS_ASSERT_EQUALS(l.GetLatitude(), 0.0);
+
+    // Radius should be 1
+    TS_ASSERT_EQUALS(l.GetRadius(), 1.0);
+
+    // Sin/cos longitude
+    TS_ASSERT_EQUALS(l.GetSinLongitude(), 0.0);
+    TS_ASSERT_EQUALS(l.GetCosLongitude(), 1.0);
+  }
 };

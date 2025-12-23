@@ -3,6 +3,7 @@
 #include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 
 class FGParameterValueTest : public CxxTest::TestSuite

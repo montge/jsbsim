@@ -319,12 +319,12 @@ public:
     double C1 = 10.0;
     double dt = 0.01;
 
-    double denom = 1.0 + C1 * dt / 2.0;
-    double ca = (1.0 - C1 * dt / 2.0) / denom;
-    double cb = C1 * dt / denom;
+    double denom = 1.0 + C1 * dt / 2.0;  // = 1.05
+    double ca = (1.0 - C1 * dt / 2.0) / denom;  // = 0.95/1.05 = 0.9047
+    double cb = C1 * dt / denom;  // = 0.1/1.05 = 0.0952
 
-    TS_ASSERT_DELTA(ca, 0.9512, 0.001);
-    TS_ASSERT_DELTA(cb, 0.0488, 0.001);
+    TS_ASSERT_DELTA(ca, 0.9047, 0.001);
+    TS_ASSERT_DELTA(cb, 0.0952, 0.001);
 
     // DC gain check: (1 + cb/ca ... actually verify sum behavior)
     // At steady state: y = ca*y + cb*u => y(1-ca) = cb*u => y/u = cb/(1-ca)
