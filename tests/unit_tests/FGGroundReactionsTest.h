@@ -1,368 +1,465 @@
+/*******************************************************************************
+ * FGGroundReactionsTest.h - Unit tests for FGGroundReactions
+ *
+ * Tests the mathematical behavior of ground reactions system:
+ * - Weight on wheels (WOW) determination
+ * - Ground contact detection
+ * - Runway surface handling
+ * - Multiple gear coordination
+ *
+ * Note: FGGroundReactions requires XML element for construction, so these tests
+ * focus on the underlying mathematical operations.
+ *
+ * Copyright (c) JSBSim Development Team
+ * Licensed under LGPL
+ ******************************************************************************/
+
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+#include <vector>
 
-#include "TestUtilities.h"
+const double epsilon = 1e-10;
 
-using namespace JSBSimTest;
-
-const double epsilon = 1e-8;
-
-/**
- * Ground Reactions unit tests
- *
- * Tests for ground reaction physics including:
- * - Contact detection
- * - Normal force calculation
- * - Friction models (static, dynamic, rolling)
- * - Tire compression
- * - Brake modeling
- * - Gear strut dynamics
- */
 class FGGroundReactionsTest : public CxxTest::TestSuite
 {
 public:
-  // Test ground contact detection
-  void testGroundContactDetection() {
-    double ground_altitude = 0.0;
-    double gear_altitude = -0.5;  // Below ground
+  /***************************************************************************
+   * Gear State Structure
+   ***************************************************************************/
+  struct GearState {
+    double compression = 0.0;     // ft (positive = compressed)
+    double compressionVelocity = 0.0;  // ft/s
+    double staticFriction = 0.8;
+    double rollingFriction = 0.02;
+    double maxSteer = 60.0;       // degrees
+    double steerAngle = 0.0;      // degrees
+    bool brake = false;
+    double brakeForce = 0.0;
+    bool retracted = false;
+    double x = 0.0, y = 0.0, z = 0.0;  // Position
+  };
 
-    bool contact = (gear_altitude <= ground_altitude);
+  /***************************************************************************
+   * Weight on Wheels Tests
+   ***************************************************************************/
+
+  // Test WOW when gear compressed
+  void testWOWCompressed() {
+    GearState gear;
+    gear.compression = 0.5;  // 0.5 ft compression
+
+    bool wow = (gear.compression > 0);
+    TS_ASSERT(wow);
+  }
+
+  // Test WOW when airborne
+  void testWOWAirborne() {
+    GearState gear;
+    gear.compression = 0.0;  // No compression
+
+    bool wow = (gear.compression > 0);
+    TS_ASSERT(!wow);
+  }
+
+  // Test WOW threshold
+  void testWOWThreshold() {
+    GearState gear;
+    gear.compression = 0.001;  // Minimal compression
+
+    bool wow = (gear.compression > 0);
+    TS_ASSERT(wow);  // Still counts as WOW
+  }
+
+  /***************************************************************************
+   * Contact Detection Tests
+   ***************************************************************************/
+
+  // Test ground contact (AGL < gear length)
+  void testGroundContact() {
+    double agl = 5.0;  // ft above ground
+    double gearLength = 6.0;  // ft extended gear length
+
+    bool contact = (agl < gearLength);
     TS_ASSERT(contact);
+  }
 
-    gear_altitude = 1.0;  // Above ground
-    contact = (gear_altitude <= ground_altitude);
+  // Test no contact (above ground)
+  void testNoContact() {
+    double agl = 10.0;
+    double gearLength = 6.0;
+
+    bool contact = (agl < gearLength);
     TS_ASSERT(!contact);
   }
 
-  // Test penetration depth calculation
-  void testPenetrationDepth() {
-    double ground = 0.0;
-    double gear = -0.5;  // 0.5 ft below ground
+  // Test compression amount
+  void testCompressionAmount() {
+    double agl = 4.0;
+    double gearLength = 6.0;
 
-    double penetration = ground - gear;
-    TS_ASSERT_DELTA(penetration, 0.5, epsilon);
+    double compression = gearLength - agl;
+    TS_ASSERT_DELTA(compression, 2.0, epsilon);
   }
 
-  // Test normal force from spring model
-  void testNormalForceSpring() {
-    // F = k * x (Hooke's law)
-    double spring_constant = 100000.0;  // lbs/ft
-    double compression = 0.5;           // ft
+  /***************************************************************************
+   * Friction Model Tests
+   ***************************************************************************/
 
-    double normal_force = spring_constant * compression;
-    TS_ASSERT_DELTA(normal_force, 50000.0, epsilon);
-  }
+  // Test static friction
+  void testStaticFriction() {
+    double normalForce = 1000.0;  // lbs
+    double staticCoeff = 0.8;
 
-  // Test normal force with damping
-  void testNormalForceWithDamping() {
-    // F = k*x + c*v
-    double k = 100000.0;  // Spring constant (lbs/ft)
-    double c = 5000.0;    // Damping coefficient (lbs*s/ft)
-    double x = 0.5;       // Compression (ft)
-    double v = -2.0;      // Velocity (ft/s, negative = compressing)
-
-    double F_spring = k * x;
-    double F_damping = -c * v;  // Opposes velocity
-    double F_total = F_spring + F_damping;
-
-    TS_ASSERT_DELTA(F_spring, 50000.0, epsilon);
-    TS_ASSERT_DELTA(F_damping, 10000.0, epsilon);
-    TS_ASSERT_DELTA(F_total, 60000.0, epsilon);
-  }
-
-  // Test Coulomb friction model
-  void testCoulombFriction() {
-    double mu_static = 0.8;
-    double mu_kinetic = 0.6;
-    double normal_force = 10000.0;
-
-    double F_static_max = mu_static * normal_force;
-    double F_kinetic = mu_kinetic * normal_force;
-
-    TS_ASSERT_DELTA(F_static_max, 8000.0, epsilon);
-    TS_ASSERT_DELTA(F_kinetic, 6000.0, epsilon);
-    TS_ASSERT(F_static_max > F_kinetic);  // Static > kinetic
-  }
-
-  // Test friction direction
-  void testFrictionDirection() {
-    double velocity_x = 10.0;
-    double velocity_y = 0.0;
-    double speed = std::sqrt(velocity_x*velocity_x + velocity_y*velocity_y);
-
-    // Friction opposes motion
-    double friction_magnitude = 1000.0;
-    double friction_x = -friction_magnitude * velocity_x / speed;
-    double friction_y = -friction_magnitude * velocity_y / speed;
-
-    TS_ASSERT_DELTA(friction_x, -1000.0, epsilon);
-    TS_ASSERT_DELTA(friction_y, 0.0, epsilon);
+    double maxStaticFriction = normalForce * staticCoeff;
+    TS_ASSERT_DELTA(maxStaticFriction, 800.0, epsilon);
   }
 
   // Test rolling friction
   void testRollingFriction() {
-    // Rolling friction is much less than sliding friction
-    double mu_rolling = 0.02;
-    double normal_force = 10000.0;
+    double normalForce = 1000.0;
+    double rollingCoeff = 0.02;
 
-    double F_rolling = mu_rolling * normal_force;
-    TS_ASSERT_DELTA(F_rolling, 200.0, epsilon);
+    double rollingFriction = normalForce * rollingCoeff;
+    TS_ASSERT_DELTA(rollingFriction, 20.0, epsilon);
   }
 
-  // Test brake effectiveness
-  void testBrakeEffectiveness() {
-    double brake_coeff = 0.7;  // Brake coefficient of friction
-    double normal_force = 10000.0;
-    double brake_input = 0.5;  // 50% brake
+  // Test friction transition
+  void testFrictionTransition() {
+    double staticCoeff = 0.8;
+    double rollingCoeff = 0.02;
+    double velocity = 5.0;  // ft/s
+    double transitionSpeed = 1.0;
 
-    double brake_force = brake_coeff * normal_force * brake_input;
-    TS_ASSERT_DELTA(brake_force, 3500.0, epsilon);
+    // Blend between static and rolling based on velocity
+    double factor = std::min(1.0, velocity / transitionSpeed);
+    double effectiveCoeff = staticCoeff * (1 - factor) + rollingCoeff * factor;
+
+    TS_ASSERT_DELTA(effectiveCoeff, rollingCoeff, epsilon);  // Fully rolling
   }
 
-  // Test anti-skid braking
-  void testAntiSkidBraking() {
-    double wheel_speed = 50.0;  // ft/s
-    double ground_speed = 55.0; // ft/s
-    double slip = (ground_speed - wheel_speed) / ground_speed;
+  // Test friction at low speed
+  void testFrictionLowSpeed() {
+    double staticCoeff = 0.8;
+    double rollingCoeff = 0.02;
+    double velocity = 0.5;  // ft/s
+    double transitionSpeed = 1.0;
 
-    // Optimal slip for max braking is around 10-20%
-    TS_ASSERT_DELTA(slip, 0.0909, 0.01);
+    double factor = std::min(1.0, velocity / transitionSpeed);
+    double effectiveCoeff = staticCoeff * (1 - factor) + rollingCoeff * factor;
 
-    // Anti-skid would reduce brake pressure if slip > threshold
-    double threshold = 0.15;
-    bool reduce_braking = (slip < threshold);
-    TS_ASSERT(reduce_braking);
+    TS_ASSERT(effectiveCoeff > rollingCoeff);
+    TS_ASSERT(effectiveCoeff < staticCoeff);
   }
 
-  // Test tire slip angle
-  void testTireSlipAngle() {
-    double velocity_x = 100.0;  // Forward velocity
-    double velocity_y = 10.0;   // Lateral velocity
+  /***************************************************************************
+   * Steering Tests
+   ***************************************************************************/
 
-    double slip_angle = std::atan2(velocity_y, velocity_x);
-    TS_ASSERT_DELTA(slip_angle * 180.0 / M_PI, 5.71, 0.1);  // About 6 degrees
+  // Test steering angle limit
+  void testSteeringLimit() {
+    GearState gear;
+    gear.maxSteer = 60.0;
+    double commanded = 90.0;
+
+    double actual = std::max(-gear.maxSteer, std::min(gear.maxSteer, commanded));
+    TS_ASSERT_DELTA(actual, 60.0, epsilon);  // Limited
   }
 
-  // Test lateral tire force
-  void testLateralTireForce() {
-    // Simplified: F_lat = C_alpha * slip_angle
-    double C_alpha = 5000.0;  // Cornering stiffness (lbs/rad)
-    double slip_angle = 0.1;  // radians
+  // Test steering within limits
+  void testSteeringWithinLimits() {
+    GearState gear;
+    gear.maxSteer = 60.0;
+    double commanded = 30.0;
 
-    double F_lateral = C_alpha * slip_angle;
-    TS_ASSERT_DELTA(F_lateral, 500.0, epsilon);
+    double actual = std::max(-gear.maxSteer, std::min(gear.maxSteer, commanded));
+    TS_ASSERT_DELTA(actual, 30.0, epsilon);
   }
 
-  // Test tire load sensitivity
-  void testTireLoadSensitivity() {
-    // Tire friction coefficient decreases with load
-    double mu_base = 0.8;
-    double load = 5000.0;
-    double reference_load = 2500.0;
+  // Test negative steering
+  void testNegativeSteering() {
+    GearState gear;
+    gear.maxSteer = 60.0;
+    double commanded = -45.0;
 
-    // Simple model: mu = mu_base * sqrt(ref_load / load)
-    double mu = mu_base * std::sqrt(reference_load / load);
-    TS_ASSERT_DELTA(mu, 0.566, 0.01);  // Reduced friction at higher load
+    double actual = std::max(-gear.maxSteer, std::min(gear.maxSteer, commanded));
+    TS_ASSERT_DELTA(actual, -45.0, epsilon);
   }
 
-  // Test gear strut extension
-  void testGearStrutExtension() {
-    double max_extension = 1.5;  // ft
-    double current_extension = 1.2;
-    double compression_ratio = current_extension / max_extension;
+  // Test steering force
+  void testSteeringForce() {
+    double steerAngle = 30.0;  // degrees
+    double velocity = 50.0;    // ft/s
+    double lateralForce = 100.0;  // Base lateral force
 
-    TS_ASSERT_DELTA(compression_ratio, 0.8, epsilon);
+    // Cornering force increases with steer angle
+    double steerRad = steerAngle * M_PI / 180.0;
+    double corneringForce = lateralForce * std::sin(steerRad);
+
+    TS_ASSERT_DELTA(corneringForce, 50.0, 0.1);  // sin(30°) = 0.5
   }
 
-  // Test gear retraction
-  void testGearRetraction() {
-    double retract_time = 8.0;  // seconds
-    double current_position = 0.0;  // 0 = up, 1 = down
-    double target_position = 1.0;
+  /***************************************************************************
+   * Brake Tests
+   ***************************************************************************/
 
-    double rate = (target_position - current_position) / retract_time;
-    TS_ASSERT_DELTA(rate, 0.125, epsilon);  // 12.5% per second
+  // Test brake force calculation
+  void testBrakeForce() {
+    double normalForce = 5000.0;  // lbs
+    double brakeCoeff = 0.6;      // Brake friction coefficient
+    double brakeInput = 1.0;      // Full brake
+
+    double brakeForce = normalForce * brakeCoeff * brakeInput;
+    TS_ASSERT_DELTA(brakeForce, 3000.0, epsilon);
   }
 
-  // Test weight on wheels
-  void testWeightOnWheels() {
-    double gear_forces[] = {5000.0, 5000.0, 2000.0};  // Main L, Main R, Nose
-    double total_weight = 0.0;
+  // Test partial brake
+  void testPartialBrake() {
+    double normalForce = 5000.0;
+    double brakeCoeff = 0.6;
+    double brakeInput = 0.5;  // Half brake
 
-    for (double f : gear_forces) {
-      total_weight += f;
+    double brakeForce = normalForce * brakeCoeff * brakeInput;
+    TS_ASSERT_DELTA(brakeForce, 1500.0, epsilon);
+  }
+
+  // Test brake fade with temperature
+  void testBrakeFade() {
+    double baseBrakeCoeff = 0.6;
+    double brakeTemp = 600.0;  // degrees F
+    double fadeTemp = 400.0;   // Temperature at which fade starts
+
+    // Linear fade above threshold
+    double fadeRate = 0.0005;  // Coefficient loss per degree
+    double fade = std::max(0.0, (brakeTemp - fadeTemp) * fadeRate);
+    double effectiveCoeff = baseBrakeCoeff - fade;
+
+    TS_ASSERT_DELTA(effectiveCoeff, 0.5, epsilon);  // Faded from 0.6 to 0.5
+  }
+
+  /***************************************************************************
+   * Spring-Damper Tests
+   ***************************************************************************/
+
+  // Test spring force
+  void testSpringForce() {
+    double compression = 0.5;  // ft
+    double springConstant = 10000.0;  // lbs/ft
+
+    double springForce = compression * springConstant;
+    TS_ASSERT_DELTA(springForce, 5000.0, epsilon);
+  }
+
+  // Test damper force
+  void testDamperForce() {
+    double compressionVelocity = 2.0;  // ft/s (compressing)
+    double dampingConstant = 500.0;    // lbs/(ft/s)
+
+    double damperForce = compressionVelocity * dampingConstant;
+    TS_ASSERT_DELTA(damperForce, 1000.0, epsilon);
+  }
+
+  // Test combined spring-damper
+  void testCombinedSpringDamper() {
+    double compression = 0.5;
+    double compressionVelocity = 2.0;
+    double springConstant = 10000.0;
+    double dampingConstant = 500.0;
+
+    double totalForce = compression * springConstant +
+                        compressionVelocity * dampingConstant;
+
+    TS_ASSERT_DELTA(totalForce, 6000.0, epsilon);  // 5000 + 1000
+  }
+
+  // Test extension (negative velocity)
+  void testExtension() {
+    double compression = 0.5;
+    double compressionVelocity = -2.0;  // Extending
+    double springConstant = 10000.0;
+    double dampingConstant = 500.0;
+
+    double springForce = compression * springConstant;
+    double damperForce = compressionVelocity * dampingConstant;
+
+    TS_ASSERT_DELTA(springForce + damperForce, 4000.0, epsilon);  // 5000 - 1000
+  }
+
+  /***************************************************************************
+   * Multi-Gear Coordination Tests
+   ***************************************************************************/
+
+  // Test total weight distribution
+  void testWeightDistribution() {
+    double totalWeight = 10000.0;  // lbs
+    double noseGearRatio = 0.08;   // 8% on nose
+    double mainGearRatio = 0.92;   // 92% on mains (46% each)
+
+    double noseLoad = totalWeight * noseGearRatio;
+    double mainLoad = totalWeight * mainGearRatio / 2;  // Per main gear
+
+    TS_ASSERT_DELTA(noseLoad, 800.0, epsilon);
+    TS_ASSERT_DELTA(mainLoad, 4600.0, epsilon);
+  }
+
+  // Test asymmetric loading (crosswind)
+  void testAsymmetricLoading() {
+    double totalWeight = 10000.0;
+    double sideForce = 500.0;
+    double gearSpan = 10.0;  // ft between mains
+
+    // Moment creates differential loading
+    double moment = sideForce * 2.0;  // Assumed CG height of 2 ft
+    double loadTransfer = moment / gearSpan;
+
+    double leftLoad = 4600.0 - loadTransfer;   // Reduced
+    double rightLoad = 4600.0 + loadTransfer;  // Increased
+
+    TS_ASSERT(rightLoad > leftLoad);
+    TS_ASSERT_DELTA(leftLoad + rightLoad, 9200.0, epsilon);  // Still equals main gear total
+  }
+
+  // Test tricycle gear moments
+  void testTricycleGearMoments() {
+    // Nose at x=10 ft, mains at x=-5 ft, CG at x=0
+    double nosePos = 10.0;
+    double mainPos = -5.0;
+    double noseLoad = 800.0;
+    double mainLoad = 9200.0;  // Combined mains
+
+    double neckMoment = noseLoad * nosePos;
+    double mainMoment = mainLoad * mainPos;
+    double totalMoment = neckMoment + mainMoment;
+
+    TS_ASSERT_DELTA(totalMoment, -38000.0, epsilon);  // Tail-down moment
+  }
+
+  /***************************************************************************
+   * Retraction Tests
+   ***************************************************************************/
+
+  // Test gear retracted state
+  void testGearRetracted() {
+    GearState gear;
+    gear.retracted = true;
+    gear.compression = 0.0;
+
+    // Retracted gear generates no forces
+    double force = gear.retracted ? 0.0 : 1000.0;
+    TS_ASSERT_DELTA(force, 0.0, epsilon);
+  }
+
+  // Test gear extended state
+  void testGearExtended() {
+    GearState gear;
+    gear.retracted = false;
+    gear.compression = 0.5;
+
+    bool canGenerateForce = !gear.retracted && gear.compression > 0;
+    TS_ASSERT(canGenerateForce);
+  }
+
+  // Test gear in transit
+  void testGearInTransit() {
+    double gearPosition = 0.5;  // 0 = retracted, 1 = extended
+    double minPositionForContact = 0.8;
+
+    bool canContact = (gearPosition >= minPositionForContact);
+    TS_ASSERT(!canContact);  // Still retracting/extending
+  }
+
+  /***************************************************************************
+   * Surface Type Tests
+   ***************************************************************************/
+
+  // Test runway friction
+  void testRunwayFriction() {
+    double dryFriction = 0.8;
+    double wetFriction = 0.5;
+    double icyFriction = 0.1;
+
+    TS_ASSERT(dryFriction > wetFriction);
+    TS_ASSERT(wetFriction > icyFriction);
+  }
+
+  // Test grass runway rolling resistance
+  void testGrassRolling() {
+    double concreteRolling = 0.02;
+    double grassRolling = 0.10;
+
+    TS_ASSERT(grassRolling > concreteRolling);  // More resistance on grass
+  }
+
+  // Test soft field sink
+  void testSoftFieldSink() {
+    double weight = 10000.0;
+    double bearingStrength = 5000.0;  // lbs/sq ft
+
+    // Simplified: sink until pressure equals bearing strength
+    double gearFootprint = 0.5;  // sq ft
+    double maxLoad = bearingStrength * gearFootprint;
+
+    bool willSink = (weight / 3) > maxLoad;  // Weight per wheel
+    TS_ASSERT(willSink);
+  }
+
+  /***************************************************************************
+   * Edge Cases
+   ***************************************************************************/
+
+  // Test zero compression
+  void testZeroCompression() {
+    double compression = 0.0;
+    double springConstant = 10000.0;
+
+    double force = compression * springConstant;
+    TS_ASSERT_DELTA(force, 0.0, epsilon);
+  }
+
+  // Test maximum compression
+  void testMaxCompression() {
+    double compression = 1.0;
+    double maxCompression = 0.8;
+    double springConstant = 10000.0;
+    double bumpStopK = 50000.0;  // Stiffer bump stop
+
+    double force;
+    if (compression > maxCompression) {
+      force = maxCompression * springConstant +
+              (compression - maxCompression) * bumpStopK;
+    } else {
+      force = compression * springConstant;
     }
 
-    bool wow = total_weight > 100.0;  // Weight on wheels threshold
-    TS_ASSERT(wow);
-    TS_ASSERT_DELTA(total_weight, 12000.0, epsilon);
+    TS_ASSERT_DELTA(force, 18000.0, epsilon);  // 8000 + 10000
   }
 
-  // Test surface friction coefficients
-  void testSurfaceFrictionCoefficients() {
-    // Different surfaces have different friction
-    double mu_dry_concrete = 0.8;
-    double mu_wet_concrete = 0.5;
-    double mu_ice = 0.1;
+  // Test zero velocity
+  void testZeroVelocity() {
+    double velocity = 0.0;
+    double rollingFriction = 0.02;
+    double normalForce = 1000.0;
 
-    TS_ASSERT(mu_dry_concrete > mu_wet_concrete);
-    TS_ASSERT(mu_wet_concrete > mu_ice);
+    // At zero velocity, use static friction
+    double friction = (velocity == 0.0) ? 0.0 : rollingFriction * normalForce;
+    TS_ASSERT_DELTA(friction, 0.0, epsilon);
   }
 
-  // Test steering angle effect
-  void testSteeringAngleEffect() {
-    double steering_angle = 30.0 * M_PI / 180.0;  // 30 degrees
-    double wheel_force = 1000.0;
+  // Test taildragger configuration
+  void testTaildraggarConfig() {
+    // Main gear forward, tail wheel aft
+    double mainPos = 2.0;   // ft forward of CG
+    double tailPos = -20.0; // ft aft of CG
+    double mainLoad = 9000.0;
+    double tailLoad = 1000.0;
 
-    double F_x = wheel_force * std::cos(steering_angle);
-    double F_y = wheel_force * std::sin(steering_angle);
+    // Verify balance
+    double mainMoment = mainLoad * mainPos;
+    double tailMoment = tailLoad * tailPos;
 
-    TS_ASSERT_DELTA(F_x, 866.0, 1.0);
-    TS_ASSERT_DELTA(F_y, 500.0, 1.0);
-  }
-
-  // Test camber effect
-  void testCamberEffect() {
-    // Camber generates lateral force
-    double camber_angle = 2.0 * M_PI / 180.0;  // 2 degrees
-    double camber_stiffness = 1000.0;  // lbs/rad
-
-    double F_camber = camber_stiffness * camber_angle;
-    TS_ASSERT_DELTA(F_camber, 34.9, 1.0);
-  }
-
-  // Test oleo strut damping
-  void testOleoDamping() {
-    // Oleo strut provides non-linear damping
-    double velocity = -5.0;  // ft/s (compression)
-    double orifice_area = 0.001;  // sq ft
-    double fluid_density = 2.0;   // slugs/cu ft
-
-    // Simple orifice flow: F ~ v^2
-    double damping_coeff = 0.5 * fluid_density / (orifice_area * orifice_area);
-    double damping_force = damping_coeff * velocity * std::abs(velocity);
-
-    TS_ASSERT(std::abs(damping_force) > 0);
-  }
-
-  // Test tire burst detection
-  void testTireBurstDetection() {
-    double max_load = 20000.0;
-    double current_load = 25000.0;
-
-    bool tire_burst = current_load > max_load;
-    TS_ASSERT(tire_burst);
-  }
-
-  // Test hydroplaning speed
-  void testHydroplaningSpeed() {
-    // V_hydro = 9 * sqrt(P) where P is tire pressure in psi
-    double tire_pressure_psi = 100.0;
-    double hydroplane_speed_kts = 9.0 * std::sqrt(tire_pressure_psi);
-
-    TS_ASSERT_DELTA(hydroplane_speed_kts, 90.0, epsilon);
-  }
-
-  // Test crosswind effect on ground handling
-  void testCrosswindEffect() {
-    double crosswind_knots = 15.0;
-    double crosswind_fps = crosswind_knots * 1.68781;
-    double aircraft_area = 500.0;  // sq ft
-    double rho = 0.002378;  // slugs/cu ft
-
-    // Crosswind force
-    double dynamic_pressure = 0.5 * rho * crosswind_fps * crosswind_fps;
-    double side_force = dynamic_pressure * aircraft_area * 0.5;  // Cd = 0.5
-
-    TS_ASSERT(side_force > 100.0);  // Significant side force
-  }
-
-  // Test ground effect on lift
-  void testGroundEffect() {
-    // Ground effect increases lift near ground
-    double wingspan = 50.0;  // ft
-    double height_agl = 10.0;  // ft
-    double height_ratio = height_agl / wingspan;
-
-    // Ground effect factor (simplified)
-    double ground_effect = 1.0 / (1.0 - 0.25 * std::exp(-4.0 * height_ratio));
-
-    TS_ASSERT(ground_effect > 1.0);  // Increased lift
-    TS_ASSERT(ground_effect < 1.5);  // But not unreasonable
-  }
-
-  // Test contact point calculation
-  void testContactPointCalculation() {
-    // Wheel contact point moves with aircraft attitude
-    double pitch_rad = 5.0 * M_PI / 180.0;  // 5 degree pitch
-    double gear_length = 4.0;  // ft
-
-    double x_offset = gear_length * std::sin(pitch_rad);
-    double z_offset = gear_length * std::cos(pitch_rad);
-
-    TS_ASSERT_DELTA(x_offset, 0.349, 0.01);
-    TS_ASSERT_DELTA(z_offset, 3.985, 0.01);
-  }
-
-  // Test multiple gear contact
-  void testMultipleGearContact() {
-    // Aircraft can have 1, 2, or all 3 gears in contact
-    bool main_left = true;
-    bool main_right = true;
-    bool nose = false;  // Nose wheel just lifted
-
-    int contact_count = (main_left ? 1 : 0) + (main_right ? 1 : 0) + (nose ? 1 : 0);
-    TS_ASSERT_EQUALS(contact_count, 2);
-  }
-
-  // Test gear bogey load distribution
-  void testBogeyLoadDistribution() {
-    // Multi-wheel bogey distributes load
-    int num_wheels = 4;
-    double total_load = 40000.0;
-    double load_per_wheel = total_load / num_wheels;
-
-    TS_ASSERT_DELTA(load_per_wheel, 10000.0, epsilon);
-  }
-
-  // Test tailwheel vs nosewheel configuration
-  void testGearConfiguration() {
-    // CG position relative to main gear
-    double cg_x = 10.0;
-    double main_gear_x = 11.0;
-    double nose_gear_x = 3.0;
-
-    bool cg_ahead_of_main = cg_x < main_gear_x;
-    TS_ASSERT(cg_ahead_of_main);  // Stable nosewheel configuration
-  }
-
-  // Test taxi speed limits
-  void testTaxiSpeedLimit() {
-    double max_taxi_speed_kts = 25.0;
-    double current_speed_kts = 30.0;
-
-    bool over_limit = current_speed_kts > max_taxi_speed_kts;
-    TS_ASSERT(over_limit);
-  }
-
-  // Test runway slope effect
-  void testRunwaySlope() {
-    double slope_percent = 2.0;  // 2% slope
-    double weight = 10000.0;     // lbs
-
-    double slope_rad = std::atan(slope_percent / 100.0);
-    double force_along_slope = weight * std::sin(slope_rad);
-
-    TS_ASSERT_DELTA(force_along_slope, 200.0, 1.0);
-  }
-
-  // Test arrested landing
-  void testArrestedLanding() {
-    double initial_velocity = 150.0;  // ft/s
-    double wire_deceleration = 60.0;  // ft/s^2
-    double time_to_stop = initial_velocity / wire_deceleration;
-
-    TS_ASSERT_DELTA(time_to_stop, 2.5, 0.1);  // 2.5 seconds to stop
+    // For balance: main_moment ≈ -tail_moment
+    // This is simplified - actual would need weight at CG
+    TS_ASSERT(mainMoment > 0);
+    TS_ASSERT(tailMoment < 0);
   }
 };
