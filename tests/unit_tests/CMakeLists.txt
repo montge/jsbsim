@@ -49,6 +49,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGXMLParseTest
                FGBuoyantForcesTest
                FGGroundReactionsTest
+               FGLGearTest
                FGSurfaceTest
                FGEngineTest
                FGElectricTest
