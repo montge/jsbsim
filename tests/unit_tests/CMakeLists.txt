@@ -27,6 +27,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGRungeKuttaTest
                FGAccelerationsTest
                FGAircraftTest
+               FGMassBalanceTest
                FGModelTest
                FGPropagateTest
                FGForceTest
@@ -36,6 +37,9 @@ set(UNIT_TESTS FGColumnVector3Test
                FGPIDTest
                FGSensorTest
                FGFilterTest
+               FGGainTest
+               FGSwitchTest
+               FGDeadBandTest
                FGGyroTest
                FGActuatorTest
                FGXMLElementTest
