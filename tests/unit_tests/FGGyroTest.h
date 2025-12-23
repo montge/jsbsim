@@ -1,474 +1,418 @@
+/*******************************************************************************
+ * FGGyroTest.h - Unit tests for FGGyro (rate gyroscope sensor)
+ *
+ * Tests the mathematical behavior of rate gyroscopes:
+ * - Angular rate measurements in body axes
+ * - Bias and drift modeling
+ * - Noise and quantization
+ * - Lag filter response
+ * - Scale factor errors
+ *
+ * Note: FGGyro requires XML element for construction, so these tests focus
+ * on the underlying mathematical operations.
+ *
+ * Copyright (c) JSBSim Development Team
+ * Licensed under LGPL
+ ******************************************************************************/
+
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
 #include <random>
 
-#include "TestUtilities.h"
+const double epsilon = 1e-10;
+const double DEG_TO_RAD = M_PI / 180.0;
+const double RAD_TO_DEG = 180.0 / M_PI;
 
-using namespace JSBSimTest;
-
-const double epsilon = 1e-8;
-
-/**
- * Gyro unit tests
- *
- * Note: FGGyro requires XML element for construction, so these tests focus on:
- * - Rate sensing accuracy (angular velocity measurements)
- * - Drift characteristics (bias, random walk)
- * - Spin axis orientation (body axis mounting)
- * - Scale factor effects on rate sensing
- * - Quantization effects on rate measurements
- * - Noise injection in angular rate sensors
- * - Cross-axis sensitivity modeling
- * - Saturation limits for rate gyros
- * - Temperature-dependent drift
- * - G-sensitivity effects
- * - Bandwidth and frequency response
- * - Digital gyro output characteristics
- */
 class FGGyroTest : public CxxTest::TestSuite
 {
 public:
-  //
-  // Task 4.3.1: Basic FGGyro test suite structure
-  //
+  /***************************************************************************
+   * Basic Angular Rate Measurement Tests
+   ***************************************************************************/
 
-  // Test basic gyro rate sensing (perfect sensor)
-  void testBasicRateSensing() {
-    // Perfect gyro: output = input angular rate
-    double input_rate = 0.5;  // rad/s (about 28.6 deg/s)
-    double scale_factor = 1.0;
-    double bias = 0.0;
+  // Test angular rate measurement in roll axis
+  void testRollRateMeasurement() {
+    double p = 10.0 * DEG_TO_RAD;  // Roll rate (rad/s)
+    double measured = p * RAD_TO_DEG;  // Convert to deg/s
 
-    double output = input_rate * scale_factor + bias;
-    TS_ASSERT_DELTA(output, 0.5, epsilon);
+    TS_ASSERT_DELTA(measured, 10.0, epsilon);
   }
 
-  // Test gyro output with typical units conversion
-  void testGyroUnitsConversion() {
-    // Input: 1 rad/s, output in deg/s
-    double input_rate_rad = 1.0;  // rad/s
-    double rad_to_deg = 180.0 / M_PI;
+  // Test angular rate measurement in pitch axis
+  void testPitchRateMeasurement() {
+    double q = 5.0 * DEG_TO_RAD;
+    double measured = q * RAD_TO_DEG;
 
-    double output_deg = input_rate_rad * rad_to_deg;
-    TS_ASSERT_DELTA(output_deg, 57.2958, 0.001);
+    TS_ASSERT_DELTA(measured, 5.0, epsilon);
   }
 
-  // Test gyro rate measurement at zero
-  void testZeroRateMeasurement() {
-    double input_rate = 0.0;
-    double bias = 0.0;
+  // Test angular rate measurement in yaw axis
+  void testYawRateMeasurement() {
+    double r = 3.0 * DEG_TO_RAD;
+    double measured = r * RAD_TO_DEG;
 
-    double output = input_rate + bias;
-    TS_ASSERT_DELTA(output, 0.0, epsilon);
+    TS_ASSERT_DELTA(measured, 3.0, epsilon);
   }
 
-  //
-  // Task 4.3.2: Rate sensing accuracy (angular velocity measurements)
-  //
+  // Test combined angular rates
+  void testCombinedRates() {
+    double p = 10.0 * DEG_TO_RAD;
+    double q = 5.0 * DEG_TO_RAD;
+    double r = 3.0 * DEG_TO_RAD;
 
-  // Test scale factor effects on rate sensing
-  void testScaleFactorEffects() {
-    double input_rate = 1.0;  // rad/s
-    double scale_factor = 1.05;  // 5% scale factor error
+    double totalRate = std::sqrt(p*p + q*q + r*r) * RAD_TO_DEG;
+    double expected = std::sqrt(10.0*10.0 + 5.0*5.0 + 3.0*3.0);
 
-    double output = input_rate * scale_factor;
-    TS_ASSERT_DELTA(output, 1.05, epsilon);
+    TS_ASSERT_DELTA(totalRate, expected, epsilon);
   }
 
-  // Test scale factor temperature sensitivity
-  void testScaleFactorTemperatureSensitivity() {
-    // Scale factor varies with temperature
-    double nominal_scale = 1.0;
-    double temp_coeff = 0.0001;  // per degree C
-    double delta_temp = 50.0;    // C from reference
+  /***************************************************************************
+   * Bias Modeling Tests
+   ***************************************************************************/
 
-    double scale_factor = nominal_scale * (1.0 + temp_coeff * delta_temp);
-    TS_ASSERT_DELTA(scale_factor, 1.005, 0.0001);
+  // Test constant bias
+  void testConstantBias() {
+    double trueRate = 10.0;  // deg/s
+    double bias = 0.5;       // deg/s
 
-    double input_rate = 10.0;  // rad/s
-    double output = input_rate * scale_factor;
-    TS_ASSERT_DELTA(output, 10.05, 0.001);
+    double measured = trueRate + bias;
+    TS_ASSERT_DELTA(measured, 10.5, epsilon);
   }
 
-  // Test rate sensing linearity
-  void testRateSensingLinearity() {
-    double scale = 1.0;
+  // Test bias subtraction for calibration
+  void testBiasCalibration() {
+    double measured = 10.5;  // With bias
+    double bias = 0.5;
 
-    double rates[] = {0.1, 0.5, 1.0, 5.0, 10.0};
-    for (double rate : rates) {
-      double output = rate * scale;
-      TS_ASSERT_DELTA(output / rate, scale, epsilon);
+    double calibrated = measured - bias;
+    TS_ASSERT_DELTA(calibrated, 10.0, epsilon);
+  }
+
+  // Test temperature-dependent bias drift
+  void testTemperatureBiasDrift() {
+    double baseBias = 0.1;  // deg/s at reference temp
+    double tempCoeff = 0.01;  // deg/s per degree C
+    double refTemp = 25.0;    // C
+    double actualTemp = 45.0;
+
+    double bias = baseBias + tempCoeff * (actualTemp - refTemp);
+    TS_ASSERT_DELTA(bias, 0.3, epsilon);  // 0.1 + 0.01 * 20
+  }
+
+  // Test bias stability over time
+  void testBiasStability() {
+    double initialBias = 0.1;
+    double driftRate = 0.001;  // deg/s per hour
+    double hours = 10.0;
+
+    double finalBias = initialBias + driftRate * hours;
+    TS_ASSERT_DELTA(finalBias, 0.11, epsilon);
+  }
+
+  /***************************************************************************
+   * Scale Factor Tests
+   ***************************************************************************/
+
+  // Test scale factor error
+  void testScaleFactorError() {
+    double trueRate = 100.0;  // deg/s
+    double scaleFactor = 0.98;  // 2% scale factor error
+
+    double measured = trueRate * scaleFactor;
+    TS_ASSERT_DELTA(measured, 98.0, epsilon);
+  }
+
+  // Test scale factor correction
+  void testScaleFactorCorrection() {
+    double measured = 98.0;
+    double scaleFactor = 0.98;
+
+    double corrected = measured / scaleFactor;
+    TS_ASSERT_DELTA(corrected, 100.0, epsilon);
+  }
+
+  // Test non-linear scale factor
+  void testNonLinearScaleFactor() {
+    double trueRate = 100.0;
+    double linearSF = 0.98;
+    double nonLinearSF = 0.0001;  // Second-order term
+
+    double measured = trueRate * linearSF + trueRate * trueRate * nonLinearSF;
+    TS_ASSERT_DELTA(measured, 99.0, epsilon);  // 98 + 1
+  }
+
+  /***************************************************************************
+   * Noise Modeling Tests
+   ***************************************************************************/
+
+  // Test noise RMS calculation
+  void testNoiseRMS() {
+    std::mt19937 gen(42);
+    std::normal_distribution<> noise(0.0, 0.1);  // 0.1 deg/s std dev
+
+    double sumSquares = 0.0;
+    int N = 10000;
+    for (int i = 0; i < N; i++) {
+      double n = noise(gen);
+      sumSquares += n * n;
     }
+
+    double rms = std::sqrt(sumSquares / N);
+    TS_ASSERT_DELTA(rms, 0.1, 0.01);  // Should be close to 0.1
   }
 
-  // Test rate sensing with nonlinearity
-  void testRateSensingNonlinearity() {
-    // Typical gyro nonlinearity: output = scale * input + k2 * input^2
-    double input_rate = 10.0;  // rad/s
-    double scale = 1.0;
-    double k2 = 0.001;  // Nonlinearity coefficient
+  // Test noise has zero mean
+  void testNoiseZeroMean() {
+    std::mt19937 gen(42);
+    std::normal_distribution<> noise(0.0, 0.1);
 
-    double output = scale * input_rate + k2 * input_rate * input_rate;
-    TS_ASSERT_DELTA(output, 10.1, 0.001);
-  }
+    double sum = 0.0;
+    int N = 10000;
+    for (int i = 0; i < N; i++) {
+      sum += noise(gen);
+    }
 
-  //
-  // Task 4.3.3: Drift characteristics (bias, random walk)
-  //
-
-  // Test constant bias drift
-  void testConstantBiasDrift() {
-    double input_rate = 0.0;  // Stationary
-    double bias = 0.01;       // rad/s (about 0.57 deg/s)
-
-    double output = input_rate + bias;
-    TS_ASSERT_DELTA(output, 0.01, epsilon);
-  }
-
-  // Test bias instability over time
-  void testBiasInstability() {
-    // Bias instability causes slow drift
-    double initial_bias = 0.01;  // rad/s
-    double bias_instability = 0.001;  // rad/s per sqrt(hour)
-    double time_hours = 1.0;
-
-    // Bias changes slowly over time
-    double time_factor = std::sqrt(time_hours);
-    double bias_change = bias_instability * time_factor;
-    double final_bias = initial_bias + bias_change;
-
-    TS_ASSERT_DELTA(final_bias, 0.011, 0.0001);
+    double mean = sum / N;
+    TS_ASSERT_DELTA(mean, 0.0, 0.01);  // Should be near zero
   }
 
   // Test angular random walk
   void testAngularRandomWalk() {
-    // Angular random walk (ARW) accumulates over time
-    std::mt19937 gen(42);
-    std::normal_distribution<double> dist(0.0, 1.0);
+    // ARW accumulates over time: sigma_angle = ARW * sqrt(t)
+    double ARW = 0.01;  // deg/sqrt(hr)
+    double hours = 1.0;
 
-    double ARW = 0.1;  // deg/sqrt(hour)
-    double dt = 0.01;  // seconds
-    double dt_hours = dt / 3600.0;
+    double angleError = ARW * std::sqrt(hours);
+    TS_ASSERT_DELTA(angleError, 0.01, epsilon);  // 0.01 degrees after 1 hour
+  }
 
-    double angle = 0.0;
-    double rate_noise_sigma = ARW / std::sqrt(dt_hours);
+  /***************************************************************************
+   * Quantization Tests
+   ***************************************************************************/
 
-    // Accumulate over 1 second
-    for (int i = 0; i < 100; i++) {
-      double rate_noise = rate_noise_sigma * dist(gen);
-      angle += rate_noise * dt;
+  // Test quantization
+  void testQuantization() {
+    double resolution = 0.01;  // deg/s
+    double trueRate = 10.015;
+
+    double quantized = std::round(trueRate / resolution) * resolution;
+    TS_ASSERT_DELTA(quantized, 10.02, epsilon);
+  }
+
+  // Test quantization with different resolution
+  void testQuantizationFineResolution() {
+    double resolution = 0.001;
+    double trueRate = 10.0154;
+
+    double quantized = std::round(trueRate / resolution) * resolution;
+    TS_ASSERT_DELTA(quantized, 10.015, epsilon);
+  }
+
+  /***************************************************************************
+   * Lag Filter Tests
+   ***************************************************************************/
+
+  // First-order lag filter
+  double lagFilter(double input, double prevOutput, double timeConstant, double dt) {
+    if (timeConstant <= 0.0) return input;
+    double alpha = dt / (timeConstant + dt);
+    return prevOutput + alpha * (input - prevOutput);
+  }
+
+  // Test lag filter step response
+  void testLagFilterStep() {
+    double output = 0.0;
+    double input = 10.0;
+    double tau = 0.1;  // 100ms time constant
+    double dt = 0.001;  // 1ms
+
+    // After one time constant
+    int steps = static_cast<int>(tau / dt);
+    for (int i = 0; i < steps; i++) {
+      output = lagFilter(input, output, tau, dt);
     }
 
-    // RMS angle error grows with sqrt(time)
-    // After 1 second: sigma ≈ ARW * sqrt(1/3600) in degrees
-    TS_ASSERT(std::abs(angle) < 10.0);  // Bounded by reasonable value
+    // Should be at ~63.2%
+    TS_ASSERT_DELTA(output, input * (1.0 - std::exp(-1.0)), 0.5);
   }
 
-  // Test turn-on to turn-on bias repeatability
-  void testTurnOnBiasRepeatability() {
-    // Different power cycles give different biases
-    std::mt19937 gen1(12345);
-    std::mt19937 gen2(67890);
-    std::normal_distribution<double> dist(0.0, 0.01);
-
-    double bias1 = dist(gen1);
-    double bias2 = dist(gen2);
-
-    // Biases should be different
-    TS_ASSERT(std::abs(bias1 - bias2) > 0.001);
-  }
-
-  // Test in-run bias stability
-  void testInRunBiasStability() {
-    // Bias changes during operation (random walk)
-    double bias = 0.01;
-    double drift_rate = 0.0001;  // rad/s per second
-    double dt = 0.1;
-
-    // Simulate 10 seconds
-    for (int i = 0; i < 100; i++) {
-      bias += drift_rate * dt;
-    }
-
-    double expected_drift = 0.01 + 0.0001 * 10.0;
-    TS_ASSERT_DELTA(bias, expected_drift, 0.0001);
-  }
-
-  //
-  // Task 4.3.4: Spin axis orientation (body axis mounting)
-  //
-
-  // Test single axis gyro (X-axis)
-  void testSingleAxisGyroX() {
-    // Gyro mounted on X-axis measures roll rate (p)
-    double p = 0.1, q = 0.2, r = 0.3;  // Body rates rad/s
-    int axis = 1;  // X-axis
-
-    double output = (axis == 1) ? p : (axis == 2) ? q : r;
-    TS_ASSERT_DELTA(output, 0.1, epsilon);
-  }
-
-  // Test single axis gyro (Y-axis)
-  void testSingleAxisGyroY() {
-    // Gyro mounted on Y-axis measures pitch rate (q)
-    double p = 0.1, q = 0.2, r = 0.3;
-    int axis = 2;  // Y-axis
-
-    double output = (axis == 1) ? p : (axis == 2) ? q : r;
-    TS_ASSERT_DELTA(output, 0.2, epsilon);
-  }
-
-  // Test single axis gyro (Z-axis)
-  void testSingleAxisGyroZ() {
-    // Gyro mounted on Z-axis measures yaw rate (r)
-    double p = 0.1, q = 0.2, r = 0.3;
-    int axis = 3;  // Z-axis
-
-    double output = (axis == 1) ? p : (axis == 2) ? q : r;
-    TS_ASSERT_DELTA(output, 0.3, epsilon);
-  }
-
-  // Test gyro with orientation transformation
-  void testGyroOrientationTransform() {
-    // Gyro mounted at an angle uses rotation matrix
-    // Simple case: 90 degree rotation about Z-axis
-    // Body X-axis maps to sensor Y-axis
-
-    double p_body = 1.0;  // Roll rate
-    double q_body = 0.0;
-
-    // After 90 deg rotation about Z:
-    // p_sensor = -q_body, q_sensor = p_body
-    double cos90 = 0.0, sin90 = 1.0;
-    double p_sensor = cos90 * p_body - sin90 * q_body;
-
-    TS_ASSERT_DELTA(p_sensor, 0.0, 0.01);
-  }
-
-  // Test cross-axis sensitivity (orthogonality error)
-  void testCrossAxisSensitivity() {
-    // Gyro on X-axis with cross-coupling to Y-axis
-    double p = 1.0, q = 10.0;  // rad/s
-    double primary_scale = 1.0;
-    double cross_coupling = 0.01;  // 1% cross-axis sensitivity
-
-    double output = primary_scale * p + cross_coupling * q;
-    TS_ASSERT_DELTA(output, 1.1, 0.001);
-  }
-
-  //
-  // Additional gyro physics tests
-  //
-
-  // Test quantization effects on rate sensing
-  void testRateQuantization() {
-    int bits = 12;
-    double min_rate = -10.0;  // rad/s
-    double max_rate = 10.0;
-
-    int divisions = (1 << bits);  // 4096
-    double granularity = (max_rate - min_rate) / divisions;
-
-    double input_rate = 2.3456;
-    int quantized = static_cast<int>((input_rate - min_rate) / granularity);
-    double output = min_rate + quantized * granularity;
-
-    // Quantization error should be less than one LSB
-    TS_ASSERT(std::abs(output - input_rate) < granularity);
-  }
-
-  // Test rate sensor saturation
-  void testRateSaturation() {
-    double max_rate = 10.0;  // rad/s
-    double min_rate = -10.0;
-
-    double inputs[] = {-20.0, -10.0, 0.0, 10.0, 20.0};
-    double expected[] = {-10.0, -10.0, 0.0, 10.0, 10.0};
-
-    for (int i = 0; i < 5; i++) {
-      double output = std::max(min_rate, std::min(max_rate, inputs[i]));
-      TS_ASSERT_DELTA(output, expected[i], epsilon);
-    }
-  }
-
-  // Test gyro bandwidth and lag
-  void testGyroBandwidthLag() {
-    // Gyro has first-order lag with bandwidth
-    double bandwidth = 100.0;  // Hz
-    double C1 = 2.0 * M_PI * bandwidth;  // rad/s
+  // Test lag filter convergence
+  void testLagFilterConvergence() {
+    double output = 0.0;
+    double input = 10.0;
+    double tau = 0.1;
     double dt = 0.001;
 
-    double ca = std::exp(-C1 * dt);
-    double cb = 1.0 - ca;
-
-    // Step response
-    double y = 0.0;
-    double u = 10.0;  // rad/s step
-
-    for (int i = 0; i < 1000; i++) {
-      y = ca * y + cb * u;
+    // After 5 time constants (99.3%)
+    int steps = static_cast<int>(5 * tau / dt);
+    for (int i = 0; i < steps; i++) {
+      output = lagFilter(input, output, tau, dt);
     }
 
-    // Should converge to input
-    TS_ASSERT_DELTA(y, 10.0, 0.01);
+    TS_ASSERT_DELTA(output, input, 0.1);
   }
 
-  // Test gyro noise spectral density
-  void testGyroNoiseSpectralDensity() {
-    std::mt19937 gen(42);
-    std::normal_distribution<double> dist(0.0, 1.0);
-
-    double NSD = 0.01;  // deg/s/sqrt(Hz)
-    double bandwidth = 100.0;  // Hz
-    double dt = 1.0 / bandwidth;
-
-    // Noise sigma = NSD * sqrt(bandwidth)
-    double noise_sigma = NSD * std::sqrt(bandwidth);
-
-    double sum = 0.0, sum_sq = 0.0;
-    int n = 10000;
-    for (int i = 0; i < n; i++) {
-      double noise = noise_sigma * dist(gen);
-      sum += noise;
-      sum_sq += noise * noise;
-    }
-
-    double variance = sum_sq / n;
-    double measured_sigma = std::sqrt(variance);
-
-    TS_ASSERT_DELTA(measured_sigma, noise_sigma, 0.01);
+  // Test no lag
+  void testNoLag() {
+    double output = lagFilter(10.0, 0.0, 0.0, 0.001);
+    TS_ASSERT_DELTA(output, 10.0, epsilon);
   }
 
-  // Test g-sensitivity (acceleration-induced bias)
-  void testGSensitivity() {
-    // Gyro bias changes with acceleration
-    double nominal_bias = 0.01;  // rad/s
-    double g_sensitivity = 0.001;  // (rad/s)/g
-    double accel_g = 2.0;  // g's
+  /***************************************************************************
+   * Axis Transformation Tests
+   ***************************************************************************/
 
-    double bias_with_accel = nominal_bias + g_sensitivity * accel_g;
-    TS_ASSERT_DELTA(bias_with_accel, 0.012, 0.0001);
+  // Test sensor axis alignment (sensor tilted 1 degree)
+  void testSensorAxisMisalignment() {
+    double trueRateX = 100.0;  // deg/s
+    double trueRateY = 0.0;
+    double misalignment = 1.0 * DEG_TO_RAD;  // 1 degree
+
+    // Misaligned sensor sees some Y rate
+    double measuredX = trueRateX * std::cos(misalignment);
+    double measuredY = trueRateX * std::sin(misalignment);
+
+    TS_ASSERT_DELTA(measuredX, 99.985, 0.001);  // Slightly reduced
+    TS_ASSERT_DELTA(measuredY, 1.745, 0.001);   // Cross-axis coupling
   }
 
-  // Test gyro combined sensor effects
-  void testGyroComboEffects() {
-    std::mt19937 gen(42);
-    std::normal_distribution<double> noise_dist(0.0, 0.01);
+  // Test orthogonality error
+  void testOrthogonalityError() {
+    double rateX = 10.0;
+    double rateY = 10.0;
+    double orthoError = 0.01;  // 0.01 rad (about 0.57 deg)
 
-    double input_rate = 5.0;  // rad/s
-    double scale_factor = 1.02;
-    double bias = 0.05;
-    double noise = noise_dist(gen);
+    // Cross-axis coupling due to non-orthogonality
+    double measuredX = rateX + rateY * orthoError;
+    double measuredY = rateY + rateX * orthoError;
 
-    // Processing chain: scale -> bias -> noise
-    double output = input_rate * scale_factor + bias + noise;
-
-    // Should be close to expected value (noise is small)
-    double expected = 5.0 * 1.02 + 0.05;
-    TS_ASSERT(std::abs(output - expected) < 0.1);
+    TS_ASSERT_DELTA(measuredX, 10.1, epsilon);
+    TS_ASSERT_DELTA(measuredY, 10.1, epsilon);
   }
 
-  // Test gyro misalignment matrix
-  void testGyroMisalignment() {
-    // 3x3 misalignment matrix for triaxial gyro
-    // Identity matrix = perfect alignment
-    double M[3][3] = {
-      {1.0, 0.0, 0.0},
-      {0.0, 1.0, 0.0},
-      {0.0, 0.0, 1.0}
-    };
+  /***************************************************************************
+   * Saturation Tests
+   ***************************************************************************/
 
-    double rates[3] = {1.0, 2.0, 3.0};  // Body rates
-    double output[3];
+  // Test rate saturation (clipping)
+  void testRateSaturation() {
+    double maxRate = 300.0;  // deg/s typical MEMS gyro
+    double trueRate = 400.0;
 
-    // Matrix multiply
-    for (int i = 0; i < 3; i++) {
-      output[i] = 0.0;
-      for (int j = 0; j < 3; j++) {
-        output[i] += M[i][j] * rates[j];
-      }
-    }
-
-    TS_ASSERT_DELTA(output[0], 1.0, epsilon);
-    TS_ASSERT_DELTA(output[1], 2.0, epsilon);
-    TS_ASSERT_DELTA(output[2], 3.0, epsilon);
+    double measured = std::min(std::abs(trueRate), maxRate) * (trueRate > 0 ? 1 : -1);
+    TS_ASSERT_DELTA(measured, 300.0, epsilon);  // Clipped
   }
 
-  // Test rate integrator (gyro as angle sensor)
-  void testRateIntegrator() {
-    double rate = 1.0;  // rad/s constant
+  // Test negative saturation
+  void testNegativeSaturation() {
+    double maxRate = 300.0;
+    double trueRate = -400.0;
+
+    double measured = std::max(-maxRate, std::min(maxRate, trueRate));
+    TS_ASSERT_DELTA(measured, -300.0, epsilon);
+  }
+
+  // Test within range
+  void testWithinRange() {
+    double maxRate = 300.0;
+    double trueRate = 200.0;
+
+    double measured = std::max(-maxRate, std::min(maxRate, trueRate));
+    TS_ASSERT_DELTA(measured, 200.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Integration Tests (Rate to Angle)
+   ***************************************************************************/
+
+  // Test rate integration to angle
+  void testRateIntegration() {
+    double rate = 10.0;  // deg/s
+    double dt = 0.01;    // 10ms
     double angle = 0.0;
-    double dt = 0.01;
 
     // Integrate for 1 second
     for (int i = 0; i < 100; i++) {
       angle += rate * dt;
     }
 
-    TS_ASSERT_DELTA(angle, 1.0, 0.001);  // 1 radian
+    TS_ASSERT_DELTA(angle, 10.0, epsilon);  // 10 deg/s * 1s = 10 deg
   }
 
-  // Test digital gyro output resolution
-  void testDigitalGyroResolution() {
-    // Modern digital gyro with 16-bit output
-    int bits = 16;
-    double full_scale_range = 500.0;  // deg/s
-
-    int divisions = (1 << bits);  // 65536
-    double resolution = full_scale_range / divisions;
-
-    // Resolution should be about 0.0076 deg/s
-    TS_ASSERT_DELTA(resolution, 0.0076, 0.0001);
-  }
-
-  // Test gyro rate of change limit (slew rate)
-  void testGyroSlewRate() {
-    // Maximum rate of change of output
-    double max_slew = 100.0;  // rad/s per second
+  // Test varying rate integration
+  void testVaryingRateIntegration() {
+    double angle = 0.0;
     double dt = 0.01;
-    double current_output = 0.0;
-    double desired_output = 10.0;
 
-    double change = desired_output - current_output;
-    double max_change = max_slew * dt;
+    // Integrate linearly increasing rate
+    for (int i = 0; i < 100; i++) {
+      double rate = static_cast<double>(i);  // 0 to 99 deg/s
+      angle += rate * dt;
+    }
 
-    double actual_change = std::max(-max_change, std::min(max_change, change));
-    double new_output = current_output + actual_change;
-
-    // Should be limited by slew rate
-    TS_ASSERT(std::abs(new_output - current_output) <= max_change + epsilon);
+    // Sum of 0+1+2+...+99 = 4950, times dt=0.01 = 49.5 degrees
+    TS_ASSERT_DELTA(angle, 49.5, epsilon);
   }
 
-  // Test MEMS gyro temperature compensation
-  void testMEMSTemperatureCompensation() {
-    // Temperature-dependent bias correction
-    double temp_C = 50.0;
-    double ref_temp_C = 25.0;
-    double bias_at_ref = 0.01;
-    double temp_coeff = 0.0001;  // rad/s per C
+  /***************************************************************************
+   * Gyro-specific Application Tests
+   ***************************************************************************/
 
-    double delta_T = temp_C - ref_temp_C;
-    double bias_correction = temp_coeff * delta_T;
-    double compensated_bias = bias_at_ref - bias_correction;
+  // Test turn coordinator calculation
+  void testTurnCoordinator() {
+    double yawRate = 3.0 * DEG_TO_RAD;  // Standard rate turn
+    double rollRate = 0.0;
 
-    TS_ASSERT_DELTA(compensated_bias, 0.0075, 0.0001);
+    // Turn coordinator shows mostly yaw rate
+    double tcInput = yawRate;
+    double tcOutput = tcInput * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(tcOutput, 3.0, epsilon);  // 3 deg/s = standard rate
   }
 
-  // Test gyro Allan variance characteristics
-  void testGyroAllanVariance() {
-    // Allan variance has characteristic shape:
-    // Short tau: quantization noise (slope -1)
-    // Medium tau: angle random walk (slope -0.5)
-    // Long tau: bias instability (flat)
-    // Very long tau: rate random walk (slope +0.5)
+  // Test attitude indicator (simplified rate-based)
+  void testRateBasedAttitude() {
+    double rollRate = 10.0;  // deg/s
+    double dt = 0.1;         // 100ms
+    double roll = 0.0;
 
-    // Simplified test: verify that bias instability is minimum
-    double allan_var_short = 1.0;   // Short averaging time
-    double allan_var_min = 0.1;     // Bias instability
-    double allan_var_long = 0.5;    // Long averaging time
+    // Integrate roll rate
+    for (int i = 0; i < 30; i++) {
+      roll += rollRate * dt;
+    }
 
-    TS_ASSERT(allan_var_min < allan_var_short);
-    TS_ASSERT(allan_var_min < allan_var_long);
+    TS_ASSERT_DELTA(roll, 30.0, epsilon);  // 30 degrees of roll
+  }
+
+  /***************************************************************************
+   * Edge Cases
+   ***************************************************************************/
+
+  // Test zero rate
+  void testZeroRate() {
+    double bias = 0.01;  // Small bias
+    double trueRate = 0.0;
+
+    double measured = trueRate + bias;
+    TS_ASSERT_DELTA(measured, 0.01, epsilon);  // Only see bias
+  }
+
+  // Test very high rate
+  void testVeryHighRate() {
+    double rate = 1000.0;  // deg/s (high but realistic for aerobatic)
+    double maxRate = 2000.0;
+
+    bool withinRange = (std::abs(rate) <= maxRate);
+    TS_ASSERT(withinRange);
+  }
+
+  // Test sign change
+  void testSignChange() {
+    double rate1 = 10.0;
+    double rate2 = -10.0;
+
+    TS_ASSERT(rate1 * rate2 < 0);  // Opposite signs
+    TS_ASSERT_DELTA(std::abs(rate1), std::abs(rate2), epsilon);  // Same magnitude
   }
 };
