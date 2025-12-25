@@ -28,6 +28,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGLogTest
                FGNelderMeadTest
                FGRungeKuttaTest
+               FGSimIntegrationTest
                FGAccelerationsTest
                FGAircraftTest
                FGMassBalanceTest
@@ -63,6 +64,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGSurfaceTest
                FGEngineTest
                FGElectricTest
+               FGElectricMotorTest
                FGPropellerTest
                FGScriptTest
                FGOutputTest
@@ -78,6 +80,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGTrimTest
                FGFlightPathTest
                FGCoordinatesTest
+               FGNavigationTest
                FGStabilityTest
                FGControlLawTest
                FGAeroBodyTest
