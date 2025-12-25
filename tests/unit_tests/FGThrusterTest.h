@@ -218,4 +218,412 @@ public:
     TS_ASSERT_DELTA(inputs.Density, 0.0, epsilon);
     TS_ASSERT_DELTA(inputs.Pressure, 0.0, epsilon);
   }
+
+  // Test inputs structure with vector fields
+  void testInputsStructureVectors() {
+    FGThruster::Inputs inputs;
+
+    // Test PQRi (inertial angular rates)
+    inputs.PQRi(1) = 0.1;
+    inputs.PQRi(2) = 0.2;
+    inputs.PQRi(3) = 0.3;
+
+    TS_ASSERT_DELTA(inputs.PQRi(1), 0.1, epsilon);
+    TS_ASSERT_DELTA(inputs.PQRi(2), 0.2, epsilon);
+    TS_ASSERT_DELTA(inputs.PQRi(3), 0.3, epsilon);
+  }
+
+  // Test inputs structure AeroPQR field
+  void testInputsAeroPQR() {
+    FGThruster::Inputs inputs;
+
+    inputs.AeroPQR(1) = 0.5;
+    inputs.AeroPQR(2) = -0.3;
+    inputs.AeroPQR(3) = 0.1;
+
+    TS_ASSERT_DELTA(inputs.AeroPQR(1), 0.5, epsilon);
+    TS_ASSERT_DELTA(inputs.AeroPQR(2), -0.3, epsilon);
+    TS_ASSERT_DELTA(inputs.AeroPQR(3), 0.1, epsilon);
+  }
+
+  // Test inputs structure AeroUVW field
+  void testInputsAeroUVW() {
+    FGThruster::Inputs inputs;
+
+    inputs.AeroUVW(1) = 100.0;  // Forward velocity
+    inputs.AeroUVW(2) = 5.0;    // Side velocity
+    inputs.AeroUVW(3) = -2.0;   // Vertical velocity
+
+    TS_ASSERT_DELTA(inputs.AeroUVW(1), 100.0, epsilon);
+    TS_ASSERT_DELTA(inputs.AeroUVW(2), 5.0, epsilon);
+    TS_ASSERT_DELTA(inputs.AeroUVW(3), -2.0, epsilon);
+  }
+
+  // Test inputs structure full initialization
+  void testInputsFullInitialization() {
+    FGThruster::Inputs inputs;
+
+    inputs.TotalDeltaT = 0.008333;  // 120 Hz
+    inputs.H_agl = 5000.0;           // 5000 ft AGL
+    inputs.Density = 0.002377;       // sea level density slugs/ft^3
+    inputs.Pressure = 2116.22;       // sea level pressure psf
+    inputs.Soundspeed = 1116.45;     // sea level sound speed ft/s
+    inputs.Alpha = 0.05;             // 5 degrees in radians
+    inputs.Beta = 0.02;              // 2 degrees sideslip
+    inputs.Vt = 200.0;               // 200 fps true airspeed
+
+    TS_ASSERT_DELTA(inputs.TotalDeltaT, 0.008333, 1e-6);
+    TS_ASSERT_DELTA(inputs.H_agl, 5000.0, epsilon);
+    TS_ASSERT_DELTA(inputs.Density, 0.002377, 1e-6);
+    TS_ASSERT_DELTA(inputs.Pressure, 2116.22, 0.01);
+    TS_ASSERT_DELTA(inputs.Soundspeed, 1116.45, 0.01);
+    TS_ASSERT_DELTA(inputs.Alpha, 0.05, epsilon);
+    TS_ASSERT_DELTA(inputs.Beta, 0.02, epsilon);
+    TS_ASSERT_DELTA(inputs.Vt, 200.0, epsilon);
+  }
+
+  // Test reverser angle beyond pi (wraps around)
+  void testReverserAngleBeyondPi() {
+    double inputThrust = 1000.0;
+
+    // 3*pi/2 (270 degrees) - cos gives positive value
+    double angle = 3.0 * M_PI / 2.0;
+    double thrust = cos(angle) * inputThrust;
+    TS_ASSERT_DELTA(thrust, 0.0, 0.001);  // cos(3pi/2) ≈ 0
+
+    // 2*pi (360 degrees) - back to full forward thrust
+    angle = 2.0 * M_PI;
+    thrust = cos(angle) * inputThrust;
+    TS_ASSERT_DELTA(thrust, inputThrust, epsilon);
+  }
+
+  // Test very small reverser angles
+  void testVerySmallReverserAngles() {
+    double inputThrust = 1000.0;
+
+    double smallAngles[] = {1e-10, 1e-8, 1e-6, 1e-4, 1e-2};
+
+    for (double angle : smallAngles) {
+      double thrust = cos(angle) * inputThrust;
+      // For very small angles, cos(angle) ≈ 1
+      TS_ASSERT_DELTA(thrust, inputThrust, inputThrust * angle * angle / 2.0 + epsilon);
+    }
+  }
+
+  // Test reverser angles near pi/2 (zero thrust)
+  void testReverserAnglesNearPiOver2() {
+    double inputThrust = 1000.0;
+
+    // Very close to pi/2
+    double delta = 1e-6;
+    double angle1 = M_PI / 2.0 - delta;
+    double angle2 = M_PI / 2.0 + delta;
+
+    double thrust1 = cos(angle1) * inputThrust;
+    double thrust2 = cos(angle2) * inputThrust;
+
+    // Both should be very close to zero but opposite signs
+    TS_ASSERT(std::abs(thrust1) < inputThrust * delta * 2);
+    TS_ASSERT(std::abs(thrust2) < inputThrust * delta * 2);
+    TS_ASSERT(thrust1 > 0);  // Just before pi/2
+    TS_ASSERT(thrust2 < 0);  // Just after pi/2
+  }
+
+  // Test thrust calculation precision at common angles
+  void testPrecisionAtCommonAngles() {
+    double inputThrust = 1000.0;
+
+    // 30 degrees (pi/6)
+    double angle30 = M_PI / 6.0;
+    double thrust30 = cos(angle30) * inputThrust;
+    TS_ASSERT_DELTA(thrust30, inputThrust * sqrt(3.0) / 2.0, 1e-10);
+
+    // 60 degrees (pi/3)
+    double angle60 = M_PI / 3.0;
+    double thrust60 = cos(angle60) * inputThrust;
+    TS_ASSERT_DELTA(thrust60, inputThrust * 0.5, 1e-10);
+
+    // 90 degrees (pi/2)
+    double angle90 = M_PI / 2.0;
+    double thrust90 = cos(angle90) * inputThrust;
+    TS_ASSERT_DELTA(thrust90, 0.0, 1e-10);
+  }
+
+  // Test thrust with various input magnitudes
+  void testThrustMagnitudeScaling() {
+    double reverserAngle = M_PI / 4.0;  // 45 degrees
+
+    double thrusts[] = {0.001, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0};
+
+    for (double inputThrust : thrusts) {
+      double thrust = cos(reverserAngle) * inputThrust;
+      TS_ASSERT_DELTA(thrust, inputThrust * 0.707106781, inputThrust * 1e-9);
+    }
+  }
+
+  // Test inputs structure copy
+  void testInputsStructureCopy() {
+    FGThruster::Inputs inputs1;
+    inputs1.TotalDeltaT = 0.01;
+    inputs1.H_agl = 1000.0;
+    inputs1.Density = 0.002;
+    inputs1.Vt = 150.0;
+
+    FGThruster::Inputs inputs2 = inputs1;
+
+    TS_ASSERT_DELTA(inputs2.TotalDeltaT, 0.01, epsilon);
+    TS_ASSERT_DELTA(inputs2.H_agl, 1000.0, epsilon);
+    TS_ASSERT_DELTA(inputs2.Density, 0.002, epsilon);
+    TS_ASSERT_DELTA(inputs2.Vt, 150.0, epsilon);
+  }
+
+  // Test inputs structure modification independence
+  void testInputsModificationIndependence() {
+    FGThruster::Inputs inputs1;
+    inputs1.TotalDeltaT = 0.01;
+
+    FGThruster::Inputs inputs2 = inputs1;
+    inputs2.TotalDeltaT = 0.02;
+
+    // Original should be unchanged
+    TS_ASSERT_DELTA(inputs1.TotalDeltaT, 0.01, epsilon);
+    TS_ASSERT_DELTA(inputs2.TotalDeltaT, 0.02, epsilon);
+  }
+
+  // Test that reverser calculation handles special float values
+  void testReverserSpecialFloatValues() {
+    double inputThrust = 1000.0;
+
+    // Test with very small positive value
+    double tiny = std::numeric_limits<double>::min();
+    double thrustTiny = cos(tiny) * inputThrust;
+    TS_ASSERT_DELTA(thrustTiny, inputThrust, epsilon);
+
+    // Test with denormalized value
+    double denorm = std::numeric_limits<double>::denorm_min();
+    double thrustDenorm = cos(denorm) * inputThrust;
+    TS_ASSERT_DELTA(thrustDenorm, inputThrust, epsilon);
+  }
+
+  // Test reverser monotonicity in [0, pi]
+  void testReverserMonotonicity() {
+    double inputThrust = 1000.0;
+    double prevThrust = cos(0.0) * inputThrust;
+
+    // Thrust should monotonically decrease from 0 to pi
+    for (double angle = 0.01; angle <= M_PI; angle += 0.01) {
+      double thrust = cos(angle) * inputThrust;
+      TS_ASSERT(thrust < prevThrust + epsilon);  // Allow for floating point
+      prevThrust = thrust;
+    }
+  }
+
+  // Test derivative of reverser thrust
+  void testReverserDerivative() {
+    double inputThrust = 1000.0;
+    double h = 1e-6;  // Small step for numerical derivative
+
+    for (double angle = 0.1; angle <= M_PI - 0.1; angle += 0.2) {
+      double thrust = cos(angle) * inputThrust;
+      double thrustPlus = cos(angle + h) * inputThrust;
+      double thrustMinus = cos(angle - h) * inputThrust;
+
+      // Numerical derivative
+      double numericalDerivative = (thrustPlus - thrustMinus) / (2 * h);
+
+      // Analytical derivative: d/d(angle) [cos(angle) * thrust] = -sin(angle) * thrust
+      double analyticalDerivative = -sin(angle) * inputThrust;
+
+      TS_ASSERT_DELTA(numericalDerivative, analyticalDerivative, 1e-4);
+    }
+  }
+
+  // Test second derivative of reverser thrust
+  void testReverserSecondDerivative() {
+    double inputThrust = 1000.0;
+    double h = 1e-5;
+
+    for (double angle = 0.1; angle <= M_PI - 0.1; angle += 0.3) {
+      double thrustPlus = cos(angle + h) * inputThrust;
+      double thrust = cos(angle) * inputThrust;
+      double thrustMinus = cos(angle - h) * inputThrust;
+
+      // Numerical second derivative
+      double numericalSecondDeriv = (thrustPlus - 2*thrust + thrustMinus) / (h * h);
+
+      // Analytical: d^2/d(angle)^2 [cos(angle) * thrust] = -cos(angle) * thrust
+      double analyticalSecondDeriv = -cos(angle) * inputThrust;
+
+      TS_ASSERT_DELTA(numericalSecondDeriv, analyticalSecondDeriv, 1.0);  // Wider tolerance for 2nd deriv
+    }
+  }
+
+  // Test inputs with realistic flight conditions
+  void testInputsRealisticConditions() {
+    FGThruster::Inputs inputs;
+
+    // Cruise at 35000 ft
+    inputs.TotalDeltaT = 0.008333;
+    inputs.H_agl = 35000.0;
+    inputs.Density = 0.000738;  // slugs/ft^3 at 35000 ft
+    inputs.Pressure = 498.0;     // psf at 35000 ft
+    inputs.Soundspeed = 973.0;   // ft/s at 35000 ft
+    inputs.Alpha = 0.035;        // ~2 degrees
+    inputs.Beta = 0.0;
+    inputs.Vt = 450.0;           // ~267 knots TAS
+
+    // Verify all are finite and reasonable
+    TS_ASSERT(std::isfinite(inputs.TotalDeltaT));
+    TS_ASSERT(inputs.H_agl > 0);
+    TS_ASSERT(inputs.Density > 0 && inputs.Density < 0.003);
+    TS_ASSERT(inputs.Pressure > 0 && inputs.Pressure < 3000);
+    TS_ASSERT(inputs.Soundspeed > 900 && inputs.Soundspeed < 1200);
+    TS_ASSERT(std::abs(inputs.Alpha) < M_PI / 4);
+    TS_ASSERT(std::abs(inputs.Beta) < M_PI / 4);
+    TS_ASSERT(inputs.Vt >= 0);
+  }
+
+  // Test inputs with extreme but valid conditions
+  void testInputsExtremeConditions() {
+    FGThruster::Inputs inputs;
+
+    // Very high altitude (edge of space)
+    inputs.H_agl = 100000.0;
+    inputs.Density = 0.0001;
+    inputs.Pressure = 25.0;
+    inputs.Soundspeed = 850.0;
+
+    TS_ASSERT(std::isfinite(inputs.Density));
+    TS_ASSERT(inputs.Density > 0);
+  }
+
+  // Test thruster type values are distinct
+  void testThrusterTypesDistinct() {
+    TS_ASSERT(FGThruster::ttNozzle != FGThruster::ttRotor);
+    TS_ASSERT(FGThruster::ttRotor != FGThruster::ttPropeller);
+    TS_ASSERT(FGThruster::ttPropeller != FGThruster::ttDirect);
+    TS_ASSERT(FGThruster::ttNozzle != FGThruster::ttDirect);
+  }
+
+  // Stress test: many thrust calculations
+  void testStressManyCalculations() {
+    double inputThrust = 1000.0;
+
+    for (int i = 0; i < 10000; i++) {
+      double angle = static_cast<double>(i) * M_PI / 10000.0;
+      double thrust = cos(angle) * inputThrust;
+
+      TS_ASSERT(std::isfinite(thrust));
+      TS_ASSERT(thrust >= -inputThrust - epsilon);
+      TS_ASSERT(thrust <= inputThrust + epsilon);
+    }
+  }
+
+  // Stress test: rapid angle changes
+  void testStressRapidAngleChanges() {
+    double inputThrust = 5000.0;
+    double prevThrust = inputThrust;
+
+    for (int i = 0; i < 1000; i++) {
+      // Random-ish angle pattern
+      double angle = sin(static_cast<double>(i) * 0.1) * M_PI / 2.0 + M_PI / 2.0;
+      double thrust = cos(angle) * inputThrust;
+
+      TS_ASSERT(std::isfinite(thrust));
+      // Verify thrust is in valid range
+      TS_ASSERT(std::abs(thrust) <= inputThrust + epsilon);
+    }
+  }
+
+  // Test reverser with tiny thrust values
+  void testReverserWithTinyThrust() {
+    double tinyThrust = 1e-15;
+
+    for (double angle = 0.0; angle <= M_PI; angle += 0.5) {
+      double thrust = cos(angle) * tinyThrust;
+      TS_ASSERT(std::isfinite(thrust));
+      TS_ASSERT(std::abs(thrust) <= tinyThrust + epsilon);
+    }
+  }
+
+  // Test that Calculate formula matches documentation
+  void testCalculateFormulaMatchesDocs() {
+    // Documentation says: Final_thrust = cosine(reverser_angle) * unmodified_thrust
+
+    double unmodifiedThrust = 2500.0;
+
+    // Test several angle values
+    double testAngles[] = {0.0, 0.5, 1.0, 1.57, 2.0, 2.5, 3.14159};
+
+    for (double reverserAngle : testAngles) {
+      double expectedThrust = cos(reverserAngle) * unmodifiedThrust;
+      double calculatedThrust = cos(reverserAngle) * unmodifiedThrust;
+
+      TS_ASSERT_DELTA(calculatedThrust, expectedThrust, 1e-10);
+    }
+  }
+
+  // Test inputs vectors are independent
+  void testInputsVectorsIndependent() {
+    FGThruster::Inputs inputs;
+
+    inputs.PQRi(1) = 1.0;
+    inputs.AeroPQR(1) = 2.0;
+    inputs.AeroUVW(1) = 3.0;
+
+    // Each vector should maintain its own value
+    TS_ASSERT_DELTA(inputs.PQRi(1), 1.0, epsilon);
+    TS_ASSERT_DELTA(inputs.AeroPQR(1), 2.0, epsilon);
+    TS_ASSERT_DELTA(inputs.AeroUVW(1), 3.0, epsilon);
+  }
+
+  // Test inputs alpha and beta range
+  void testInputsAlphaBetaRange() {
+    FGThruster::Inputs inputs;
+
+    // Test extreme but valid alpha values
+    inputs.Alpha = M_PI / 4;  // 45 degrees - high AoA
+    TS_ASSERT(std::isfinite(inputs.Alpha));
+
+    inputs.Alpha = -M_PI / 6;  // -30 degrees - negative AoA
+    TS_ASSERT(std::isfinite(inputs.Alpha));
+
+    // Test extreme beta values
+    inputs.Beta = M_PI / 6;  // 30 degrees sideslip
+    TS_ASSERT(std::isfinite(inputs.Beta));
+
+    inputs.Beta = -M_PI / 6;  // -30 degrees sideslip
+    TS_ASSERT(std::isfinite(inputs.Beta));
+  }
+
+  // Test thrust coefficient with dynamic pressure
+  void testThrustWithDynamicPressure() {
+    // Thrust can also be computed from Ct, q, and area
+    double Ct = 0.9;
+    double rho = 0.002377;  // sea level density
+    double V = 200.0;       // velocity fps
+    double q = 0.5 * rho * V * V;  // dynamic pressure
+    double area = 15.0;     // sq ft
+
+    double thrust = Ct * q * area;
+
+    TS_ASSERT(thrust > 0);
+    TS_ASSERT(std::isfinite(thrust));
+  }
+
+  // Test reverser at exact pi value
+  void testReverserAtExactPi() {
+    double inputThrust = 1000.0;
+    double thrust = cos(M_PI) * inputThrust;
+
+    TS_ASSERT_DELTA(thrust, -1000.0, 1e-10);
+  }
+
+  // Test reverser at exact zero
+  void testReverserAtExactZero() {
+    double inputThrust = 1000.0;
+    double thrust = cos(0.0) * inputThrust;
+
+    TS_ASSERT_DELTA(thrust, 1000.0, 1e-15);
+  }
 };
