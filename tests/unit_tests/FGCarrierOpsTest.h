@@ -1,0 +1,631 @@
+#include <cxxtest/TestSuite.h>
+#include <limits>
+#include <cmath>
+#include "TestUtilities.h"
+
+using namespace JSBSimTest;
+
+class FGCarrierOpsTest : public CxxTest::TestSuite
+{
+public:
+  // Catapult Launch Physics Tests
+
+  void testCatapultEndSpeed() {
+    // Test catapult end speed calculation using v^2 = v0^2 + 2*a*d
+    // Typical values: stroke = 310 ft, acceleration = 5g, initial speed = 0
+    double stroke = 310.0; // ft
+    double accel = 5.0 * Constants::G_FTPS2; // ft/s^2
+    double v0 = 0.0; // ft/s
+
+    double v_end = sqrt(v0*v0 + 2.0*accel*stroke);
+    double expected_end_speed = 315.8; // ft/s (approximately 187 knots)
+
+    TS_ASSERT_DELTA(v_end, expected_end_speed, 1.0);
+  }
+
+  void testCatapultAccelerationFromEndSpeed() {
+    // Given end speed and stroke, calculate required acceleration
+    double stroke = 310.0; // ft
+    double v_end = 140.0 * Constants::KTS_TO_FTPS; // 140 knots end speed
+    double v0 = 20.0 * Constants::KTS_TO_FTPS; // 20 knots wind-over-deck
+
+    // a = (v_end^2 - v0^2) / (2 * stroke)
+    double accel = (v_end*v_end - v0*v0) / (2.0 * stroke);
+    double accel_g = accel / Constants::G_FTPS2;
+
+    TS_ASSERT_DELTA(accel_g, 2.74, 0.1); // Approximately 2.7g
+  }
+
+  void testCatapultLaunchTime() {
+    // Test launch time: t = (v_end - v0) / a
+    double stroke = 310.0; // ft
+    double v_end = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+    double v0 = 0.0; // ft/s
+    double accel = (v_end*v_end - v0*v0) / (2.0 * stroke);
+
+    double launch_time = (v_end - v0) / accel;
+
+    TS_ASSERT_DELTA(launch_time, 2.63, 0.1); // Approximately 2.6 seconds
+  }
+
+  void testCatapultStrokeLongC13() {
+    // C-13 steam catapult long stroke specification
+    double stroke_long = 310.0; // ft
+    double max_aircraft_weight = 73000.0; // lbs
+    double end_speed = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    // Force = mass * acceleration = weight/g * a
+    double mass = max_aircraft_weight / Constants::G_FTPS2; // slugs
+    double accel = (end_speed*end_speed) / (2.0 * stroke_long);
+    double force = mass * accel;
+
+    TS_ASSERT_DELTA(force / 1000.0, 204.3, 10.0); // Approximately 204,000 lbs
+  }
+
+  void testCatapultStrokeShortC13() {
+    // C-13 steam catapult short stroke for lighter aircraft
+    double stroke_short = 250.0; // ft
+    double aircraft_weight = 45000.0; // lbs
+    double end_speed = 130.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double mass = aircraft_weight / Constants::G_FTPS2;
+    double accel = (end_speed*end_speed) / (2.0 * stroke_short);
+    double accel_g = accel / Constants::G_FTPS2;
+
+    TS_ASSERT_DELTA(accel_g, 2.99, 0.2); // Approximately 3g
+  }
+
+  void testCatapultShuttleResetTime() {
+    // Typical shuttle reset time for steam catapult
+    double reset_time = 45.0; // seconds between launches (same catapult)
+    double launch_interval_two_cats = 30.0; // seconds (alternating)
+
+    // Verify minimum time between launches
+    TS_ASSERT(reset_time >= 30.0);
+    TS_ASSERT(launch_interval_two_cats >= 20.0);
+
+    // Verify reset is longer than launch interval
+    TS_ASSERT(reset_time > launch_interval_two_cats);
+  }
+
+  // Arrested Landing Physics Tests
+
+  void testArrestingWireTension() {
+    // Calculate cable tension from aircraft deceleration
+    double aircraft_weight = 45000.0; // lbs
+    double trap_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+    double decel_time = 2.0; // seconds
+
+    double mass = aircraft_weight / Constants::G_FTPS2; // slugs
+    double decel = trap_speed / decel_time; // ft/s^2
+    double tension = mass * decel;
+
+    TS_ASSERT_DELTA(tension / 1000.0, 171.1, 5.0); // Approximately 171,000 lbs
+  }
+
+  void testArrestingWireEngagementDecel() {
+    // Test deceleration during wire engagement
+    double v0 = 150.0 * Constants::KTS_TO_FTPS; // ft/s approach speed
+    double v_final = 0.0; // ft/s
+    double runout = 340.0; // ft (typical wire runout)
+
+    // v_final^2 = v0^2 + 2*a*d -> a = (v_final^2 - v0^2) / (2*d)
+    double decel = (v_final*v_final - v0*v0) / (2.0 * runout);
+    double decel_g = -decel / Constants::G_FTPS2;
+
+    TS_ASSERT_DELTA(decel_g, 3.1, 0.2); // Approximately 3g deceleration
+  }
+
+  void testArrestingWireRunout() {
+    // Verify wire runout distance calculation
+    double v0 = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+    double decel_g = 3.2; // g's
+    double decel = decel_g * Constants::G_FTPS2; // ft/s^2
+
+    // d = v0^2 / (2*a)
+    double runout = (v0*v0) / (2.0 * decel);
+
+    TS_ASSERT_DELTA(runout, 290.9, 10.0); // Approximately 291 ft
+  }
+
+  void testArrestingWireNumber2() {
+    // Wire #2 (target wire) typical engagement
+    double wire_height = 36.0; // inches above deck
+    double wire_spacing = 40.0; // ft between wires
+    double wire_number = 2; // Target is wire 2 (of 4)
+
+    TS_ASSERT_DELTA(wire_height / 12.0, 3.0, 0.1); // 3 ft above deck
+    TS_ASSERT(wire_number >= 1 && wire_number <= 4);
+    TS_ASSERT_DELTA(wire_spacing, 40.0, 1.0);
+  }
+
+  void testMaxTrapWeight() {
+    // Maximum aircraft weight for safe trap (Mk 7 arresting gear)
+    double max_trap_weight = 50000.0; // lbs (typical for Nimitz class)
+    double test_aircraft_weight = 48000.0; // lbs
+
+    TS_ASSERT(test_aircraft_weight < max_trap_weight);
+
+    // Calculate margin
+    double margin = (max_trap_weight - test_aircraft_weight) / max_trap_weight;
+    TS_ASSERT(margin > 0.0);
+    TS_ASSERT_DELTA(margin, 0.04, 0.01);
+  }
+
+  // Hook Point Geometry Tests
+
+  void testTailhookGeometry() {
+    // Tailhook geometry relative to main gear
+    double hook_to_main_gear = 15.0; // ft (typical fighter)
+    double hook_point_height_down = 2.5; // ft below datum when down
+    double hook_angle_down = 7.0 * Constants::DEG_TO_RAD; // radians
+
+    double hook_length = hook_to_main_gear / cos(hook_angle_down);
+
+    TS_ASSERT_DELTA(hook_length, 15.1, 0.2);
+    TS_ASSERT(hook_point_height_down > 0.0);
+  }
+
+  void testHookStrikePoint() {
+    // Calculate hook strike point on deck
+    double aircraft_pitch = 3.0 * Constants::DEG_TO_RAD; // radians
+    double hook_angle = 7.0 * Constants::DEG_TO_RAD; // radians
+    double main_gear_height = 8.0; // ft above deck
+
+    double effective_hook_angle = hook_angle - aircraft_pitch;
+    double hook_strike_distance = main_gear_height / tan(effective_hook_angle);
+
+    TS_ASSERT_DELTA(hook_strike_distance, 115.0, 10.0); // Approximately 115 ft
+  }
+
+  // Approach Glideslope Tests
+
+  void testStandardGlideslope() {
+    // Standard carrier glideslope is 3.5 degrees
+    double glideslope = 3.5 * Constants::DEG_TO_RAD; // radians
+    double distance_from_ramp = 1000.0; // ft
+
+    double altitude_above_deck = distance_from_ramp * tan(glideslope);
+
+    TS_ASSERT_DELTA(altitude_above_deck, 61.1, 1.0); // Approximately 61 ft
+  }
+
+  void testGlideslopeDeviation() {
+    // Calculate glideslope error
+    double target_glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double actual_altitude = 75.0; // ft
+    double distance = 1000.0; // ft
+
+    double actual_glideslope = atan(actual_altitude / distance);
+    double deviation = (actual_glideslope - target_glideslope) * Constants::RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(deviation, 0.8, 0.1); // High by 0.8 degrees
+  }
+
+  void testThreeQuarterMileGlideslope() {
+    // Altitude at 3/4 mile (standard call position)
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double distance = 0.75 * 6076.0; // 0.75 nautical miles in feet
+
+    double altitude = distance * tan(glideslope);
+
+    TS_ASSERT_DELTA(altitude, 278.3, 5.0); // Approximately 278 ft
+  }
+
+  // Bolter Detection Tests
+
+  void testBolterDetection() {
+    // Bolter occurs when hook doesn't engage any wire
+    double trap_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+    double time_after_touchdown = 2.5; // seconds
+    double decel_threshold = 0.5 * Constants::G_FTPS2; // ft/s^2
+
+    // If deceleration < threshold, it's a bolter
+    double actual_decel = 0.3 * Constants::G_FTPS2; // Minimal decel
+
+    bool is_bolter = (actual_decel < decel_threshold);
+    TS_ASSERT(is_bolter);
+  }
+
+  void testBolterGoAroundDistance() {
+    // Distance traveled during bolter before go-around
+    double touchdown_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+    double time_to_throttle_up = 1.5; // seconds
+    double accel = 0.2 * Constants::G_FTPS2; // slight acceleration
+
+    double distance = touchdown_speed * time_to_throttle_up + 0.5 * accel * time_to_throttle_up * time_to_throttle_up;
+
+    TS_ASSERT_DELTA(distance, 371.0, 10.0); // Approximately 371 ft
+  }
+
+  // Wire Engagement Timing Tests
+
+  void testWireEngagementTime() {
+    // Time from touchdown to full wire engagement
+    double engagement_distance = 50.0; // ft
+    double touchdown_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double engagement_time = engagement_distance / touchdown_speed;
+
+    TS_ASSERT_DELTA(engagement_time, 0.204, 0.01); // Approximately 0.2 seconds
+  }
+
+  void testWireDecelBeginTime() {
+    // Time when significant deceleration begins
+    double initial_runout = 30.0; // ft before wire starts pulling
+    double touchdown_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double decel_begin_time = initial_runout / touchdown_speed;
+
+    TS_ASSERT_DELTA(decel_begin_time, 0.122, 0.01); // Approximately 0.12 seconds
+  }
+
+  // Deck Motion Effects Tests
+
+  void testDeckPitchMotion() {
+    // Deck pitch amplitude and period in moderate seas
+    double pitch_amplitude = 2.0 * Constants::DEG_TO_RAD; // radians
+    double pitch_period = 8.0; // seconds
+    double time = 2.0; // seconds
+
+    // Sinusoidal pitch motion
+    double pitch_angle = pitch_amplitude * sin(2.0 * M_PI * time / pitch_period);
+
+    TS_ASSERT_DELTA(pitch_angle * Constants::RAD_TO_DEG, 2.0, 0.1);
+  }
+
+  void testDeckRollMotion() {
+    // Deck roll in moderate seas
+    double roll_amplitude = 3.0 * Constants::DEG_TO_RAD; // radians
+    double roll_period = 10.0; // seconds
+    double time = 2.5; // seconds
+
+    double roll_angle = roll_amplitude * sin(2.0 * M_PI * time / roll_period);
+
+    TS_ASSERT_DELTA(roll_angle * Constants::RAD_TO_DEG, 3.0, 0.1);
+  }
+
+  void testDeckHeaveMotion() {
+    // Vertical deck motion (heave)
+    double heave_amplitude = 5.0; // ft
+    double heave_period = 12.0; // seconds
+    double time = 3.0; // seconds
+
+    double heave = heave_amplitude * sin(2.0 * M_PI * time / heave_period);
+    double heave_rate = heave_amplitude * (2.0 * M_PI / heave_period) * cos(2.0 * M_PI * time / heave_period);
+
+    TS_ASSERT_DELTA(heave, 5.0, 0.1); // ft
+    TS_ASSERT_DELTA(heave_rate, 0.0, 0.1); // ft/s
+  }
+
+  void testDeckMotionCombined() {
+    // Combined pitch and heave effect on glide slope
+    double pitch = 2.0 * Constants::DEG_TO_RAD; // bow up
+    double heave = 5.0; // ft up
+    double distance_from_ramp = 500.0; // ft
+
+    // Effective altitude change = heave + distance * sin(pitch)
+    double altitude_change = heave + distance_from_ramp * sin(pitch);
+
+    TS_ASSERT_DELTA(altitude_change, 22.4, 1.0); // Approximately 22 ft higher
+  }
+
+  // Wind-Over-Deck Calculations
+
+  void testWindOverDeck() {
+    // Calculate wind-over-deck from ship speed and true wind
+    double ship_speed = 30.0 * Constants::KTS_TO_FTPS; // ft/s
+    double true_wind_speed = 15.0 * Constants::KTS_TO_FTPS; // ft/s
+    double true_wind_angle = 20.0 * Constants::DEG_TO_RAD; // radians relative to ship heading
+
+    // Component along deck
+    double wod_component = ship_speed + true_wind_speed * cos(true_wind_angle);
+
+    TS_ASSERT_DELTA(wod_component / Constants::KTS_TO_FTPS, 44.1, 0.5); // knots
+  }
+
+  void testOptimalWindOverDeck() {
+    // Optimal WOD for carrier operations
+    double optimal_wod = 25.0; // knots
+    double optimal_wod_fps = optimal_wod * Constants::KTS_TO_FTPS;
+
+    TS_ASSERT_DELTA(optimal_wod_fps, 42.2, 0.5); // ft/s
+    TS_ASSERT(optimal_wod >= 20.0 && optimal_wod <= 35.0);
+  }
+
+  void testWindOverDeckCrosswind() {
+    // Crosswind component of wind-over-deck
+    double true_wind = 20.0 * Constants::KTS_TO_FTPS; // ft/s
+    double wind_angle = 30.0 * Constants::DEG_TO_RAD; // radians
+
+    double crosswind = true_wind * sin(wind_angle);
+
+    TS_ASSERT_DELTA(crosswind / Constants::KTS_TO_FTPS, 10.0, 0.2); // knots
+  }
+
+  // Approach Speed Tests
+
+  void testApproachSpeedOnSpeed() {
+    // On-speed approach speed calculation
+    double stall_speed = 105.0; // knots
+    double approach_margin = 1.3; // typically 1.2-1.3
+
+    double approach_speed = stall_speed * approach_margin;
+
+    TS_ASSERT_DELTA(approach_speed, 136.5, 2.0); // knots
+  }
+
+  void testAngleOfAttackOnSpeed() {
+    // Typical on-speed AoA for carrier approach
+    double on_speed_aoa = 8.1 * Constants::DEG_TO_RAD; // radians (F/A-18)
+    double fast_aoa = 6.5 * Constants::DEG_TO_RAD; // radians
+    double slow_aoa = 9.5 * Constants::DEG_TO_RAD; // radians
+
+    TS_ASSERT(on_speed_aoa > fast_aoa);
+    TS_ASSERT(on_speed_aoa < slow_aoa);
+    TS_ASSERT_DELTA(on_speed_aoa * Constants::RAD_TO_DEG, 8.1, 0.1);
+  }
+
+  void testApproachSpeedWithWOD() {
+    // Groundspeed at touchdown with wind-over-deck
+    double approach_airspeed = 140.0; // knots
+    double wod = 25.0; // knots
+
+    double groundspeed = approach_airspeed - wod;
+
+    TS_ASSERT_DELTA(groundspeed, 115.0, 1.0); // knots
+  }
+
+  // Meatball Glideslope Indication Tests
+
+  void testMeatballOnGlideslope() {
+    // Fresnel lens system indication
+    double target_glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double aircraft_glideslope = 3.5 * Constants::DEG_TO_RAD;
+
+    double deviation = (aircraft_glideslope - target_glideslope) * Constants::RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(deviation, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  void testMeatballHighIndication() {
+    // High indication (above glideslope)
+    double target_gs = 3.5 * Constants::DEG_TO_RAD;
+    double actual_gs = 4.0 * Constants::DEG_TO_RAD;
+
+    double deviation = (actual_gs - target_gs) * Constants::RAD_TO_DEG;
+
+    TS_ASSERT(deviation > 0.3); // More than 0.3 degrees high
+  }
+
+  void testMeatballLowIndication() {
+    // Low indication (below glideslope)
+    double target_gs = 3.5 * Constants::DEG_TO_RAD;
+    double actual_gs = 3.0 * Constants::DEG_TO_RAD;
+
+    double deviation = (actual_gs - target_gs) * Constants::RAD_TO_DEG;
+
+    TS_ASSERT(deviation < -0.3); // More than 0.3 degrees low
+  }
+
+  // LSO Calls Tests
+
+  void testLSOPowerCall() {
+    // LSO power call based on energy state
+    double actual_speed = 135.0; // knots
+    double target_speed = 140.0; // knots
+    double speed_deficit = target_speed - actual_speed;
+
+    bool power_call = (speed_deficit > 3.0);
+
+    TS_ASSERT(power_call);
+    TS_ASSERT_DELTA(speed_deficit, 5.0, 0.1);
+  }
+
+  void testLSOLineupCall() {
+    // LSO lineup correction based on angle-off-centerline
+    double centerline_angle = 0.0 * Constants::DEG_TO_RAD;
+    double aircraft_angle = 2.5 * Constants::DEG_TO_RAD;
+
+    double lineup_error = (aircraft_angle - centerline_angle) * Constants::RAD_TO_DEG;
+
+    bool lineup_call = (fabs(lineup_error) > 1.5);
+    TS_ASSERT(lineup_call);
+  }
+
+  // Case I/II/III Approach Tests
+
+  void testCaseIApproachPattern() {
+    // Case I: Visual pattern (day, good weather)
+    double break_altitude = 800.0; // ft
+    double downwind_altitude = 600.0; // ft
+    double abeam_distance = 1.0 * 6076.0; // 1 NM in feet
+
+    TS_ASSERT(break_altitude > 500.0);
+    TS_ASSERT(downwind_altitude < break_altitude);
+    TS_ASSERT_DELTA(abeam_distance / 6076.0, 1.0, 0.1);
+  }
+
+  void testCaseIIApproachPattern() {
+    // Case II: TACAN/Precision approach (restricted visibility)
+    double initial_altitude = 5000.0; // ft
+    double final_approach_altitude = 1200.0; // ft at 3 NM
+    double distance_3nm = 3.0 * 6076.0; // ft
+
+    double descent_angle = atan((initial_altitude - final_approach_altitude) / distance_3nm);
+
+    TS_ASSERT_DELTA(descent_angle * Constants::RAD_TO_DEG, 11.8, 0.5);
+  }
+
+  void testCaseIIIApproachPattern() {
+    // Case III: Full instrument approach (night, low visibility)
+    double platform_altitude = 1200.0; // ft
+    double commencing_altitude = 5000.0; // ft
+    double glideslope_intercept = 3.0 * 6076.0; // 3 NM in feet
+
+    TS_ASSERT(platform_altitude > 1000.0);
+    TS_ASSERT(commencing_altitude > platform_altitude);
+    TS_ASSERT_DELTA(glideslope_intercept / 6076.0, 3.0, 0.1);
+  }
+
+  // Marshal Pattern Tests
+
+  void testMarshalStackAltitude() {
+    // Aircraft stacked at 1000 ft intervals
+    double base_altitude = 6000.0; // ft
+    int stack_position = 3; // Third aircraft
+    double altitude_interval = 1000.0; // ft
+
+    double holding_altitude = base_altitude + (stack_position - 1) * altitude_interval;
+
+    TS_ASSERT_DELTA(holding_altitude, 8000.0, 0.1);
+  }
+
+  void testMarshalHoldingPattern() {
+    // Standard marshal holding pattern
+    double holding_speed = 250.0; // knots
+    double pattern_radius = 1.0 * 6076.0; // 1 NM
+    double bank_angle = 30.0 * Constants::DEG_TO_RAD;
+
+    // Turn rate = g * tan(bank) / velocity
+    double velocity = holding_speed * Constants::KTS_TO_FTPS;
+    double turn_rate = Constants::G_FTPS2 * tan(bank_angle) / velocity;
+
+    TS_ASSERT_DELTA(turn_rate * Constants::RAD_TO_DEG, 2.52, 0.2); // deg/s
+  }
+
+  // TACAN Navigation Tests
+
+  void testTACANDistanceToCarrier() {
+    // Calculate slant range to carrier
+    double horizontal_distance = 10.0 * 6076.0; // 10 NM in feet
+    double altitude_above_carrier = 5000.0; // ft
+
+    double slant_range = sqrt(horizontal_distance * horizontal_distance + altitude_above_carrier * altitude_above_carrier);
+
+    TS_ASSERT_DELTA(slant_range / 6076.0, 10.04, 0.1); // NM
+  }
+
+  void testTACANBearingCorrection() {
+    // Magnetic bearing to TACAN beacon
+    double true_bearing = 90.0; // degrees
+    double magnetic_variation = 10.0; // degrees east
+
+    double magnetic_bearing = true_bearing - magnetic_variation;
+
+    TS_ASSERT_DELTA(magnetic_bearing, 80.0, 0.1);
+  }
+
+  // Deck Spotting Calculations Tests
+
+  void testAircraftSpotFactor() {
+    // Deck spot factor (square feet per aircraft)
+    double fighter_spot = 900.0; // sq ft (F/A-18)
+    double deck_area_forward = 25000.0; // sq ft available
+
+    double max_aircraft_forward = deck_area_forward / fighter_spot;
+
+    TS_ASSERT_DELTA(max_aircraft_forward, 27.8, 1.0);
+  }
+
+  void testDeckCycleTime() {
+    // Time to complete a full deck cycle
+    double aircraft_to_launch = 12;
+    double launch_interval = 30.0; // seconds
+
+    double total_launch_time = aircraft_to_launch * launch_interval;
+
+    TS_ASSERT_DELTA(total_launch_time / 60.0, 6.0, 0.5); // minutes
+  }
+
+  // Fuel State Tests
+
+  void testBingoFuel() {
+    // Bingo fuel: minimum to reach alternate + reserve
+    double fuel_to_alternate = 2500.0; // lbs
+    double reserve_fuel = 2000.0; // lbs (20 minutes at cruise)
+
+    double bingo_fuel = fuel_to_alternate + reserve_fuel;
+
+    TS_ASSERT_DELTA(bingo_fuel, 4500.0, 0.1);
+  }
+
+  void testFuelLadder() {
+    // Fuel ladder: time to bingo at current burn rate
+    double current_fuel = 6000.0; // lbs
+    double bingo_fuel = 4500.0; // lbs
+    double fuel_flow = 3000.0; // lbs/hr
+
+    double time_to_bingo = (current_fuel - bingo_fuel) / (fuel_flow / 60.0); // minutes
+
+    TS_ASSERT_DELTA(time_to_bingo, 30.0, 1.0); // minutes
+  }
+
+  void testJokerFuel() {
+    // Joker fuel: fuel state to leave marshal stack
+    double bingo_fuel = 4500.0; // lbs
+    double fuel_margin = 1000.0; // lbs
+
+    double joker_fuel = bingo_fuel + fuel_margin;
+
+    TS_ASSERT_DELTA(joker_fuel, 5500.0, 0.1);
+  }
+
+  // Emergency Barrier Engagement Tests
+
+  void testBarrierEngagementDecel() {
+    // Emergency barrier deceleration (higher than wire)
+    double barrier_speed = 100.0 * Constants::KTS_TO_FTPS; // ft/s
+    double barrier_runout = 150.0; // ft (shorter than wire)
+
+    double decel = (barrier_speed * barrier_speed) / (2.0 * barrier_runout);
+    double decel_g = decel / Constants::G_FTPS2;
+
+    TS_ASSERT_DELTA(decel_g, 2.95, 0.3); // Approximately 3g
+  }
+
+  void testBarrierHeight() {
+    // Barrier height above deck
+    double barrier_height = 20.0; // ft when raised
+    double aircraft_height = 15.0; // ft at nose
+
+    TS_ASSERT(barrier_height > aircraft_height);
+
+    double clearance = barrier_height - aircraft_height;
+    TS_ASSERT_DELTA(clearance, 5.0, 0.1);
+  }
+
+  // Pitching Deck Cycle Tests
+
+  void testPitchingDeckCycle() {
+    // One complete pitch cycle
+    double pitch_period = 8.0; // seconds
+    double pitch_amplitude = 2.0 * Constants::DEG_TO_RAD; // radians
+
+    // Maximum pitch rate occurs at centerline (zero pitch angle)
+    double max_pitch_rate = pitch_amplitude * 2.0 * M_PI / pitch_period;
+
+    TS_ASSERT_DELTA(max_pitch_rate * Constants::RAD_TO_DEG, 1.57, 0.5); // deg/s
+  }
+
+  void testDeckAngleAtTouchdown() {
+    // Deck pitch angle at touchdown affects trap
+    double pitch_angle = 1.5 * Constants::DEG_TO_RAD; // bow up
+    double aircraft_aoa = 8.0 * Constants::DEG_TO_RAD;
+
+    // Effective AoA relative to deck
+    double effective_aoa = aircraft_aoa - pitch_angle;
+
+    TS_ASSERT_DELTA(effective_aoa * Constants::RAD_TO_DEG, 6.5, 0.1);
+  }
+
+  void testOptimalTouchdownTiming() {
+    // Timing touchdown with deck pitch cycle
+    double pitch_period = 8.0; // seconds
+    double pitch_phase_optimal = M_PI / 4.0; // 45 degrees into cycle
+
+    double optimal_time = pitch_phase_optimal * pitch_period / (2.0 * M_PI);
+
+    TS_ASSERT_DELTA(optimal_time, 1.0, 0.1); // seconds into cycle
+  }
+};
