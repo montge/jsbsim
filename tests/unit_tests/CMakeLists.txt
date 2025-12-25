@@ -110,7 +110,12 @@ set(UNIT_TESTS FGColumnVector3Test
                FGGustTest
                FGCarrierOpsTest
                FGAutolandTest
-               FGAeroelasticityTest)
+               FGAeroelasticityTest
+               FGFCSTest
+               FGFCSChannelTest
+               FGPropulsionTest
+               FGExternalReactionsTest
+               FGGasCellTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
