@@ -1,0 +1,28 @@
+# Pre-commit hooks configuration
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Standard hooks for code quality
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(src/simgear/|src/GeographicLib/)
+      - id: end-of-file-fixer
+        exclude: ^(src/simgear/|src/GeographicLib/)
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+
+  # OpenSpec validation
+  - repo: local
+    hooks:
+      - id: openspec-validate
+        name: OpenSpec Validation
+        entry: openspec validate --changes --strict
+        language: system
+        pass_filenames: false
+        files: ^openspec/
+        types: [file]

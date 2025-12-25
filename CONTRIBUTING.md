@@ -24,6 +24,40 @@ Thank you for your interest in contributing to JSBSim! This document provides gu
    git remote add upstream https://github.com/JSBSim-Team/jsbsim.git
    ```
 4. Build the project following the instructions in [CLAUDE.md](CLAUDE.md)
+5. Set up pre-commit hooks:
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+
+## Pre-commit Hooks
+
+This project uses [pre-commit](https://pre-commit.com/) to run automated checks before each commit. The hooks include:
+
+- **Trailing whitespace**: Removes trailing whitespace from files
+- **End-of-file fixer**: Ensures files end with a newline
+- **YAML validation**: Checks YAML file syntax
+- **Large file check**: Prevents committing files larger than 1MB
+- **Merge conflict check**: Detects unresolved merge conflicts
+- **OpenSpec validation**: Validates OpenSpec changes (`openspec validate --changes --strict`)
+
+### Running Hooks Manually
+
+```bash
+# Run on all files
+pre-commit run --all-files
+
+# Run on staged files only
+pre-commit run
+```
+
+### Skipping Hooks
+
+In rare cases where you need to bypass hooks (not recommended):
+
+```bash
+git commit --no-verify -m "Your message"
+```
 
 ## Development Workflow
 
