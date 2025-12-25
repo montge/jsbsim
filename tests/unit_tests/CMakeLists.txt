@@ -114,7 +114,11 @@ set(UNIT_TESTS FGColumnVector3Test
                FGFCSTest
                FGPropulsionTest
                FGExternalReactionsTest
-               FGGasCellTest)
+               FGGasCellTest
+               FGFDMExecTest
+               FGOutputTypeTest
+               FGModelFunctionsTest
+               FGTemplateTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
