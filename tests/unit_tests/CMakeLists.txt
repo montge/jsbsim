@@ -20,6 +20,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGPropertyManagerTest
                FGAtmosphereTest
                FGStandardAtmosphereTest
+               FGAtmosphericModelTest
                FGAuxiliaryTest
                FGMSISTest
                FGLogTest
@@ -74,7 +75,9 @@ set(UNIT_TESTS FGColumnVector3Test
                FGTrimTest
                FGFlightPathTest
                FGCoordinatesTest
-               FGStabilityTest)
+               FGStabilityTest
+               FGControlLawTest
+               FGAeroBodyTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
