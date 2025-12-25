@@ -1,0 +1,746 @@
+/*******************************************************************************
+ * FGWeatherEffectsTest.h - Unit tests for weather effects on aircraft performance
+ *
+ * Tests mathematical modeling of environmental weather effects on aircraft:
+ * - Rain effects on aerodynamics (drag, lift)
+ * - Rain effects on engine performance
+ * - Hail damage modeling
+ * - Lightning strike effects
+ * - Volcanic ash engine degradation
+ * - Sand/dust ingestion
+ * - Snow accumulation effects
+ * - Frost effects on wing surfaces
+ * - Temperature inversion effects
+ * - Density altitude calculations
+ * - Humidity effects on performance
+ * - Visibility degradation modeling
+ *
+ * Copyright (c) JSBSim Development Team
+ * Licensed under LGPL
+ ******************************************************************************/
+
+#include <cxxtest/TestSuite.h>
+#include <limits>
+#include <cmath>
+
+const double epsilon = 1e-10;
+const double tolerance = 1e-6;
+const double DEG_TO_RAD = M_PI / 180.0;
+const double RAD_TO_DEG = 180.0 / M_PI;
+const double FT_TO_M = 0.3048;
+const double M_TO_FT = 3.28084;
+const double SLUGFT3_TO_KGCUM = 515.379;
+
+class FGWeatherEffectsTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Rain Effects on Drag
+   ***************************************************************************/
+
+  // Test rain drag coefficient increase
+  void testRainDragIncrease() {
+    double baseDrag = 0.025;
+    double rainfall = 25.0;  // mm/hr (moderate rain)
+
+    // Rain increases drag coefficient by approximately 5-10% per 25mm/hr
+    double rainDragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    double totalDrag = baseDrag * rainDragFactor;
+
+    TS_ASSERT(totalDrag > baseDrag);
+    TS_ASSERT_DELTA(totalDrag, 0.02688, 0.001);
+  }
+
+  // Test light rain drag effect
+  void testLightRainDrag() {
+    double baseDrag = 0.025;
+    double rainfall = 5.0;  // mm/hr (light rain)
+
+    double rainDragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    double totalDrag = baseDrag * rainDragFactor;
+
+    TS_ASSERT_DELTA(totalDrag, 0.02538, 0.001);
+  }
+
+  // Test heavy rain drag effect
+  void testHeavyRainDrag() {
+    double baseDrag = 0.025;
+    double rainfall = 100.0;  // mm/hr (heavy rain)
+
+    double rainDragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    double totalDrag = baseDrag * rainDragFactor;
+
+    TS_ASSERT_DELTA(totalDrag, 0.0325, 0.001);
+  }
+
+  // Test no rain condition
+  void testNoRainDrag() {
+    double baseDrag = 0.025;
+    double rainfall = 0.0;
+
+    double rainDragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    double totalDrag = baseDrag * rainDragFactor;
+
+    TS_ASSERT_DELTA(totalDrag, baseDrag, epsilon);
+  }
+
+  /***************************************************************************
+   * Rain Effects on Lift
+   ***************************************************************************/
+
+  // Test rain lift coefficient reduction
+  void testRainLiftReduction() {
+    double baseLift = 0.45;
+    double rainfall = 25.0;  // mm/hr
+
+    // Rain reduces lift coefficient by approximately 3-5% per 25mm/hr
+    double rainLiftFactor = 1.0 - 0.04 * (rainfall / 25.0);
+    double totalLift = baseLift * rainLiftFactor;
+
+    TS_ASSERT(totalLift < baseLift);
+    TS_ASSERT_DELTA(totalLift, 0.432, 0.001);
+  }
+
+  // Test light rain lift reduction
+  void testLightRainLift() {
+    double baseLift = 0.45;
+    double rainfall = 10.0;  // mm/hr
+
+    double rainLiftFactor = 1.0 - 0.04 * (rainfall / 25.0);
+    double totalLift = baseLift * rainLiftFactor;
+
+    TS_ASSERT_DELTA(totalLift, 0.4428, 0.001);
+  }
+
+  // Test heavy rain lift reduction
+  void testHeavyRainLift() {
+    double baseLift = 0.45;
+    double rainfall = 50.0;  // mm/hr
+
+    double rainLiftFactor = 1.0 - 0.04 * (rainfall / 25.0);
+    double totalLift = baseLift * rainLiftFactor;
+
+    TS_ASSERT_DELTA(totalLift, 0.414, 0.001);
+  }
+
+  // Test wing surface roughness from rain
+  void testRainSurfaceRoughness() {
+    double dryRoughness = 0.0001;  // ft
+    double rainfall = 25.0;         // mm/hr
+
+    // Rain film increases effective surface roughness
+    double wetRoughness = dryRoughness * (1.0 + rainfall / 100.0);
+
+    TS_ASSERT(wetRoughness > dryRoughness);
+    TS_ASSERT_DELTA(wetRoughness, 0.000125, tolerance);
+  }
+
+  /***************************************************************************
+   * Heavy Rain Engine Power Loss
+   ***************************************************************************/
+
+  // Test engine power reduction in rain
+  void testRainEnginePowerLoss() {
+    double basePower = 200.0;  // hp
+    double rainfall = 25.0;    // mm/hr
+
+    // Heavy rain can reduce engine power by 2-5%
+    double powerLossFactor = 1.0 - 0.03 * (rainfall / 25.0);
+    double effectivePower = basePower * powerLossFactor;
+
+    TS_ASSERT(effectivePower < basePower);
+    TS_ASSERT_DELTA(effectivePower, 194.0, 0.1);
+  }
+
+  // Test water ingestion power loss
+  void testWaterIngestionPowerLoss() {
+    double basePower = 200.0;
+    double waterIngestionRate = 0.5;  // lb/s
+
+    // Water ingestion causes power loss
+    double powerLoss = waterIngestionRate * 10.0;  // hp loss
+    double effectivePower = basePower - powerLoss;
+
+    TS_ASSERT_DELTA(effectivePower, 195.0, epsilon);
+  }
+
+  // Test jet engine flameout risk
+  void testJetEngineFlameoutRisk() {
+    double rainfall = 100.0;  // mm/hr (very heavy)
+    double airspeed = 150.0;  // kts
+
+    // Risk factor based on water flux
+    double waterFlux = rainfall * airspeed / 1000.0;
+    double flameoutRisk = std::min(1.0, waterFlux / 20.0);
+
+    TS_ASSERT(flameoutRisk > 0);
+    TS_ASSERT(flameoutRisk <= 1.0);
+    TS_ASSERT_DELTA(flameoutRisk, 0.75, 0.01);
+  }
+
+  // Test compressor efficiency in rain
+  void testCompressorEfficiencyRain() {
+    double baseEfficiency = 0.85;
+    double rainfall = 50.0;  // mm/hr
+
+    // Rain reduces compressor efficiency
+    double efficiencyFactor = 1.0 - 0.05 * (rainfall / 50.0);
+    double wetEfficiency = baseEfficiency * efficiencyFactor;
+
+    TS_ASSERT_DELTA(wetEfficiency, 0.8075, 0.001);
+  }
+
+  /***************************************************************************
+   * Hail Damage Modeling
+   ***************************************************************************/
+
+  // Test hail impact force
+  void testHailImpactForce() {
+    double hailMass = 0.01;     // kg (1cm diameter)
+    double airspeed = 250.0;    // kts
+    double velocity = airspeed * 0.514444;  // m/s
+
+    // Impact energy = 0.5 * mass * velocity^2
+    double impactEnergy = 0.5 * hailMass * velocity * velocity;
+
+    TS_ASSERT(impactEnergy > 0);
+    TS_ASSERT_DELTA(impactEnergy, 82.7, 1.0);
+  }
+
+  // Test hail damage to leading edge
+  void testHailLeadingEdgeDamage() {
+    double hailSize = 2.0;    // cm diameter
+    double airspeed = 200.0;  // kts
+
+    // Damage severity index
+    double damageSeverity = (hailSize / 5.0) * (airspeed / 250.0);
+
+    TS_ASSERT(damageSeverity > 0);
+    TS_ASSERT_DELTA(damageSeverity, 0.32, 0.01);
+  }
+
+  // Test hail aerodynamic degradation
+  void testHailAerodynamicDegradation() {
+    double baseDrag = 0.025;
+    double hailDamageIndex = 0.5;  // 0 to 1 scale
+
+    // Hail damage increases drag
+    double damagedDrag = baseDrag * (1.0 + 0.2 * hailDamageIndex);
+
+    TS_ASSERT(damagedDrag > baseDrag);
+    TS_ASSERT_DELTA(damagedDrag, 0.0275, epsilon);
+  }
+
+  // Test windshield impact resistance
+  void testWindshieldHailImpact() {
+    double hailKineticEnergy = 100.0;  // Joules
+    double glassStrength = 150.0;      // Joules threshold
+
+    bool windshieldIntact = (hailKineticEnergy < glassStrength);
+
+    TS_ASSERT(windshieldIntact);
+  }
+
+  /***************************************************************************
+   * Lightning Strike Effects
+   ***************************************************************************/
+
+  // Test lightning current magnitude
+  void testLightningCurrentMagnitude() {
+    double peakCurrent = 30000.0;  // Amperes (typical)
+    double duration = 0.0002;      // seconds
+
+    // Charge transfer
+    double charge = peakCurrent * duration;
+
+    TS_ASSERT(charge > 0);
+    TS_ASSERT_DELTA(charge, 6.0, epsilon);  // Coulombs
+  }
+
+  // Test electromagnetic interference
+  void testLightningEMI() {
+    double current = 30000.0;  // A
+    double distance = 10.0;    // m
+
+    // Magnetic field strength (simplified)
+    double magneticField = current / (2.0 * M_PI * distance);
+
+    TS_ASSERT(magneticField > 0);
+    TS_ASSERT_DELTA(magneticField, 477.46, 1.0);  // A/m
+  }
+
+  // Test avionics disruption probability
+  void testAvionicsDisruption() {
+    double strikeIntensity = 0.8;  // 0 to 1 scale
+    double shielding = 0.6;        // 0 to 1 scale
+
+    double disruptionProbability = strikeIntensity * (1.0 - shielding);
+
+    TS_ASSERT_DELTA(disruptionProbability, 0.32, epsilon);
+  }
+
+  // Test composite material damage
+  void testCompositeLightningDamage() {
+    double strikeEnergy = 1e6;  // Joules
+    double conductivity = 0.1;   // Relative to metal
+
+    // Damage inversely proportional to conductivity
+    double damageIndex = strikeEnergy * (1.0 - conductivity) / 1e6;
+
+    TS_ASSERT_DELTA(damageIndex, 0.9, epsilon);
+  }
+
+  /***************************************************************************
+   * Volcanic Ash Effects on Engines
+   ***************************************************************************/
+
+  // Test ash particle ingestion
+  void testAshParticleIngestion() {
+    double ashConcentration = 2.0;  // mg/m³
+    double airflowRate = 100.0;     // kg/s
+
+    // Ash ingestion rate
+    double ashRate = (ashConcentration / 1e6) * airflowRate;
+
+    TS_ASSERT(ashRate > 0);
+    TS_ASSERT_DELTA(ashRate, 0.0002, tolerance);  // kg/s
+  }
+
+  // Test turbine blade erosion
+  void testTurbineBladeErosion() {
+    double ashExposureTime = 600.0;  // seconds (10 min)
+    double ashConcentration = 4.0;   // mg/m³
+
+    // Erosion depth (simplified)
+    double erosionRate = 0.001;  // mm per mg/m³ per hour
+    double erosionDepth = erosionRate * ashConcentration * (ashExposureTime / 3600.0);
+
+    TS_ASSERT_DELTA(erosionDepth, 0.00067, 0.0001);  // mm
+  }
+
+  // Test engine temperature rise from ash
+  void testAshEngineTemperatureRise() {
+    double baseEGT = 1200.0;  // °F
+    double ashConcentration = 5.0;  // mg/m³
+
+    // Ash deposition increases EGT
+    double tempRise = ashConcentration * 20.0;  // °F per mg/m³
+    double effectiveEGT = baseEGT + tempRise;
+
+    TS_ASSERT_DELTA(effectiveEGT, 1300.0, epsilon);
+  }
+
+  // Test compressor stall risk
+  void testAshCompressorStall() {
+    double ashDeposit = 0.5;    // kg accumulated
+    double flowReduction = ashDeposit * 0.1;  // 10% per kg
+
+    double stallRisk = std::min(1.0, flowReduction);
+
+    TS_ASSERT_DELTA(stallRisk, 0.05, epsilon);
+  }
+
+  // Test ash melting temperature
+  void testAshMeltingPoint() {
+    double ashSilicaContent = 0.7;  // 70% silica
+
+    // Melting point varies with composition (°C)
+    double meltingPoint = 1000.0 + ashSilicaContent * 200.0;
+
+    TS_ASSERT_DELTA(meltingPoint, 1140.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Sand/Dust Ingestion
+   ***************************************************************************/
+
+  // Test sand particle erosion
+  void testSandParticleErosion() {
+    double sandConcentration = 10.0;  // mg/m³
+    double particleSize = 50.0;       // microns
+
+    // Erosion severity
+    double erosionIndex = (sandConcentration / 10.0) * (particleSize / 100.0);
+
+    TS_ASSERT_DELTA(erosionIndex, 0.5, epsilon);
+  }
+
+  // Test air filter clogging
+  void testAirFilterClogging() {
+    double dustAccumulation = 500.0;  // grams
+    double filterCapacity = 1000.0;   // grams
+
+    double cloggingFraction = dustAccumulation / filterCapacity;
+    double flowReduction = cloggingFraction * 0.5;  // 50% at full capacity
+
+    TS_ASSERT_DELTA(flowReduction, 0.25, epsilon);
+  }
+
+  // Test engine power loss from sand
+  void testSandEnginePowerLoss() {
+    double basePower = 250.0;  // hp
+    double sandExposure = 0.3;  // 0 to 1 scale
+
+    double powerLoss = basePower * sandExposure * 0.15;  // Up to 15% loss
+    double effectivePower = basePower - powerLoss;
+
+    TS_ASSERT_DELTA(effectivePower, 238.75, 0.01);
+  }
+
+  // Test bearing wear from dust
+  void testBearingWearDust() {
+    double operatingHours = 100.0;
+    double dustConcentration = 5.0;  // mg/m³
+
+    // Wear index
+    double wearIndex = operatingHours * (dustConcentration / 10.0);
+
+    TS_ASSERT_DELTA(wearIndex, 50.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Snow Accumulation Effects
+   ***************************************************************************/
+
+  // Test snow weight accumulation
+  void testSnowWeightAccumulation() {
+    double wingArea = 200.0;     // ft²
+    double snowDepth = 0.25;     // inches
+    double snowDensity = 6.0;    // lb/ft³ (wet snow)
+
+    // Snow weight
+    double snowWeight = wingArea * (snowDepth / 12.0) * snowDensity;
+
+    TS_ASSERT_DELTA(snowWeight, 25.0, epsilon);  // lbs
+  }
+
+  // Test snow drag penalty
+  void testSnowDragPenalty() {
+    double baseDrag = 0.025;
+    double snowRoughness = 0.5;  // inches
+
+    // Snow increases drag significantly
+    double dragIncrease = 1.0 + (snowRoughness * 0.3);
+    double totalDrag = baseDrag * dragIncrease;
+
+    TS_ASSERT_DELTA(totalDrag, 0.02875, epsilon);
+  }
+
+  // Test snow shedding rate
+  void testSnowSheddingRate() {
+    double snowMass = 50.0;      // lbs
+    double airspeed = 120.0;     // kts
+    double dynamicPressure = 0.5 * 0.002377 * (airspeed * 1.68781) * (airspeed * 1.68781);
+
+    // Shedding rate proportional to dynamic pressure
+    double sheddingRate = dynamicPressure * 0.01;  // lb/s
+
+    TS_ASSERT(sheddingRate > 0);
+    TS_ASSERT_DELTA(sheddingRate, 0.4875, 0.01);
+  }
+
+  // Test pitot tube blockage
+  void testPitotTubeSnowBlockage() {
+    double snowAccumulation = 0.1;  // inches
+    double pitotDiameter = 0.25;    // inches
+
+    bool blocked = (snowAccumulation > pitotDiameter * 0.3);
+
+    TS_ASSERT(blocked);
+  }
+
+  /***************************************************************************
+   * Frost Effects on Wing
+   ***************************************************************************/
+
+  // Test frost lift degradation
+  void testFrostLiftDegradation() {
+    double baseLift = 0.45;
+    double frostThickness = 0.02;  // inches
+
+    // Frost can reduce lift by 30% even with thin layer
+    double liftReduction = std::min(0.3, frostThickness * 5.0);
+    double frostyLift = baseLift * (1.0 - liftReduction);
+
+    TS_ASSERT(frostyLift < baseLift);
+    TS_ASSERT_DELTA(frostyLift, 0.405, 0.001);
+  }
+
+  // Test frost drag increase
+  void testFrostDragIncrease() {
+    double baseDrag = 0.025;
+    double frostThickness = 0.02;  // inches
+
+    double dragIncrease = 1.0 + frostThickness * 2.0;
+    double frostyDrag = baseDrag * dragIncrease;
+
+    TS_ASSERT_DELTA(frostyDrag, 0.026, epsilon);
+  }
+
+  // Test frost formation rate
+  void testFrostFormationRate() {
+    double temperature = -5.0;  // °C
+    double dewPoint = -2.0;     // °C
+    double humidity = 0.8;      // 80%
+
+    // Frost forms when temp < dewpoint and below freezing
+    bool frostForming = (temperature < 0.0) && (temperature < dewPoint);
+
+    TS_ASSERT(frostForming);
+  }
+
+  // Test de-icing effectiveness
+  void testDeIcingEffectiveness() {
+    double frostMass = 10.0;     // lbs
+    double heatFlux = 50.0;      // BTU/min
+    double duration = 5.0;       // minutes
+
+    // Heat of fusion for ice: ~144 BTU/lb
+    double heatApplied = heatFlux * duration;
+    double massMelted = heatApplied / 144.0;
+
+    TS_ASSERT_DELTA(massMelted, 1.736, 0.001);
+  }
+
+  /***************************************************************************
+   * Temperature Inversion Effects
+   ***************************************************************************/
+
+  // Test temperature inversion gradient
+  void testTemperatureInversion() {
+    double tempAtBase = 50.0;   // °F at 1000 ft
+    double tempAtTop = 60.0;    // °F at 3000 ft
+    double altDifference = 2000.0;  // ft
+
+    // Positive lapse rate (inversion)
+    double lapseRate = (tempAtTop - tempAtBase) / altDifference;
+
+    TS_ASSERT(lapseRate > 0);  // Inverted (temp increases with altitude)
+    TS_ASSERT_DELTA(lapseRate, 0.005, epsilon);  // °F per ft
+  }
+
+  // Test inversion layer thickness
+  void testInversionLayerThickness() {
+    double baseAltitude = 1000.0;  // ft
+    double topAltitude = 3000.0;   // ft
+
+    double thickness = topAltitude - baseAltitude;
+
+    TS_ASSERT_DELTA(thickness, 2000.0, epsilon);
+  }
+
+  // Test trapped pollution effects
+  void testTrappedPollution() {
+    double visibility = 5.0;      // miles (normal 10)
+    double inversionStrength = 0.7;  // 0 to 1
+
+    double reducedVisibility = visibility * (1.0 - inversionStrength * 0.4);
+
+    TS_ASSERT_DELTA(reducedVisibility, 3.6, epsilon);
+  }
+
+  /***************************************************************************
+   * Density Altitude Effects
+   ***************************************************************************/
+
+  // Test density altitude calculation
+  void testDensityAltitudeCalculation() {
+    double pressureAltitude = 3000.0;  // ft
+    double temperature = 95.0;          // °F
+    double standardTemp = 59.0 - (3000.0 * 0.00356);  // ISA at 3000 ft
+
+    // Density altitude approximation
+    double densityAltitude = pressureAltitude +
+                            118.8 * (temperature - standardTemp);
+
+    TS_ASSERT(densityAltitude > pressureAltitude);
+    TS_ASSERT_DELTA(densityAltitude, 8545.6, 1.0);
+  }
+
+  // Test high density altitude performance
+  void testHighDensityAltitudePerformance() {
+    double seaLevelPower = 200.0;  // hp
+    double densityAltitude = 8000.0;  // ft
+
+    // Power loss approximately 3% per 1000 ft
+    double powerLossFactor = 1.0 - (densityAltitude / 1000.0) * 0.03;
+    double effectivePower = seaLevelPower * powerLossFactor;
+
+    TS_ASSERT(effectivePower < seaLevelPower);
+    TS_ASSERT_DELTA(effectivePower, 152.0, 0.1);
+  }
+
+  // Test density ratio
+  void testDensityRatio() {
+    double actualDensity = 0.002;     // slugs/ft³
+    double seaLevelDensity = 0.002377;  // slugs/ft³
+
+    double densityRatio = actualDensity / seaLevelDensity;
+
+    TS_ASSERT(densityRatio < 1.0);
+    TS_ASSERT_DELTA(densityRatio, 0.8415, 0.001);
+  }
+
+  // Test takeoff distance increase
+  void testTakeoffDistanceIncrease() {
+    double seaLevelDistance = 1000.0;  // ft
+    double densityRatio = 0.85;
+
+    // Takeoff distance inversely proportional to density ratio
+    double adjustedDistance = seaLevelDistance / densityRatio;
+
+    TS_ASSERT_DELTA(adjustedDistance, 1176.47, 0.1);
+  }
+
+  /***************************************************************************
+   * Humidity Effects on Performance
+   ***************************************************************************/
+
+  // Test humid air density
+  void testHumidAirDensity() {
+    double dryAirDensity = 0.002377;  // slugs/ft³
+    double relativeHumidity = 0.8;     // 80%
+
+    // Humid air is less dense (water vapor lighter than air)
+    double humidityFactor = 1.0 - relativeHumidity * 0.01;
+    double humidDensity = dryAirDensity * humidityFactor;
+
+    TS_ASSERT(humidDensity < dryAirDensity);
+    TS_ASSERT_DELTA(humidDensity, 0.002358, tolerance);
+  }
+
+  // Test humidity effect on engine power
+  void testHumidityEnginePower() {
+    double dryPower = 200.0;       // hp
+    double relativeHumidity = 0.9;  // 90%
+
+    // High humidity reduces power slightly (1-2%)
+    double powerReduction = 1.0 - relativeHumidity * 0.015;
+    double humidPower = dryPower * powerReduction;
+
+    TS_ASSERT_DELTA(humidPower, 197.3, 0.1);
+  }
+
+  // Test water vapor partial pressure
+  void testWaterVaporPressure() {
+    double saturationPressure = 0.5;  // psi at given temp
+    double relativeHumidity = 0.7;    // 70%
+
+    double vaporPressure = saturationPressure * relativeHumidity;
+
+    TS_ASSERT_DELTA(vaporPressure, 0.35, epsilon);
+  }
+
+  // Test virtual temperature
+  void testVirtualTemperature() {
+    double actualTemp = 300.0;  // K
+    double mixingRatio = 0.01;  // kg water / kg dry air
+
+    // Virtual temperature (temp dry air would have to have same density)
+    double virtualTemp = actualTemp * (1.0 + 0.61 * mixingRatio);
+
+    TS_ASSERT(virtualTemp > actualTemp);
+    TS_ASSERT_DELTA(virtualTemp, 301.83, 0.01);
+  }
+
+  /***************************************************************************
+   * Visibility Degradation
+   ***************************************************************************/
+
+  // Test fog visibility reduction
+  void testFogVisibility() {
+    double baseVisibility = 10.0;  // statute miles
+    double fogDensity = 0.7;       // 0 to 1 scale
+
+    double visibility = baseVisibility * (1.0 - fogDensity);
+
+    TS_ASSERT_DELTA(visibility, 3.0, epsilon);
+  }
+
+  // Test smoke visibility
+  void testSmokeVisibility() {
+    double particleConcentration = 100.0;  // μg/m³
+    double extinctionCoefficient = 4.0;     // m⁻¹ per 100 μg/m³
+
+    // Visibility = 3.912 / extinction coefficient
+    double visibility = 3.912 / (extinctionCoefficient * particleConcentration / 100.0);
+
+    TS_ASSERT_DELTA(visibility, 0.978, 0.001);  // km
+  }
+
+  // Test rain visibility reduction
+  void testRainVisibilityReduction() {
+    double clearVisibility = 10.0;  // miles
+    double rainfall = 50.0;         // mm/hr
+
+    // Heavy rain reduces visibility significantly
+    double visibilityFactor = 1.0 / (1.0 + rainfall / 100.0);
+    double rainVisibility = clearVisibility * visibilityFactor;
+
+    TS_ASSERT_DELTA(rainVisibility, 6.667, 0.01);
+  }
+
+  // Test contrast threshold
+  void testContrastThreshold() {
+    double objectLuminance = 100.0;
+    double backgroundLuminance = 90.0;
+
+    double contrast = std::abs(objectLuminance - backgroundLuminance) /
+                     backgroundLuminance;
+
+    TS_ASSERT_DELTA(contrast, 0.1111, 0.001);
+  }
+
+  // Test slant range visibility
+  void testSlantRangeVisibility() {
+    double horizontalVisibility = 5.0;  // miles
+    double viewAngle = 30.0 * DEG_TO_RAD;  // degrees from horizontal
+
+    // Slant range visibility often less than horizontal
+    double slantVisibility = horizontalVisibility * std::cos(viewAngle);
+
+    TS_ASSERT_DELTA(slantVisibility, 4.33, 0.01);
+  }
+
+  /***************************************************************************
+   * Combined Effects Tests
+   ***************************************************************************/
+
+  // Test combined rain and wind effects
+  void testCombinedRainWind() {
+    double baseDrag = 0.025;
+    double rainfall = 25.0;
+    double gustFactor = 1.3;
+
+    double rainDragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    double totalDrag = baseDrag * rainDragFactor;
+    double effectiveDrag = totalDrag * gustFactor;
+
+    TS_ASSERT_DELTA(effectiveDrag, 0.03494, 0.001);
+  }
+
+  // Test icing in clouds
+  void testIcingInClouds() {
+    double temperature = -10.0;  // °C
+    double liquidWaterContent = 0.5;  // g/m³
+
+    // Icing severity
+    bool icingConditions = (temperature < 0.0) && (temperature > -40.0) &&
+                          (liquidWaterContent > 0.1);
+
+    TS_ASSERT(icingConditions);
+  }
+
+  // Test thunderstorm hazard index
+  void testThunderstormHazardIndex() {
+    double turbulence = 0.8;    // 0-1 scale
+    double lightning = 0.6;     // 0-1 scale
+    double hail = 0.4;          // 0-1 scale
+    double rainfall = 0.9;      // 0-1 scale
+
+    // Combined hazard index
+    double hazardIndex = (turbulence + lightning + hail + rainfall) / 4.0;
+
+    TS_ASSERT_DELTA(hazardIndex, 0.675, epsilon);
+  }
+};
