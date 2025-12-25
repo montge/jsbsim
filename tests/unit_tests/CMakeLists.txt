@@ -89,7 +89,10 @@ set(UNIT_TESTS FGColumnVector3Test
                FGHighAOATest
                FGCompressibleFlowTest
                FGGroundEffectTest
-               FGPerformanceTest)
+               FGPerformanceTest
+               FGStructuralLoadsTest
+               FGWeightBalanceTest
+               FGIcingTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
