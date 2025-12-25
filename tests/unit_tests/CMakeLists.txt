@@ -104,7 +104,10 @@ set(UNIT_TESTS FGColumnVector3Test
                FGPressureSystemTest
                FGFlightEnvelopeTest
                FGWeatherEffectsTest
-               FGHydraulicSystemTest)
+               FGHydraulicSystemTest
+               FGSupersonicFlightTest
+               FGCrosswindTest
+               FGGustTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
