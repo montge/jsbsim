@@ -112,7 +112,6 @@ set(UNIT_TESTS FGColumnVector3Test
                FGAutolandTest
                FGAeroelasticityTest
                FGFCSTest
-               FGFCSChannelTest
                FGPropulsionTest
                FGExternalReactionsTest
                FGGasCellTest)

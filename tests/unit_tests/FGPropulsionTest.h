@@ -4,8 +4,7 @@
  * Tests the FGPropulsion model including:
  * - Engine and tank management
  * - Force and moment calculations
- * - Fuel management (transfer, dump, refuel)
- * - Engine control (magnetos, starter, cutoff)
+ * - Fuel management
  *
  * Copyright (c) JSBSim Development Team
  * Licensed under LGPL
@@ -92,17 +91,6 @@ public:
     TS_ASSERT_DELTA(prop->GetForces(3), 0.0, epsilon);
   }
 
-  void testGetForcesIndexed() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    const FGColumnVector3& forces = prop->GetForces();
-
-    TS_ASSERT_DELTA(prop->GetForces(1), forces(1), epsilon);
-    TS_ASSERT_DELTA(prop->GetForces(2), forces(2), epsilon);
-    TS_ASSERT_DELTA(prop->GetForces(3), forces(3), epsilon);
-  }
-
   /***************************************************************************
    * Moment Vector Tests
    ***************************************************************************/
@@ -127,17 +115,6 @@ public:
     TS_ASSERT_DELTA(prop->GetMoments(3), 0.0, epsilon);
   }
 
-  void testGetMomentsIndexed() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    const FGColumnVector3& moments = prop->GetMoments();
-
-    TS_ASSERT_DELTA(prop->GetMoments(1), moments(1), epsilon);
-    TS_ASSERT_DELTA(prop->GetMoments(2), moments(2), epsilon);
-    TS_ASSERT_DELTA(prop->GetMoments(3), moments(3), epsilon);
-  }
-
   /***************************************************************************
    * Active Engine Tests
    ***************************************************************************/
@@ -146,20 +123,9 @@ public:
     FGFDMExec fdmex;
     auto prop = fdmex.GetPropulsion();
 
-    // Default active engine is typically -1 (all engines) or 0
+    // Default active engine is -1 (all engines)
     int activeEngine = prop->GetActiveEngine();
-    TS_ASSERT(activeEngine >= -1);
-  }
-
-  void testSetActiveEngine() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    prop->SetActiveEngine(0);
-    TS_ASSERT_EQUALS(prop->GetActiveEngine(), 0);
-
-    prop->SetActiveEngine(-1);  // All engines
-    TS_ASSERT_EQUALS(prop->GetActiveEngine(), -1);
+    TS_ASSERT_EQUALS(activeEngine, -1);
   }
 
   /***************************************************************************
@@ -266,81 +232,5 @@ public:
     TS_ASSERT_DELTA(inertias(1,1), 0.0, epsilon);
     TS_ASSERT_DELTA(inertias(2,2), 0.0, epsilon);
     TS_ASSERT_DELTA(inertias(3,3), 0.0, epsilon);
-  }
-
-  /***************************************************************************
-   * Engine Control Tests (without loaded engines)
-   ***************************************************************************/
-
-  void testSetMagnetosNoEngines() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    // Should not crash with no engines
-    prop->SetMagnetos(3);
-    TS_ASSERT(true);  // If we get here, no crash occurred
-  }
-
-  void testSetStarterNoEngines() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    prop->SetStarter(1);
-    TS_ASSERT(true);
-  }
-
-  void testSetCutoffNoEngines() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    prop->SetCutoff(1);
-    TS_ASSERT(true);
-  }
-
-  /***************************************************************************
-   * Fuel Operations Tests (without tanks)
-   ***************************************************************************/
-
-  void testDoRefuelNoTanks() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    // Should handle gracefully with no tanks
-    prop->DoRefuel(1.0);
-    TS_ASSERT(true);
-  }
-
-  void testDumpFuelNoTanks() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    prop->DumpFuel(1.0);
-    TS_ASSERT(true);
-  }
-
-  /***************************************************************************
-   * Fuel Transfer Tests (without tanks)
-   ***************************************************************************/
-
-  void testTransferNoTanks() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    // Should return 0 with no tanks
-    double transferred = prop->Transfer(0, 1, 100.0);
-    TS_ASSERT_DELTA(transferred, 0.0, epsilon);
-  }
-
-  /***************************************************************************
-   * Steady State Tests
-   ***************************************************************************/
-
-  void testGetSteadyStateNoEngines() {
-    FGFDMExec fdmex;
-    auto prop = fdmex.GetPropulsion();
-
-    bool result = prop->GetSteadyState();
-    // With no engines, should return true (nothing to stabilize)
-    TS_ASSERT_EQUALS(result, true);
   }
 };

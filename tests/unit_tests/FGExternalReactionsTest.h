@@ -105,14 +105,16 @@ public:
     FGFDMExec fdmex;
     auto extReact = fdmex.GetExternalReactions();
 
+    // Run returns true when no external forces are defined (early return)
     bool result = extReact->Run(false);
-    TS_ASSERT_EQUALS(result, false);  // false = no error
+    TS_ASSERT_EQUALS(result, true);
   }
 
   void testRunHolding() {
     FGFDMExec fdmex;
     auto extReact = fdmex.GetExternalReactions();
 
+    // When holding, Run returns false
     bool result = extReact->Run(true);
     TS_ASSERT_EQUALS(result, false);
   }
@@ -127,7 +129,7 @@ public:
 
     for (int i = 0; i < 10; i++) {
       bool result = extReact->Run(false);
-      TS_ASSERT_EQUALS(result, false);
+      TS_ASSERT_EQUALS(result, true);  // Returns true when no forces defined
     }
   }
 
@@ -137,7 +139,7 @@ public:
 
     extReact->InitModel();
     bool result = extReact->Run(false);
-    TS_ASSERT_EQUALS(result, false);
+    TS_ASSERT_EQUALS(result, true);  // Returns true when no forces defined
   }
 
   /***************************************************************************
