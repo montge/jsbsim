@@ -69,7 +69,9 @@ set(UNIT_TESTS FGColumnVector3Test
                FGRotorTest
                FGNozzleTest
                FGTransmissionTest
-               FGTurboPropTest)
+               FGTurboPropTest
+               FGWindsTest
+               FGTrimTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
