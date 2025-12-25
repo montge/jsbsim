@@ -10,6 +10,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGGroundCallbackTest
                FGInitialConditionTest
                FGInertialTest
+               FGInertiaTest
                FGPropertyValueTest
                FGTableTest
                FGRealValueTest
@@ -22,6 +23,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGStandardAtmosphereTest
                FGAtmosphericModelTest
                FGAuxiliaryTest
+               FGAirspeedTest
                FGMSISTest
                FGLogTest
                FGNelderMeadTest
@@ -36,6 +38,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGExternalForceTest
                FGThrusterTest
                FGTankTest
+               FGThermodynamicsTest
                FGPIDTest
                FGSensorTest
                FGFilterTest
@@ -84,6 +87,7 @@ set(UNIT_TESTS FGColumnVector3Test
 set(FAST_TESTS FGColumnVector3Test
                FGMatrix33Test
                FGQuaternionTest
+               FGInertiaTest
                FGLocationTest
                FGRealValueTest
                FGTableTest
