@@ -80,7 +80,10 @@ set(UNIT_TESTS FGColumnVector3Test
                FGCoordinatesTest
                FGStabilityTest
                FGControlLawTest
-               FGAeroBodyTest)
+               FGAeroBodyTest
+               FGStateSpaceTest
+               FGHighAOATest
+               FGCompressibleFlowTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
