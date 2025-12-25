@@ -77,6 +77,7 @@ set(UNIT_TESTS FGColumnVector3Test
                FGTransmissionTest
                FGTurboPropTest
                FGWindsTest
+               FGTurbulenceTest
                FGTrimTest
                FGFlightPathTest
                FGCoordinatesTest
@@ -86,7 +87,9 @@ set(UNIT_TESTS FGColumnVector3Test
                FGAeroBodyTest
                FGStateSpaceTest
                FGHighAOATest
-               FGCompressibleFlowTest)
+               FGCompressibleFlowTest
+               FGGroundEffectTest
+               FGPerformanceTest)
 
 
 # Fast test suite - core math and fundamental tests for quick PR checks
