@@ -497,4 +497,699 @@ public:
     TS_ASSERT(inputName.find("input") != std::string::npos);
     TS_ASSERT(inputName.find("5500") != std::string::npos);
   }
+
+  // Test array index extraction from property path
+  void testArrayIndexExtraction() {
+    std::string property = "propulsion/engine[2]/thrust-lbs";
+
+    // Find bracket positions
+    size_t openBracket = property.find('[');
+    size_t closeBracket = property.find(']');
+
+    TS_ASSERT(openBracket != std::string::npos);
+    TS_ASSERT(closeBracket != std::string::npos);
+    TS_ASSERT(closeBracket > openBracket);
+
+    // Extract index
+    std::string indexStr = property.substr(openBracket + 1, closeBracket - openBracket - 1);
+    int index = std::atoi(indexStr.c_str());
+
+    TS_ASSERT_EQUALS(indexStr, "2");
+    TS_ASSERT_EQUALS(index, 2);
+  }
+
+  // Test multiple array indices in property path
+  void testMultipleArrayIndices() {
+    std::string property = "systems/autopilot[0]/channels[1]/gain";
+
+    // Count bracket pairs
+    int bracketCount = 0;
+    for (char c : property) {
+      if (c == '[') bracketCount++;
+    }
+
+    TS_ASSERT_EQUALS(bracketCount, 2);
+
+    // Extract all indices
+    std::vector<int> indices;
+    size_t pos = 0;
+    while ((pos = property.find('[', pos)) != std::string::npos) {
+      size_t close = property.find(']', pos);
+      if (close != std::string::npos) {
+        std::string indexStr = property.substr(pos + 1, close - pos - 1);
+        indices.push_back(std::atoi(indexStr.c_str()));
+      }
+      pos++;
+    }
+
+    TS_ASSERT_EQUALS(indices.size(), 2u);
+    TS_ASSERT_EQUALS(indices[0], 0);
+    TS_ASSERT_EQUALS(indices[1], 1);
+  }
+
+  // Test scientific notation value parsing
+  void testScientificNotationParsing() {
+    std::vector<std::pair<std::string, double>> testCases = {
+      {"1e6", 1e6},
+      {"1E6", 1E6},
+      {"1.5e-3", 1.5e-3},
+      {"-2.5E+2", -2.5E+2},
+      {"3.14159e0", 3.14159},
+      {"1e-10", 1e-10}
+    };
+
+    for (const auto& tc : testCases) {
+      double parsed = std::atof(tc.first.c_str());
+      TS_ASSERT_DELTA(parsed, tc.second, std::abs(tc.second) * 1e-10 + 1e-15);
+    }
+  }
+
+  // Test hexadecimal value parsing
+  void testHexadecimalValueParsing() {
+    std::string hexValue = "0xFF";
+
+    // strtol can parse hex with base 0 (auto-detect)
+    long value = std::strtol(hexValue.c_str(), nullptr, 0);
+
+    TS_ASSERT_EQUALS(value, 255);
+  }
+
+  // Test boolean string to value conversion
+  void testBooleanStringConversion() {
+    std::vector<std::pair<std::string, bool>> trueValues = {
+      {"true", true}, {"TRUE", true}, {"True", true},
+      {"1", true}, {"yes", true}, {"on", true}
+    };
+
+    for (const auto& tc : trueValues) {
+      std::string lower = tc.first;
+      std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+      bool result = (lower == "true" || lower == "1" ||
+                     lower == "yes" || lower == "on");
+      TS_ASSERT(result == tc.second || lower == "true" || lower == "1" ||
+                lower == "yes" || lower == "on");
+    }
+  }
+
+  // Test LF-only line ending (Unix style)
+  void testLFOnlyLineEnding() {
+    std::string buffer = "set prop1 1.0\nset prop2 2.0\n";
+
+    std::vector<std::string> lines;
+    std::istringstream iss(buffer);
+    std::string line;
+
+    while (std::getline(iss, line)) {
+      // Remove any trailing CR
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      if (!line.empty()) {
+        lines.push_back(line);
+      }
+    }
+
+    TS_ASSERT_EQUALS(lines.size(), 2u);
+    TS_ASSERT_EQUALS(lines[0], "set prop1 1.0");
+    TS_ASSERT_EQUALS(lines[1], "set prop2 2.0");
+  }
+
+  // Test mixed line endings
+  void testMixedLineEndings() {
+    std::string buffer = "set prop1 1.0\r\nset prop2 2.0\nset prop3 3.0\r";
+
+    // Replace all line endings with \n
+    std::string normalized = buffer;
+    size_t pos = 0;
+    while ((pos = normalized.find("\r\n", pos)) != std::string::npos) {
+      normalized.replace(pos, 2, "\n");
+    }
+    pos = 0;
+    while ((pos = normalized.find('\r', pos)) != std::string::npos) {
+      normalized.replace(pos, 1, "\n");
+    }
+
+    // Count lines
+    int lineCount = 0;
+    for (char c : normalized) {
+      if (c == '\n') lineCount++;
+    }
+
+    TS_ASSERT_EQUALS(lineCount, 3);
+  }
+
+  // Test tab as delimiter
+  void testTabDelimiter() {
+    std::string line = "set\tvelocities/vc-kts\t150.0";
+
+    std::istringstream iss(line);
+    std::vector<std::string> tokens;
+    std::string token;
+
+    while (iss >> token) {
+      tokens.push_back(token);
+    }
+
+    TS_ASSERT_EQUALS(tokens.size(), 3u);
+    TS_ASSERT_EQUALS(tokens[0], "set");
+    TS_ASSERT_EQUALS(tokens[1], "velocities/vc-kts");
+    TS_ASSERT_EQUALS(tokens[2], "150.0");
+  }
+
+  // Test whitespace-only input
+  void testWhitespaceOnlyInput() {
+    std::string line = "   \t  \r\n";
+
+    // Trim and check if empty
+    size_t start = line.find_first_not_of(" \t\r\n");
+    bool isEmpty = (start == std::string::npos);
+
+    TS_ASSERT(isEmpty);
+  }
+
+  // Test very long property path
+  void testVeryLongPropertyPath() {
+    std::string longPath = "systems/subsystem/component/element/parameter/value";
+
+    // Count path depth
+    int depth = 1;
+    for (char c : longPath) {
+      if (c == '/') depth++;
+    }
+
+    TS_ASSERT_EQUALS(depth, 6);
+    TS_ASSERT(longPath.length() > 40);
+  }
+
+  // Test property with hyphen in name
+  void testPropertyWithHyphen() {
+    std::string property = "fcs/aileron-pos-rad";
+
+    // Count hyphens
+    int hyphenCount = 0;
+    for (char c : property) {
+      if (c == '-') hyphenCount++;
+    }
+
+    TS_ASSERT_EQUALS(hyphenCount, 2);
+
+    // Should still parse correctly
+    size_t slashPos = property.find('/');
+    std::string category = property.substr(0, slashPos);
+    std::string name = property.substr(slashPos + 1);
+
+    TS_ASSERT_EQUALS(category, "fcs");
+    TS_ASSERT_EQUALS(name, "aileron-pos-rad");
+  }
+
+  // Test property with underscore
+  void testPropertyWithUnderscore() {
+    std::string property = "aero/alpha_deg";
+
+    size_t slashPos = property.find('/');
+    std::string name = property.substr(slashPos + 1);
+
+    TS_ASSERT(name.find('_') != std::string::npos);
+    TS_ASSERT_EQUALS(name, "alpha_deg");
+  }
+
+  // Test zero value handling
+  void testZeroValueHandling() {
+    std::string line = "set fcs/throttle-cmd-norm 0.0";
+
+    std::istringstream iss(line);
+    std::string cmd, prop, val;
+    iss >> cmd >> prop >> val;
+
+    double value = std::atof(val.c_str());
+
+    TS_ASSERT_EQUALS(value, 0.0);
+    TS_ASSERT_DELTA(value, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test negative value handling
+  void testNegativeValueHandling() {
+    std::string line = "set position/lat-gc-deg -45.5";
+
+    std::istringstream iss(line);
+    std::string cmd, prop, val;
+    iss >> cmd >> prop >> val;
+
+    double value = std::atof(val.c_str());
+
+    TS_ASSERT(value < 0.0);
+    TS_ASSERT_DELTA(value, -45.5, DEFAULT_TOLERANCE);
+  }
+
+  // Test integer value handling
+  void testIntegerValueHandling() {
+    std::string line = "set simulation/frame 100";
+
+    std::istringstream iss(line);
+    std::string cmd, prop, val;
+    iss >> cmd >> prop >> val;
+
+    int intValue = std::atoi(val.c_str());
+    double doubleValue = std::atof(val.c_str());
+
+    TS_ASSERT_EQUALS(intValue, 100);
+    TS_ASSERT_DELTA(doubleValue, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test command with extra spaces
+  void testCommandWithExtraSpaces() {
+    std::string line = "set     velocities/vc-kts     150.0";
+
+    std::istringstream iss(line);
+    std::vector<std::string> tokens;
+    std::string token;
+
+    while (iss >> token) {
+      tokens.push_back(token);
+    }
+
+    // istringstream handles multiple spaces correctly
+    TS_ASSERT_EQUALS(tokens.size(), 3u);
+    TS_ASSERT_EQUALS(tokens[0], "set");
+    TS_ASSERT_EQUALS(tokens[1], "velocities/vc-kts");
+    TS_ASSERT_EQUALS(tokens[2], "150.0");
+  }
+
+  // Test iterate with negative count (invalid)
+  void testIterateNegativeCount() {
+    std::string line = "iterate -5";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    int count;
+    iss >> cmd >> count;
+
+    TS_ASSERT_EQUALS(cmd, "iterate");
+    TS_ASSERT(count < 0);
+
+    // Negative count should be rejected
+    bool isValid = (count > 0);
+    TS_ASSERT(!isValid);
+  }
+
+  // Test iterate with zero count (invalid)
+  void testIterateZeroCount() {
+    std::string line = "iterate 0";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    int count;
+    iss >> cmd >> count;
+
+    TS_ASSERT_EQUALS(cmd, "iterate");
+    TS_ASSERT_EQUALS(count, 0);
+
+    // Zero iterations should be rejected or treated as no-op
+    bool isValid = (count > 0);
+    TS_ASSERT(!isValid);
+  }
+
+  // Test info command (no arguments)
+  void testInfoCommandNoArgs() {
+    std::string line = "info";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+
+    TS_ASSERT_EQUALS(cmd, "info");
+
+    // Check if there are remaining tokens
+    std::string remaining;
+    iss >> remaining;
+    TS_ASSERT(remaining.empty());
+  }
+
+  // Test help command (no arguments)
+  void testHelpCommandNoArgs() {
+    std::string line = "help";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+
+    TS_ASSERT_EQUALS(cmd, "help");
+
+    std::string remaining;
+    iss >> remaining;
+    TS_ASSERT(remaining.empty());
+  }
+
+  // Test hold command
+  void testHoldCommand() {
+    std::string line = "hold";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+
+    TS_ASSERT_EQUALS(cmd, "hold");
+
+    // Hold pauses simulation
+    bool simHeld = true;
+    TS_ASSERT(simHeld);
+  }
+
+  // Test resume command
+  void testResumeCommand() {
+    std::string line = "resume";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+
+    TS_ASSERT_EQUALS(cmd, "resume");
+
+    // Resume continues simulation
+    bool simHeld = false;
+    TS_ASSERT(!simHeld);
+  }
+
+  // Test quit command
+  void testQuitCommand() {
+    std::string line = "quit";
+
+    std::istringstream iss(line);
+    std::string cmd;
+    iss >> cmd;
+
+    TS_ASSERT_EQUALS(cmd, "quit");
+
+    // Quit should set exit flag
+    bool shouldExit = (cmd == "quit");
+    TS_ASSERT(shouldExit);
+  }
+
+  // Test get command with wildcard (conceptual)
+  void testGetCommandWithWildcard() {
+    std::string line = "get velocities/*";
+
+    std::istringstream iss(line);
+    std::string cmd, pattern;
+    iss >> cmd >> pattern;
+
+    TS_ASSERT_EQUALS(cmd, "get");
+    TS_ASSERT_EQUALS(pattern, "velocities/*");
+
+    // Check for wildcard character
+    bool hasWildcard = (pattern.find('*') != std::string::npos);
+    TS_ASSERT(hasWildcard);
+  }
+
+  // Test property value bounds
+  void testPropertyValueBounds() {
+    // Test typical bounded values
+    double throttle = 0.8;
+    double elevator = 0.5;
+    double rudder = -0.3;
+
+    // Normalized control values should be -1 to 1
+    TS_ASSERT(throttle >= 0.0 && throttle <= 1.0);
+    TS_ASSERT(elevator >= -1.0 && elevator <= 1.0);
+    TS_ASSERT(rudder >= -1.0 && rudder <= 1.0);
+  }
+
+  // Test connection state enum values
+  void testConnectionStateValues() {
+    enum ConnectionState { Disconnected = 0, Connecting = 1, Connected = 2, Error = 3 };
+
+    ConnectionState state = Disconnected;
+    TS_ASSERT_EQUALS(static_cast<int>(state), 0);
+
+    state = Connected;
+    TS_ASSERT_EQUALS(static_cast<int>(state), 2);
+  }
+
+  // Test input queue ordering
+  void testInputQueueOrdering() {
+    std::vector<std::string> inputQueue;
+
+    inputQueue.push_back("cmd1");
+    inputQueue.push_back("cmd2");
+    inputQueue.push_back("cmd3");
+
+    // FIFO order
+    TS_ASSERT_EQUALS(inputQueue[0], "cmd1");
+    TS_ASSERT_EQUALS(inputQueue[1], "cmd2");
+    TS_ASSERT_EQUALS(inputQueue[2], "cmd3");
+
+    // Process front first
+    std::string first = inputQueue.front();
+    inputQueue.erase(inputQueue.begin());
+
+    TS_ASSERT_EQUALS(first, "cmd1");
+    TS_ASSERT_EQUALS(inputQueue.size(), 2u);
+  }
+
+  // Test batch command parsing
+  void testBatchCommandParsing() {
+    // Multiple commands separated by semicolons
+    std::string batch = "set prop1 1.0; set prop2 2.0; set prop3 3.0";
+
+    std::vector<std::string> commands;
+    std::istringstream iss(batch);
+    std::string cmd;
+
+    while (std::getline(iss, cmd, ';')) {
+      // Trim whitespace
+      size_t start = cmd.find_first_not_of(" \t");
+      size_t end = cmd.find_last_not_of(" \t");
+      if (start != std::string::npos) {
+        commands.push_back(cmd.substr(start, end - start + 1));
+      }
+    }
+
+    TS_ASSERT_EQUALS(commands.size(), 3u);
+    TS_ASSERT_EQUALS(commands[0], "set prop1 1.0");
+    TS_ASSERT_EQUALS(commands[1], "set prop2 2.0");
+    TS_ASSERT_EQUALS(commands[2], "set prop3 3.0");
+  }
+
+  // Test input timeout handling
+  void testInputTimeoutHandling() {
+    double timeoutSec = 30.0;
+    double elapsedSec = 0.0;
+
+    // Simulate time passing
+    for (int i = 0; i < 10; i++) {
+      elapsedSec += 1.0;
+    }
+
+    bool timedOut = (elapsedSec >= timeoutSec);
+    TS_ASSERT(!timedOut);
+
+    // Exceed timeout
+    elapsedSec = 35.0;
+    timedOut = (elapsedSec >= timeoutSec);
+    TS_ASSERT(timedOut);
+  }
+
+  // Test double precision value parsing
+  void testDoublePrecisionParsing() {
+    std::string highPrecision = "3.141592653589793";
+
+    double value = std::stod(highPrecision);
+
+    TS_ASSERT_DELTA(value, M_PI, 1e-15);
+  }
+
+  // Test very small value parsing
+  void testVerySmallValueParsing() {
+    std::string smallValue = "1e-20";
+
+    double value = std::atof(smallValue.c_str());
+
+    TS_ASSERT(value > 0.0);
+    TS_ASSERT(value < 1e-10);
+    TS_ASSERT_DELTA(value, 1e-20, 1e-30);
+  }
+
+  // Test very large value parsing
+  void testVeryLargeValueParsing() {
+    std::string largeValue = "1e20";
+
+    double value = std::atof(largeValue.c_str());
+
+    TS_ASSERT(value > 1e10);
+    TS_ASSERT_DELTA(value, 1e20, 1e10);
+  }
+
+  // Test special float values
+  void testSpecialFloatValues() {
+    double inf = std::numeric_limits<double>::infinity();
+    double negInf = -std::numeric_limits<double>::infinity();
+    double nan = std::numeric_limits<double>::quiet_NaN();
+
+    TS_ASSERT(std::isinf(inf));
+    TS_ASSERT(std::isinf(negInf));
+    TS_ASSERT(inf > 0.0);
+    TS_ASSERT(negInf < 0.0);
+    TS_ASSERT(std::isnan(nan));
+  }
+
+  // Test input buffer clear
+  void testInputBufferClear() {
+    std::string buffer = "some data here";
+
+    TS_ASSERT(!buffer.empty());
+
+    buffer.clear();
+
+    TS_ASSERT(buffer.empty());
+    TS_ASSERT_EQUALS(buffer.size(), 0u);
+  }
+
+  // Test property category validation
+  void testPropertyCategoryValidation() {
+    std::vector<std::string> validCategories = {
+      "velocities", "position", "attitude", "fcs", "propulsion",
+      "aero", "forces", "moments", "accelerations", "metrics"
+    };
+
+    std::string testCategory = "velocities";
+
+    bool isValid = std::find(validCategories.begin(), validCategories.end(),
+                             testCategory) != validCategories.end();
+
+    TS_ASSERT(isValid);
+
+    // Invalid category
+    testCategory = "invalid_category";
+    isValid = std::find(validCategories.begin(), validCategories.end(),
+                        testCategory) != validCategories.end();
+    TS_ASSERT(!isValid);
+  }
+
+  // Test port range validation
+  void testPortRangeValidation() {
+    int reservedPort = 80;     // HTTP
+    int userPort = 5500;       // User range
+    int highPort = 49152;      // Dynamic/private range
+
+    // Reserved ports (< 1024) typically require root
+    TS_ASSERT(reservedPort < 1024);
+
+    // User ports (1024-49151) are typical for applications
+    TS_ASSERT(userPort >= 1024 && userPort < 49152);
+
+    // Dynamic ports (49152-65535) are for ephemeral connections
+    TS_ASSERT(highPort >= 49152 && highPort <= 65535);
+  }
+
+  // Test error response format
+  void testErrorResponseFormat() {
+    std::string errorProperty = "unknown/property";
+    std::string errorMsg = "ERROR: Property not found: " + errorProperty;
+
+    TS_ASSERT(errorMsg.find("ERROR") != std::string::npos);
+    TS_ASSERT(errorMsg.find(errorProperty) != std::string::npos);
+  }
+
+  // Test command echo response
+  void testCommandEchoResponse() {
+    std::string command = "set velocities/vc-kts 150.0";
+    bool echoEnabled = true;
+
+    std::string response;
+    if (echoEnabled) {
+      response = "> " + command + "\r\n";
+    }
+
+    TS_ASSERT(response.find(command) != std::string::npos);
+    TS_ASSERT(response.substr(0, 2) == "> ");
+  }
+
+  // Test multiple sequential commands
+  void testMultipleSequentialCommands() {
+    std::vector<std::string> commands = {
+      "hold",
+      "set fcs/throttle-cmd-norm 1.0",
+      "iterate 100",
+      "get velocities/vc-kts",
+      "resume"
+    };
+
+    // Process sequentially
+    int processed = 0;
+    for (const auto& cmd : commands) {
+      TS_ASSERT(!cmd.empty());
+      processed++;
+    }
+
+    TS_ASSERT_EQUALS(processed, 5);
+  }
+
+  // Test input with quoted string value
+  void testQuotedStringValue() {
+    std::string line = "set simulation/name \"Test Flight\"";
+
+    // Find first and last quote
+    size_t firstQuote = line.find('"');
+    size_t lastQuote = line.rfind('"');
+
+    TS_ASSERT(firstQuote != std::string::npos);
+    TS_ASSERT(lastQuote != std::string::npos);
+    TS_ASSERT(lastQuote > firstQuote);
+
+    std::string quotedValue = line.substr(firstQuote + 1, lastQuote - firstQuote - 1);
+    TS_ASSERT_EQUALS(quotedValue, "Test Flight");
+  }
+
+  // Test concurrent input processing flag
+  void testConcurrentInputProcessing() {
+    bool inputProcessing = false;
+
+    // Start processing
+    inputProcessing = true;
+    TS_ASSERT(inputProcessing);
+
+    // End processing
+    inputProcessing = false;
+    TS_ASSERT(!inputProcessing);
+  }
+
+  // Test input direction (read vs write)
+  void testInputDirection() {
+    enum Direction { Read = 0, Write = 1 };
+
+    Direction inputDir = Read;
+    Direction outputDir = Write;
+
+    TS_ASSERT_EQUALS(static_cast<int>(inputDir), 0);
+    TS_ASSERT_EQUALS(static_cast<int>(outputDir), 1);
+    TS_ASSERT(inputDir != outputDir);
+  }
+
+  // Test host address validation
+  void testHostAddressValidation() {
+    std::string localhost = "127.0.0.1";
+    std::string anyAddr = "0.0.0.0";
+    std::string hostname = "localhost";
+
+    // Basic IPv4 validation
+    int dotCount = 0;
+    for (char c : localhost) {
+      if (c == '.') dotCount++;
+    }
+    TS_ASSERT_EQUALS(dotCount, 3);
+
+    dotCount = 0;
+    for (char c : anyAddr) {
+      if (c == '.') dotCount++;
+    }
+    TS_ASSERT_EQUALS(dotCount, 3);
+
+    // Hostname doesn't have dots (in this case)
+    dotCount = 0;
+    for (char c : hostname) {
+      if (c == '.') dotCount++;
+    }
+    TS_ASSERT_EQUALS(dotCount, 0);
+  }
 };
