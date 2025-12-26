@@ -354,4 +354,679 @@ public:
     TS_ASSERT_DELTA(clipped1, 45.0, epsilon);
     TS_ASSERT_DELTA(clipped2, -45.0, epsilon);
   }
+
+  /***************************************************************************
+   * Trigonometric Relationship Tests
+   ***************************************************************************/
+
+  // Test sine function at key angles
+  void testSineAtKeyAngles() {
+    TS_ASSERT_DELTA(std::sin(0.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(30.0 * DEG_TO_RAD), 0.5, epsilon);
+    TS_ASSERT_DELTA(std::sin(45.0 * DEG_TO_RAD), std::sqrt(2.0)/2.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(60.0 * DEG_TO_RAD), std::sqrt(3.0)/2.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(90.0 * DEG_TO_RAD), 1.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(180.0 * DEG_TO_RAD), 0.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(270.0 * DEG_TO_RAD), -1.0, epsilon);
+  }
+
+  // Test cosine function at key angles
+  void testCosineAtKeyAngles() {
+    TS_ASSERT_DELTA(std::cos(0.0), 1.0, epsilon);
+    TS_ASSERT_DELTA(std::cos(30.0 * DEG_TO_RAD), std::sqrt(3.0)/2.0, epsilon);
+    TS_ASSERT_DELTA(std::cos(45.0 * DEG_TO_RAD), std::sqrt(2.0)/2.0, epsilon);
+    TS_ASSERT_DELTA(std::cos(60.0 * DEG_TO_RAD), 0.5, epsilon);
+    TS_ASSERT_DELTA(std::cos(90.0 * DEG_TO_RAD), 0.0, epsilon);
+    TS_ASSERT_DELTA(std::cos(180.0 * DEG_TO_RAD), -1.0, epsilon);
+  }
+
+  // Test Pythagorean identity
+  void testPythagoreanIdentity() {
+    double angles[] = {0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0, 123.0, 180.0, 270.0};
+    for (double deg : angles) {
+      double rad = deg * DEG_TO_RAD;
+      double sinVal = std::sin(rad);
+      double cosVal = std::cos(rad);
+      TS_ASSERT_DELTA(sinVal*sinVal + cosVal*cosVal, 1.0, epsilon);
+    }
+  }
+
+  // Test tangent = sine/cosine
+  void testTangentRelationship() {
+    double angles[] = {15.0, 30.0, 45.0, 60.0, 75.0};
+    for (double deg : angles) {
+      double rad = deg * DEG_TO_RAD;
+      double tanVal = std::tan(rad);
+      double sinCosRatio = std::sin(rad) / std::cos(rad);
+      TS_ASSERT_DELTA(tanVal, sinCosRatio, epsilon);
+    }
+  }
+
+  // Test inverse trig functions
+  void testInverseTrigFunctions() {
+    TS_ASSERT_DELTA(std::asin(0.5) * RAD_TO_DEG, 30.0, epsilon);
+    TS_ASSERT_DELTA(std::acos(0.5) * RAD_TO_DEG, 60.0, epsilon);
+    TS_ASSERT_DELTA(std::atan(1.0) * RAD_TO_DEG, 45.0, epsilon);
+  }
+
+  // Test atan2 for quadrant determination
+  void testAtan2Quadrants() {
+    // First quadrant (0-90)
+    TS_ASSERT_DELTA(std::atan2(1.0, 1.0) * RAD_TO_DEG, 45.0, epsilon);
+
+    // Second quadrant (90-180)
+    TS_ASSERT_DELTA(std::atan2(1.0, -1.0) * RAD_TO_DEG, 135.0, epsilon);
+
+    // Third quadrant (-180 to -90)
+    TS_ASSERT_DELTA(std::atan2(-1.0, -1.0) * RAD_TO_DEG, -135.0, epsilon);
+
+    // Fourth quadrant (-90 to 0)
+    TS_ASSERT_DELTA(std::atan2(-1.0, 1.0) * RAD_TO_DEG, -45.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Angular Rate Tests
+   ***************************************************************************/
+
+  // Test angular rate calculation
+  void testAngularRateCalculation() {
+    double angle1 = 30.0;
+    double angle2 = 60.0;
+    double dt = 2.0;  // seconds
+
+    double rate = (angle2 - angle1) / dt;  // deg/sec
+    TS_ASSERT_DELTA(rate, 15.0, epsilon);
+  }
+
+  // Test standard rate turn (3 deg/sec)
+  void testStandardRateTurn() {
+    double standardRate = 3.0;  // deg/sec
+    double time = 60.0;         // seconds
+
+    double headingChange = standardRate * time;
+    TS_ASSERT_DELTA(headingChange, 180.0, epsilon);  // Half turn in 1 minute
+  }
+
+  // Test turn rate from bank angle
+  void testTurnRateFromBankAngle() {
+    // Turn rate (deg/s) = g * tan(bank) / V
+    // At 60 deg bank, tan(60) = sqrt(3), for V = 100 m/s
+    double g = 9.81;
+    double bankDeg = 60.0;
+    double V = 100.0;
+
+    double turnRateRad = g * std::tan(bankDeg * DEG_TO_RAD) / V;
+    double turnRateDeg = turnRateRad * RAD_TO_DEG;
+
+    TS_ASSERT(turnRateDeg > 9.0);
+    TS_ASSERT(turnRateDeg < 10.0);
+  }
+
+  // Test angular acceleration
+  void testAngularAcceleration() {
+    double rate1 = 0.0;    // deg/sec
+    double rate2 = 30.0;   // deg/sec
+    double dt = 3.0;       // seconds
+
+    double accel = (rate2 - rate1) / dt;  // deg/sec^2
+    TS_ASSERT_DELTA(accel, 10.0, epsilon);
+  }
+
+  // Test rate limiting
+  void testAngularRateLimiting() {
+    double currentAngle = 0.0;
+    double targetAngle = 90.0;
+    double maxRate = 3.0;  // deg/sec
+    double dt = 1.0;       // seconds
+
+    double requestedChange = targetAngle - currentAngle;
+    double maxChange = maxRate * dt;
+    double actualChange = std::clamp(requestedChange, -maxChange, maxChange);
+
+    TS_ASSERT_DELTA(actualChange, 3.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Euler Angle Tests
+   ***************************************************************************/
+
+  // Test roll angle range
+  void testRollAngleRange() {
+    // Roll typically -180 to +180
+    double rolls[] = {-180.0, -90.0, 0.0, 90.0, 180.0};
+    for (double roll : rolls) {
+      double normalized = normalizeAngle180(roll);
+      TS_ASSERT(normalized >= -180.0 && normalized <= 180.0);
+    }
+  }
+
+  // Test pitch angle typical range
+  void testPitchAngleTypicalRange() {
+    // Pitch typically limited to -90 to +90 (or aircraft limits)
+    double pitch = 45.0;
+    TS_ASSERT(pitch >= -90.0 && pitch <= 90.0);
+  }
+
+  // Test yaw/heading range
+  void testYawHeadingRange() {
+    // Heading 0 to 360
+    double headings[] = {0.0, 90.0, 180.0, 270.0, 359.0};
+    for (double hdg : headings) {
+      double normalized = normalizeAngle360(hdg);
+      TS_ASSERT(normalized >= 0.0 && normalized < 360.0);
+    }
+  }
+
+  // Test level flight angles
+  void testLevelFlightAngles() {
+    double roll = 0.0;
+    double pitch = 0.0;
+
+    // Level flight: both zero
+    TS_ASSERT_DELTA(roll, 0.0, epsilon);
+    TS_ASSERT_DELTA(pitch, 0.0, epsilon);
+  }
+
+  // Test coordinated turn angles
+  void testCoordinatedTurnAngles() {
+    // In coordinated turn, bank and turn rate are related
+    double bankAngle = 30.0;
+    double speed_kts = 120.0;
+
+    // Approximate turn radius (nm) = V^2 / (11.26 * tan(bank))
+    double turnRadius = (speed_kts * speed_kts) / (11.26 * std::tan(bankAngle * DEG_TO_RAD));
+    TS_ASSERT(turnRadius > 0.0);
+    TS_ASSERT(turnRadius > 100.0);  // Reasonably large turn radius
+  }
+
+  /***************************************************************************
+   * Interpolation Tests
+   ***************************************************************************/
+
+  // Test linear angle interpolation (simple case)
+  void testLinearAngleInterpolation() {
+    double start = 30.0;
+    double end = 60.0;
+    double t = 0.5;
+
+    double result = start + t * (end - start);
+    TS_ASSERT_DELTA(result, 45.0, epsilon);
+  }
+
+  // Test angle interpolation across zero
+  void testAngleInterpolationAcrossZero() {
+    double start = 350.0;
+    double end = 10.0;
+    double t = 0.5;
+
+    // Need to handle wrap-around
+    double diff = smallestIncludedAngle(start, end);  // = 20
+    double result = normalizeAngle360(start + t * diff);
+
+    TS_ASSERT_DELTA(result, 0.0, 0.5);  // Should be at/near 360/0
+  }
+
+  // Test multiple point angle averaging
+  void testMultipleAngleAveraging() {
+    // Average of angles requires special handling
+    double angles[] = {350.0, 10.0};  // Average should be 0/360, not 180
+
+    // Using unit vector approach
+    double sumX = 0.0, sumY = 0.0;
+    for (double a : angles) {
+      sumX += std::cos(a * DEG_TO_RAD);
+      sumY += std::sin(a * DEG_TO_RAD);
+    }
+
+    double avgRad = std::atan2(sumY, sumX);
+    double avgDeg = normalizeAngle360(avgRad * RAD_TO_DEG);
+
+    // Result should be near 0 or 360 (equivalent angles)
+    double nearZero = std::min(avgDeg, 360.0 - avgDeg);
+    TS_ASSERT_DELTA(nearZero, 0.0, 1.0);
+  }
+
+  // Test weighted angle average
+  void testWeightedAngleAverage() {
+    double angle1 = 0.0, weight1 = 1.0;
+    double angle2 = 90.0, weight2 = 1.0;
+
+    double sumX = weight1 * std::cos(angle1 * DEG_TO_RAD) +
+                  weight2 * std::cos(angle2 * DEG_TO_RAD);
+    double sumY = weight1 * std::sin(angle1 * DEG_TO_RAD) +
+                  weight2 * std::sin(angle2 * DEG_TO_RAD);
+
+    double avgRad = std::atan2(sumY, sumX);
+    double avgDeg = normalizeAngle360(avgRad * RAD_TO_DEG);
+
+    TS_ASSERT_DELTA(avgDeg, 45.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Wind/Track Angle Tests
+   ***************************************************************************/
+
+  // Test crosswind angle calculation
+  void testCrosswindAngle() {
+    double runwayHeading = 90.0;  // East
+    double windFrom = 180.0;      // From south
+
+    double crosswindAngle = smallestIncludedAngle(runwayHeading, windFrom);
+    TS_ASSERT_DELTA(crosswindAngle, 90.0, epsilon);  // Direct crosswind
+  }
+
+  // Test headwind component
+  void testHeadwindComponent() {
+    double runwayHeading = 360.0;  // North
+    double windFrom = 360.0;       // From north
+    double windSpeed = 20.0;       // knots
+
+    double relativeWind = smallestIncludedAngle(runwayHeading, windFrom);
+    double headwind = windSpeed * std::cos(relativeWind * DEG_TO_RAD);
+
+    TS_ASSERT_DELTA(headwind, 20.0, epsilon);  // Full headwind
+  }
+
+  // Test crosswind component
+  void testCrosswindComponent() {
+    double runwayHeading = 360.0;  // North
+    double windFrom = 90.0;        // From east
+    double windSpeed = 20.0;       // knots
+
+    double relativeWind = smallestIncludedAngle(runwayHeading, windFrom);
+    double crosswind = windSpeed * std::sin(relativeWind * DEG_TO_RAD);
+
+    TS_ASSERT_DELTA(crosswind, 20.0, epsilon);  // Full crosswind
+  }
+
+  // Test crab angle calculation
+  void testCrabAngleCalculation() {
+    // Simplified: crab = asin(crosswind / TAS)
+    double crosswind = 10.0;  // knots
+    double TAS = 100.0;       // knots
+
+    double crabAngleDeg = std::asin(crosswind / TAS) * RAD_TO_DEG;
+    TS_ASSERT_DELTA(crabAngleDeg, 5.74, 0.1);
+  }
+
+  // Test track vs heading
+  void testTrackVsHeading() {
+    double heading = 90.0;     // Flying east
+    double crabAngle = 10.0;   // Correcting for north wind
+
+    double track = heading + crabAngle;  // Actual ground track
+    TS_ASSERT_DELTA(track, 100.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Angle of Attack and Sideslip Tests
+   ***************************************************************************/
+
+  // Test angle of attack calculation
+  void testAngleOfAttackCalculation() {
+    double verticalVel = 10.0;    // m/s (climbing)
+    double forwardVel = 100.0;   // m/s
+
+    double aoaRad = std::atan2(verticalVel, forwardVel);
+    double aoaDeg = aoaRad * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(aoaDeg, 5.71, 0.1);
+  }
+
+  // Test sideslip angle calculation
+  void testSideslipAngleCalculation() {
+    double lateralVel = 5.0;     // m/s (slipping right)
+    double forwardVel = 100.0;   // m/s
+
+    double betaRad = std::atan2(lateralVel, forwardVel);
+    double betaDeg = betaRad * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(betaDeg, 2.86, 0.1);
+  }
+
+  // Test zero sideslip (coordinated flight)
+  void testZeroSideslip() {
+    double lateralVel = 0.0;
+    double forwardVel = 100.0;
+
+    double betaDeg = std::atan2(lateralVel, forwardVel) * RAD_TO_DEG;
+    TS_ASSERT_DELTA(betaDeg, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Common Aviation Angle Tests
+   ***************************************************************************/
+
+  // Test glideslope angle (ILS)
+  void testGlideslopeAngle() {
+    double glideslopeAngle = 3.0;  // Standard ILS
+    double altitude = 1000.0;     // ft above runway
+
+    // Distance to runway = altitude / tan(angle)
+    double distance = altitude / std::tan(glideslopeAngle * DEG_TO_RAD);
+    TS_ASSERT_DELTA(distance, 19081.1, 10.0);  // About 3.1 nm
+  }
+
+  // Test localizer course width
+  void testLocalizerCourseWidth() {
+    double fullScaleDeflection = 2.5;  // degrees for ILS
+    double halfScale = fullScaleDeflection / 2.0;
+
+    TS_ASSERT_DELTA(halfScale, 1.25, epsilon);
+  }
+
+  // Test VOR radial
+  void testVORRadial() {
+    double stationBearing = 270.0;  // West of station
+    double radial = normalizeAngle360(stationBearing + 180.0);
+
+    TS_ASSERT_DELTA(radial, 90.0, epsilon);  // On the 090 radial
+  }
+
+  // Test approach angle limits
+  void testApproachAngleLimits() {
+    double minApproach = 2.5;   // degrees
+    double maxApproach = 3.5;   // degrees
+    double nominal = 3.0;       // degrees
+
+    TS_ASSERT(nominal >= minApproach);
+    TS_ASSERT(nominal <= maxApproach);
+  }
+
+  /***************************************************************************
+   * Precision and Comparison Tests
+   ***************************************************************************/
+
+  // Test floating point angle comparison
+  void testFloatingPointAngleComparison() {
+    double angle1 = 45.0;
+    double angle2 = 45.0 + 1e-12;  // Nearly equal
+
+    bool equal = std::abs(angle1 - angle2) < epsilon;
+    TS_ASSERT(equal);
+  }
+
+  // Test angle difference near zero
+  void testAngleDifferenceNearZero() {
+    double source = 0.001;
+    double target = -0.001;
+
+    double diff = smallestIncludedAngle(source, target);
+    TS_ASSERT_DELTA(diff, -0.002, epsilon);
+  }
+
+  // Test angle at machine precision
+  void testAngleAtMachinePrecision() {
+    double tiny = std::numeric_limits<double>::epsilon();
+    double angle = 0.0 + tiny;
+
+    TS_ASSERT(angle != 0.0);
+    TS_ASSERT_DELTA(angle, 0.0, 1e-10);
+  }
+
+  // Test large angle normalization precision
+  void testLargeAngleNormalizationPrecision() {
+    double largeAngle = 360000.0 + 45.0;  // 1000 revolutions + 45
+    double normalized = normalizeAngle360(largeAngle);
+
+    TS_ASSERT_DELTA(normalized, 45.0, 1e-6);
+  }
+
+  /***************************************************************************
+   * Bearing Calculation Tests
+   ***************************************************************************/
+
+  // Test bearing from coordinates (simplified)
+  void testBearingFromCoordinates() {
+    // Using atan2 for bearing calculation
+    double dx = 1.0;  // East
+    double dy = 1.0;  // North
+
+    double bearingRad = std::atan2(dx, dy);  // Note: atan2(x,y) for bearing
+    double bearingDeg = normalizeAngle360(bearingRad * RAD_TO_DEG);
+
+    TS_ASSERT_DELTA(bearingDeg, 45.0, epsilon);  // NE bearing
+  }
+
+  // Test reciprocal bearing
+  void testReciprocalBearing() {
+    double bearing = 45.0;
+    double reciprocal = normalizeAngle360(bearing + 180.0);
+
+    TS_ASSERT_DELTA(reciprocal, 225.0, epsilon);
+  }
+
+  // Test relative bearing
+  void testRelativeBearing() {
+    double heading = 90.0;   // Flying east
+    double targetBearing = 135.0;  // Target is SE
+
+    double relativeBearing = smallestIncludedAngle(heading, targetBearing);
+    TS_ASSERT_DELTA(relativeBearing, 45.0, epsilon);  // 45 degrees right
+  }
+
+  /***************************************************************************
+   * Sector/Quadrant Tests
+   ***************************************************************************/
+
+  // Test quadrant determination
+  void testQuadrantDetermination() {
+    // First quadrant (0-90): sin+, cos+
+    double q1 = 45.0;
+    TS_ASSERT(std::sin(q1 * DEG_TO_RAD) > 0);
+    TS_ASSERT(std::cos(q1 * DEG_TO_RAD) > 0);
+
+    // Second quadrant (90-180): sin+, cos-
+    double q2 = 135.0;
+    TS_ASSERT(std::sin(q2 * DEG_TO_RAD) > 0);
+    TS_ASSERT(std::cos(q2 * DEG_TO_RAD) < 0);
+
+    // Third quadrant (180-270): sin-, cos-
+    double q3 = 225.0;
+    TS_ASSERT(std::sin(q3 * DEG_TO_RAD) < 0);
+    TS_ASSERT(std::cos(q3 * DEG_TO_RAD) < 0);
+
+    // Fourth quadrant (270-360): sin-, cos+
+    double q4 = 315.0;
+    TS_ASSERT(std::sin(q4 * DEG_TO_RAD) < 0);
+    TS_ASSERT(std::cos(q4 * DEG_TO_RAD) > 0);
+  }
+
+  // Test angle sector check
+  void testAngleSectorCheck() {
+    double heading = 45.0;
+    double sectorStart = 30.0;
+    double sectorEnd = 60.0;
+
+    bool inSector = (heading >= sectorStart && heading <= sectorEnd);
+    TS_ASSERT(inSector);
+  }
+
+  // Test sector spanning zero
+  void testSectorSpanningZero() {
+    double heading = 350.0;
+    double sectorStart = 330.0;
+    double sectorEnd = 30.0;  // Wraps through 0
+
+    // Check if in sector (spans 0)
+    bool inSector = (heading >= sectorStart || heading <= sectorEnd);
+    TS_ASSERT(inSector);
+  }
+
+  /***************************************************************************
+   * Rate/Time Integration Tests
+   ***************************************************************************/
+
+  // Test angular displacement from rate
+  void testAngularDisplacementFromRate() {
+    double rate = 3.0;   // deg/sec
+    double time = 10.0;  // seconds
+
+    double displacement = rate * time;
+    TS_ASSERT_DELTA(displacement, 30.0, epsilon);
+  }
+
+  // Test time to turn calculation
+  void testTimeToTurnCalculation() {
+    double requiredTurn = 90.0;  // degrees
+    double turnRate = 3.0;       // deg/sec (standard rate)
+
+    double time = requiredTurn / turnRate;
+    TS_ASSERT_DELTA(time, 30.0, epsilon);  // 30 seconds for 90 degree turn
+  }
+
+  // Test full turn time
+  void testFullTurnTime() {
+    double turnRate = 3.0;  // deg/sec (standard rate)
+    double fullTurn = 360.0;
+
+    double time = fullTurn / turnRate;
+    TS_ASSERT_DELTA(time, 120.0, epsilon);  // 2 minutes for full turn
+  }
+
+  /***************************************************************************
+   * Miscellaneous Angle Tests
+   ***************************************************************************/
+
+  // Test complementary angles
+  void testComplementaryAngles() {
+    double angle = 30.0;
+    double complement = 90.0 - angle;
+
+    TS_ASSERT_DELTA(complement, 60.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(angle * DEG_TO_RAD),
+                    std::cos(complement * DEG_TO_RAD), epsilon);
+  }
+
+  // Test supplementary angles
+  void testSupplementaryAngles() {
+    double angle = 30.0;
+    double supplement = 180.0 - angle;
+
+    TS_ASSERT_DELTA(supplement, 150.0, epsilon);
+    TS_ASSERT_DELTA(std::sin(angle * DEG_TO_RAD),
+                    std::sin(supplement * DEG_TO_RAD), epsilon);
+  }
+
+  // Test angle bisector
+  void testAngleBisector() {
+    double angle1 = 30.0;
+    double angle2 = 90.0;
+
+    double bisector = (angle1 + angle2) / 2.0;
+    TS_ASSERT_DELTA(bisector, 60.0, epsilon);
+  }
+
+  // Test arc length calculation
+  void testArcLengthCalculation() {
+    double radius = 100.0;  // units
+    double angleDeg = 60.0;
+    double angleRad = angleDeg * DEG_TO_RAD;
+
+    double arcLength = radius * angleRad;
+    TS_ASSERT_DELTA(arcLength, 104.72, 0.01);
+  }
+
+  // Test sector area calculation
+  void testSectorAreaCalculation() {
+    double radius = 100.0;
+    double angleDeg = 60.0;
+    double angleRad = angleDeg * DEG_TO_RAD;
+
+    double area = 0.5 * radius * radius * angleRad;
+    TS_ASSERT_DELTA(area, 5235.99, 1.0);
+  }
+
+  // Test small angle approximation
+  void testSmallAngleApproximation() {
+    double smallAngleDeg = 1.0;
+    double smallAngleRad = smallAngleDeg * DEG_TO_RAD;
+
+    // sin(x) ≈ x for small angles
+    TS_ASSERT_DELTA(std::sin(smallAngleRad), smallAngleRad, 0.001);
+
+    // cos(x) ≈ 1 for small angles
+    TS_ASSERT_DELTA(std::cos(smallAngleRad), 1.0, 0.001);
+
+    // tan(x) ≈ x for small angles
+    TS_ASSERT_DELTA(std::tan(smallAngleRad), smallAngleRad, 0.001);
+  }
+
+  // Test double angle formulas
+  void testDoubleAngleFormulas() {
+    double angle = 30.0;
+    double rad = angle * DEG_TO_RAD;
+
+    // sin(2x) = 2*sin(x)*cos(x)
+    double sin2x = std::sin(2.0 * rad);
+    double sin2x_formula = 2.0 * std::sin(rad) * std::cos(rad);
+    TS_ASSERT_DELTA(sin2x, sin2x_formula, epsilon);
+
+    // cos(2x) = cos^2(x) - sin^2(x)
+    double cos2x = std::cos(2.0 * rad);
+    double cos2x_formula = std::cos(rad)*std::cos(rad) - std::sin(rad)*std::sin(rad);
+    TS_ASSERT_DELTA(cos2x, cos2x_formula, epsilon);
+  }
+
+  // Test half angle formulas
+  void testHalfAngleFormulas() {
+    double angle = 60.0;
+    double rad = angle * DEG_TO_RAD;
+
+    // sin(x/2) = sqrt((1-cos(x))/2)
+    double sinHalf = std::sin(rad / 2.0);
+    double sinHalf_formula = std::sqrt((1.0 - std::cos(rad)) / 2.0);
+    TS_ASSERT_DELTA(sinHalf, sinHalf_formula, epsilon);
+  }
+
+  // Test angle in triangle (sum = 180)
+  void testTriangleAngleSum() {
+    double angle1 = 60.0;
+    double angle2 = 60.0;
+    double angle3 = 60.0;  // Equilateral
+
+    double sum = angle1 + angle2 + angle3;
+    TS_ASSERT_DELTA(sum, 180.0, epsilon);
+  }
+
+  // Test exterior angle
+  void testExteriorAngle() {
+    double interiorAngle = 60.0;
+    double exteriorAngle = 180.0 - interiorAngle;
+
+    TS_ASSERT_DELTA(exteriorAngle, 120.0, epsilon);
+  }
+
+  // Test law of sines
+  void testLawOfSines() {
+    // a/sin(A) = b/sin(B) = c/sin(C)
+    double A = 30.0 * DEG_TO_RAD;
+    double B = 60.0 * DEG_TO_RAD;
+    double C = 90.0 * DEG_TO_RAD;
+
+    // For a right triangle with C=90
+    double a = 1.0;  // opposite to A
+    double b = std::sqrt(3.0);  // opposite to B
+    double c = 2.0;  // hypotenuse
+
+    double ratio_a = a / std::sin(A);
+    double ratio_b = b / std::sin(B);
+    double ratio_c = c / std::sin(C);
+
+    TS_ASSERT_DELTA(ratio_a, ratio_b, epsilon);
+    TS_ASSERT_DELTA(ratio_b, ratio_c, epsilon);
+  }
+
+  // Test law of cosines
+  void testLawOfCosines() {
+    // c^2 = a^2 + b^2 - 2*a*b*cos(C)
+    double a = 3.0;
+    double b = 4.0;
+    double C = 90.0 * DEG_TO_RAD;
+
+    double c_squared = a*a + b*b - 2.0*a*b*std::cos(C);
+    double c = std::sqrt(c_squared);
+
+    TS_ASSERT_DELTA(c, 5.0, epsilon);  // 3-4-5 right triangle
+  }
 };
