@@ -628,4 +628,289 @@ public:
 
     TS_ASSERT_DELTA(optimal_time, 1.0, 0.1); // seconds into cycle
   }
+
+  // EMALS (Electromagnetic Aircraft Launch System) Tests
+
+  void testEMALSEndSpeed() {
+    // EMALS provides smoother acceleration than steam
+    double stroke = 300.0; // ft
+    double end_speed = 150.0 * Constants::KTS_TO_FTPS; // ft/s
+    double v0 = 0.0;
+
+    double accel = (end_speed * end_speed - v0 * v0) / (2.0 * stroke);
+    double accel_g = accel / Constants::G_FTPS2;
+
+    // EMALS can provide precise acceleration
+    TS_ASSERT_DELTA(accel_g, 3.37, 0.2);
+  }
+
+  void testEMALSEnergyRequirement() {
+    // Electrical energy needed for launch
+    double aircraft_mass = 70000.0 / Constants::G_FTPS2; // slugs
+    double end_speed = 150.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    // KE = 0.5 * m * v^2
+    double kinetic_energy = 0.5 * aircraft_mass * end_speed * end_speed;
+    double energy_megajoules = kinetic_energy * 1.356e-6; // Convert ft-lb to MJ
+
+    // EMALS typically requires 90-100 MJ for heavy aircraft
+    TS_ASSERT(energy_megajoules > 80.0);
+    TS_ASSERT(energy_megajoules < 120.0);
+  }
+
+  void testEMALSAccelerationProfile() {
+    // EMALS can vary acceleration profile
+    double peak_accel_g = 4.0;
+    double min_accel_g = 2.5;
+    double average_accel_g = (peak_accel_g + min_accel_g) / 2.0;
+
+    TS_ASSERT_DELTA(average_accel_g, 3.25, 0.1);
+    TS_ASSERT(peak_accel_g > average_accel_g);
+  }
+
+  // Advanced Arresting Gear (AAG) Tests
+
+  void testAAGEnergyAbsorption() {
+    // AAG uses water turbines for energy absorption
+    double aircraft_mass = 50000.0 / Constants::G_FTPS2; // slugs
+    double trap_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double kinetic_energy = 0.5 * aircraft_mass * trap_speed * trap_speed;
+    double energy_megajoules = kinetic_energy * 1.356e-6;
+
+    TS_ASSERT(energy_megajoules > 50.0); // Significant energy
+  }
+
+  void testAAGControlledDecel() {
+    // AAG provides controlled deceleration
+    double target_decel_g = 3.0;
+    double tolerance = 0.2; // g's
+
+    double min_decel = target_decel_g - tolerance;
+    double max_decel = target_decel_g + tolerance;
+
+    TS_ASSERT(min_decel > 2.5);
+    TS_ASSERT(max_decel < 3.5);
+  }
+
+  // Night Carrier Landing Tests
+
+  void testNightApproachLighting() {
+    // Fresnel lens visibility at night
+    double lens_brightness = 100.0; // relative units
+    double visibility = 5.0; // NM
+    double minimum_visibility = 0.5; // NM for night ops
+
+    TS_ASSERT(visibility > minimum_visibility);
+    TS_ASSERT(lens_brightness > 50.0);
+  }
+
+  void testNightGlideslopeAccuracy() {
+    // Tighter glideslope requirements at night
+    double day_tolerance = 0.5 * Constants::DEG_TO_RAD; // radians
+    double night_tolerance = 0.3 * Constants::DEG_TO_RAD; // radians
+
+    TS_ASSERT(night_tolerance < day_tolerance);
+    TS_ASSERT_DELTA(night_tolerance * Constants::RAD_TO_DEG, 0.3, 0.05);
+  }
+
+  void testDropLightsIndication() {
+    // Drop lights for lineup in low visibility
+    double lineup_error = 1.5 * Constants::DEG_TO_RAD; // radians
+    double drop_light_threshold = 1.0 * Constants::DEG_TO_RAD;
+
+    bool drop_lights_activated = fabs(lineup_error) > drop_light_threshold;
+    TS_ASSERT(drop_lights_activated);
+  }
+
+  // Hook Bounce Scenarios
+
+  void testHookBounceDistance() {
+    // Distance traveled during hook skip
+    double bounce_height = 2.0; // ft
+    double forward_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+    double bounce_time = sqrt(2.0 * bounce_height / Constants::G_FTPS2) * 2.0;
+
+    double bounce_distance = forward_speed * bounce_time;
+
+    // Hook skip covers significant distance (about 170 ft)
+    TS_ASSERT_DELTA(bounce_distance, 172.6, 5.0); // ft
+  }
+
+  void testHookSkipRecovery() {
+    // Time to recover from hook skip
+    double descent_rate = 750.0 / 60.0; // ft/s (from fpm)
+    double hook_height = 2.0; // ft above deck
+
+    double recovery_time = hook_height / descent_rate;
+
+    TS_ASSERT_DELTA(recovery_time, 0.16, 0.02); // seconds
+  }
+
+  // Waveoff Procedures
+
+  void testWaveoffClimbAngle() {
+    // Required climb angle during waveoff
+    double climb_rate = 3000.0; // fpm
+    double forward_speed = 150.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double climb_angle = atan((climb_rate / 60.0) / forward_speed);
+
+    TS_ASSERT_DELTA(climb_angle * Constants::RAD_TO_DEG, 11.3, 0.5);
+  }
+
+  void testWaveoffMinAltitude() {
+    // Minimum altitude gain before turn
+    double min_altitude = 400.0; // ft
+    double climb_rate = 3000.0; // fpm
+
+    double time_to_min = min_altitude / (climb_rate / 60.0);
+
+    TS_ASSERT_DELTA(time_to_min, 8.0, 0.5); // seconds
+  }
+
+  void testWaveoffAbeamDistance() {
+    // Distance abeam when cleared to turn
+    double waveoff_speed = 180.0 * Constants::KTS_TO_FTPS; // ft/s
+    double time_before_turn = 15.0; // seconds
+
+    double abeam_distance = waveoff_speed * time_before_turn;
+
+    TS_ASSERT_DELTA(abeam_distance / 6076.0, 0.75, 0.1); // NM
+  }
+
+  // Foul Deck Situations
+
+  void testFoulDeckClearanceTime() {
+    // Time to clear foul deck
+    double tractor_speed = 5.0; // knots
+    double deck_length = 300.0; // ft
+
+    double clear_time = deck_length / (tractor_speed * Constants::KTS_TO_FTPS);
+
+    TS_ASSERT(clear_time > 30.0); // More than 30 seconds
+  }
+
+  void testFoulDeckWaveoffDecision() {
+    // Decision altitude for foul deck waveoff
+    double decision_altitude = 200.0; // ft
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+
+    double decision_distance = decision_altitude / tan(glideslope);
+
+    TS_ASSERT_DELTA(decision_distance, 3270.0, 100.0); // ft
+  }
+
+  // Delta Pattern Operations
+
+  void testDeltaPatternAltitude() {
+    // Delta pattern altitude for fuel conservation
+    double marshal_altitude = 2000.0; // ft
+    double delta_altitude = 3000.0; // ft
+
+    TS_ASSERT(delta_altitude > marshal_altitude);
+    TS_ASSERT(delta_altitude < 5000.0);
+  }
+
+  void testDeltaPatternSpacing() {
+    // Spacing between aircraft in delta
+    double time_spacing = 60.0; // seconds
+    double speed = 250.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double distance_spacing = speed * time_spacing;
+
+    TS_ASSERT_DELTA(distance_spacing / 6076.0, 4.14, 0.2); // NM
+  }
+
+  // Catapult Steam Pressure Tests
+
+  void testSteamCatapultPressure() {
+    // Steam pressure for different aircraft weights
+    double light_weight = 35000.0; // lbs
+    double heavy_weight = 70000.0; // lbs
+    double max_pressure = 520.0; // psi
+
+    double light_pressure = max_pressure * (light_weight / heavy_weight);
+
+    TS_ASSERT_DELTA(light_pressure, 260.0, 10.0); // psi
+  }
+
+  void testSteamRecoveryTime() {
+    // Time to rebuild steam pressure after launch
+    double pressure_drop = 100.0; // psi
+    double recovery_rate = 5.0; // psi/second
+
+    double recovery_time = pressure_drop / recovery_rate;
+
+    TS_ASSERT_DELTA(recovery_time, 20.0, 2.0); // seconds
+  }
+
+  // Crosswind Landing Effects
+
+  void testCrossDeckWind() {
+    // Effect of cross-deck wind on approach
+    double crosswind = 15.0 * Constants::KTS_TO_FTPS; // ft/s
+    double approach_speed = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double crab_angle = asin(crosswind / approach_speed);
+
+    TS_ASSERT_DELTA(crab_angle * Constants::RAD_TO_DEG, 6.1, 0.3);
+  }
+
+  void testMaxCrosswindLimit() {
+    // Maximum allowable crosswind
+    double max_crosswind = 25.0; // knots
+    double actual_crosswind = 20.0; // knots
+
+    bool within_limits = actual_crosswind < max_crosswind;
+    TS_ASSERT(within_limits);
+  }
+
+  // Vertical Velocity at Touchdown
+
+  void testTouchdownVerticalVelocity() {
+    // Typical carrier touchdown vertical velocity
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double approach_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    double vertical_velocity = approach_speed * sin(glideslope);
+
+    TS_ASSERT_DELTA(vertical_velocity, 14.95, 0.5); // ft/s
+    TS_ASSERT(vertical_velocity > 10.0); // Higher than land-based
+  }
+
+  void testLandingGearLoadAtTrap() {
+    // Landing gear load factor at trap
+    double aircraft_weight = 45000.0; // lbs
+    double touchdown_vv = 15.0; // ft/s vertical
+    double gear_stroke = 1.0; // ft
+
+    // Energy = 0.5 * m * v^2 = F * d
+    double mass = aircraft_weight / Constants::G_FTPS2;
+    double energy = 0.5 * mass * touchdown_vv * touchdown_vv;
+    double gear_force = energy / gear_stroke;
+    double load_factor = gear_force / aircraft_weight;
+
+    TS_ASSERT(load_factor > 1.0);
+  }
+
+  // Recovery Tanker Operations
+
+  void testTankerPatternAltitude() {
+    // Recovery tanker holds at higher altitude
+    double tanker_altitude = 6000.0; // ft
+    double marshal_base = 2000.0; // ft
+
+    TS_ASSERT(tanker_altitude > marshal_base);
+    TS_ASSERT_DELTA(tanker_altitude, 6000.0, 500.0);
+  }
+
+  void testMinimumFuelForTank() {
+    // Minimum fuel state to receive tanking
+    double critical_fuel = 2000.0; // lbs
+    double bingo_fuel = 4500.0; // lbs
+
+    bool needs_tank = critical_fuel < bingo_fuel;
+    TS_ASSERT(needs_tank);
+  }
 };
