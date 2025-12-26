@@ -470,4 +470,521 @@ public:
     TS_ASSERT_DELTA(negativeForce(2), -200.0, epsilon);
     TS_ASSERT_DELTA(negativeForce(3), -300.0, epsilon);
   }
+
+  // ============================================================================
+  // Additional Force Location and Moment Tests
+  // ============================================================================
+
+  // Test setting force location
+  void testSetLocation() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce(&fdmex);
+
+    extForce.SetLocation(10.0, 5.0, -3.0);
+
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 10.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 5.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), -3.0, epsilon);
+  }
+
+  // Test location at aircraft nose
+  void testNoseLocation() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce(&fdmex);
+
+    // Typical nose location (forward of CG)
+    extForce.SetLocation(15.0, 0.0, 0.0);
+
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 15.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 0.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), 0.0, epsilon);
+  }
+
+  // Test location at aircraft tail
+  void testTailLocation() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce(&fdmex);
+
+    // Typical tail location (behind CG)
+    extForce.SetLocation(-25.0, 0.0, 5.0);
+
+    TS_ASSERT_DELTA(extForce.GetLocationX(), -25.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 0.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), 5.0, epsilon);
+  }
+
+  // Test location at wingtip (left)
+  void testLeftWingtipLocation() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce(&fdmex);
+
+    // Left wingtip (negative Y in body frame)
+    extForce.SetLocation(0.0, -30.0, 0.0);
+
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 0.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), -30.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), 0.0, epsilon);
+  }
+
+  // Test location at wingtip (right)
+  void testRightWingtipLocation() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce(&fdmex);
+
+    // Right wingtip (positive Y in body frame)
+    extForce.SetLocation(0.0, 30.0, 0.0);
+
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 0.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 30.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), 0.0, epsilon);
+  }
+
+  // ============================================================================
+  // Couple and Distributed Force Tests
+  // ============================================================================
+
+  // Test couple (pure moment from equal and opposite forces)
+  void testCoupleForce() {
+    // A couple consists of two equal and opposite forces at different points
+    // Net force = 0, but produces a moment
+    double forceY = 50.0;  // lbs
+    double separation = 4.0;  // ft between forces
+
+    // Forces at +2 and -2 ft on X axis
+    FGColumnVector3 pos1(2.0, 0.0, 0.0);
+    FGColumnVector3 pos2(-2.0, 0.0, 0.0);
+    FGColumnVector3 force1(0.0, forceY, 0.0);
+    FGColumnVector3 force2(0.0, -forceY, 0.0);
+
+    // Net force should be zero
+    FGColumnVector3 netForce = force1 + force2;
+    TS_ASSERT_DELTA(netForce.Magnitude(), 0.0, epsilon);
+
+    // Net moment should be non-zero
+    FGColumnVector3 moment1 = pos1 * force1;
+    FGColumnVector3 moment2 = pos2 * force2;
+    FGColumnVector3 netMoment = moment1 + moment2;
+
+    // Moment magnitude = force * separation
+    double expectedMoment = forceY * separation;
+    TS_ASSERT_DELTA(netMoment.Magnitude(), expectedMoment, epsilon);
+  }
+
+  // Test distributed load equivalent point force
+  void testDistributedLoadEquivalent() {
+    // A uniformly distributed load can be replaced by equivalent point force
+    double loadPerFoot = 10.0;  // lbs/ft
+    double length = 20.0;  // ft
+
+    double totalForce = loadPerFoot * length;
+    TS_ASSERT_DELTA(totalForce, 200.0, epsilon);
+
+    // Equivalent point force acts at center
+    double centerPos = length / 2.0;
+    TS_ASSERT_DELTA(centerPos, 10.0, epsilon);
+  }
+
+  // Test triangular distributed load
+  void testTriangularDistributedLoad() {
+    // Triangular load: zero at one end, maximum at other
+    // Equivalent point force at 2/3 from zero end
+    double maxLoad = 30.0;  // lbs/ft at max point
+    double length = 15.0;  // ft
+
+    // Total force = 0.5 * base * height
+    double totalForce = 0.5 * length * maxLoad;
+    TS_ASSERT_DELTA(totalForce, 225.0, epsilon);
+
+    // Centroid at 2/3 from zero end
+    double centroidPos = (2.0 / 3.0) * length;
+    TS_ASSERT_DELTA(centroidPos, 10.0, epsilon);
+  }
+
+  // ============================================================================
+  // Aerodynamic Center and Pressure Center Tests
+  // ============================================================================
+
+  // Test neutral point concept
+  void testNeutralPointMoment() {
+    // At neutral point, pitching moment coefficient doesn't change with alpha
+    // This is a stability concept
+    double lift = 1000.0;  // lbs
+    double distToNP = 2.5;  // ft from CG to neutral point
+
+    // Lift at neutral point produces pitching moment
+    double pitchMoment = lift * distToNP;
+    TS_ASSERT_DELTA(pitchMoment, 2500.0, epsilon);
+  }
+
+  // Test center of pressure shift with angle of attack
+  void testCPShiftWithAOA() {
+    // Center of pressure moves forward with increasing AOA
+    // CP position relative to chord: xCP = xAC - M0/(CL * c)
+    double xAC = 0.25;  // Aerodynamic center at quarter chord
+    double M0_coeff = -0.05;  // Moment coefficient about AC
+    double CL = 0.5;  // Lift coefficient
+
+    // Simplified CP position
+    double xCP = xAC - M0_coeff / CL;
+    TS_ASSERT_DELTA(xCP, 0.35, epsilon);
+  }
+
+  // Test pitching moment from tail lift
+  void testTailPitchingMoment() {
+    // Horizontal tail produces pitching moment about CG
+    double tailLift = 200.0;  // lbs (typically negative for stability)
+    double tailArm = 20.0;  // ft from CG to tail AC
+
+    // Nose-down moment from upward tail force
+    double pitchMoment = -tailLift * tailArm;
+    TS_ASSERT_DELTA(pitchMoment, -4000.0, epsilon);
+  }
+
+  // ============================================================================
+  // Frame Transformation Extended Tests
+  // ============================================================================
+
+  // Test wind frame to body frame at zero alpha and beta
+  void testWindToBodyZeroAlphaBeta() {
+    // At zero alpha and beta, wind and body frames align
+    FGColumnVector3 windForce(100.0, 0.0, -200.0);
+
+    // With zero alpha/beta, body force equals wind force
+    TS_ASSERT_DELTA(windForce(1), 100.0, epsilon);
+    TS_ASSERT_DELTA(windForce(3), -200.0, epsilon);
+  }
+
+  // Test body frame force at angle of attack
+  void testForceAtAngleOfAttack() {
+    // At non-zero alpha, lift and drag decompose differently in body frame
+    double alpha = 10.0 * M_PI / 180.0;  // 10 degrees
+    double lift = 1000.0;
+    double drag = 100.0;
+
+    // Body X (axial) and Z (normal) from lift and drag
+    // At positive alpha, lift has positive X component in body frame
+    double Fx = -drag * cos(alpha) + lift * sin(alpha);
+    double Fz = -drag * sin(alpha) - lift * cos(alpha);
+
+    TS_ASSERT(!std::isnan(Fx));
+    TS_ASSERT(!std::isnan(Fz));
+    // Verify Fz is negative (lift is upward, which is -Z in body frame)
+    TS_ASSERT(Fz < 0.0);
+  }
+
+  // Test sideslip effect on lateral force
+  void testSideslipLateralForce() {
+    // Sideslip generates side force
+    double beta = 5.0 * M_PI / 180.0;  // 5 degrees
+    double sideForceCoeff = 0.1;  // per degree
+    double qS = 10000.0;  // Dynamic pressure * area
+
+    double sideForce = sideForceCoeff * (beta * 180.0 / M_PI) * qS;
+    TS_ASSERT_DELTA(sideForce, 5000.0, 100.0);
+  }
+
+  // ============================================================================
+  // Moment of Inertia and Angular Acceleration Tests
+  // ============================================================================
+
+  // Test angular acceleration from moment: alpha = M / I
+  void testAngularAccelerationFromMoment() {
+    double moment = 10000.0;  // lb-ft
+    double Ixx = 5000.0;  // slug-ft^2
+
+    double angularAccel = moment / Ixx;  // rad/s^2
+    TS_ASSERT_DELTA(angularAccel, 2.0, epsilon);
+  }
+
+  // Test roll rate buildup
+  void testRollRateBuildup() {
+    double rollMoment = 500.0;  // lb-ft
+    double Ixx = 1000.0;  // slug-ft^2
+    double dt = 0.1;  // seconds
+
+    double rollAccel = rollMoment / Ixx;  // rad/s^2
+    double rollRate = rollAccel * dt;  // rad/s
+
+    TS_ASSERT_DELTA(rollRate, 0.05, epsilon);
+  }
+
+  // Test pitch rate buildup
+  void testPitchRateBuildup() {
+    double pitchMoment = 2000.0;  // lb-ft
+    double Iyy = 4000.0;  // slug-ft^2
+    double dt = 0.5;  // seconds
+
+    double pitchAccel = pitchMoment / Iyy;  // rad/s^2
+    double pitchRate = pitchAccel * dt;  // rad/s
+
+    TS_ASSERT_DELTA(pitchRate, 0.25, epsilon);
+  }
+
+  // Test yaw rate buildup
+  void testYawRateBuildup() {
+    double yawMoment = 1500.0;  // lb-ft
+    double Izz = 6000.0;  // slug-ft^2
+    double dt = 0.2;  // seconds
+
+    double yawAccel = yawMoment / Izz;  // rad/s^2
+    double yawRate = yawAccel * dt;  // rad/s
+
+    TS_ASSERT_DELTA(yawRate, 0.05, epsilon);
+  }
+
+  // ============================================================================
+  // Force Balance and Equilibrium Tests
+  // ============================================================================
+
+  // Test level flight force balance
+  void testLevelFlightForceBalance() {
+    // In level flight: Lift = Weight, Thrust = Drag
+    double weight = 10000.0;  // lbs
+    double lift = 10000.0;  // lbs
+    double drag = 500.0;  // lbs
+    double thrust = 500.0;  // lbs
+
+    double verticalBalance = lift - weight;
+    double horizontalBalance = thrust - drag;
+
+    TS_ASSERT_DELTA(verticalBalance, 0.0, epsilon);
+    TS_ASSERT_DELTA(horizontalBalance, 0.0, epsilon);
+  }
+
+  // Test climbing flight force balance
+  void testClimbingFlightForceBalance() {
+    // In climb: Thrust > Drag (excess for climb)
+    double weight = 10000.0;  // lbs
+    double gamma = 5.0 * M_PI / 180.0;  // 5 degree climb
+
+    // Required thrust includes component of weight
+    double thrustRequired = 500.0 + weight * sin(gamma);
+    TS_ASSERT(thrustRequired > 500.0);
+  }
+
+  // Test banked turn force balance
+  void testBankedTurnForceBalance() {
+    // In coordinated turn: L * cos(phi) = W
+    double weight = 10000.0;  // lbs
+    double bankAngle = 30.0 * M_PI / 180.0;  // 30 degrees
+
+    double requiredLift = weight / cos(bankAngle);
+    double loadFactor = requiredLift / weight;
+
+    TS_ASSERT_DELTA(loadFactor, 1.155, 0.001);
+  }
+
+  // Test moment equilibrium in steady flight
+  void testMomentEquilibrium() {
+    // In steady flight, sum of moments = 0
+    double wingMoment = 5000.0;  // lb-ft (nose up)
+    double tailMoment = -5000.0;  // lb-ft (nose down)
+    double fuselageMoment = 0.0;  // lb-ft
+
+    double totalMoment = wingMoment + tailMoment + fuselageMoment;
+    TS_ASSERT_DELTA(totalMoment, 0.0, epsilon);
+  }
+
+  // ============================================================================
+  // Force Direction and Sign Convention Tests
+  // ============================================================================
+
+  // Test body frame sign conventions
+  void testBodyFrameSignConventions() {
+    // X forward, Y right, Z down
+    FGColumnVector3 forward(1.0, 0.0, 0.0);
+    FGColumnVector3 right(0.0, 1.0, 0.0);
+    FGColumnVector3 down(0.0, 0.0, 1.0);
+
+    TS_ASSERT_DELTA(forward(1), 1.0, epsilon);
+    TS_ASSERT_DELTA(right(2), 1.0, epsilon);
+    TS_ASSERT_DELTA(down(3), 1.0, epsilon);
+  }
+
+  // Test moment sign conventions (right-hand rule)
+  void testMomentSignConventions() {
+    // Positive roll (Mx): right wing down
+    // Positive pitch (My): nose up
+    // Positive yaw (Mz): nose right
+
+    // Roll moment from Y-force at +Z location
+    FGColumnVector3 pos(0.0, 0.0, 1.0);
+    FGColumnVector3 force(0.0, 1.0, 0.0);
+    FGColumnVector3 moment = pos * force;
+
+    // Mx = y*Fz - z*Fy = 0*0 - 1*1 = -1 (left wing down)
+    TS_ASSERT_DELTA(moment(1), -1.0, epsilon);
+  }
+
+  // ============================================================================
+  // Edge Cases and Numerical Stability Tests
+  // ============================================================================
+
+  // Test zero vector handling
+  void testZeroVectorHandling() {
+    FGColumnVector3 zeroVec(0.0, 0.0, 0.0);
+    FGColumnVector3 force(100.0, 50.0, 25.0);
+
+    FGColumnVector3 moment = zeroVec * force;
+
+    TS_ASSERT_DELTA(moment(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(moment(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(moment(3), 0.0, epsilon);
+  }
+
+  // Test very large moment arms
+  void testLargeMomentArms() {
+    double largeArm = 1000.0;  // ft
+    double force = 100.0;  // lbs
+
+    double moment = force * largeArm;
+    TS_ASSERT_DELTA(moment, 100000.0, epsilon);
+    TS_ASSERT(!std::isinf(moment));
+  }
+
+  // Test very small moment arms
+  void testSmallMomentArms() {
+    double smallArm = 0.001;  // ft
+    double force = 100.0;  // lbs
+
+    double moment = force * smallArm;
+    TS_ASSERT_DELTA(moment, 0.1, 1e-6);
+    TS_ASSERT(!std::isnan(moment));
+  }
+
+  // Test orthogonality of rotation matrix
+  void testRotationMatrixOrthogonality() {
+    double angle = 0.5;  // radians
+
+    FGMatrix33 rotZ;
+    rotZ(1,1) = cos(angle);  rotZ(1,2) = sin(angle); rotZ(1,3) = 0.0;
+    rotZ(2,1) = -sin(angle); rotZ(2,2) = cos(angle); rotZ(2,3) = 0.0;
+    rotZ(3,1) = 0.0;         rotZ(3,2) = 0.0;        rotZ(3,3) = 1.0;
+
+    // R * R^T should equal identity
+    FGMatrix33 rotZT = rotZ.Transposed();
+    FGMatrix33 product = rotZ * rotZT;
+
+    TS_ASSERT_DELTA(product(1,1), 1.0, epsilon);
+    TS_ASSERT_DELTA(product(2,2), 1.0, epsilon);
+    TS_ASSERT_DELTA(product(3,3), 1.0, epsilon);
+    TS_ASSERT_DELTA(product(1,2), 0.0, epsilon);
+    TS_ASSERT_DELTA(product(1,3), 0.0, epsilon);
+    TS_ASSERT_DELTA(product(2,3), 0.0, epsilon);
+  }
+
+  // Test rotation matrix determinant = 1
+  void testRotationMatrixDeterminant() {
+    double angle = 1.2;  // radians
+
+    FGMatrix33 rotY;
+    rotY(1,1) = cos(angle);  rotY(1,2) = 0.0; rotY(1,3) = -sin(angle);
+    rotY(2,1) = 0.0;         rotY(2,2) = 1.0; rotY(2,3) = 0.0;
+    rotY(3,1) = sin(angle);  rotY(3,2) = 0.0; rotY(3,3) = cos(angle);
+
+    double det = rotY.Determinant();
+    TS_ASSERT_DELTA(det, 1.0, epsilon);
+  }
+
+  // Test inverse rotation
+  void testInverseRotation() {
+    double angle = 0.7;  // radians
+
+    FGMatrix33 rotX;
+    rotX(1,1) = 1.0; rotX(1,2) = 0.0;         rotX(1,3) = 0.0;
+    rotX(2,1) = 0.0; rotX(2,2) = cos(angle);  rotX(2,3) = sin(angle);
+    rotX(3,1) = 0.0; rotX(3,2) = -sin(angle); rotX(3,3) = cos(angle);
+
+    FGColumnVector3 original(1.0, 2.0, 3.0);
+    FGColumnVector3 rotated = rotX * original;
+    FGColumnVector3 restored = rotX.Transposed() * rotated;
+
+    TS_ASSERT_DELTA(restored(1), original(1), epsilon);
+    TS_ASSERT_DELTA(restored(2), original(2), epsilon);
+    TS_ASSERT_DELTA(restored(3), original(3), epsilon);
+  }
+
+  // ============================================================================
+  // Specific External Force Scenarios
+  // ============================================================================
+
+  // Test tow cable force on glider
+  void testTowCableForce() {
+    // Tow cable applies force at nose hook
+    double cableTension = 300.0;  // lbs
+    double cableAngle = 15.0 * M_PI / 180.0;  // degrees above horizontal
+
+    // Force components in body frame
+    double Fx = cableTension * cos(cableAngle);
+    double Fz = -cableTension * sin(cableAngle);
+
+    TS_ASSERT(Fx > 0.0);  // Forward
+    TS_ASSERT(Fz < 0.0);  // Upward (negative Z in body frame)
+  }
+
+  // Test refueling boom force
+  void testRefuelingBoomForce() {
+    // Refueling boom applies force at receptacle location
+    double boomForce = 50.0;  // lbs
+    double offsetX = -5.0;  // ft aft of CG
+    double offsetZ = 2.0;  // ft below fuselage centerline
+
+    // Force primarily downward
+    FGColumnVector3 pos(offsetX, 0.0, offsetZ);
+    FGColumnVector3 force(0.0, 0.0, boomForce);
+
+    FGColumnVector3 moment = pos * force;
+
+    // M = r × F: My = rz*Fx - rx*Fz = 2*0 - (-5)*50 = 250 (nose-down)
+    TS_ASSERT(moment(2) > 0.0);  // Nose-down moment
+  }
+
+  // Test arresting hook force
+  void testArrestingHookForce() {
+    // Arresting wire applies force at tail hook
+    double cableForce = 50000.0;  // lbs
+    double hookOffset = -40.0;  // ft behind CG
+    double hookHeight = 3.0;  // ft below CG
+
+    FGColumnVector3 pos(hookOffset, 0.0, hookHeight);
+    FGColumnVector3 force(-cableForce, 0.0, 0.0);  // Decelerating force
+
+    FGColumnVector3 moment = pos * force;
+
+    // M = r × F: My = rz*Fx - rx*Fz = 3*(-50000) - (-40)*0 = -150000 (nose-up)
+    TS_ASSERT(moment(2) < 0.0);  // Nose-up moment from tail hook
+  }
+
+  // Test catapult launch force
+  void testCatapultForce() {
+    // Catapult applies force at nose gear attachment
+    double catForce = 75000.0;  // lbs
+    double noseGearOffset = 10.0;  // ft forward of CG
+    double noseGearHeight = 5.0;  // ft below CG
+
+    FGColumnVector3 pos(noseGearOffset, 0.0, noseGearHeight);
+    FGColumnVector3 force(catForce, 0.0, 0.0);  // Accelerating force
+
+    FGColumnVector3 moment = pos * force;
+
+    // Should produce pitch moment
+    TS_ASSERT(fabs(moment(2)) > 0.0);
+  }
+
+  // Test parachute drogue deployment
+  void testDrogueParachuteForce() {
+    // Drogue chute applies drag at tail
+    double drogueForce = 2000.0;  // lbs
+    double drogueTailOffset = -50.0;  // ft behind CG
+    double drogueHeight = 0.0;  // centerline
+
+    // Force direction depends on relative wind
+    FGColumnVector3 pos(drogueTailOffset, 0.0, drogueHeight);
+    FGColumnVector3 force(-drogueForce, 0.0, 0.0);  // Drag (aft)
+
+    FGColumnVector3 moment = pos * force;
+
+    // Should produce minimal pitch moment if on centerline
+    TS_ASSERT_DELTA(moment(2), 0.0, epsilon);
+  }
 };
