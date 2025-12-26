@@ -553,3 +553,487 @@ public:
     }
   }
 };
+
+/*******************************************************************************
+ * Additional FGPropertyValue Tests (32 new tests)
+ ******************************************************************************/
+
+class FGPropertyValueAdditionalTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Signed Property Edge Cases
+   ***************************************************************************/
+
+  // Test 44: Signed property with infinity
+  void testSignedPropertyInfinity() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-x", pm, nullptr);
+
+    auto node = pm->GetNode("x", true);
+    double inf = std::numeric_limits<double>::infinity();
+    node->setDoubleValue(inf);
+    TS_ASSERT_EQUALS(property.GetValue(), -inf);
+  }
+
+  // Test 45: Signed property with negative infinity
+  void testSignedPropertyNegativeInfinity() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-x", pm, nullptr);
+
+    auto node = pm->GetNode("x", true);
+    double neg_inf = -std::numeric_limits<double>::infinity();
+    node->setDoubleValue(neg_inf);
+    TS_ASSERT_EQUALS(property.GetValue(), std::numeric_limits<double>::infinity());
+  }
+
+  // Test 46: Signed property with NaN (NaN sign behavior)
+  void testSignedPropertyNaN() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-x", pm, nullptr);
+
+    auto node = pm->GetNode("x", true);
+    node->setDoubleValue(std::nan(""));
+    // -NaN is still NaN
+    TS_ASSERT(std::isnan(property.GetValue()));
+  }
+
+  // Test 47: Signed property with denormalized value
+  void testSignedPropertyDenormalized() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-x", pm, nullptr);
+
+    auto node = pm->GetNode("x", true);
+    double denorm = std::numeric_limits<double>::denorm_min();
+    node->setDoubleValue(denorm);
+    TS_ASSERT_EQUALS(property.GetValue(), -denorm);
+  }
+
+  /***************************************************************************
+   * Property Path Patterns
+   ***************************************************************************/
+
+  // Test 48: Property with numeric suffix
+  void testPropertyWithNumericSuffix() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("engine0/rpm", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "rpm");
+    TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/engine0/rpm");
+  }
+
+  // Test 49: Property with hyphenated name
+  void testPropertyWithHyphenatedName() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("fuel-flow-rate", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "fuel-flow-rate");
+  }
+
+  // Test 50: Property with underscore name
+  void testPropertyWithUnderscoreName() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("pitch_rate_rad", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "pitch_rate_rad");
+  }
+
+  // Test 51: Deeply nested property path
+  void testDeeplyNestedPropertyPath() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("a/b/c/d/e/f/g/h", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "h");
+    TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/a/b/c/d/e/f/g/h");
+  }
+
+  // Test 52: Property with array index
+  void testPropertyWithArrayIndex() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("tank", 2, true);
+    FGPropertyValue property(node);
+
+    node->setDoubleValue(1000.0);
+    TS_ASSERT_EQUALS(property.GetValue(), 1000.0);
+  }
+
+  /***************************************************************************
+   * Late Binding Edge Cases
+   ***************************************************************************/
+
+  // Test 53: Late bound property with nested path containing hyphen
+  void testLateBoundNestedWithHyphen() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("fcs/aileron-cmd-norm", pm, nullptr);
+
+    TS_ASSERT_EQUALS(property.IsLateBound(), true);
+
+    auto node = pm->GetNode("fcs/aileron-cmd-norm", true);
+    node->setDoubleValue(0.75);
+
+    TS_ASSERT_EQUALS(property.GetValue(), 0.75);
+    TS_ASSERT_EQUALS(property.IsLateBound(), false);
+  }
+
+  // Test 54: Late bound signed property with nested path
+  void testLateBoundSignedNestedPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-aero/beta-rad", pm, nullptr);
+
+    auto node = pm->GetNode("aero/beta-rad", true);
+    node->setDoubleValue(0.05);
+
+    TS_ASSERT_EQUALS(property.GetValue(), -0.05);
+    // GetName returns the leaf node name after binding
+    TS_ASSERT_EQUALS(property.GetName(), "beta-rad");
+    TS_ASSERT_EQUALS(property.GetNameWithSign(), "-beta-rad");
+  }
+
+  // Test 55: Multiple late bound properties to same path
+  void testMultipleLateBoundSamePath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue prop1("shared/value", pm, nullptr);
+    FGPropertyValue prop2("shared/value", pm, nullptr);
+
+    TS_ASSERT(prop1.IsLateBound());
+    TS_ASSERT(prop2.IsLateBound());
+
+    auto node = pm->GetNode("shared/value", true);
+    node->setDoubleValue(42.0);
+
+    TS_ASSERT_EQUALS(prop1.GetValue(), 42.0);
+    TS_ASSERT_EQUALS(prop2.GetValue(), 42.0);
+    TS_ASSERT(!prop1.IsLateBound());
+    TS_ASSERT(!prop2.IsLateBound());
+  }
+
+  // Test 56: Late bound property resolution order
+  void testLateBoundResolutionOrder() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("test/order", pm, nullptr);
+
+    // Create the node
+    auto node = pm->GetNode("test/order", true);
+    node->setDoubleValue(100.0);
+
+    // First access triggers binding
+    TS_ASSERT_EQUALS(property.GetValue(), 100.0);
+
+    // Subsequent modification via node
+    node->setDoubleValue(200.0);
+    TS_ASSERT_EQUALS(property.GetValue(), 200.0);
+
+    // Modification via property
+    property.SetValue(300.0);
+    TS_ASSERT_EQUALS(node->getDoubleValue(), 300.0);
+  }
+
+  /***************************************************************************
+   * SetNode Advanced Tests
+   ***************************************************************************/
+
+  // Test 57: SetNode multiple times
+  void testSetNodeMultipleTimes() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node_a = root.getNode("a", true);
+    SGPropertyNode_ptr node_b = root.getNode("b", true);
+    SGPropertyNode_ptr node_c = root.getNode("c", true);
+    FGPropertyValue property(node_a);
+
+    node_a->setDoubleValue(1.0);
+    node_b->setDoubleValue(2.0);
+    node_c->setDoubleValue(3.0);
+
+    TS_ASSERT_EQUALS(property.GetValue(), 1.0);
+
+    property.SetNode(node_b);
+    TS_ASSERT_EQUALS(property.GetValue(), 2.0);
+
+    property.SetNode(node_c);
+    TS_ASSERT_EQUALS(property.GetValue(), 3.0);
+
+    property.SetNode(node_a);
+    TS_ASSERT_EQUALS(property.GetValue(), 1.0);
+  }
+
+  // Test 58: SetNode with different paths
+  void testSetNodeDifferentPaths() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node_deep = root.getNode("deep/path/prop", true);
+    SGPropertyNode_ptr node_shallow = root.getNode("shallow", true);
+    FGPropertyValue property(node_deep);
+
+    TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/deep/path/prop");
+
+    property.SetNode(node_shallow);
+    TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/shallow");
+  }
+
+  /***************************************************************************
+   * IsConstant Advanced Tests
+   ***************************************************************************/
+
+  // Test 59: Toggle constant status multiple times
+  void testToggleConstantMultipleTimes() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    SGPropertyNode_ptr node = pm->GetNode("toggle", true);
+    FGPropertyValue property(node);
+
+    for (int i = 0; i < 5; i++) {
+      node->setAttribute(SGPropertyNode::WRITE, false);
+      TS_ASSERT(property.IsConstant());
+
+      node->setAttribute(SGPropertyNode::WRITE, true);
+      TS_ASSERT(!property.IsConstant());
+    }
+  }
+
+  // Test 60: Constant property value retrieval
+  void testConstantPropertyValueRetrieval() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    SGPropertyNode_ptr node = pm->GetNode("const-test", true);
+    node->setDoubleValue(3.14159);
+    node->setAttribute(SGPropertyNode::WRITE, false);
+    FGPropertyValue property(node);
+
+    TS_ASSERT(property.IsConstant());
+    TS_ASSERT_EQUALS(property.GetValue(), 3.14159);
+    // GetValue should work even when constant
+    TS_ASSERT_EQUALS(property.GetValue(), 3.14159);
+  }
+
+  /***************************************************************************
+   * Value Precision Tests
+   ***************************************************************************/
+
+  // Test 61: Very small difference detection
+  void testVerySmallDifferenceDetection() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("precise", true);
+    FGPropertyValue property(node);
+
+    double val1 = 1.0;
+    double val2 = 1.0 + 1e-15;
+
+    property.SetValue(val1);
+    double retrieved1 = property.GetValue();
+
+    property.SetValue(val2);
+    double retrieved2 = property.GetValue();
+
+    // Should be able to detect small differences
+    TS_ASSERT(retrieved1 != retrieved2 || val1 == val2);
+  }
+
+  // Test 62: Epsilon neighborhood values
+  void testEpsilonNeighborhoodValues() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("epsilon", true);
+    FGPropertyValue property(node);
+
+    double epsilon = std::numeric_limits<double>::epsilon();
+    property.SetValue(1.0 + epsilon);
+    TS_ASSERT_DELTA(property.GetValue(), 1.0, 2.0 * epsilon);
+  }
+
+  // Test 63: Mantissa precision test
+  void testMantissaPrecision() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("mantissa", true);
+    FGPropertyValue property(node);
+
+    // Value that exercises mantissa precision
+    double precise = 1.234567890123456789;
+    property.SetValue(precise);
+    // IEEE 754 double has ~15-17 significant digits
+    TS_ASSERT_DELTA(property.GetValue(), precise, 1e-15);
+  }
+
+  /***************************************************************************
+   * Multiple Property Interaction Tests
+   ***************************************************************************/
+
+  // Test 64: Many properties sharing same node
+  void testManyPropertiesSharingNode() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("shared", true);
+
+    std::vector<FGPropertyValue> properties;
+    for (int i = 0; i < 10; i++) {
+      properties.emplace_back(node);
+    }
+
+    node->setDoubleValue(999.0);
+
+    for (const auto& prop : properties) {
+      TS_ASSERT_EQUALS(prop.GetValue(), 999.0);
+    }
+  }
+
+  // Test 65: Properties in different managers with same name
+  void testPropertiesDifferentManagersSameName() {
+    std::vector<std::shared_ptr<FGPropertyManager>> managers;
+    std::vector<FGPropertyValue*> properties;
+
+    for (int i = 0; i < 5; i++) {
+      managers.push_back(std::make_shared<FGPropertyManager>());
+      properties.push_back(new FGPropertyValue("x", managers[i], nullptr));
+      managers[i]->GetNode("x", true)->setDoubleValue(static_cast<double>(i * 10));
+    }
+
+    for (int i = 0; i < 5; i++) {
+      TS_ASSERT_EQUALS(properties[i]->GetValue(), static_cast<double>(i * 10));
+      delete properties[i];
+    }
+  }
+
+  /***************************************************************************
+   * Name Pattern Tests
+   ***************************************************************************/
+
+  // Test 66: Property name with many segments
+  void testPropertyNameManySegments() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("seg1/seg2/seg3/seg4/seg5", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "seg5");
+    TS_ASSERT(property.GetFullyQualifiedName().find("seg1") != std::string::npos);
+    TS_ASSERT(property.GetFullyQualifiedName().find("seg5") != std::string::npos);
+  }
+
+  // Test 67: Property name with numbers
+  void testPropertyNameWithNumbers() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("engine123/prop456", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "prop456");
+  }
+
+  // Test 68: Single character property name
+  void testSingleCharacterPropertyName() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("x", true);
+    FGPropertyValue property(node);
+
+    TS_ASSERT_EQUALS(property.GetName(), "x");
+    TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/x");
+  }
+
+  /***************************************************************************
+   * Value Range Tests
+   ***************************************************************************/
+
+  // Test 69: Alternating positive and negative values
+  void testAlternatingPositiveNegative() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("alt", true);
+    FGPropertyValue property(node);
+
+    for (int i = 0; i < 20; i++) {
+      double val = (i % 2 == 0) ? 100.0 : -100.0;
+      property.SetValue(val);
+      TS_ASSERT_EQUALS(property.GetValue(), val);
+    }
+  }
+
+  // Test 70: Exponential growth values
+  void testExponentialGrowthValues() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("exp", true);
+    FGPropertyValue property(node);
+
+    double val = 1.0;
+    for (int i = 0; i < 50; i++) {
+      property.SetValue(val);
+      TS_ASSERT_EQUALS(property.GetValue(), val);
+      val *= 10.0;
+    }
+  }
+
+  // Test 71: Exponential decay values
+  void testExponentialDecayValues() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("decay", true);
+    FGPropertyValue property(node);
+
+    double val = 1.0;
+    for (int i = 0; i < 50; i++) {
+      property.SetValue(val);
+      TS_ASSERT_DELTA(property.GetValue(), val, std::abs(val) * 1e-14 + 1e-300);
+      val /= 10.0;
+    }
+  }
+
+  /***************************************************************************
+   * Signed Property Comprehensive Tests
+   ***************************************************************************/
+
+  // Test 72: Signed property with max double
+  void testSignedPropertyMaxDouble() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-x", pm, nullptr);
+
+    auto node = pm->GetNode("x", true);
+    double max_val = std::numeric_limits<double>::max();
+    node->setDoubleValue(max_val);
+    TS_ASSERT_EQUALS(property.GetValue(), -max_val);
+  }
+
+  // Test 73: Signed property name variations
+  void testSignedPropertyNameVariations() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue prop1("-simple", pm, nullptr);
+    FGPropertyValue prop2("-path/to/prop", pm, nullptr);
+
+    TS_ASSERT_EQUALS(prop1.GetName(), "simple");
+    TS_ASSERT_EQUALS(prop1.GetNameWithSign(), "-simple");
+    TS_ASSERT_EQUALS(prop2.GetName(), "path/to/prop");
+    TS_ASSERT_EQUALS(prop2.GetNameWithSign(), "-path/to/prop");
+  }
+
+  // Test 74: Signed property value propagation
+  void testSignedPropertyValuePropagation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue signedProp("-x", pm, nullptr);
+    FGPropertyValue unsignedProp("x", pm, nullptr);
+
+    auto node = pm->GetNode("x", true);
+    node->setDoubleValue(50.0);
+
+    // Both properties read from same node but signed inverts
+    TS_ASSERT_EQUALS(signedProp.GetValue(), -50.0);
+    TS_ASSERT_EQUALS(unsignedProp.GetValue(), 50.0);
+  }
+
+  // Test 75: Property binding lifecycle
+  void testPropertyBindingLifecycle() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Create late-bound property
+    FGPropertyValue property("lifecycle/test", pm, nullptr);
+    TS_ASSERT(property.IsLateBound());
+
+    // Create node and verify binding
+    auto node = pm->GetNode("lifecycle/test", true);
+    node->setDoubleValue(1.0);
+    TS_ASSERT_EQUALS(property.GetValue(), 1.0);
+    TS_ASSERT(!property.IsLateBound());
+
+    // Modify through various paths
+    property.SetValue(2.0);
+    TS_ASSERT_EQUALS(node->getDoubleValue(), 2.0);
+
+    node->setDoubleValue(3.0);
+    TS_ASSERT_EQUALS(property.GetValue(), 3.0);
+
+    // Verify name accessors still work
+    TS_ASSERT_EQUALS(property.GetName(), "test");
+    TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/lifecycle/test");
+  }
+};
