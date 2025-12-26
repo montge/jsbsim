@@ -2,6 +2,8 @@
 #include <limits>
 #include <cmath>
 #include <random>
+#include <algorithm>
+#include <deque>
 
 #include "TestUtilities.h"
 
@@ -486,5 +488,575 @@ public:
     // After convergence, lag output should be very close to after_bias
     // Noise std=0.5, so should be within ~2 at 99% confidence
     TS_ASSERT(std::abs(after_noise - after_bias) < 3.0);
+  }
+
+  /***************************************************************************
+   * Additional Comprehensive Sensor Tests
+   ***************************************************************************/
+
+  // Test sensor saturation (clamping)
+  double saturate(double value, double min_val, double max_val) {
+    return std::max(min_val, std::min(max_val, value));
+  }
+
+  void testSaturationLow() {
+    double output = saturate(-10.0, 0.0, 100.0);
+    TS_ASSERT_DELTA(output, 0.0, epsilon);
+  }
+
+  void testSaturationHigh() {
+    double output = saturate(150.0, 0.0, 100.0);
+    TS_ASSERT_DELTA(output, 100.0, epsilon);
+  }
+
+  void testSaturationWithin() {
+    double output = saturate(50.0, 0.0, 100.0);
+    TS_ASSERT_DELTA(output, 50.0, epsilon);
+  }
+
+  // Test hysteresis in sensor
+  double applyHysteresis(double input, double& prevOutput, double hysteresisWidth) {
+    if (std::abs(input - prevOutput) > hysteresisWidth) {
+      prevOutput = input;
+    }
+    return prevOutput;
+  }
+
+  void testHysteresisSmallChange() {
+    double prevOutput = 50.0;
+    double result = applyHysteresis(52.0, prevOutput, 5.0);
+    TS_ASSERT_DELTA(result, 50.0, epsilon);  // Within hysteresis band
+  }
+
+  void testHysteresisLargeChange() {
+    double prevOutput = 50.0;
+    double result = applyHysteresis(60.0, prevOutput, 5.0);
+    TS_ASSERT_DELTA(result, 60.0, epsilon);  // Outside hysteresis band
+  }
+
+  // Test rate limiting (slew rate)
+  double rateLimit(double input, double& prevOutput, double maxRate, double dt) {
+    double delta = input - prevOutput;
+    double maxDelta = maxRate * dt;
+    if (std::abs(delta) > maxDelta) {
+      delta = delta > 0 ? maxDelta : -maxDelta;
+    }
+    prevOutput += delta;
+    return prevOutput;
+  }
+
+  void testRateLimitExceeded() {
+    double prev = 0.0;
+    double result = rateLimit(100.0, prev, 10.0, 1.0);
+    TS_ASSERT_DELTA(result, 10.0, epsilon);
+  }
+
+  void testRateLimitNotExceeded() {
+    double prev = 0.0;
+    double result = rateLimit(5.0, prev, 10.0, 1.0);
+    TS_ASSERT_DELTA(result, 5.0, epsilon);
+  }
+
+  // Test temperature sensor scaling
+  void testTemperatureSensorScaling() {
+    // Typical temperature sensor: 0-5V maps to -40 to 150 C
+    double voltage = 2.5;  // Mid-range
+    double minTemp = -40.0;
+    double maxTemp = 150.0;
+    double minVolt = 0.0;
+    double maxVolt = 5.0;
+
+    double temperature = minTemp + (voltage - minVolt) / (maxVolt - minVolt) * (maxTemp - minTemp);
+    TS_ASSERT_DELTA(temperature, 55.0, epsilon);  // Midpoint
+  }
+
+  void testTemperatureSensorAtMin() {
+    double voltage = 0.0;
+    double temperature = -40.0 + (voltage / 5.0) * 190.0;
+    TS_ASSERT_DELTA(temperature, -40.0, epsilon);
+  }
+
+  void testTemperatureSensorAtMax() {
+    double voltage = 5.0;
+    double temperature = -40.0 + (voltage / 5.0) * 190.0;
+    TS_ASSERT_DELTA(temperature, 150.0, epsilon);
+  }
+
+  // Test pressure sensor scaling
+  void testPressureSensorScaling() {
+    // Pressure sensor: 0.5-4.5V maps to 0-100 PSI
+    double voltage = 2.5;  // Mid-range
+    double minPres = 0.0;
+    double maxPres = 100.0;
+    double minVolt = 0.5;
+    double maxVolt = 4.5;
+
+    double pressure = minPres + (voltage - minVolt) / (maxVolt - minVolt) * (maxPres - minPres);
+    TS_ASSERT_DELTA(pressure, 50.0, epsilon);
+  }
+
+  // Test sensor calibration with offset and scale
+  void testSensorCalibration() {
+    double rawValue = 512;  // ADC counts
+    double offset = -2.5;   // Offset correction
+    double scale = 0.01;    // Scale factor
+
+    double calibrated = (rawValue * scale) + offset;
+    TS_ASSERT_DELTA(calibrated, 2.62, epsilon);
+  }
+
+  // Test cross-axis sensitivity
+  void testCrossAxisSensitivity() {
+    double primaryAxis = 100.0;
+    double secondaryAxis = 50.0;
+    double crossAxisCoeff = 0.02;  // 2% cross-axis sensitivity
+
+    double measuredPrimary = primaryAxis + secondaryAxis * crossAxisCoeff;
+    TS_ASSERT_DELTA(measuredPrimary, 101.0, epsilon);
+  }
+
+  // Test temperature compensation
+  void testTemperatureCompensation() {
+    double rawReading = 100.0;
+    double temperature = 50.0;     // Current temperature
+    double refTemp = 25.0;         // Reference temperature
+    double tempCoeff = 0.001;      // 0.1% per degree
+
+    double compensated = rawReading / (1.0 + tempCoeff * (temperature - refTemp));
+    TS_ASSERT_DELTA(compensated, 97.56097561, 0.0001);
+  }
+
+  // Test sensor resolution (minimum detectable change)
+  void testSensorResolution() {
+    int adcBits = 12;
+    double fullScaleRange = 10.0;  // Volts
+
+    double resolution = fullScaleRange / (1 << adcBits);
+    TS_ASSERT_DELTA(resolution, 10.0 / 4096.0, epsilon);
+    TS_ASSERT(resolution < 0.003);  // Less than 3 mV
+  }
+
+  // Test signal-to-noise ratio
+  void testSignalToNoiseRatio() {
+    double signalAmplitude = 100.0;
+    double noiseRMS = 1.0;
+
+    double snr = signalAmplitude / noiseRMS;
+    double snrDB = 20.0 * std::log10(snr);
+
+    TS_ASSERT_DELTA(snr, 100.0, epsilon);
+    TS_ASSERT_DELTA(snrDB, 40.0, epsilon);
+  }
+
+  // Test intermittent failure mode
+  void testIntermittentFailure() {
+    std::mt19937 gen(42);
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+    double failureProbability = 0.1;  // 10% chance of failure
+    int failures = 0;
+    int samples = 10000;
+
+    for (int i = 0; i < samples; i++) {
+      if (dist(gen) < failureProbability) {
+        failures++;
+      }
+    }
+
+    // Should be approximately 10% (1000 +/- ~100)
+    TS_ASSERT(failures > 900 && failures < 1100);
+  }
+
+  // Test erratic failure mode
+  void testErraticFailure() {
+    std::mt19937 gen(42);
+    std::uniform_real_distribution<double> erratic(-1000.0, 1000.0);
+
+    bool failed = true;
+    double input = 100.0;
+    double output = failed ? erratic(gen) : input;
+
+    // Erratic output is random and may be far from input
+    TS_ASSERT(output != input || failed == false);
+  }
+
+  // Test moving average filter
+  void testMovingAverageFilter() {
+    std::deque<double> buffer;
+    int windowSize = 5;
+    double inputs[] = {10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0};
+
+    for (int i = 0; i < 5; i++) {
+      buffer.push_back(inputs[i]);
+    }
+
+    double sum = 0.0;
+    for (double val : buffer) {
+      sum += val;
+    }
+    double avg = sum / windowSize;
+
+    TS_ASSERT_DELTA(avg, 30.0, epsilon);  // (10+20+30+40+50)/5 = 30
+  }
+
+  // Test exponential moving average
+  void testExponentialMovingAverage() {
+    double alpha = 0.1;  // Smoothing factor
+    double ema = 0.0;
+
+    double inputs[] = {100.0, 100.0, 100.0, 100.0, 100.0};
+    for (double input : inputs) {
+      ema = alpha * input + (1.0 - alpha) * ema;
+    }
+
+    // After 5 samples of constant 100, EMA should approach 100
+    TS_ASSERT(ema > 40.0);  // Should have increased from 0
+    TS_ASSERT(ema < 100.0); // But not yet at 100
+  }
+
+  // Test median filter
+  void testMedianFilter() {
+    std::vector<double> buffer = {10.0, 100.0, 20.0, 30.0, 15.0};
+    std::sort(buffer.begin(), buffer.end());
+
+    double median = buffer[buffer.size() / 2];
+    TS_ASSERT_DELTA(median, 20.0, epsilon);  // Median of sorted {10, 15, 20, 30, 100}
+  }
+
+  // Test deadband filter
+  void testDeadbandFilter() {
+    double prevOutput = 50.0;
+    double deadband = 2.0;
+
+    // Small change - within deadband
+    double input1 = 51.0;
+    double output1 = (std::abs(input1 - prevOutput) > deadband) ? input1 : prevOutput;
+    TS_ASSERT_DELTA(output1, 50.0, epsilon);
+
+    // Large change - outside deadband
+    double input2 = 55.0;
+    double output2 = (std::abs(input2 - prevOutput) > deadband) ? input2 : prevOutput;
+    TS_ASSERT_DELTA(output2, 55.0, epsilon);
+  }
+
+  // Test sampling rate effect
+  void testSamplingRateEffect() {
+    double signalFreq = 10.0;  // Hz
+    double sampleRate1 = 100.0;  // Hz
+    double sampleRate2 = 20.0;   // Hz
+
+    // Nyquist limit
+    double nyquist1 = sampleRate1 / 2.0;
+    double nyquist2 = sampleRate2 / 2.0;
+
+    TS_ASSERT(signalFreq < nyquist1);  // Well sampled
+    TS_ASSERT(signalFreq == nyquist2); // At Nyquist limit
+  }
+
+  // Test anti-aliasing concept
+  void testAntiAliasingCutoff() {
+    double sampleRate = 100.0;  // Hz
+    double cutoffFreq = sampleRate / 2.0 * 0.8;  // 80% of Nyquist
+
+    TS_ASSERT_DELTA(cutoffFreq, 40.0, epsilon);
+  }
+
+  // Test ADC quantization noise
+  void testADCQuantizationNoise() {
+    int bits = 12;
+    double fullScale = 10.0;
+    double lsb = fullScale / (1 << bits);
+
+    // Theoretical quantization noise RMS = LSB / sqrt(12)
+    double quantNoiseRMS = lsb / std::sqrt(12.0);
+
+    TS_ASSERT(quantNoiseRMS < 0.001);  // Very small for 12-bit ADC
+  }
+
+  // Test gain error
+  void testGainError() {
+    double expectedGain = 1.0;
+    double actualGain = 1.02;  // 2% gain error
+
+    double gainError = (actualGain - expectedGain) / expectedGain * 100.0;
+    TS_ASSERT_DELTA(gainError, 2.0, epsilon);
+  }
+
+  // Test offset error
+  void testOffsetError() {
+    double expectedOffset = 0.0;
+    double actualOffset = 0.5;
+
+    double offsetError = actualOffset - expectedOffset;
+    TS_ASSERT_DELTA(offsetError, 0.5, epsilon);
+  }
+
+  // Test linearity error
+  void testLinearityError() {
+    // Simulated non-linear sensor response
+    auto nonLinearResponse = [](double x) { return x + 0.01 * x * x; };
+
+    double input = 50.0;
+    double linearOutput = input;
+    double actualOutput = nonLinearResponse(input);
+
+    double linearityError = actualOutput - linearOutput;
+    TS_ASSERT_DELTA(linearityError, 25.0, epsilon);  // 0.01 * 50^2 = 25
+  }
+
+  // Test repeatability
+  void testRepeatability() {
+    std::mt19937 gen(42);
+    std::normal_distribution<double> noise(0.0, 0.1);
+
+    double trueValue = 100.0;
+    std::vector<double> measurements;
+
+    for (int i = 0; i < 100; i++) {
+      measurements.push_back(trueValue + noise(gen));
+    }
+
+    // Calculate standard deviation (repeatability)
+    double sum = 0.0, sum_sq = 0.0;
+    for (double m : measurements) {
+      sum += m;
+      sum_sq += m * m;
+    }
+    double mean = sum / measurements.size();
+    double variance = sum_sq / measurements.size() - mean * mean;
+    double stdDev = std::sqrt(variance);
+
+    TS_ASSERT_DELTA(stdDev, 0.1, 0.02);  // Should be close to noise std dev
+  }
+
+  // Test sensor warm-up drift
+  void testWarmUpDrift() {
+    double initialBias = 5.0;   // Initial bias at cold start
+    double finalBias = 0.5;     // Final bias after warm-up
+    double warmUpTime = 60.0;   // 60 seconds warm-up
+    double timeConstant = 20.0; // Thermal time constant
+
+    // Exponential decay of bias
+    double t = 60.0;  // After full warm-up
+    double currentBias = finalBias + (initialBias - finalBias) * std::exp(-t / timeConstant);
+
+    TS_ASSERT(currentBias < initialBias);
+    TS_ASSERT(currentBias > finalBias);
+    TS_ASSERT_DELTA(currentBias, 0.7, 0.1);  // Close to final bias
+  }
+
+  // Test scale factor stability
+  void testScaleFactorStability() {
+    double nominalScale = 1.0;
+    double temperature = 50.0;
+    double refTemp = 25.0;
+    double ppmPerDegree = 50;  // 50 ppm/C
+
+    double scaleDrift = nominalScale * ppmPerDegree * (temperature - refTemp) / 1e6;
+    double actualScale = nominalScale + scaleDrift;
+
+    TS_ASSERT_DELTA(scaleDrift, 0.00125, epsilon);  // 1250 ppm for 25C delta
+    TS_ASSERT_DELTA(actualScale, 1.00125, epsilon);
+  }
+
+  // Test second-order lag filter
+  void testSecondOrderLag() {
+    double omega_n = 10.0;  // Natural frequency
+    double zeta = 0.7;      // Damping ratio
+    double dt = 0.001;
+
+    // Simplified second-order discrete approximation
+    double a1 = 2.0 * zeta * omega_n;
+    double a0 = omega_n * omega_n;
+
+    double y_prev = 0.0, y_prev2 = 0.0;
+    double u = 1.0;  // Step input
+
+    // Run simulation
+    for (int i = 0; i < 5000; i++) {
+      double y = (a0 * dt * dt * u + 2 * y_prev - y_prev2 + a1 * dt * y_prev) /
+                 (1 + a1 * dt + a0 * dt * dt);
+      y_prev2 = y_prev;
+      y_prev = y;
+    }
+
+    // Should converge to 1.0 (DC gain)
+    TS_ASSERT_DELTA(y_prev, 1.0, 0.01);
+  }
+
+  // Test multiple lag stages
+  void testMultipleLagStages() {
+    double C1 = 10.0;
+    double C2 = 20.0;
+    double dt = 0.01;
+
+    double ca1 = std::exp(-C1 * dt);
+    double cb1 = 1.0 - ca1;
+    double ca2 = std::exp(-C2 * dt);
+    double cb2 = 1.0 - ca2;
+
+    double y1 = 0.0, y2 = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y1 = ca1 * y1 + cb1 * u;
+      y2 = ca2 * y2 + cb2 * y1;
+    }
+
+    // Both stages converged
+    TS_ASSERT_DELTA(y1, 1.0, 0.001);
+    TS_ASSERT_DELTA(y2, 1.0, 0.001);
+  }
+
+  // Test sensor range percentage
+  void testSensorRangePercentage() {
+    double minRange = -100.0;
+    double maxRange = 100.0;
+    double reading = 50.0;
+
+    double percentage = (reading - minRange) / (maxRange - minRange) * 100.0;
+    TS_ASSERT_DELTA(percentage, 75.0, epsilon);  // 50 is 75% of -100 to 100
+  }
+
+  // Test over-range detection
+  void testOverRangeDetection() {
+    double maxRange = 100.0;
+    double reading = 120.0;
+
+    bool overRange = reading > maxRange;
+    TS_ASSERT(overRange);
+  }
+
+  // Test under-range detection
+  void testUnderRangeDetection() {
+    double minRange = 0.0;
+    double reading = -5.0;
+
+    bool underRange = reading < minRange;
+    TS_ASSERT(underRange);
+  }
+
+  // Test sensor resolution in engineering units
+  void testResolutionInEngineeringUnits() {
+    int adcBits = 16;
+    double minEU = -1000.0;  // Engineering units min
+    double maxEU = 1000.0;   // Engineering units max
+
+    double resolution = (maxEU - minEU) / (1 << adcBits);
+    TS_ASSERT_DELTA(resolution, 2000.0 / 65536.0, epsilon);
+    TS_ASSERT(resolution < 0.031);  // Better than 0.031 units
+  }
+
+  // Test noise rejection with averaging
+  void testNoiseRejectionWithAveraging() {
+    std::mt19937 gen(42);
+    std::normal_distribution<double> noise(0.0, 10.0);  // High noise
+
+    double trueValue = 100.0;
+    int numSamples = 100;
+    double sum = 0.0;
+
+    for (int i = 0; i < numSamples; i++) {
+      sum += trueValue + noise(gen);
+    }
+
+    double average = sum / numSamples;
+    // Averaging reduces noise by sqrt(N)
+    // Expected std of average = 10 / sqrt(100) = 1
+    TS_ASSERT(std::abs(average - trueValue) < 3.0);  // Within 3 sigma
+  }
+
+  // Test sample and hold
+  void testSampleAndHold() {
+    double sampledValue = 50.0;
+    bool holdMode = true;
+
+    double currentInput = 100.0;
+    double output = holdMode ? sampledValue : currentInput;
+
+    TS_ASSERT_DELTA(output, 50.0, epsilon);  // Holds previous value
+  }
+
+  // Test zero-order hold (ZOH) reconstruction
+  void testZeroOrderHold() {
+    double samples[] = {0.0, 50.0, 100.0, 75.0, 25.0};
+    double sampleRate = 10.0;  // Hz
+    double samplePeriod = 1.0 / sampleRate;
+
+    // ZOH holds each sample constant until next sample
+    double t = 0.15;  // Between sample 1 and 2
+    int sampleIndex = static_cast<int>(t / samplePeriod);
+    double output = samples[sampleIndex];
+
+    TS_ASSERT_DELTA(output, 50.0, epsilon);  // Holds sample 1 value
+  }
+
+  // Test first-order hold (linear interpolation)
+  void testFirstOrderHold() {
+    double sample1 = 50.0;
+    double sample2 = 100.0;
+    double samplePeriod = 0.1;
+    double t = 0.05;  // Halfway between samples
+
+    double fraction = t / samplePeriod;
+    double output = sample1 + fraction * (sample2 - sample1);
+
+    TS_ASSERT_DELTA(output, 75.0, epsilon);  // Linear interpolation
+  }
+
+  // Test digital to analog conversion
+  void testDAC() {
+    int digitalValue = 2048;  // 12-bit DAC, mid-scale
+    int maxDigital = 4095;
+    double minVolt = 0.0;
+    double maxVolt = 5.0;
+
+    double analogVolt = minVolt + (static_cast<double>(digitalValue) / maxDigital) * (maxVolt - minVolt);
+    TS_ASSERT_DELTA(analogVolt, 2.5, 0.001);  // Approximately mid-scale
+  }
+
+  // Test analog to digital conversion
+  void testADC() {
+    double analogVolt = 2.5;
+    double minVolt = 0.0;
+    double maxVolt = 5.0;
+    int maxDigital = 4095;
+
+    int digitalValue = static_cast<int>((analogVolt - minVolt) / (maxVolt - minVolt) * maxDigital);
+    TS_ASSERT_EQUALS(digitalValue, 2047);  // Mid-scale
+  }
+
+  // Test sensor health status
+  void testSensorHealthStatus() {
+    double reading = 50.0;
+    double minValid = 0.0;
+    double maxValid = 100.0;
+
+    bool healthy = (reading >= minValid && reading <= maxValid);
+    TS_ASSERT(healthy);
+  }
+
+  // Test sensor health with out-of-range
+  void testSensorHealthOutOfRange() {
+    double reading = 150.0;
+    double minValid = 0.0;
+    double maxValid = 100.0;
+
+    bool healthy = (reading >= minValid && reading <= maxValid);
+    TS_ASSERT(!healthy);
+  }
+
+  // Test rate of change monitoring
+  void testRateOfChangeMonitor() {
+    double prevReading = 100.0;
+    double currentReading = 120.0;
+    double dt = 0.1;
+    double maxRate = 100.0;  // Max allowed rate per second
+
+    double rate = std::abs(currentReading - prevReading) / dt;
+    bool rateValid = (rate <= maxRate);
+
+    TS_ASSERT_DELTA(rate, 200.0, epsilon);
+    TS_ASSERT(!rateValid);  // Rate exceeds limit
   }
 };
