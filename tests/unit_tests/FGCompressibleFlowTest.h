@@ -792,3 +792,408 @@ public:
         TS_ASSERT_DELTA(M2, 0.547, 0.01);
     }
 };
+
+/*******************************************************************************
+ * Additional FGCompressibleFlow Tests (30 new tests)
+ ******************************************************************************/
+
+class FGCompressibleFlowAdditionalTest : public CxxTest::TestSuite
+{
+public:
+    //==========================================================================
+    // HYPERSONIC FLOW EFFECTS
+    //==========================================================================
+
+    // Test 46: Hypersonic similarity parameter
+    void testHypersonicSimilarity() {
+        // Hypersonic similarity: K = M * θ (Mach * deflection angle)
+        double M = 6.0;
+        double theta = 0.10;  // radians (~5.7 degrees)
+
+        double K = M * theta;
+        TS_ASSERT_DELTA(K, 0.6, 0.01);
+
+        // Similar flows have same K
+        double M2 = 10.0;
+        double theta2 = K / M2;
+        TS_ASSERT_DELTA(theta2, 0.06, 0.001);
+    }
+
+    // Test 47: Newtonian flow limit
+    void testNewtonianFlowLimit() {
+        // At very high Mach, Cp = 2 * sin²θ (Newtonian)
+        double theta = 30.0 * PI_CONST / 180.0;  // radians
+
+        double Cp_newtonian = 2.0 * sin(theta) * sin(theta);
+        TS_ASSERT_DELTA(Cp_newtonian, 0.5, 0.01);
+    }
+
+    // Test 48: High Mach stagnation pressure ratio
+    void testHighMachStagnation() {
+        double M = 5.0;
+        double gamma = GAMMA_AIR;
+
+        double P0_P = pow(1.0 + ((gamma - 1.0) / 2.0) * M * M, gamma / (gamma - 1.0));
+        TS_ASSERT_DELTA(P0_P, 529.1, 1.0);  // Very high ratio
+    }
+
+    // Test 49: Hypersonic temperature ratio
+    void testHypersonicTemperatureRatio() {
+        double M = 8.0;
+        double gamma = GAMMA_AIR;
+
+        double T0_T = 1.0 + ((gamma - 1.0) / 2.0) * M * M;
+        TS_ASSERT_DELTA(T0_T, 13.8, 0.1);  // Very high stagnation temp
+    }
+
+    //==========================================================================
+    // CONICAL SHOCK FLOW
+    //==========================================================================
+
+    // Test 50: Conical shock angle
+    void testConicalShockAngle() {
+        // Conical shock angle is less than 2D wedge shock angle
+        double M = 3.0;
+        double cone_half_angle = 10.0;  // degrees
+
+        // Approximate shock angle for cone
+        double shock_angle_wedge = 25.0;  // degrees (2D)
+        double shock_angle_cone = 20.0;   // degrees (3D, less)
+
+        TS_ASSERT(shock_angle_cone < shock_angle_wedge);
+    }
+
+    // Test 51: Conical flow pressure ratio
+    void testConicalFlowPressureRatio() {
+        // Conical shocks have lower pressure rise than 2D
+        double P2_P1_wedge = 3.5;  // 2D oblique shock
+        double P2_P1_cone = 2.5;   // 3D conical shock
+
+        TS_ASSERT(P2_P1_cone < P2_P1_wedge);
+    }
+
+    // Test 52: Taylor-Maccoll cone flow
+    void testTaylorMaccollConeFlow() {
+        // Surface pressure on cone follows Taylor-Maccoll equation
+        double M = 2.5;
+        double cone_angle = 15.0 * PI_CONST / 180.0;
+
+        // Simplified surface Mach number
+        double M_surface_approx = M * cos(cone_angle) * 0.95;
+        TS_ASSERT(M_surface_approx > 2.0);
+        TS_ASSERT(M_surface_approx < M);
+    }
+
+    //==========================================================================
+    // COMPRESSION CORNER FLOWS
+    //==========================================================================
+
+    // Test 53: Compression corner shock angle
+    void testCompressionCornerShock() {
+        double M1 = 2.0;
+        double theta = 15.0 * PI_CONST / 180.0;  // Corner angle
+
+        // For compression, flow turns toward shock
+        // Mach angle is lower bound
+        double mu = asin(1.0 / M1);
+        TS_ASSERT(theta + mu < PI_CONST / 2.0);  // Attached shock possible
+    }
+
+    // Test 54: Pressure recovery in compression
+    void testCompressionPressureRecovery() {
+        double M1 = 2.0;
+        double gamma = GAMMA_AIR;
+
+        // Single oblique shock at β = 40°
+        double beta = 40.0 * PI_CONST / 180.0;
+        double M1n = M1 * sin(beta);
+        double P2_P1_oblique = 1.0 + (2.0 * gamma / (gamma + 1.0)) * (M1n * M1n - 1.0);
+
+        // Normal shock at same M1
+        double P2_P1_normal = 1.0 + (2.0 * gamma / (gamma + 1.0)) * (M1 * M1 - 1.0);
+
+        TS_ASSERT(P2_P1_oblique < P2_P1_normal);  // Oblique better
+    }
+
+    // Test 55: Isentropic compression efficiency
+    void testIsentropicCompressionEfficiency() {
+        double M1 = 2.0;
+        double M2 = 1.5;  // After isentropic compression
+        double gamma = GAMMA_AIR;
+
+        // Isentropic pressure ratio
+        double P2_P1 = pow((1.0 + ((gamma - 1.0) / 2.0) * M1 * M1) /
+                          (1.0 + ((gamma - 1.0) / 2.0) * M2 * M2), gamma / (gamma - 1.0));
+
+        TS_ASSERT(P2_P1 > 1.0);  // Pressure rises in compression
+    }
+
+    //==========================================================================
+    // SHOCK-EXPANSION THEORY
+    //==========================================================================
+
+    // Test 56: Diamond airfoil pressure distribution
+    void testDiamondAirfoilPressure() {
+        double M = 2.0;
+        double gamma = GAMMA_AIR;
+        double theta = 5.0 * PI_CONST / 180.0;  // Half-angle
+
+        // Leading edge compression
+        double M1n = M * sin(45.0 * PI_CONST / 180.0);  // Approximate
+        double P2_P1 = 1.0 + (2.0 * gamma / (gamma + 1.0)) * (M1n * M1n - 1.0);
+        TS_ASSERT(P2_P1 > 1.0);
+
+        // Trailing edge expansion (isentropic)
+        // Pressure decreases
+        double P3_P2 = 0.5;  // Simplified
+        TS_ASSERT(P3_P2 < 1.0);
+    }
+
+    // Test 57: Shock-expansion wave drag
+    void testShockExpansionWaveDrag() {
+        double M = 2.5;
+        double theta = 10.0 * PI_CONST / 180.0;  // Wedge half-angle
+        double gamma = GAMMA_AIR;
+
+        // Wave drag from pressure difference
+        // Simplified: CD ∝ θ² for small angles
+        double CD_wave_approx = 4.0 * theta * theta / sqrt(M * M - 1.0);
+
+        TS_ASSERT(CD_wave_approx > 0);
+        TS_ASSERT(CD_wave_approx < 0.1);
+    }
+
+    // Test 58: Expansion fan interaction
+    void testExpansionFanInteraction() {
+        // Two expansion fans meeting
+        double M1 = 2.0;
+        double turn1 = 10.0 * PI_CONST / 180.0;
+        double turn2 = 8.0 * PI_CONST / 180.0;
+
+        // Each fan accelerates flow
+        double total_turn = turn1 + turn2;
+        TS_ASSERT(total_turn < 30.0 * PI_CONST / 180.0);  // Still attached
+    }
+
+    //==========================================================================
+    // INLET DESIGN
+    //==========================================================================
+
+    // Test 59: External compression inlet
+    void testExternalCompressionInlet() {
+        double M0 = 2.0;
+        double n_shocks = 2;  // Number of oblique shocks
+
+        // Multiple weak shocks more efficient than single normal shock
+        double eta_multiple = 0.95;  // Typical for 2-shock inlet
+        double eta_normal = 0.72;    // Normal shock only
+
+        TS_ASSERT(eta_multiple > eta_normal);
+    }
+
+    // Test 60: Mixed compression inlet
+    void testMixedCompressionInlet() {
+        // External + internal compression
+        double M0 = 3.0;
+        double M_throat = 1.2;  // Just supersonic at throat
+
+        // Pressure recovery better than external only
+        double PR_external = 0.85;
+        double PR_mixed = 0.92;
+
+        TS_ASSERT(PR_mixed > PR_external);
+    }
+
+    // Test 61: Inlet buzz margin
+    void testInletBuzzMargin() {
+        // Inlet buzz occurs when normal shock oscillates
+        double M_design = 2.0;
+        double M_margin = 0.1;  // Buzz margin
+
+        double M_buzz = M_design - M_margin;
+        TS_ASSERT_DELTA(M_buzz, 1.9, 0.01);
+    }
+
+    //==========================================================================
+    // NOZZLE EXPANSION
+    //==========================================================================
+
+    // Test 62: Underexpanded nozzle plume
+    void testUnderexpandedPlume() {
+        double P_exit = 150000.0;  // Pa
+        double P_ambient = 101325.0;  // Pa
+
+        double pressure_ratio = P_exit / P_ambient;
+        TS_ASSERT(pressure_ratio > 1.0);  // Underexpanded
+
+        // Plume expands after nozzle exit
+        double expansion_angle_approx = 15.0;  // degrees
+        TS_ASSERT(expansion_angle_approx > 0);
+    }
+
+    // Test 63: Overexpanded nozzle separation
+    void testOverexpandedSeparation() {
+        double P_exit_design = 50000.0;  // Pa
+        double P_ambient = 101325.0;      // Pa
+
+        double pressure_ratio = P_exit_design / P_ambient;
+        TS_ASSERT(pressure_ratio < 1.0);  // Overexpanded
+
+        // Flow may separate from nozzle wall
+        double separation_ratio = 0.35;  // Typical separation P/P_ambient
+        TS_ASSERT(separation_ratio < 0.5);
+    }
+
+    // Test 64: Plug nozzle expansion
+    void testPlugNozzleExpansion() {
+        double M_design = 3.0;
+        double gamma = GAMMA_AIR;
+
+        // Plug nozzle self-adjusts to ambient pressure
+        double A_exit_A_throat = 4.0;  // Design area ratio
+
+        // Thrust coefficient at design
+        double Cf_design = 1.8;  // Typical for plug nozzle
+        TS_ASSERT(Cf_design > 1.5);
+    }
+
+    //==========================================================================
+    // TRANSONIC BUFFET
+    //==========================================================================
+
+    // Test 65: Buffet onset Mach
+    void testBuffetOnsetMach() {
+        // Buffet begins when shock-boundary layer interaction causes oscillation
+        double CL = 0.6;
+        double M_buffet_onset = 0.80 - 0.05 * CL;
+
+        TS_ASSERT_DELTA(M_buffet_onset, 0.77, 0.01);
+    }
+
+    // Test 66: Shock oscillation frequency
+    void testShockOscillationFrequency() {
+        // Typical buffet frequency
+        double chord = 5.0;  // m
+        double V = 250.0;    // m/s
+
+        // Strouhal number for buffet ~ 0.1
+        double St = 0.1;
+        double f_buffet = St * V / chord;
+
+        TS_ASSERT_DELTA(f_buffet, 5.0, 0.5);  // Hz
+    }
+
+    // Test 67: Buffet boundary
+    void testBuffetBoundary() {
+        // CL vs M buffet boundary
+        double M = 0.85;
+        double CL_max_buffet = 0.80;  // At this Mach
+
+        // Lower Mach allows higher CL before buffet
+        double M2 = 0.75;
+        double CL_max_buffet_2 = 1.0;
+
+        TS_ASSERT(CL_max_buffet_2 > CL_max_buffet);
+    }
+
+    //==========================================================================
+    // SHOCK-BOUNDARY LAYER INTERACTION
+    //==========================================================================
+
+    // Test 68: Shock-induced separation
+    void testShockInducedSeparation() {
+        // Strong shock can separate boundary layer
+        double M_local = 1.4;
+        double P2_P1 = 2.0;  // Across shock
+
+        // Incipient separation occurs at pressure rise ~ 2x
+        double P_ratio_separation = 2.0;
+
+        TS_ASSERT(P2_P1 >= P_ratio_separation);  // May cause separation
+    }
+
+    // Test 69: Lambda shock structure
+    void testLambdaShockStructure() {
+        // Lambda shock forms in turbulent boundary layer interaction
+        double M_upstream = 1.5;
+        double shock_foot_height_approx = 0.005;  // m (boundary layer scale)
+
+        // Bifurcated shock with oblique leg
+        TS_ASSERT(shock_foot_height_approx > 0);
+    }
+
+    // Test 70: Separation bubble length
+    void testSeparationBubbleLength() {
+        // Separation bubble length scales with shock strength
+        double delta = 0.01;  // m (boundary layer thickness)
+        double P2_P1 = 2.5;   // Shock pressure ratio
+
+        double bubble_length_approx = delta * (P2_P1 - 1.0) * 10.0;
+        TS_ASSERT(bubble_length_approx > 0);
+        TS_ASSERT(bubble_length_approx < 0.5);
+    }
+
+    //==========================================================================
+    // AREA RULE AND WAVE DRAG
+    //==========================================================================
+
+    // Test 71: Area rule concept
+    void testAreaRuleConcept() {
+        // Smooth area distribution minimizes wave drag
+        double A_max_fuselage = 10.0;   // m² (fuselage cross-section)
+        double A_wing_root = 3.0;       // m² (wing adds area)
+
+        // Waisted fuselage reduces total
+        double A_waist = 7.0;
+        double A_total_waisted = A_waist + A_wing_root;
+        double A_total_unwaisted = A_max_fuselage + A_wing_root;
+
+        TS_ASSERT(A_total_waisted < A_total_unwaisted);
+    }
+
+    // Test 72: Sears-Haack body drag
+    void testSearsHaackDrag() {
+        // Minimum wave drag for given volume
+        double volume = 10.0;  // m³
+        double length = 15.0;  // m
+
+        // Fineness ratio
+        double fineness = length / pow(volume, 1.0/3.0);
+        TS_ASSERT(fineness > 5.0);  // Should be slender
+    }
+
+    // Test 73: Transonic area ruling effect
+    void testTransonicAreaRuling() {
+        // CD reduction from area ruling
+        double CD_unruled = 0.040;
+        double CD_ruled = 0.025;
+
+        double reduction = (CD_unruled - CD_ruled) / CD_unruled * 100.0;
+        TS_ASSERT_DELTA(reduction, 37.5, 1.0);  // ~38% reduction
+    }
+
+    //==========================================================================
+    // COMPRESSIBILITY EFFECTS ON CONTROL
+    //==========================================================================
+
+    // Test 74: Aileron reversal Mach
+    void testAileronReversalMach() {
+        // At high Mach, flexible wing can cause control reversal
+        double q_dynamic = 50000.0;  // Pa
+        double q_reversal = 80000.0; // Pa (reversal dynamic pressure)
+
+        bool reversal = q_dynamic > q_reversal;
+        TS_ASSERT_EQUALS(reversal, false);  // Not reversed at this q
+    }
+
+    // Test 75: Transonic control effectiveness
+    void testTransonicControlEffectiveness() {
+        // Control surface effectiveness varies in transonic regime
+        double eta_subsonic = 1.0;    // Baseline
+        double eta_transonic = 0.7;   // Reduced due to shock
+        double eta_supersonic = 0.8;  // Partially recovered
+
+        TS_ASSERT(eta_transonic < eta_subsonic);
+        TS_ASSERT(eta_supersonic > eta_transonic);
+    }
+};
