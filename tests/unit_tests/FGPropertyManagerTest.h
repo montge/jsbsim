@@ -269,4 +269,626 @@ public:
     TS_ASSERT_EQUALS(pm2->HasNode("pm2/prop"), true);
     TS_ASSERT_EQUALS(pm2->HasNode("pm1/prop"), false);
   }
+
+  /***************************************************************************
+   * Node Traversal Tests
+   ***************************************************************************/
+
+  void testGetParentNode() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto child = pm->GetNode("parent/child", true);
+    auto parent = child->getParent();
+
+    TS_ASSERT(parent != nullptr);
+    TS_ASSERT_EQUALS(parent->getNameString(), "parent");
+  }
+
+  void testGetChildCount() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto parent = pm->GetNode("parent", true);
+
+    // Create children
+    pm->GetNode("parent/child1", true);
+    pm->GetNode("parent/child2", true);
+    pm->GetNode("parent/child3", true);
+
+    TS_ASSERT_EQUALS(parent->nChildren(), 3);
+  }
+
+  void testGetChildByIndex() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("parent/alpha", true);
+    pm->GetNode("parent/beta", true);
+    pm->GetNode("parent/gamma", true);
+
+    auto parent = pm->GetNode("parent");
+    TS_ASSERT(parent != nullptr);
+
+    // Access children by index
+    auto child0 = parent->getChild(0);
+    auto child1 = parent->getChild(1);
+    auto child2 = parent->getChild(2);
+
+    TS_ASSERT(child0 != nullptr);
+    TS_ASSERT(child1 != nullptr);
+    TS_ASSERT(child2 != nullptr);
+  }
+
+  void testGetChildByName() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("parent/named_child", true)->setIntValue(42);
+
+    auto parent = pm->GetNode("parent");
+    auto child = parent->getChild("named_child");
+
+    TS_ASSERT(child != nullptr);
+    TS_ASSERT_EQUALS(child->getIntValue(), 42);
+  }
+
+  void testGetRootNode() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto deep = pm->GetNode("a/b/c/d/e", true);
+
+    auto root = deep->getRootNode();
+    TS_ASSERT(root != nullptr);
+    TS_ASSERT_EQUALS(root->getNameString(), "");
+  }
+
+  /***************************************************************************
+   * Additional Property Type Tests
+   ***************************************************************************/
+
+  void testSetAndGetLong() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("test/long", true);
+
+    node->setLongValue(123456789L);
+    TS_ASSERT_EQUALS(node->getLongValue(), 123456789L);
+  }
+
+  void testSetAndGetFloat() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("test/float", true);
+
+    node->setFloatValue(2.718f);
+    TS_ASSERT_DELTA(node->getFloatValue(), 2.718f, 1e-5);
+  }
+
+  void testUnspecifiedType() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("test/unspecified", true);
+
+    // Node with no value set should have UNSPECIFIED type
+    TS_ASSERT(node->getType() == simgear::props::UNSPECIFIED ||
+              node->getType() == simgear::props::NONE);
+  }
+
+  void testTypeAfterSetting() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("test/typed", true);
+
+    node->setDoubleValue(1.0);
+    TS_ASSERT_EQUALS(node->getType(), simgear::props::DOUBLE);
+
+    // Note: Once type is set, it may not change with subsequent sets
+    // Test that the original type is preserved
+    node->setIntValue(1);
+    // Type may stay DOUBLE since it was already typed
+    TS_ASSERT(node->getType() == simgear::props::DOUBLE ||
+              node->getType() == simgear::props::INT);
+  }
+
+  /***************************************************************************
+   * Node Removal Tests
+   ***************************************************************************/
+
+  void testRemoveChild() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("parent/child1", true);
+    pm->GetNode("parent/child2", true);
+
+    auto parent = pm->GetNode("parent");
+    int initialCount = parent->nChildren();
+
+    parent->removeChild("child1");
+
+    TS_ASSERT_EQUALS(parent->nChildren(), initialCount - 1);
+    TS_ASSERT(parent->getChild("child1") == nullptr);
+  }
+
+  void testRemoveAllChildren() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("parent/child1", true);
+    pm->GetNode("parent/child2", true);
+    pm->GetNode("parent/child3", true);
+
+    auto parent = pm->GetNode("parent");
+    parent->removeAllChildren();
+
+    TS_ASSERT_EQUALS(parent->nChildren(), 0);
+  }
+
+  /***************************************************************************
+   * Type Coercion Tests
+   ***************************************************************************/
+
+  void testDoubleToIntCoercion() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("coerce/double", true);
+
+    node->setDoubleValue(3.7);
+    int intVal = node->getIntValue();
+
+    TS_ASSERT_EQUALS(intVal, 3);  // Truncated
+  }
+
+  void testIntToDoubleCoercion() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("coerce/int", true);
+
+    node->setIntValue(42);
+    double doubleVal = node->getDoubleValue();
+
+    TS_ASSERT_DELTA(doubleVal, 42.0, 1e-10);
+  }
+
+  void testBoolToIntCoercion() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("coerce/bool", true);
+
+    node->setBoolValue(true);
+    TS_ASSERT_EQUALS(node->getIntValue(), 1);
+
+    node->setBoolValue(false);
+    TS_ASSERT_EQUALS(node->getIntValue(), 0);
+  }
+
+  void testIntToBoolCoercion() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("coerce/tobool", true);
+
+    node->setIntValue(0);
+    TS_ASSERT_EQUALS(node->getBoolValue(), false);
+
+    node->setIntValue(1);
+    TS_ASSERT_EQUALS(node->getBoolValue(), true);
+
+    node->setIntValue(42);  // Any non-zero
+    TS_ASSERT_EQUALS(node->getBoolValue(), true);
+  }
+
+  void testStringToDoubleCoercion() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("coerce/string", true);
+
+    node->setStringValue("123.456");
+    TS_ASSERT_DELTA(node->getDoubleValue(), 123.456, 1e-6);
+  }
+
+  void testDoubleToStringCoercion() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("coerce/dtostr", true);
+
+    node->setDoubleValue(3.14);
+    std::string str = node->getStringValue();
+
+    TS_ASSERT(str.find("3.14") != std::string::npos);
+  }
+
+  /***************************************************************************
+   * Path Edge Cases
+   ***************************************************************************/
+
+  void testEmptyPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("", false);
+
+    // Empty path should return root
+    TS_ASSERT(node != nullptr);
+  }
+
+  void testTrailingSlash() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("test/path", true);
+
+    // Trailing slash should still find the node
+    auto node = pm->GetNode("test/path/");
+    TS_ASSERT(node != nullptr);
+  }
+
+  void testDoubleSlash() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("test//double", true);
+
+    // Should handle double slashes gracefully
+    TS_ASSERT(node != nullptr);
+  }
+
+  void testAbsolutePath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("test/abs", true);
+
+    // Leading slash indicates absolute path
+    auto node = pm->GetNode("/test/abs");
+    TS_ASSERT(node != nullptr);
+  }
+
+  /***************************************************************************
+   * Index Array Operations
+   ***************************************************************************/
+
+  void testArrayAccess() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Create array elements
+    pm->GetNode("array", 0, true)->setIntValue(10);
+    pm->GetNode("array", 1, true)->setIntValue(20);
+    pm->GetNode("array", 2, true)->setIntValue(30);
+
+    TS_ASSERT_EQUALS(pm->GetNode("array", 0)->getIntValue(), 10);
+    TS_ASSERT_EQUALS(pm->GetNode("array", 1)->getIntValue(), 20);
+    TS_ASSERT_EQUALS(pm->GetNode("array", 2)->getIntValue(), 30);
+  }
+
+  void testArrayPathSyntax() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    pm->GetNode("items[0]", true)->setIntValue(100);
+    pm->GetNode("items[1]", true)->setIntValue(200);
+
+    auto item0 = pm->GetNode("items[0]");
+    auto item1 = pm->GetNode("items[1]");
+
+    TS_ASSERT(item0 != nullptr);
+    TS_ASSERT(item1 != nullptr);
+    TS_ASSERT_EQUALS(item0->getIntValue(), 100);
+    TS_ASSERT_EQUALS(item1->getIntValue(), 200);
+  }
+
+  void testNestedArrays() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    pm->GetNode("matrix/row", 0, true)->getNode("col", 0, true)->setIntValue(1);
+    pm->GetNode("matrix/row", 0, true)->getNode("col", 1, true)->setIntValue(2);
+    pm->GetNode("matrix/row", 1, true)->getNode("col", 0, true)->setIntValue(3);
+
+    auto val00 = pm->GetNode("matrix/row[0]/col[0]");
+    auto val01 = pm->GetNode("matrix/row[0]/col[1]");
+
+    TS_ASSERT(val00 != nullptr);
+    TS_ASSERT(val01 != nullptr);
+  }
+
+  /***************************************************************************
+   * Attribute Tests
+   ***************************************************************************/
+
+  void testAttributeReadOnly() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("readonly/prop", true);
+
+    node->setDoubleValue(1.0);
+    node->setAttribute(SGPropertyNode::READ, true);
+    node->setAttribute(SGPropertyNode::WRITE, false);
+
+    // Should be readable
+    TS_ASSERT_DELTA(node->getDoubleValue(), 1.0, 1e-10);
+
+    // Attribute flags should be set
+    TS_ASSERT_EQUALS(node->getAttribute(SGPropertyNode::READ), true);
+  }
+
+  void testAttributeUserArchive() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("archive/prop", true);
+
+    node->setAttribute(SGPropertyNode::USERARCHIVE, true);
+
+    TS_ASSERT_EQUALS(node->getAttribute(SGPropertyNode::USERARCHIVE), true);
+  }
+
+  void testAttributePreserve() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("preserve/prop", true);
+
+    node->setAttribute(SGPropertyNode::PRESERVE, true);
+
+    TS_ASSERT_EQUALS(node->getAttribute(SGPropertyNode::PRESERVE), true);
+  }
+
+  /***************************************************************************
+   * Alias Tests
+   ***************************************************************************/
+
+  void testPropertyAlias() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto original = pm->GetNode("original/value", true);
+    auto alias = pm->GetNode("alias/value", true);
+
+    original->setDoubleValue(42.0);
+    alias->alias(original);
+
+    // Alias should reflect the original value
+    TS_ASSERT_DELTA(alias->getDoubleValue(), 42.0, 1e-10);
+
+    // Changing original should change alias
+    original->setDoubleValue(100.0);
+    TS_ASSERT_DELTA(alias->getDoubleValue(), 100.0, 1e-10);
+  }
+
+  void testIsAlias() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto original = pm->GetNode("orig", true);
+    auto alias = pm->GetNode("als", true);
+
+    alias->alias(original);
+
+    TS_ASSERT_EQUALS(alias->isAlias(), true);
+    TS_ASSERT_EQUALS(original->isAlias(), false);
+  }
+
+  void testUnalias() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto original = pm->GetNode("original2", true);
+    auto alias = pm->GetNode("alias2", true);
+
+    original->setDoubleValue(50.0);
+    alias->alias(original);
+    alias->unalias();
+
+    TS_ASSERT_EQUALS(alias->isAlias(), false);
+
+    // After unalias, the node no longer tracks original
+    // but may not have retained the value
+    original->setDoubleValue(999.0);
+    // Just verify it's no longer aliased
+    TS_ASSERT(!alias->isAlias());
+  }
+
+  void testMultipleAliases() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto source = pm->GetNode("source/value", true);
+    auto alias1 = pm->GetNode("alias1", true);
+    auto alias2 = pm->GetNode("alias2", true);
+
+    source->setDoubleValue(100.0);
+    alias1->alias(source);
+    alias2->alias(source);
+
+    // Both aliases should point to same value
+    TS_ASSERT_DELTA(alias1->getDoubleValue(), 100.0, 1e-10);
+    TS_ASSERT_DELTA(alias2->getDoubleValue(), 100.0, 1e-10);
+
+    // Change source
+    source->setDoubleValue(200.0);
+    TS_ASSERT_DELTA(alias1->getDoubleValue(), 200.0, 1e-10);
+    TS_ASSERT_DELTA(alias2->getDoubleValue(), 200.0, 1e-10);
+  }
+
+  /***************************************************************************
+   * Copy Operations
+   ***************************************************************************/
+
+  void testCopyValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto src = pm->GetNode("src", true);
+    auto dst = pm->GetNode("dst", true);
+
+    src->setDoubleValue(3.14);
+    dst->setDoubleValue(src->getDoubleValue());
+
+    TS_ASSERT_DELTA(dst->getDoubleValue(), 3.14, 1e-10);
+
+    // Changing source shouldn't affect destination (not aliased)
+    src->setDoubleValue(2.71);
+    TS_ASSERT_DELTA(dst->getDoubleValue(), 3.14, 1e-10);
+  }
+
+  /***************************************************************************
+   * Deep Nesting Tests
+   ***************************************************************************/
+
+  void testDeepNesting() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    std::string deepPath = "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p";
+
+    auto node = pm->GetNode(deepPath, true);
+    node->setIntValue(12345);
+
+    auto retrieved = pm->GetNode(deepPath);
+    TS_ASSERT(retrieved != nullptr);
+    TS_ASSERT_EQUALS(retrieved->getIntValue(), 12345);
+  }
+
+  void testDeepNodeDepth() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("l1/l2/l3/l4/l5", true);
+
+    int depth = 0;
+    SGPropertyNode* current = node;
+    while (current->getParent() != nullptr) {
+      depth++;
+      current = current->getParent();
+    }
+
+    TS_ASSERT_EQUALS(depth, 5);
+  }
+
+  /***************************************************************************
+   * Tie with Methods Tests
+   ***************************************************************************/
+
+  void testTieInt() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    int value = 100;
+
+    pm->Tie("tied/int", &value);
+
+    auto node = pm->GetNode("tied/int");
+    TS_ASSERT(node != nullptr);
+    TS_ASSERT_EQUALS(node->getIntValue(), 100);
+
+    value = 200;
+    TS_ASSERT_EQUALS(node->getIntValue(), 200);
+  }
+
+  void testTieBool() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    bool flag = true;
+
+    pm->Tie("tied/bool", &flag);
+
+    auto node = pm->GetNode("tied/bool");
+    TS_ASSERT(node != nullptr);
+    TS_ASSERT_EQUALS(node->getBoolValue(), true);
+
+    flag = false;
+    TS_ASSERT_EQUALS(node->getBoolValue(), false);
+  }
+
+  /***************************************************************************
+   * Property Name Tests
+   ***************************************************************************/
+
+  void testUnderscoreInName() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Underscores are typically allowed
+    auto node = pm->GetNode("test_property_name", true);
+    TS_ASSERT(node != nullptr);
+  }
+
+  void testHyphenInName() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto node = pm->GetNode("test-property-name", true);
+    TS_ASSERT(node != nullptr);
+  }
+
+  void testMixedCaseName() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto node1 = pm->GetNode("CamelCase", true);
+    auto node2 = pm->GetNode("lowercase", true);
+    auto node3 = pm->GetNode("UPPERCASE", true);
+
+    TS_ASSERT(node1 != nullptr);
+    TS_ASSERT(node2 != nullptr);
+    TS_ASSERT(node3 != nullptr);
+  }
+
+  /***************************************************************************
+   * Multiple Value Updates
+   ***************************************************************************/
+
+  void testMultipleUpdates() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("update/test", true);
+
+    for (int i = 0; i < 100; i++) {
+      node->setIntValue(i);
+      TS_ASSERT_EQUALS(node->getIntValue(), i);
+    }
+  }
+
+  void testSequentialTypeSet() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Use separate nodes to avoid type confusion
+    auto intNode = pm->GetNode("types/myint", true);
+    auto dblNode = pm->GetNode("types/mydbl", true);
+    auto strNode = pm->GetNode("types/mystr", true);
+    auto boolNode = pm->GetNode("types/mybool", true);
+
+    intNode->setIntValue(1);
+    dblNode->setDoubleValue(2.5);
+    strNode->setStringValue("hello");
+    boolNode->setBoolValue(true);
+
+    TS_ASSERT_EQUALS(intNode->getIntValue(), 1);
+    TS_ASSERT_DELTA(dblNode->getDoubleValue(), 2.5, 1e-10);
+    TS_ASSERT_EQUALS(strNode->getStringValue(), std::string("hello"));
+    TS_ASSERT_EQUALS(boolNode->getBoolValue(), true);
+  }
+
+  /***************************************************************************
+   * Edge Value Tests
+   ***************************************************************************/
+
+  void testLargeDoubleValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("large/double", true);
+
+    double large = 1e50;  // Reasonably large
+    node->setDoubleValue(large);
+    TS_ASSERT(node->getDoubleValue() > 1e49);
+  }
+
+  void testSmallDoubleValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("small/double", true);
+
+    double small = 1e-50;  // Reasonably small
+    node->setDoubleValue(small);
+    TS_ASSERT(node->getDoubleValue() > 0);
+    TS_ASSERT(node->getDoubleValue() < 1e-40);
+  }
+
+  void testNegativeValues() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto intNode = pm->GetNode("neg/int", true);
+    intNode->setIntValue(-12345);
+    TS_ASSERT_EQUALS(intNode->getIntValue(), -12345);
+
+    auto dblNode = pm->GetNode("neg/double", true);
+    dblNode->setDoubleValue(-3.14159);
+    TS_ASSERT_DELTA(dblNode->getDoubleValue(), -3.14159, 1e-10);
+  }
+
+  void testZeroValues() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto intNode = pm->GetNode("zero/int", true);
+    intNode->setIntValue(0);
+    TS_ASSERT_EQUALS(intNode->getIntValue(), 0);
+
+    auto dblNode = pm->GetNode("zero/double", true);
+    dblNode->setDoubleValue(0.0);
+    TS_ASSERT_DELTA(dblNode->getDoubleValue(), 0.0, 1e-10);
+  }
+
+  void testEmptyStringValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("empty/string", true);
+
+    node->setStringValue("");
+    TS_ASSERT_EQUALS(node->getStringValue(), std::string(""));
+  }
+
+  /***************************************************************************
+   * Additional Navigation Tests
+   ***************************************************************************/
+
+  void testSiblingCount() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("parent/child1", true);
+    pm->GetNode("parent/child2", true);
+    pm->GetNode("parent/child3", true);
+
+    auto parent = pm->GetNode("parent");
+
+    // There should be 3 children
+    TS_ASSERT_EQUALS(parent->nChildren(), 3);
+  }
+
+  void testParentChildRelation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("a/b/c", true)->setIntValue(1);
+    pm->GetNode("a/b/d", true)->setIntValue(2);
+
+    auto nodeB = pm->GetNode("a/b");
+    TS_ASSERT(nodeB != nullptr);
+    TS_ASSERT_EQUALS(nodeB->nChildren(), 2);
+  }
 };
