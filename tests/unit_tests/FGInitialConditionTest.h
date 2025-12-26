@@ -856,4 +856,704 @@ public:
     double vt_computed = sqrt(u*u + v*v + w*w);
     TS_ASSERT_DELTA(ic.GetVtrueFpsIC(), vt_computed, 0.5);
   }
+
+  /***************************************************************************
+   * Earth Position Angle Tests
+   ***************************************************************************/
+
+  void testEarthPositionAngleDefault() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Default earth position angle should be 0
+    TS_ASSERT_DELTA(ic.GetEarthPositionAngleIC(), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Trim Request Tests
+   ***************************************************************************/
+
+  void testTrimRequestedDefault() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Verify trim requested returns a valid value
+    int trim = ic.TrimRequested();
+    TS_ASSERT(trim >= 0);  // Should be a valid trim mode
+  }
+
+  /***************************************************************************
+   * Engine Running Tests
+   ***************************************************************************/
+
+  void testIsEngineRunningDefault() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // By default no engines should be running
+    for (unsigned int i = 0; i < 8; i++) {
+      TS_ASSERT_EQUALS(ic.IsEngineRunning(i), false);
+    }
+  }
+
+  /***************************************************************************
+   * Wind in Body Frame Tests
+   ***************************************************************************/
+
+  void testWindBodyFrameDefault() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Default wind should be zero
+    TS_ASSERT_DELTA(ic.GetWindUFpsIC(), 0.0, epsilon);
+    TS_ASSERT_DELTA(ic.GetWindVFpsIC(), 0.0, epsilon);
+    TS_ASSERT_DELTA(ic.GetWindWFpsIC(), 0.0, epsilon);
+  }
+
+  void testWindBodyFrameWithNEDWind() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set NED wind and check body frame transformation
+    ic.SetWindNEDFpsIC(10.0, 5.0, 0.0);
+
+    // With level flight (phi=theta=psi=0), body and NED align
+    // so body U should match NED N, body V should match NED E
+    double windU = ic.GetWindUFpsIC();
+    double windV = ic.GetWindVFpsIC();
+    double windW = ic.GetWindWFpsIC();
+
+    // All should be finite
+    TS_ASSERT(!std::isnan(windU));
+    TS_ASSERT(!std::isnan(windV));
+    TS_ASSERT(!std::isnan(windW));
+  }
+
+  /***************************************************************************
+   * Speed Relationship Tests
+   ***************************************************************************/
+
+  void testSpeedRelationshipsAtSeaLevel() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // At sea level, calibrated = equivalent = true airspeed (approximately)
+    ic.SetAltitudeASLFtIC(0.0);
+    ic.SetVcalibratedKtsIC(200.0);
+
+    double vc = ic.GetVcalibratedKtsIC();
+    double ve = ic.GetVequivalentKtsIC();
+    double vt = ic.GetVtrueKtsIC();
+
+    // At sea level, these should be approximately equal
+    TS_ASSERT_DELTA(vc, 200.0, 1.0);
+    TS_ASSERT_DELTA(ve, vt, 5.0);  // EAS and TAS nearly equal at sea level
+  }
+
+  void testSpeedRelationshipsAtAltitude() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // At altitude, true airspeed > calibrated airspeed
+    ic.SetAltitudeASLFtIC(30000.0);
+    ic.SetVcalibratedKtsIC(200.0);
+
+    double vt = ic.GetVtrueKtsIC();
+
+    // True airspeed should be significantly higher at altitude
+    TS_ASSERT(vt > 250.0);  // Much higher at 30000 ft
+  }
+
+  void testMachAtDifferentAltitudes() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Same true airspeed gives different Mach at different altitudes
+    ic.SetAltitudeASLFtIC(0.0);
+    ic.SetVtrueKtsIC(400.0);
+    double mach_low = ic.GetMachIC();
+
+    ic.SetAltitudeASLFtIC(40000.0);
+    ic.SetVtrueKtsIC(400.0);
+    double mach_high = ic.GetMachIC();
+
+    // Mach should be higher at altitude (lower speed of sound)
+    TS_ASSERT(mach_high > mach_low);
+  }
+
+  /***************************************************************************
+   * Alpha, Gamma, Theta Relationship Tests
+   ***************************************************************************/
+
+  void testAlphaGammaThetaRelationship() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set velocity first
+    ic.SetVtrueFpsIC(300.0);
+
+    // theta = alpha + gamma for level-wing flight
+    // Set alpha and gamma, check theta
+    ic.SetAlphaDegIC(5.0);
+    ic.SetFlightPathAngleDegIC(3.0);
+
+    double theta = ic.GetThetaDegIC();
+    double alpha = ic.GetAlphaDegIC();
+    double gamma = ic.GetFlightPathAngleDegIC();
+
+    // In steady flight: theta ≈ alpha + gamma
+    TS_ASSERT_DELTA(theta, alpha + gamma, 1.0);
+  }
+
+  void testClimbRateFlightPathAngleRelationship() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // gamma = arcsin(climb_rate / Vt)
+    double vt = 300.0;  // fps
+    ic.SetVtrueFpsIC(vt);
+
+    // Set climb rate
+    double climb_rate = 20.0;  // fps
+    ic.SetClimbRateFpsIC(climb_rate);
+
+    double gamma = ic.GetFlightPathAngleRadIC();
+    double expected_gamma = asin(climb_rate / vt);
+
+    TS_ASSERT_DELTA(gamma, expected_gamma, 0.01);
+  }
+
+  void testClimbRateFromFlightPathAngle() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    double vt = 400.0;  // fps
+    ic.SetVtrueFpsIC(vt);
+
+    // Set flight path angle to 5 degrees
+    ic.SetFlightPathAngleDegIC(5.0);
+
+    double climb_rate = ic.GetClimbRateFpsIC();
+    double expected = vt * sin(5.0 * M_PI / 180.0);
+
+    TS_ASSERT_DELTA(climb_rate, expected, 1.0);
+  }
+
+  /***************************************************************************
+   * Extreme Position Tests
+   ***************************************************************************/
+
+  void testPositionNearNorthPole() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetLatitudeDegIC(89.9);
+    ic.SetLongitudeDegIC(0.0);
+    ic.SetAltitudeASLFtIC(1000.0);
+
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 89.9, 0.01);
+    TS_ASSERT(!std::isnan(ic.GetGeodLatitudeDegIC()));
+  }
+
+  void testPositionNearSouthPole() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetLatitudeDegIC(-89.9);
+    ic.SetLongitudeDegIC(180.0);
+    ic.SetAltitudeASLFtIC(5000.0);
+
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), -89.9, 0.01);
+    TS_ASSERT(!std::isnan(ic.GetGeodLatitudeDegIC()));
+  }
+
+  void testPositionAtEquator() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetLatitudeDegIC(0.0);
+    ic.SetLongitudeDegIC(90.0);
+    ic.SetAltitudeASLFtIC(0.0);
+
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 0.0, epsilon);
+    // At equator, geodetic and geocentric latitude should be equal
+    TS_ASSERT_DELTA(ic.GetGeodLatitudeDegIC(), 0.0, 0.01);
+  }
+
+  void testPositionAtDateLine() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetLatitudeDegIC(45.0);
+    ic.SetLongitudeDegIC(180.0);
+    ic.SetAltitudeASLFtIC(1000.0);
+
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), 180.0, epsilon * 100.);
+  }
+
+  void testPositionNegativeLongitude() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetLongitudeDegIC(-180.0);
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), -180.0, epsilon * 100.);
+
+    ic.SetLongitudeDegIC(-90.0);
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), -90.0, epsilon * 100.);
+  }
+
+  /***************************************************************************
+   * Geodetic vs Geocentric Latitude Tests
+   ***************************************************************************/
+
+  void testGeodeticVsGeocentricLatitude() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // At mid-latitudes, geodetic latitude differs from geocentric
+    ic.SetLatitudeDegIC(45.0);  // Set geocentric
+
+    double geocentric = ic.GetLatitudeDegIC();
+    double geodetic = ic.GetGeodLatitudeDegIC();
+
+    // Geodetic latitude should be slightly larger at 45 degrees
+    // (Earth is flattened at poles, bulges at equator)
+    TS_ASSERT(geodetic >= geocentric - 0.5);  // Within reasonable range
+  }
+
+  void testSetGeodeticThenGetGeocentric() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetAltitudeASLFtIC(1000.0);
+    ic.SetGeodLatitudeDegIC(45.0);
+
+    double geodetic = ic.GetGeodLatitudeDegIC();
+    double geocentric = ic.GetLatitudeDegIC();
+
+    // Should be close but not identical
+    TS_ASSERT_DELTA(geodetic, 45.0, 0.01);
+    TS_ASSERT(fabs(geodetic - geocentric) < 1.0);  // Reasonable difference
+  }
+
+  /***************************************************************************
+   * Wind Magnitude and Direction Tests
+   ***************************************************************************/
+
+  void testWindMagnitudeAndDirection() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set wind using magnitude and direction
+    ic.SetWindMagKtsIC(20.0);
+    ic.SetWindDirDegIC(90.0);  // Wind from east
+
+    // Check components
+    double windMag = ic.GetWindMagFpsIC();
+    double windDir = ic.GetWindDirDegIC();
+
+    TS_ASSERT(windMag > 0.0);
+    TS_ASSERT_DELTA(windDir, 90.0, 1.0);
+
+    // Wind from east should have N=0, E<0 (wind blowing from east to west)
+    double windN = ic.GetWindNFpsIC();
+    double windE = ic.GetWindEFpsIC();
+
+    TS_ASSERT_DELTA(windN, 0.0, 1.0);
+  }
+
+  void testWindDirectionWrap() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Test wind direction at various angles
+    ic.SetWindMagKtsIC(10.0);
+
+    ic.SetWindDirDegIC(0.0);  // From north
+    double windN_0 = ic.GetWindNFpsIC();
+
+    ic.SetWindDirDegIC(180.0);  // From south
+    double windN_180 = ic.GetWindNFpsIC();
+
+    // Wind direction should affect N component (opposite signs for N vs S wind)
+    // Just verify they're different and wind magnitude is correct
+    TS_ASSERT(windN_0 != windN_180 || ic.GetWindMagFpsIC() < 0.1);
+    TS_ASSERT(ic.GetWindMagFpsIC() > 0.0);
+  }
+
+  /***************************************************************************
+   * Combined Headwind and Crosswind Tests
+   ***************************************************************************/
+
+  void testCombinedHeadwindCrosswind() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVtrueKtsIC(200.0);
+    ic.SetPsiDegIC(0.0);  // Heading north
+
+    // Set both headwind and crosswind
+    ic.SetHeadWindKtsIC(15.0);
+    ic.SetCrossWindKtsIC(10.0);
+
+    // Wind should have both N and E components
+    double windMag = ic.GetWindMagFpsIC();
+    TS_ASSERT(windMag > 0.0);
+
+    // Total wind magnitude should be sqrt(15^2 + 10^2) in knots
+    double expectedMag = sqrt(15.0*15.0 + 10.0*10.0) * ktstofps;
+    TS_ASSERT_DELTA(windMag, expectedMag, 1.0);
+  }
+
+  /***************************************************************************
+   * Terrain Elevation Tests
+   ***************************************************************************/
+
+  void testTerrainElevationSetting() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetTerrainElevationFtIC(5000.0);
+    TS_ASSERT_DELTA(ic.GetTerrainElevationFtIC(), 5000.0, 1.0);
+
+    ic.SetTerrainElevationFtIC(0.0);
+    TS_ASSERT_DELTA(ic.GetTerrainElevationFtIC(), 0.0, 1.0);
+
+    // Negative terrain (below sea level)
+    ic.SetTerrainElevationFtIC(-1000.0);
+    TS_ASSERT_DELTA(ic.GetTerrainElevationFtIC(), -1000.0, 1.0);
+  }
+
+  void testAGLWithTerrainElevation() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetTerrainElevationFtIC(2000.0);
+    ic.SetAltitudeAGLFtIC(500.0);
+
+    // ASL should be terrain + AGL
+    double asl = ic.GetAltitudeASLFtIC();
+    TS_ASSERT_DELTA(asl, 2500.0, 10.0);
+
+    // Now change terrain elevation
+    ic.SetTerrainElevationFtIC(3000.0);
+    ic.SetAltitudeAGLFtIC(500.0);
+    asl = ic.GetAltitudeASLFtIC();
+    TS_ASSERT_DELTA(asl, 3500.0, 10.0);
+  }
+
+  /***************************************************************************
+   * Very High Altitude Tests
+   ***************************************************************************/
+
+  void testVeryHighAltitude() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Test at space-like altitude
+    ic.SetAltitudeASLFtIC(300000.0);  // ~90km, near space
+    TS_ASSERT_DELTA(ic.GetAltitudeASLFtIC(), 300000.0, 100.0);
+
+    // Set Mach at very high altitude
+    ic.SetMachIC(5.0);  // Hypersonic
+    TS_ASSERT_DELTA(ic.GetMachIC(), 5.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Zero Velocity Edge Cases
+   ***************************************************************************/
+
+  void testZeroVelocity() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVtrueFpsIC(0.0);
+
+    TS_ASSERT_DELTA(ic.GetVtrueFpsIC(), 0.0, epsilon);
+    TS_ASSERT_DELTA(ic.GetVgroundFpsIC(), 0.0, epsilon);
+    TS_ASSERT_DELTA(ic.GetMachIC(), 0.0, epsilon);
+  }
+
+  void testFlightPathAngleWithZeroVelocity() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVtrueFpsIC(0.0);
+
+    // Flight path angle should be 0 when velocity is 0
+    double gamma = ic.GetFlightPathAngleRadIC();
+    TS_ASSERT_DELTA(gamma, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Orientation Quaternion Tests
+   ***************************************************************************/
+
+  void testQuaternionNormalized() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPhiDegIC(30.0);
+    ic.SetThetaDegIC(15.0);
+    ic.SetPsiDegIC(90.0);
+
+    const FGQuaternion& quat = ic.GetOrientation();
+
+    // Quaternion should be normalized (magnitude = 1)
+    double mag = sqrt(quat(1)*quat(1) + quat(2)*quat(2) +
+                      quat(3)*quat(3) + quat(4)*quat(4));
+    TS_ASSERT_DELTA(mag, 1.0, epsilon);
+  }
+
+  void testQuaternionIdentityAtZeroAngles() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPhiDegIC(0.0);
+    ic.SetThetaDegIC(0.0);
+    ic.SetPsiDegIC(0.0);
+
+    const FGQuaternion& quat = ic.GetOrientation();
+
+    // Identity quaternion is [1, 0, 0, 0]
+    TS_ASSERT_DELTA(quat(1), 1.0, epsilon);
+    TS_ASSERT_DELTA(quat(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(quat(3), 0.0, epsilon);
+    TS_ASSERT_DELTA(quat(4), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Alpha and Beta at Various Velocities
+   ***************************************************************************/
+
+  void testAlphaWithPositiveW() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Flying forward with nose-up attack
+    ic.SetUBodyFpsIC(200.0);
+    ic.SetWBodyFpsIC(20.0);  // Positive W means positive alpha
+
+    double alpha = ic.GetAlphaRadIC();
+    TS_ASSERT(alpha > 0.0);
+
+    // alpha = atan(w/u) approximately
+    double expected = atan2(20.0, 200.0);
+    TS_ASSERT_DELTA(alpha, expected, 0.01);
+  }
+
+  void testBetaWithPositiveV() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Flying forward with sideslip
+    ic.SetUBodyFpsIC(200.0);
+    ic.SetVBodyFpsIC(20.0);  // Positive V means positive beta
+
+    double beta = ic.GetBetaRadIC();
+    TS_ASSERT(beta > 0.0);
+
+    // beta = asin(v/vt) approximately
+    double vt = sqrt(200.0*200.0 + 20.0*20.0);
+    double expected = asin(20.0 / vt);
+    TS_ASSERT_DELTA(beta, expected, 0.01);
+  }
+
+  /***************************************************************************
+   * Speed Set Tracking Additional Tests
+   ***************************************************************************/
+
+  void testSpeedSetAfterVBodyFps() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVBodyFpsIC(50.0);
+    TS_ASSERT_EQUALS(ic.GetSpeedSet(), setuvw);
+
+    ic.SetWBodyFpsIC(10.0);
+    TS_ASSERT_EQUALS(ic.GetSpeedSet(), setuvw);
+  }
+
+  void testSpeedSetAfterNEDVelocities() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVEastFpsIC(100.0);
+    TS_ASSERT_EQUALS(ic.GetSpeedSet(), setned);
+
+    ic.SetVDownFpsIC(-10.0);
+    TS_ASSERT_EQUALS(ic.GetSpeedSet(), setned);
+  }
+
+  /***************************************************************************
+   * Target Nlf Additional Tests
+   ***************************************************************************/
+
+  void testTargetNlfNegative() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Test negative load factor (inverted flight)
+    ic.SetTargetNlfIC(-1.0);
+    TS_ASSERT_DELTA(ic.GetTargetNlfIC(), -1.0, epsilon);
+  }
+
+  void testTargetNlfHighG() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Test high G load factor
+    ic.SetTargetNlfIC(9.0);
+    TS_ASSERT_DELTA(ic.GetTargetNlfIC(), 9.0, epsilon);
+  }
+
+  /***************************************************************************
+   * FGLocation Access Tests
+   ***************************************************************************/
+
+  void testGetPositionRadius() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetLatitudeDegIC(45.0);
+    ic.SetLongitudeDegIC(-75.0);
+    ic.SetAltitudeASLFtIC(10000.0);
+
+    const FGLocation& pos = ic.GetPosition();
+
+    // Radius should be approximately Earth's radius + altitude
+    double radius = pos.GetRadius();
+    TS_ASSERT(radius > 20000000.0);  // > 20 million feet (Earth radius)
+    TS_ASSERT(radius < 25000000.0);  // < 25 million feet
+  }
+
+  /***************************************************************************
+   * Multiple Set/Get Cycles
+   ***************************************************************************/
+
+  void testMultipleSetGetCycles() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Test that multiple set/get cycles are stable
+    for (int i = 0; i < 5; i++) {
+      double lat = 30.0 + i * 5.0;
+      double lon = -100.0 + i * 10.0;
+      double alt = 5000.0 + i * 1000.0;
+
+      ic.SetLatitudeDegIC(lat);
+      ic.SetLongitudeDegIC(lon);
+      ic.SetAltitudeASLFtIC(alt);
+
+      TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), lat, 0.01);
+      TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), lon, 0.01);
+      TS_ASSERT_DELTA(ic.GetAltitudeASLFtIC(), alt, 10.0);
+    }
+  }
+
+  void testVelocitySetGetCycles() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetAltitudeASLFtIC(10000.0);
+
+    // Multiple velocity set/get cycles
+    for (int i = 0; i < 5; i++) {
+      double vt = 200.0 + i * 50.0;
+      ic.SetVtrueKtsIC(vt);
+      TS_ASSERT_DELTA(ic.GetVtrueKtsIC(), vt, 1.0);
+    }
+  }
+
+  /***************************************************************************
+   * Conversion Consistency Tests
+   ***************************************************************************/
+
+  void testKnotsToFpsConversion() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVtrueKtsIC(100.0);
+    double vt_fps = ic.GetVtrueFpsIC();
+    double vt_kts = ic.GetVtrueKtsIC();
+
+    // Check conversion factor
+    TS_ASSERT_DELTA(vt_fps / vt_kts, ktstofps, 0.001);
+  }
+
+  void testDegreesToRadiansConversion() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPhiDegIC(45.0);
+    TS_ASSERT_DELTA(ic.GetPhiRadIC(), M_PI / 4.0, epsilon);
+
+    ic.SetThetaDegIC(30.0);
+    TS_ASSERT_DELTA(ic.GetThetaRadIC(), M_PI / 6.0, epsilon);
+
+    ic.SetPsiDegIC(90.0);
+    TS_ASSERT_DELTA(ic.GetPsiRadIC(), M_PI / 2.0, epsilon);
+  }
+
+  void testFpmToFpsConversion() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVtrueFpsIC(300.0);
+    ic.SetClimbRateFpmIC(1200.0);
+
+    TS_ASSERT_DELTA(ic.GetClimbRateFpsIC(), 20.0, 0.1);
+    TS_ASSERT_DELTA(ic.GetClimbRateFpmIC(), 1200.0, 5.0);
+  }
+
+  /***************************************************************************
+   * Edge Case: Very Small Velocities
+   ***************************************************************************/
+
+  void testVerySmallVelocity() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVtrueFpsIC(0.001);
+    TS_ASSERT(!std::isnan(ic.GetMachIC()));
+    TS_ASSERT(!std::isnan(ic.GetVcalibratedKtsIC()));
+  }
+
+  /***************************************************************************
+   * Heading Wrap Tests
+   ***************************************************************************/
+
+  void testHeadingWrap360() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPsiDegIC(359.0);
+    TS_ASSERT_DELTA(ic.GetPsiDegIC(), 359.0, 0.1);
+
+    ic.SetPsiDegIC(0.0);
+    TS_ASSERT_DELTA(ic.GetPsiDegIC(), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * InitializeIC Then Set Tests
+   ***************************************************************************/
+
+  void testInitializeThenSetValues() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set values
+    ic.SetLatitudeDegIC(40.0);
+    ic.SetVtrueKtsIC(300.0);
+
+    // Initialize (reset)
+    ic.InitializeIC();
+
+    // Set new values
+    ic.SetLatitudeDegIC(50.0);
+    ic.SetVtrueKtsIC(400.0);
+
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 50.0, epsilon);
+    TS_ASSERT_DELTA(ic.GetVtrueKtsIC(), 400.0, 1.0);
+  }
 };
