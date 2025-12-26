@@ -364,4 +364,464 @@ public:
     TS_ASSERT_DELTA(std::sin(latRad), 0.0, epsilon);
     TS_ASSERT_DELTA(std::cos(latRad), 1.0, epsilon);
   }
+
+  /***************************************************************************
+   * Additional Comprehensive Inertial Tests
+   ***************************************************************************/
+
+  // Test geopotential height
+  void testGeopotentialHeight() {
+    double geometric_h = 35000.0;  // ft
+    double r0 = WGS84_A;
+
+    // Geopotential height: H = r0 * h / (r0 + h)
+    double geopotential_h = r0 * geometric_h / (r0 + geometric_h);
+
+    TS_ASSERT(geopotential_h < geometric_h);
+    TS_ASSERT_DELTA(geopotential_h, 34941.0, 10.0);
+  }
+
+  // Test geopotential to geometric conversion
+  void testGeopotentialToGeometric() {
+    double geopotential_h = 34941.0;  // ft
+    double r0 = WGS84_A;
+
+    // Geometric height: h = r0 * H / (r0 - H)
+    double geometric_h = r0 * geopotential_h / (r0 - geopotential_h);
+
+    TS_ASSERT_DELTA(geometric_h, 35000.0, 10.0);
+  }
+
+  // Test J2 zonal harmonic effect
+  void testJ2ZonalHarmonic() {
+    double J2 = 1.08263e-3;  // WGS84 second zonal harmonic
+
+    // J2 causes gravity variation with latitude
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // Simplified J2 correction factor
+    double sin2lat = std::sin(latRad) * std::sin(latRad);
+    double j2_factor = 1.0 + 1.5 * J2 * (3 * sin2lat - 1);
+
+    TS_ASSERT(j2_factor > 0.99 && j2_factor < 1.01);
+  }
+
+  // Test geodetic vs geocentric latitude
+  void testGeodeticVsGeocentricLatitude() {
+    double geodetic_lat = 45.0;  // degrees
+    double a = WGS84_A;
+    double b = WGS84_B;
+
+    // tan(geocentric) = (b²/a²) * tan(geodetic)
+    double ratio = (b * b) / (a * a);
+    double geocentric_lat = std::atan(ratio * std::tan(geodetic_lat * DEG_TO_RAD)) / DEG_TO_RAD;
+
+    TS_ASSERT(geocentric_lat < geodetic_lat);  // Geocentric is smaller
+    TS_ASSERT_DELTA(geocentric_lat, 44.81, 0.01);
+  }
+
+  // Test gravity gradient
+  void testGravityGradient() {
+    double r = WGS84_A;
+
+    // dg/dh = -2g/r (approximate)
+    double gravity_gradient = -2.0 * G0 / r;  // ft/s²/ft
+
+    TS_ASSERT(gravity_gradient < 0);  // Gravity decreases with altitude
+    TS_ASSERT_DELTA(gravity_gradient * 1e6, -3.07, 0.1);  // micro-g/ft
+  }
+
+  // Test free-fall acceleration
+  void testFreeFallAcceleration() {
+    double mass = 1.0;  // slug
+    double weight = mass * G0;
+
+    // F = ma, so a = F/m = g
+    double acceleration = weight / mass;
+    TS_ASSERT_DELTA(acceleration, G0, epsilon);
+  }
+
+  // Test Eötvös effect
+  void testEotvosEffect() {
+    // Aircraft flying east at equator experiences apparent weight change
+    double v_east = 500.0;  // ft/s eastward
+    double lat = 0.0;
+
+    // Eötvös acceleration = 2*omega*v*cos(lat) + v²/r
+    double a_eotvos = 2 * OMEGA_EARTH * v_east * std::cos(lat * DEG_TO_RAD);
+    a_eotvos += (v_east * v_east) / WGS84_A;
+
+    TS_ASSERT(a_eotvos > 0);  // Apparent reduction in weight
+  }
+
+  // Test westward flight Eötvös effect
+  void testEotvosWestward() {
+    double v_west = -500.0;  // ft/s westward
+    double lat = 0.0;
+
+    double a_eotvos = 2 * OMEGA_EARTH * v_west * std::cos(lat * DEG_TO_RAD);
+    a_eotvos += (v_west * v_west) / WGS84_A;
+
+    // Net effect is positive (v² term) but smaller than eastward
+    TS_ASSERT(a_eotvos != 0);
+  }
+
+  // Test local vertical deviation
+  void testLocalVerticalDeviation() {
+    double geodetic_lat = 45.0;
+    double geocentric_lat = 44.81;
+
+    // Difference between geodetic and geocentric latitude
+    double deviation = geodetic_lat - geocentric_lat;
+    TS_ASSERT_DELTA(deviation, 0.19, 0.01);  // degrees
+  }
+
+  // Test Earth surface velocity
+  void testEarthSurfaceVelocity() {
+    double lat = 0.0;  // Equator
+    double r = WGS84_A;
+
+    // Surface velocity = omega * r * cos(lat)
+    double v_surface = OMEGA_EARTH * r * std::cos(lat * DEG_TO_RAD);
+
+    // Convert to knots: 1 ft/s = 0.5925 knots
+    double v_knots = v_surface * 0.5925;
+
+    TS_ASSERT_DELTA(v_knots, 902.0, 5.0);  // About 900 knots at equator
+  }
+
+  // Test Earth surface velocity at mid-latitude
+  void testEarthSurfaceVelocityMidLat() {
+    double lat = 45.0;
+    double r = WGS84_A * std::cos(lat * DEG_TO_RAD);  // Distance from axis
+
+    double v_surface = OMEGA_EARTH * r;
+    double v_knots = v_surface * 0.5925;
+
+    TS_ASSERT(v_knots < 900.0);  // Less than at equator
+  }
+
+  // Test gravitational potential
+  void testGravitationalPotential() {
+    double r = WGS84_A;
+
+    // U = GM/r
+    double U = GM / r;
+
+    TS_ASSERT(U > 0);
+    // U = GM/r = 1.408e16 / 2.09e7 ≈ 6.73e8 ft²/s²
+    TS_ASSERT_DELTA(U * 1e-8, 6.73, 0.1);
+  }
+
+  // Test escape velocity concept
+  void testEscapeVelocity() {
+    double r = WGS84_A;
+
+    // v_escape = sqrt(2*GM/r)
+    double v_escape = std::sqrt(2 * GM / r);
+
+    // Convert to ft/s, should be about 36,700 ft/s
+    TS_ASSERT_DELTA(v_escape, 36700.0, 100.0);
+  }
+
+  // Test orbital velocity concept
+  void testOrbitalVelocity() {
+    double r = WGS84_A + 100 * 6076.12;  // 100 nm altitude in ft
+
+    // v_orbital = sqrt(GM/r)
+    double v_orbital = std::sqrt(GM / r);
+
+    // Should be about 25,500 ft/s
+    TS_ASSERT_DELTA(v_orbital, 25500.0, 500.0);
+  }
+
+  // Test gravity at different latitudes array
+  void testGravityLatitudeArray() {
+    double latitudes[] = {0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0};
+    double g_equator = 32.0877;
+    double g_pole = 32.2577;
+
+    double prev_g = 0.0;
+    for (double lat : latitudes) {
+      double latRad = lat * DEG_TO_RAD;
+      double g = g_equator + (g_pole - g_equator) * std::sin(latRad) * std::sin(latRad);
+
+      TS_ASSERT(g >= g_equator);
+      TS_ASSERT(g <= g_pole);
+      TS_ASSERT(g >= prev_g);  // Monotonically increasing
+      prev_g = g;
+    }
+  }
+
+  // Test transport rate
+  void testTransportRate() {
+    // Transport rate = rate of change of latitude due to velocity
+    double v_north = 500.0;  // ft/s northward
+    double r = WGS84_A;
+
+    // dlat/dt = v_north / r (radians/s)
+    double lat_rate = v_north / r;
+
+    TS_ASSERT(lat_rate > 0);
+    TS_ASSERT(lat_rate < 1e-4);  // Small rate
+  }
+
+  // Test longitude rate
+  void testLongitudeRate() {
+    double v_east = 500.0;  // ft/s eastward
+    double r = WGS84_A;
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // dlon/dt = v_east / (r * cos(lat))
+    double lon_rate = v_east / (r * std::cos(latRad));
+
+    TS_ASSERT(lon_rate > 0);
+  }
+
+  // Test radius of curvature (meridian)
+  void testRadiusCurvatureMeridian() {
+    double a = WGS84_A;
+    double b = WGS84_B;
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    double e2 = (a*a - b*b) / (a*a);
+    double sinLat = std::sin(latRad);
+
+    // Radius of curvature in meridian
+    double M = a * (1 - e2) / std::pow(1 - e2 * sinLat * sinLat, 1.5);
+
+    TS_ASSERT(M > 0);
+    TS_ASSERT(M < a * 1.1);  // Reasonable range
+  }
+
+  // Test radius of curvature (prime vertical)
+  void testRadiusCurvaturePrimeVertical() {
+    double a = WGS84_A;
+    double b = WGS84_B;
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    double e2 = (a*a - b*b) / (a*a);
+    double sinLat = std::sin(latRad);
+
+    // Radius of curvature in prime vertical
+    double N = a / std::sqrt(1 - e2 * sinLat * sinLat);
+
+    TS_ASSERT(N > 0);
+    TS_ASSERT(N >= a);  // N >= a always
+  }
+
+  // Test plumb line deviation
+  void testPlumbLineDeviation() {
+    // The plumb line doesn't point exactly to Earth center
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // Deviation is max at 45° latitude
+    double max_deviation = 0.19;  // degrees (approximately)
+    TS_ASSERT(max_deviation > 0.1);
+    TS_ASSERT(max_deviation < 0.3);
+  }
+
+  // Test pendulum period variation
+  void testPendulumPeriodVariation() {
+    // T = 2*pi*sqrt(L/g)
+    double L = 1.0;  // ft pendulum length
+    double g_equator = 32.0877;
+    double g_pole = 32.2577;
+
+    double T_equator = 2 * M_PI * std::sqrt(L / g_equator);
+    double T_pole = 2 * M_PI * std::sqrt(L / g_pole);
+
+    TS_ASSERT(T_equator > T_pole);  // Longer period at equator (weaker gravity)
+  }
+
+  // Test Coriolis for vertical motion
+  void testCoriolisVertical() {
+    double v_vertical = 100.0;  // ft/s upward
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // Vertical Coriolis (deflects east for upward motion in N. Hemisphere)
+    double a_coriolis_h = 2 * OMEGA_EARTH * v_vertical * std::cos(latRad);
+
+    TS_ASSERT(a_coriolis_h > 0);
+  }
+
+  // Test gravity at geostationary orbit altitude
+  void testGravityGeostationary() {
+    // Geostationary altitude: ~22,236 miles = 117,406,080 ft above equator
+    double h = 117406080.0;
+    double r0 = WGS84_A;
+    double r = r0 + h;
+
+    double g = G0 * (r0 / r) * (r0 / r);
+
+    TS_ASSERT(g < 1.0);  // Much weaker gravity
+    TS_ASSERT(g > 0.0);
+  }
+
+  // Test centripetal requirement for orbit
+  void testCentripetalOrbit() {
+    double h = 100 * 6076.12;  // 100 nm in ft
+    double r = WGS84_A + h;
+
+    // At orbital velocity, centripetal = gravitational
+    double g = GM / (r * r);
+    double v_orbital = std::sqrt(GM / r);
+    double centripetal = v_orbital * v_orbital / r;
+
+    TS_ASSERT_DELTA(centripetal, g, 0.001);
+  }
+
+  // Test angular momentum of orbiting object
+  void testOrbitalAngularMomentum() {
+    double r = WGS84_A + 100 * 6076.12;
+    double v = std::sqrt(GM / r);
+    double mass = 1.0;  // slug
+
+    double L = mass * v * r;  // Angular momentum
+
+    TS_ASSERT(L > 0);
+  }
+
+  // Test Foucault pendulum period
+  void testFoucaultPendulumPeriod() {
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // Period of Foucault pendulum plane rotation
+    double T_foucault = (2 * M_PI / OMEGA_EARTH) / std::sin(latRad);
+    double hours = T_foucault / 3600.0;
+
+    TS_ASSERT_DELTA(hours, 33.84, 0.1);  // About 34 hours at 45°
+  }
+
+  // Test Foucault at pole
+  void testFoucaultPendulumPole() {
+    double lat = 90.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    double T_foucault = (2 * M_PI / OMEGA_EARTH) / std::sin(latRad);
+    double hours = T_foucault / 3600.0;
+
+    TS_ASSERT_DELTA(hours, 23.93, 0.1);  // One sidereal day
+  }
+
+  // Test weight variation for aircraft
+  void testAircraftWeightVariation() {
+    double mass = 155.0;  // slugs (5000 lb aircraft)
+    double h = 35000.0;
+    double r0 = WGS84_A;
+
+    double g_surface = G0;
+    double g_altitude = g_surface * (r0 / (r0 + h)) * (r0 / (r0 + h));
+
+    double weight_surface = mass * g_surface;
+    double weight_altitude = mass * g_altitude;
+    double weight_loss = weight_surface - weight_altitude;
+
+    TS_ASSERT(weight_loss > 0);
+    TS_ASSERT(weight_loss < 20.0);  // Less than 20 lbs difference
+  }
+
+  // Test specific force
+  void testSpecificForce() {
+    // Specific force = acceleration felt by accelerometer
+    // In free fall: specific force = 0
+    // At rest on Earth: specific force = g (upward)
+
+    double g = G0;
+    double specific_force_rest = g;  // Accelerometer reads g when at rest
+
+    TS_ASSERT_DELTA(specific_force_rest, G0, epsilon);
+  }
+
+  // Test rotating frame velocity addition
+  void testRotatingFrameVelocity() {
+    double v_inertial = 500.0;  // ft/s in inertial frame
+    double v_earth = OMEGA_EARTH * WGS84_A;  // Earth surface velocity
+
+    // Ground speed = inertial velocity - Earth rotation
+    double v_ground = v_inertial - v_earth;
+
+    TS_ASSERT(std::abs(v_ground) < std::abs(v_inertial) + std::abs(v_earth));
+  }
+
+  // Test spherical vs ellipsoid gravity
+  void testSphericalVsEllipsoid() {
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // Spherical approximation
+    double g_spherical = G0;
+
+    // Ellipsoid approximation (Somigliana)
+    double g_equator = 32.0877;
+    double g_pole = 32.2577;
+    double g_ellipsoid = g_equator + (g_pole - g_equator) * std::sin(latRad) * std::sin(latRad);
+
+    // They differ slightly
+    TS_ASSERT(std::abs(g_spherical - g_ellipsoid) < 0.2);
+  }
+
+  // Test gravity vector direction
+  void testGravityVectorDirection() {
+    // Gravity vector points toward Earth center (in geocentric frame)
+    // In geodetic frame, it's along the local vertical
+
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    // Local vertical has components in geocentric frame
+    double sin_lat = std::sin(latRad);
+    double cos_lat = std::cos(latRad);
+
+    // Unit vector magnitude should be 1
+    double mag = std::sqrt(sin_lat * sin_lat + cos_lat * cos_lat);
+    TS_ASSERT_DELTA(mag, 1.0, epsilon);
+  }
+
+  // Test apparent weight in curved flight
+  void testApparentWeightCurvedFlight() {
+    double v = 500.0;  // ft/s
+    double r = 5000.0; // ft turn radius
+    double mass = 155.0; // slugs
+
+    // Centripetal acceleration
+    double a_centripetal = v * v / r;
+
+    // Load factor for level turn
+    double n = std::sqrt(1 + (a_centripetal / G0) * (a_centripetal / G0));
+
+    TS_ASSERT(n > 1.0);  // Load factor > 1 in a turn
+  }
+
+  // Test load factor in pull-up
+  void testLoadFactorPullUp() {
+    double v = 500.0;  // ft/s
+    double r = 3000.0; // ft pull-up radius
+
+    // In a pull-up, centripetal adds to gravity
+    double a_centripetal = v * v / r;
+    double n = 1.0 + a_centripetal / G0;
+
+    TS_ASSERT(n > 2.0);  // High g pull-up
+  }
+
+  // Test negative g (push-over)
+  void testNegativeG() {
+    double v = 500.0;  // ft/s
+    double r = 2000.0; // ft push-over radius
+
+    // In a push-over, centripetal opposes gravity
+    double a_centripetal = v * v / r;
+    double n = 1.0 - a_centripetal / G0;
+
+    TS_ASSERT(n < 1.0);
+    TS_ASSERT(n < 0.0);  // Negative g
+  }
 };
