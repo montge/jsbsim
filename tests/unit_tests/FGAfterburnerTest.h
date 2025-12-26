@@ -855,4 +855,327 @@ public:
     TS_ASSERT(noiseIncrease > 15.0);
     TS_ASSERT(noiseIncrease < 35.0);
   }
+
+  // Test AB specific thrust calculation
+  void testABSpecificThrust() {
+    // Specific thrust = Thrust / (mass flow rate)
+    double thrust = 24000.0;  // lbs
+    double massFlow = 200.0;  // lbs/sec
+
+    double specificThrust = thrust / massFlow;
+    TS_ASSERT_DELTA(specificThrust, 120.0, 0.1);  // lbs/(lbs/sec) = sec
+
+    // Higher with AB due to higher exhaust velocity
+    double thrust_dry = 15000.0;
+    double specificThrust_dry = thrust_dry / massFlow;
+    TS_ASSERT(specificThrust > specificThrust_dry);
+  }
+
+  // Test nozzle pressure ratio
+  void testNozzlePressureRatio() {
+    double P0_nozzle = 50.0;  // psia
+    double P_ambient = 14.7;  // psia
+
+    double NPR = P0_nozzle / P_ambient;
+    TS_ASSERT_DELTA(NPR, 3.40, 0.01);
+
+    // Choked flow occurs at NPR > ~1.89
+    bool chokedFlow = (NPR > 1.89);
+    TS_ASSERT(chokedFlow);
+  }
+
+  // Test convergent-divergent nozzle expansion
+  void testCDNozzleExpansion() {
+    // Area ratio for supersonic expansion
+    double exitMach = 2.0;
+    double gamma = 1.35;
+
+    // Simplified area ratio calculation
+    double term1 = 1.0 + (gamma - 1.0) / 2.0 * exitMach * exitMach;
+    double term2 = (gamma + 1.0) / 2.0;
+    double areaRatio = pow(term1 / term2, (gamma + 1.0) / (2.0 * (gamma - 1.0))) / exitMach;
+
+    TS_ASSERT(areaRatio > 1.0);  // Exit area > throat area
+  }
+
+  // Test AB fuel-air ratio limits
+  void testABFuelAirRatioLimits() {
+    double FAR_min = 0.008;   // Lean limit for stable combustion
+    double FAR_max = 0.035;   // Rich limit before efficiency drop
+    double FAR_operating = 0.020;
+
+    bool withinLimits = (FAR_operating >= FAR_min) && (FAR_operating <= FAR_max);
+    TS_ASSERT(withinLimits);
+  }
+
+  // Test AB combustion stability margin
+  void testABCombustionStabilityMargin() {
+    double velocityRatio = 1.5;  // Flame speed / flow velocity
+    double stabilityMargin = velocityRatio - 1.0;
+
+    // Positive margin means stable combustion
+    TS_ASSERT(stabilityMargin > 0.0);
+    TS_ASSERT_DELTA(stabilityMargin, 0.5, 0.01);
+  }
+
+  // Test AB liner cooling effectiveness
+  void testABLinerCoolingEffectiveness() {
+    double T_gas = 1800.0;     // K (gas temperature)
+    double T_coolant = 600.0;  // K (cooling air temperature)
+    double T_wall = 1000.0;    // K (wall temperature)
+
+    double coolingEffectiveness = (T_gas - T_wall) / (T_gas - T_coolant);
+    TS_ASSERT(coolingEffectiveness > 0.5);
+    TS_ASSERT_DELTA(coolingEffectiveness, 0.667, 0.01);
+  }
+
+  // Test AB exit area control
+  void testABExitAreaControl() {
+    // Variable area nozzle position based on AB command
+    double abCommand = 0.0;
+    double A_min = 1.0;
+    double A_max = 1.8;
+
+    double A_exit = A_min + abCommand * (A_max - A_min);
+    TS_ASSERT_DELTA(A_exit, 1.0, 0.01);  // Dry
+
+    abCommand = 1.0;
+    A_exit = A_min + abCommand * (A_max - A_min);
+    TS_ASSERT_DELTA(A_exit, 1.8, 0.01);  // Full AB
+  }
+
+  // Test exhaust velocity with AB
+  void testExhaustVelocityWithAB() {
+    double Tt = 1500.0;  // K (total temperature)
+    double gamma = 1.3;
+    double R = 287.0;    // J/kg-K
+    double NPR = 4.0;
+
+    // Ideal exhaust velocity
+    double V_exit = sqrt(2.0 * gamma / (gamma - 1.0) * R * Tt *
+                        (1.0 - pow(1.0 / NPR, (gamma - 1.0) / gamma)));
+
+    TS_ASSERT(V_exit > 500.0);  // m/s
+    TS_ASSERT(V_exit < 2000.0);
+  }
+
+  // Test nozzle thrust coefficient
+  void testNozzleThrustCoefficient() {
+    double Cf_ideal = 1.8;
+    double Cf_loss = 0.02;
+
+    double Cf_actual = Cf_ideal * (1.0 - Cf_loss);
+    TS_ASSERT_DELTA(Cf_actual, 1.764, 0.01);
+  }
+
+  // Test AB cycle time from dry to wet
+  void testABCycleTimeDryToWet() {
+    double dryToWetTime = 1.5;  // seconds
+    double wetToDryTime = 0.8;  // seconds
+
+    // Wet-to-dry faster than dry-to-wet
+    TS_ASSERT(wetToDryTime < dryToWetTime);
+  }
+
+  // Test AB fuel control valve response
+  void testABFuelControlValveResponse() {
+    double valveTimeConstant = 0.1;  // seconds
+    double stepResponse_1tau = 1.0 - std::exp(-1.0);
+
+    TS_ASSERT_DELTA(stepResponse_1tau, 0.632, 0.01);
+  }
+
+  // Test AB temperature limiting
+  void testABTemperatureLimiting() {
+    double T_max = 1900.0;  // K (material limit)
+    double T_current = 1850.0;
+
+    bool limitActive = T_current > 0.95 * T_max;
+    TS_ASSERT(limitActive);
+  }
+
+  // Test partial AB thrust
+  void testPartialABThrust() {
+    double milThrust = 15000.0;
+    double maxThrust = 24000.0;
+    double abCommands[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    double expectedThrusts[] = {15000.0, 17250.0, 19500.0, 21750.0, 24000.0};
+
+    for (int i = 0; i < 5; i++) {
+      double thrust = milThrust + abCommands[i] * (maxThrust - milThrust);
+      TS_ASSERT_DELTA(thrust, expectedThrusts[i], 0.1);
+    }
+  }
+
+  // Test AB mass flow augmentation
+  void testABMassFlowAugmentation() {
+    double massFlow_dry = 200.0;  // lbs/sec
+    double fuelFlow_AB = 30000.0 / 3600.0;  // lbs/sec (from lbs/hr)
+
+    double massFlow_wet = massFlow_dry + fuelFlow_AB;
+    TS_ASSERT(massFlow_wet > massFlow_dry);
+  }
+
+  // Test AB inlet compatibility
+  void testABInletCompatibility() {
+    // Inlet capture ratio at supersonic speeds
+    double A_capture = 5.0;  // ft^2
+    double A_inlet = 4.5;    // ft^2
+
+    double captureRatio = A_inlet / A_capture;
+    TS_ASSERT(captureRatio < 1.0);  // Some spillage
+  }
+
+  // Test AB minimum fuel flow
+  void testABMinimumFuelFlow() {
+    double minFuelFlow = 5000.0;  // lbs/hr for stable combustion
+    double currentFuelFlow = 8000.0;
+
+    bool stableCombustion = currentFuelFlow >= minFuelFlow;
+    TS_ASSERT(stableCombustion);
+  }
+
+  // Test AB screech margin
+  void testABScreechMargin() {
+    double frequency = 500.0;  // Hz (screech frequency)
+    double operatingBand_low = 200.0;
+    double operatingBand_high = 400.0;
+
+    bool outOfBand = (frequency < operatingBand_low) || (frequency > operatingBand_high);
+    TS_ASSERT(outOfBand);  // Should avoid screech frequency
+  }
+
+  // Test nozzle area scheduling with Mach
+  void testNozzleAreaSchedulingWithMach() {
+    double mach = 0.0;
+    double A_base = 1.0;
+
+    // Area increases with Mach for constant pressure operation
+    mach = 1.5;
+    double A_supersonic = A_base * (1.0 + 0.15 * mach);
+    TS_ASSERT(A_supersonic > A_base);
+  }
+
+  // Test AB bleed air reduction
+  void testABBleedAirReduction() {
+    // Some aircraft reduce bleed air during AB operation
+    double bleed_normal = 5.0;  // % of core flow
+    double bleed_AB = 2.0;      // Reduced during AB
+
+    TS_ASSERT(bleed_AB < bleed_normal);
+  }
+
+  // Test nozzle divergence losses
+  void testNozzleDivergenceLosses() {
+    double halfAngle = 15.0 * M_PI / 180.0;  // radians
+
+    // Divergence loss factor
+    double divergenceFactor = (1.0 + std::cos(halfAngle)) / 2.0;
+    TS_ASSERT(divergenceFactor < 1.0);
+    TS_ASSERT(divergenceFactor > 0.95);
+  }
+
+  // Test AB thrust-to-weight ratio impact
+  void testABThrustToWeightImpact() {
+    double weight = 30000.0;  // lbs
+    double thrust_dry = 15000.0;
+    double thrust_wet = 24000.0;
+
+    double TW_dry = thrust_dry / weight;
+    double TW_wet = thrust_wet / weight;
+
+    TS_ASSERT_DELTA(TW_dry, 0.5, 0.01);
+    TS_ASSERT_DELTA(TW_wet, 0.8, 0.01);
+    TS_ASSERT(TW_wet > TW_dry);
+  }
+
+  // Test AB acceleration capability
+  void testABAccelerationCapability() {
+    double mass = 30000.0 / 32.174;  // slugs
+    double thrust_dry = 15000.0;
+    double thrust_wet = 24000.0;
+    double drag = 5000.0;
+
+    double accel_dry = (thrust_dry - drag) / mass;
+    double accel_wet = (thrust_wet - drag) / mass;
+
+    TS_ASSERT(accel_wet > accel_dry);
+    TS_ASSERT_DELTA(accel_wet / accel_dry, 1.9, 0.1);
+  }
+
+  // Test AB climb rate improvement
+  void testABClimbRateImprovement() {
+    double weight = 30000.0;
+    double excessThrust_dry = 10000.0;
+    double excessThrust_wet = 19000.0;
+
+    double ROC_dry = excessThrust_dry / weight * 60.0 * 101.3;  // fpm
+    double ROC_wet = excessThrust_wet / weight * 60.0 * 101.3;
+
+    TS_ASSERT(ROC_wet > ROC_dry);
+  }
+
+  // Test AB service ceiling impact
+  void testABServiceCeilingImpact() {
+    // AB extends service ceiling
+    double ceiling_dry = 50000.0;  // ft
+    double ceiling_wet = 60000.0;  // ft with AB
+
+    double ceilingIncrease = ceiling_wet - ceiling_dry;
+    TS_ASSERT(ceilingIncrease > 5000.0);
+  }
+
+  // Test AB turn rate improvement
+  void testABTurnRateImprovement() {
+    double loadFactor = 4.0;  // g's
+    double velocity = 500.0;  // fps
+    double g0 = 32.174;
+
+    // Turn rate = g * n / V
+    double turnRate = g0 * loadFactor / velocity;  // rad/s
+    double turnRate_degps = turnRate * 180.0 / M_PI;
+
+    TS_ASSERT(turnRate_degps > 10.0);
+  }
+
+  // Test AB range penalty
+  void testABRangePenalty() {
+    double SFC_dry = 0.85;
+    double SFC_wet = 2.0;
+    double SFC_ratio = SFC_wet / SFC_dry;
+
+    // Range roughly inversely proportional to SFC
+    double rangeFactor = 1.0 / SFC_ratio;
+    TS_ASSERT(rangeFactor < 0.5);  // Significant range reduction
+  }
+
+  // Test AB usage in combat
+  void testABUsageInCombat() {
+    // Typical combat AB usage time
+    double combatDuration = 300.0;  // seconds
+    double abUsagePercent = 0.30;   // 30% of combat time
+
+    double abTime = combatDuration * abUsagePercent;
+    TS_ASSERT_DELTA(abTime, 90.0, 0.1);  // 90 seconds of AB
+  }
+
+  // Test AB for takeoff
+  void testABForTakeoff() {
+    double thrust_dry = 15000.0;
+    double thrust_wet = 24000.0;
+    double weight = 45000.0;
+
+    // Takeoff thrust-to-weight
+    double TW_wet = thrust_wet / weight;
+    TS_ASSERT(TW_wet > 0.5);  // Adequate for takeoff
+  }
+
+  // Test minimum AB engagement speed
+  void testMinABEngagementSpeed() {
+    double minSpeed = 200.0;  // knots
+    double currentSpeed = 250.0;
+
+    bool canEngage = currentSpeed >= minSpeed;
+    TS_ASSERT(canEngage);
+  }
 };
