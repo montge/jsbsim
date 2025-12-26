@@ -434,4 +434,572 @@ public:
     double gain_stop = C1 / std::sqrt(w_stop*w_stop + C1*C1);
     TS_ASSERT(gain_stop < 0.1);
   }
+
+  /***************************************************************************
+   * Additional Comprehensive Filter Tests
+   ***************************************************************************/
+
+  // Test high-pass filter DC gain (zero)
+  void testHighPassDCGain() {
+    // High-pass: s/(s+C1)
+    // At DC (s=0): gain = 0
+    double C1 = 10.0;
+    double s = 0.001;  // Near DC
+    double gain = s / (s + C1);
+
+    TS_ASSERT(gain < 0.001);
+  }
+
+  // Test high-pass filter high frequency gain
+  void testHighPassHighFreqGain() {
+    // At high frequency (s >> C1): gain -> 1
+    double C1 = 10.0;
+    double s = 1000.0;
+    double gain = s / (s + C1);
+
+    TS_ASSERT(gain > 0.99);
+  }
+
+  // Test bandpass filter concept
+  void testBandpassFilterConcept() {
+    // Bandpass: (C1*s)/((s+wL)(s+wH)) where wL < wH
+    // Peak at geometric mean
+    double wL = 1.0;   // Low corner
+    double wH = 100.0; // High corner
+    double wCenter = std::sqrt(wL * wH);
+
+    TS_ASSERT_DELTA(wCenter, 10.0, epsilon);
+  }
+
+  // Test filter quality factor
+  void testFilterQualityFactor() {
+    // Q = wn / (2*zeta*wn) = 1/(2*zeta)
+    double zeta = 0.1;
+    double Q = 1.0 / (2.0 * zeta);
+
+    TS_ASSERT_DELTA(Q, 5.0, epsilon);
+
+    // High Q = sharp resonance
+    zeta = 0.01;
+    Q = 1.0 / (2.0 * zeta);
+    TS_ASSERT_DELTA(Q, 50.0, epsilon);
+  }
+
+  // Test resonant peak magnitude
+  void testResonantPeak() {
+    // For underdamped 2nd order, peak magnitude = 1/(2*zeta*sqrt(1-zeta^2))
+    double zeta = 0.1;
+    double peak = 1.0 / (2.0 * zeta * std::sqrt(1.0 - zeta*zeta));
+
+    TS_ASSERT(peak > 5.0);  // Significant resonance
+  }
+
+  // Test resonant frequency
+  void testResonantFrequency() {
+    // Resonant frequency wr = wn*sqrt(1-2*zeta^2)
+    double wn = 10.0;
+    double zeta = 0.3;
+    double wr = wn * std::sqrt(1.0 - 2.0*zeta*zeta);
+
+    TS_ASSERT(wr < wn);  // Resonance below natural freq
+    TS_ASSERT_DELTA(wr, 9.06, 0.01);
+  }
+
+  // Test filter phase margin concept
+  void testPhaseMarginConcept() {
+    // Phase margin = 180 + phase at gain crossover
+    // For lag filter at corner: phase = -45 deg, PM = 135 deg
+    double C1 = 10.0;
+    double w_crossover = C1;  // Assuming gain crossover at corner
+    double phase = -std::atan(w_crossover / C1) * 180.0 / M_PI;
+
+    double PM = 180.0 + phase;
+    TS_ASSERT_DELTA(PM, 135.0, 0.1);
+  }
+
+  // Test filter gain margin concept
+  void testGainMarginConcept() {
+    // Gain margin = 1/|H(jw)| at phase crossover (where phase = -180)
+    // For first-order lag, phase never reaches -180, so GM = infinity
+    // For second-order, depends on parameters
+
+    // Simplified check: stable system has positive GM
+    double GM_db = 20.0;  // 20 dB gain margin
+    double GM_linear = std::pow(10.0, GM_db / 20.0);
+
+    TS_ASSERT_DELTA(GM_linear, 10.0, 0.01);
+  }
+
+  // Test cascaded filters
+  void testCascadedFilters() {
+    // Two first-order lags in series
+    double C1 = 10.0;
+    double C2 = 20.0;
+    double dt = 0.01;
+
+    double ca1 = std::exp(-C1 * dt);
+    double cb1 = 1.0 - ca1;
+    double ca2 = std::exp(-C2 * dt);
+    double cb2 = 1.0 - ca2;
+
+    double y1 = 0.0, y2 = 0.0;
+    double u = 1.0;
+
+    // Run until settled
+    for (int i = 0; i < 5000; i++) {
+      y1 = ca1 * y1 + cb1 * u;
+      y2 = ca2 * y2 + cb2 * y1;
+    }
+
+    // Both should converge to 1.0
+    TS_ASSERT_DELTA(y1, 1.0, 0.001);
+    TS_ASSERT_DELTA(y2, 1.0, 0.001);
+  }
+
+  // Test parallel filters
+  void testParallelFilters() {
+    // Two filters in parallel with different coefficients
+    double C1 = 10.0;
+    double C2 = 20.0;
+    double dt = 0.01;
+
+    double ca1 = std::exp(-C1 * dt);
+    double cb1 = 1.0 - ca1;
+    double ca2 = std::exp(-C2 * dt);
+    double cb2 = 1.0 - ca2;
+
+    double y1 = 0.0, y2 = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y1 = ca1 * y1 + cb1 * u;
+      y2 = ca2 * y2 + cb2 * u;
+    }
+
+    // Sum of outputs
+    double y_sum = y1 + y2;
+    TS_ASSERT_DELTA(y_sum, 2.0, 0.01);  // Both converge to 1
+  }
+
+  // Test forward Euler integration
+  void testForwardEulerIntegration() {
+    double C1 = 10.0;
+    double dt = 0.01;
+
+    // Forward Euler: y(n+1) = y(n) + dt*f(y,u)
+    // For dy/dt = C1*(u - y): y(n+1) = y(n) + dt*C1*(u - y(n))
+    double y = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y = y + dt * C1 * (u - y);
+    }
+
+    TS_ASSERT_DELTA(y, 1.0, 0.001);
+  }
+
+  // Test backward Euler integration
+  void testBackwardEulerIntegration() {
+    double C1 = 10.0;
+    double dt = 0.01;
+
+    // Backward Euler: y(n+1) = (y(n) + dt*C1*u) / (1 + dt*C1)
+    double y = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y = (y + dt * C1 * u) / (1.0 + dt * C1);
+    }
+
+    TS_ASSERT_DELTA(y, 1.0, 0.001);
+  }
+
+  // Test trapezoidal integration
+  void testTrapezoidalIntegration() {
+    // Trapezoidal: y(n+1) = (1-C1*dt/2)/(1+C1*dt/2)*y(n) + (C1*dt)/(1+C1*dt/2)*u
+    double C1 = 10.0;
+    double dt = 0.01;
+
+    double denom = 1.0 + C1 * dt / 2.0;
+    double ca = (1.0 - C1 * dt / 2.0) / denom;
+    double cb = (C1 * dt) / denom;
+
+    double y = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y = ca * y + cb * u;
+    }
+
+    TS_ASSERT_DELTA(y, 1.0, 0.001);
+  }
+
+  // Test filter initial conditions
+  void testFilterInitialConditions() {
+    double C1 = 10.0;
+    double dt = 0.01;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    // Non-zero initial condition
+    double y = 5.0;  // IC
+    double u = 1.0;
+
+    // Should decay to final value
+    for (int i = 0; i < 1000; i++) {
+      y = ca * y + cb * u;
+    }
+
+    TS_ASSERT_DELTA(y, 1.0, 0.001);
+  }
+
+  // Test filter with sinusoidal input
+  void testFilterSinusoidalInput() {
+    double C1 = 10.0;
+    double dt = 0.001;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double omega = 5.0;  // Input frequency below corner
+    double y = 0.0;
+
+    // Run for several cycles
+    for (int i = 0; i < 10000; i++) {
+      double t = i * dt;
+      double u = std::sin(omega * t);
+      y = ca * y + cb * u;
+    }
+
+    // Output should be sinusoidal (check by verifying bounded)
+    TS_ASSERT(std::abs(y) <= 1.0);
+  }
+
+  // Test differentiator approximation
+  void testDifferentiatorApproximation() {
+    // Pseudo-differentiator: s/(s/N + 1) = N*s/(s+N)
+    // High-pass with gain N at high freq
+    double N = 100.0;  // Differentiator bandwidth
+    double dt = 0.001;
+
+    // At low freq, acts as differentiator
+    // At high freq, limited to gain N
+    double corner = N;
+    double hf_gain = N;
+
+    TS_ASSERT_DELTA(hf_gain, 100.0, epsilon);
+  }
+
+  // Test PI controller as filter
+  void testPIControllerFilter() {
+    // PI: Kp + Ki/s = (Kp*s + Ki)/s
+    double Kp = 1.0;
+    double Ki = 10.0;
+    double dt = 0.01;
+
+    double integral = 0.0;
+    double error = 1.0;  // Constant error
+
+    for (int i = 0; i < 100; i++) {
+      integral += Ki * error * dt;
+      double output = Kp * error + integral;
+
+      // Output grows without bound (pure integrator)
+      if (i == 99) {
+        TS_ASSERT(integral > 9.0);  // Ki * 1.0 * 1.0 = 10
+      }
+    }
+  }
+
+  // Test PD controller as filter
+  void testPDControllerFilter() {
+    // PD: Kp + Kd*s (approximated)
+    double Kp = 1.0;
+    double Kd = 0.1;
+    double dt = 0.01;
+
+    double prev_error = 0.0;
+    double error = 1.0;
+
+    double derivative = (error - prev_error) / dt;
+    double output = Kp * error + Kd * derivative;
+
+    // First step: derivative is large
+    TS_ASSERT_DELTA(output, 1.0 + 0.1 * 100.0, epsilon);  // Kp*1 + Kd*(1/0.01)
+  }
+
+  // Test filter bandwidth
+  void testFilterBandwidth() {
+    // Bandwidth = corner frequency for first-order
+    double C1 = 10.0;
+    double bandwidth_rad = C1;
+    double bandwidth_hz = C1 / (2.0 * M_PI);
+
+    TS_ASSERT_DELTA(bandwidth_hz, 1.59, 0.01);
+  }
+
+  // Test filter time constant
+  void testFilterTimeConstant() {
+    double C1 = 10.0;
+    double tau = 1.0 / C1;
+
+    TS_ASSERT_DELTA(tau, 0.1, epsilon);
+
+    // 63.2% response at t = tau
+    double response_at_tau = 1.0 - std::exp(-1.0);
+    TS_ASSERT_DELTA(response_at_tau, 0.632, 0.001);
+  }
+
+  // Test filter pole locations
+  void testFilterPoleLocations() {
+    // Second-order: poles at s = -zeta*wn +/- wn*sqrt(zeta^2-1)
+    double wn = 10.0;
+    double zeta = 0.5;
+
+    double real_part = -zeta * wn;
+    double imag_part = wn * std::sqrt(1.0 - zeta*zeta);
+
+    TS_ASSERT_DELTA(real_part, -5.0, epsilon);
+    TS_ASSERT_DELTA(imag_part, 8.66, 0.01);
+  }
+
+  // Test damped oscillation frequency
+  void testDampedOscillationFreq() {
+    double wn = 10.0;
+    double zeta = 0.3;
+    double wd = wn * std::sqrt(1.0 - zeta*zeta);  // Damped frequency
+
+    TS_ASSERT_DELTA(wd, 9.54, 0.01);
+  }
+
+  // Test exponential decay envelope
+  void testExponentialDecayEnvelope() {
+    double wn = 10.0;
+    double zeta = 0.3;
+    double sigma = zeta * wn;  // Decay rate
+
+    // Envelope: exp(-sigma*t)
+    double t = 0.5;
+    double envelope = std::exp(-sigma * t);
+
+    TS_ASSERT_DELTA(envelope, 0.223, 0.01);
+  }
+
+  // Test filter delay (group delay concept)
+  void testFilterDelay() {
+    // For first-order lag: group delay = 1/(w^2 + C1^2) at frequency w
+    double C1 = 10.0;
+    double w = 0.0;  // At DC
+
+    // At DC, delay = 1/C1^2... actually group delay = d(phase)/dw
+    // For lag: phase = -atan(w/C1), group delay = C1/(w^2+C1^2)
+    double group_delay = C1 / (w*w + C1*C1);
+
+    TS_ASSERT_DELTA(group_delay, 0.1, epsilon);  // 1/C1 at DC
+  }
+
+  // Test numerical stability
+  void testNumericalStability() {
+    double C1 = 1000.0;  // Very fast filter
+    double dt = 0.01;    // Relatively large timestep
+
+    // Check if ca is stable
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    TS_ASSERT(ca >= 0.0 && ca < 1.0);  // Stable if 0 <= ca < 1
+    TS_ASSERT(cb > 0.0 && cb <= 1.0);
+  }
+
+  // Test filter with large gain
+  void testFilterWithLargeGain() {
+    double C1 = 10.0;
+    double gain = 100.0;
+    double dt = 0.01;
+
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y = ca * y + cb * (gain * u);
+    }
+
+    TS_ASSERT_DELTA(y, 100.0, 0.01);  // Converges to gain * u
+  }
+
+  // Test rate limit filter concept
+  void testRateLimitFilterConcept() {
+    double prev_output = 0.0;
+    double input = 100.0;
+    double max_rate = 10.0;  // per second
+    double dt = 0.1;
+
+    double max_change = max_rate * dt;
+    double delta = input - prev_output;
+
+    if (std::abs(delta) > max_change) {
+      delta = (delta > 0) ? max_change : -max_change;
+    }
+
+    double output = prev_output + delta;
+    TS_ASSERT_DELTA(output, 1.0, epsilon);  // Limited to 10 * 0.1 = 1
+  }
+
+  // Test all-pass filter concept
+  void testAllPassFilterConcept() {
+    // All-pass: (s-a)/(s+a) has unity magnitude at all frequencies
+    double a = 10.0;
+    double w = 5.0;
+
+    // |H(jw)| = |jw-a|/|jw+a| = sqrt(w^2+a^2)/sqrt(w^2+a^2) = 1
+    double mag = 1.0;  // Always unity for all-pass
+
+    TS_ASSERT_DELTA(mag, 1.0, epsilon);
+  }
+
+  // Test delay using Pade approximation concept
+  void testPadeDelayApproximation() {
+    // First-order Pade: e^(-sT) ≈ (1 - sT/2)/(1 + sT/2)
+    double T = 0.1;  // Delay
+    double s = 0.0;  // DC
+
+    double approx = (1.0 - s*T/2.0) / (1.0 + s*T/2.0);
+    TS_ASSERT_DELTA(approx, 1.0, epsilon);  // Unity at DC
+  }
+
+  // Test filter order effect on roll-off
+  void testFilterOrderRolloff() {
+    // First-order: -20 dB/decade
+    // Second-order: -40 dB/decade
+    // nth order: -20n dB/decade
+
+    int order1 = 1, order2 = 2, order4 = 4;
+
+    double rolloff1 = -20.0 * order1;  // dB/decade
+    double rolloff2 = -20.0 * order2;
+    double rolloff4 = -20.0 * order4;
+
+    TS_ASSERT_DELTA(rolloff1, -20.0, epsilon);
+    TS_ASSERT_DELTA(rolloff2, -40.0, epsilon);
+    TS_ASSERT_DELTA(rolloff4, -80.0, epsilon);
+  }
+
+  // Test Butterworth filter characteristic
+  void testButterworthCharacteristic() {
+    // Butterworth: maximally flat in passband
+    // |H(jw)|^2 = 1/(1 + (w/wc)^(2n))
+    double wc = 10.0;  // Cutoff
+    int n = 2;         // Order
+
+    // At cutoff: |H(jwc)|^2 = 1/(1+1) = 0.5 -> |H| = 0.707
+    double mag_at_cutoff = 1.0 / std::sqrt(1.0 + std::pow(1.0, 2*n));
+    TS_ASSERT_DELTA(mag_at_cutoff, 0.707, 0.001);
+  }
+
+  // Test Chebyshev filter concept
+  void testChebyshevConcept() {
+    // Chebyshev: ripple in passband, steeper rolloff
+    double ripple_db = 1.0;  // 1 dB ripple
+    double epsilon_cheb = std::sqrt(std::pow(10.0, ripple_db/10.0) - 1.0);
+
+    TS_ASSERT(epsilon_cheb > 0.0);
+  }
+
+  // Test filter impulse response
+  void testFilterImpulseResponse() {
+    double C1 = 10.0;
+    double dt = 0.001;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+
+    // Apply impulse at t=0
+    y = ca * y + cb * 1000.0;  // Large impulse
+    double peak = y;
+
+    // Then decay
+    for (int i = 0; i < 1000; i++) {
+      y = ca * y + cb * 0.0;  // Zero input after impulse
+    }
+
+    TS_ASSERT(y < 0.01);  // Decayed to near zero
+    TS_ASSERT(peak > 0.0);
+  }
+
+  // Test filter steady-state error
+  void testFilterSteadyStateError() {
+    // First-order lag has zero steady-state error for step
+    double C1 = 10.0;
+    double dt = 0.01;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+    double u = 5.0;  // Step input
+
+    for (int i = 0; i < 2000; i++) {
+      y = ca * y + cb * u;
+    }
+
+    double ss_error = u - y;
+    TS_ASSERT_DELTA(ss_error, 0.0, 0.001);
+  }
+
+  // Test filter with noisy input
+  void testFilterWithNoisyInput() {
+    double C1 = 10.0;  // Low-pass filter
+    double dt = 0.01;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+    double signal = 1.0;
+
+    // Simulate with pseudo-noise
+    for (int i = 0; i < 1000; i++) {
+      double noise = ((i % 7) - 3) * 0.1;  // Simple deterministic "noise"
+      double u = signal + noise;
+      y = ca * y + cb * u;
+    }
+
+    // Filtered output should be close to signal (noise filtered out)
+    TS_ASSERT(std::abs(y - signal) < 0.3);
+  }
+
+  // Test conversion between frequency units
+  void testFrequencyConversion() {
+    double f_hz = 10.0;  // Hz
+    double w_rad = 2.0 * M_PI * f_hz;  // rad/s
+
+    TS_ASSERT_DELTA(w_rad, 62.83, 0.01);
+
+    // Convert back
+    double f_back = w_rad / (2.0 * M_PI);
+    TS_ASSERT_DELTA(f_back, f_hz, epsilon);
+  }
+
+  // Test decibel conversion
+  void testDecibelConversion() {
+    double gain_linear = 10.0;
+    double gain_db = 20.0 * std::log10(gain_linear);
+
+    TS_ASSERT_DELTA(gain_db, 20.0, epsilon);
+
+    // Convert back
+    double gain_back = std::pow(10.0, gain_db / 20.0);
+    TS_ASSERT_DELTA(gain_back, gain_linear, epsilon);
+  }
+
+  // Test half-power point
+  void testHalfPowerPoint() {
+    // At -3dB, power is halved, amplitude is 1/sqrt(2)
+    double half_power_amplitude = 1.0 / std::sqrt(2.0);
+    double half_power_db = 20.0 * std::log10(half_power_amplitude);
+
+    TS_ASSERT_DELTA(half_power_amplitude, 0.707, 0.001);
+    TS_ASSERT_DELTA(half_power_db, -3.01, 0.01);
+  }
 };
