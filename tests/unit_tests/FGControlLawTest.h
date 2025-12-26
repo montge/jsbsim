@@ -752,13 +752,470 @@ public:
     void testControlAllocationWithSaturation() {
         // Multiple surfaces for same control, handle saturation
         double pitch_cmd = 2.0;
-        
+
         double elevator_1 = Saturation::Limit(pitch_cmd, -1.0, 1.0);
         double remaining = pitch_cmd - elevator_1;
         double elevator_2 = Saturation::Limit(remaining, -1.0, 1.0);
-        
+
         TS_ASSERT_DELTA(elevator_1, 1.0, EPSILON);
         TS_ASSERT_DELTA(elevator_2, 1.0, EPSILON);
+    }
+};
+
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ * Additional Control Law Tests (30 new tests)
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+class FGControlLawAdditionalTest : public CxxTest::TestSuite
+{
+public:
+    //===========================================================================
+    // Autopilot Mode Logic Tests
+    //===========================================================================
+
+    // Test 46: Wings level mode
+    void testWingsLevelMode() {
+        double bank_angle = 10.0 * DEG_TO_RAD;
+        double roll_rate = 0.05;  // rad/s
+
+        double K_phi = 1.5;
+        double K_p = 0.8;
+
+        double aileron_cmd = -K_phi * bank_angle - K_p * roll_rate;
+
+        // Should command aileron opposite to bank
+        TS_ASSERT(aileron_cmd < 0);
+    }
+
+    // Test 47: Heading hold mode
+    void testHeadingHoldMode() {
+        double heading_error = 15.0 * DEG_TO_RAD;
+        double heading_rate = 0.02;  // rad/s
+
+        double K_psi = 1.0;
+        double K_r = 2.0;
+
+        // Bank angle command from heading error
+        double bank_cmd = K_psi * heading_error - K_r * heading_rate;
+
+        // Limit bank angle
+        double max_bank = 30.0 * DEG_TO_RAD;
+        bank_cmd = Saturation::Limit(bank_cmd, -max_bank, max_bank);
+
+        TS_ASSERT(bank_cmd > 0);
+        TS_ASSERT(bank_cmd <= max_bank);
+    }
+
+    // Test 48: Altitude capture logic
+    void testAltitudeCaptureLogic() {
+        double current_alt = 4500.0;  // ft
+        double target_alt = 5000.0;   // ft
+        double capture_band = 200.0;  // ft
+
+        double alt_error = target_alt - current_alt;
+        bool in_capture = std::abs(alt_error) < capture_band;
+
+        TS_ASSERT_EQUALS(in_capture, false);
+
+        // Move closer
+        current_alt = 4900.0;
+        alt_error = target_alt - current_alt;
+        in_capture = std::abs(alt_error) < capture_band;
+
+        TS_ASSERT_EQUALS(in_capture, true);
+    }
+
+    // Test 49: Speed mode transition
+    void testSpeedModeTransition() {
+        double current_speed = 250.0;  // kts
+        double target_speed = 280.0;   // kts
+        double speed_error = target_speed - current_speed;
+
+        // Climb mode: trade altitude for speed
+        double K_speed = 0.1;
+        double pitch_adjust = K_speed * speed_error;
+
+        // Should pitch down to accelerate
+        TS_ASSERT_DELTA(pitch_adjust, 3.0, 0.1);
+    }
+
+    //===========================================================================
+    // Envelope Protection Tests
+    //===========================================================================
+
+    // Test 50: Alpha protection
+    void testAlphaProtection() {
+        double alpha = 14.0 * DEG_TO_RAD;
+        double alpha_max = 15.0 * DEG_TO_RAD;
+        double alpha_margin = 1.0 * DEG_TO_RAD;
+
+        double protection_gain = 0.0;
+        if (alpha > alpha_max - alpha_margin) {
+            protection_gain = (alpha - (alpha_max - alpha_margin)) / alpha_margin;
+        }
+
+        TS_ASSERT(protection_gain > 0);
+        TS_ASSERT(protection_gain < 1.0);
+    }
+
+    // Test 51: Load factor limiting
+    void testLoadFactorLimiting() {
+        double n_commanded = 3.5;
+        double n_max = 2.5;
+        double n_min = -1.0;
+
+        double n_limited = Saturation::Limit(n_commanded, n_min, n_max);
+
+        TS_ASSERT_DELTA(n_limited, n_max, EPSILON);
+    }
+
+    // Test 52: Overspeed protection
+    void testOverspeedProtection() {
+        double current_mach = 0.85;
+        double mmo = 0.82;  // Max operating Mach
+
+        double overspeed_gain = 0.0;
+        if (current_mach > mmo) {
+            overspeed_gain = 10.0 * (current_mach - mmo);
+        }
+
+        // Should command pitch up
+        double pitch_cmd = overspeed_gain;
+        TS_ASSERT_DELTA(pitch_cmd, 0.3, 0.01);
+    }
+
+    // Test 53: Bank angle protection
+    void testBankAngleProtection() {
+        double bank = 40.0 * DEG_TO_RAD;
+        double bank_limit = 35.0 * DEG_TO_RAD;
+
+        double protection_active = std::abs(bank) > bank_limit;
+
+        TS_ASSERT_EQUALS(protection_active, true);
+    }
+
+    //===========================================================================
+    // Stick Shaker/Pusher Tests
+    //===========================================================================
+
+    // Test 54: Stick shaker activation
+    void testStickShakerActivation() {
+        double alpha = 12.0 * DEG_TO_RAD;
+        double alpha_stall = 15.0 * DEG_TO_RAD;
+        double shaker_margin = 3.0 * DEG_TO_RAD;
+
+        bool shaker_active = alpha > (alpha_stall - shaker_margin);
+
+        TS_ASSERT_EQUALS(shaker_active, true);
+    }
+
+    // Test 55: Stick pusher activation
+    void testStickPusherActivation() {
+        double alpha = 14.5 * DEG_TO_RAD;
+        double alpha_stall = 15.0 * DEG_TO_RAD;
+        double pusher_margin = 1.0 * DEG_TO_RAD;
+
+        bool pusher_active = alpha > (alpha_stall - pusher_margin);
+        double pusher_force = 0.0;
+
+        if (pusher_active) {
+            pusher_force = 50.0 * (alpha - (alpha_stall - pusher_margin)) / pusher_margin;
+        }
+
+        TS_ASSERT_EQUALS(pusher_active, true);
+        TS_ASSERT(pusher_force > 0);
+    }
+
+    //===========================================================================
+    // Structural Mode Filter Tests
+    //===========================================================================
+
+    // Test 56: Notch filter for structural mode
+    void testNotchFilter() {
+        // Simplified notch filter test
+        double omega_n = 10.0;  // rad/s (structural mode frequency)
+        double zeta = 0.1;      // Damping
+
+        // Notch filter attenuates at omega_n
+        // At omega_n, gain should be minimal
+        double gain_at_notch = 2.0 * zeta;  // Simplified
+
+        TS_ASSERT(gain_at_notch < 0.5);
+    }
+
+    // Test 57: Low-pass filter for noise
+    void testLowPassFilter() {
+        double omega_c = 5.0;   // rad/s cutoff
+        double omega = 20.0;   // rad/s input frequency
+
+        // First-order low-pass gain = 1/sqrt(1 + (omega/omega_c)^2)
+        double gain = 1.0 / std::sqrt(1.0 + (omega / omega_c) * (omega / omega_c));
+
+        TS_ASSERT(gain < 0.3);  // Attenuated at high frequency
+    }
+
+    //===========================================================================
+    // Control Surface Failure Tests
+    //===========================================================================
+
+    // Test 58: Single aileron failure compensation
+    void testSingleAileronFailure() {
+        double roll_cmd = 0.5;
+        bool left_aileron_failed = true;
+
+        double left_aileron = left_aileron_failed ? 0.0 : roll_cmd;
+        double right_aileron = -roll_cmd;  // Opposite for roll
+
+        // Use spoilers or differential thrust for compensation
+        double spoiler_assist = left_aileron_failed ? 0.3 : 0.0;
+
+        TS_ASSERT_DELTA(left_aileron, 0.0, EPSILON);
+        TS_ASSERT_DELTA(right_aileron, -0.5, EPSILON);
+        TS_ASSERT_DELTA(spoiler_assist, 0.3, EPSILON);
+    }
+
+    // Test 59: Elevator failure with stabilizer trim
+    void testElevatorFailureWithTrim() {
+        double pitch_cmd = 0.3;
+        bool elevator_failed = true;
+
+        double elevator = elevator_failed ? 0.0 : pitch_cmd;
+        double stab_trim_rate = 0.0;
+
+        if (elevator_failed) {
+            stab_trim_rate = 0.5 * pitch_cmd;  // Slower trim authority
+        }
+
+        TS_ASSERT_DELTA(elevator, 0.0, EPSILON);
+        TS_ASSERT_DELTA(stab_trim_rate, 0.15, EPSILON);
+    }
+
+    // Test 60: Rudder hardover detection
+    void testRudderHardoverDetection() {
+        double rudder_cmd = 0.1;
+        double rudder_pos = 1.0;  // Full deflection despite small command
+
+        double position_error = std::abs(rudder_pos - rudder_cmd);
+        double threshold = 0.5;
+
+        bool hardover_detected = position_error > threshold;
+
+        TS_ASSERT_EQUALS(hardover_detected, true);
+    }
+
+    //===========================================================================
+    // Turn Coordination Tests
+    //===========================================================================
+
+    // Test 61: Sideslip minimization
+    void testSideslipMinimization() {
+        double beta = 3.0 * DEG_TO_RAD;  // Sideslip angle
+        double K_beta = 2.0;
+
+        double rudder_cmd = -K_beta * beta;
+
+        // Rudder should oppose sideslip
+        TS_ASSERT(rudder_cmd < 0);
+    }
+
+    // Test 62: Lateral acceleration feedback
+    void testLateralAccelerationFeedback() {
+        double ay = 0.1;  // g's lateral acceleration
+        double K_ay = 0.5;
+
+        double rudder_cmd = -K_ay * ay;
+
+        TS_ASSERT_DELTA(rudder_cmd, -0.05, EPSILON);
+    }
+
+    // Test 63: Aileron-rudder interconnect
+    void testAileronRudderInterconnect() {
+        double aileron = 0.4;
+        double airspeed = 150.0;  // kts
+
+        // ARI gain varies with airspeed
+        double K_ari = ScheduledGain::GetGain(airspeed, 100.0, 0.2, 200.0, 0.1);
+        double rudder_from_ari = K_ari * aileron;
+
+        TS_ASSERT_DELTA(K_ari, 0.15, EPSILON);
+        TS_ASSERT_DELTA(rudder_from_ari, 0.06, EPSILON);
+    }
+
+    //===========================================================================
+    // Fly-by-Wire Control Law Tests
+    //===========================================================================
+
+    // Test 64: C* control law
+    void testCStarControlLaw() {
+        // C* = n_z + (V/g) * q
+        double n_z = 1.5;       // g's
+        double V = 200.0;       // ft/s
+        double g = 32.2;        // ft/s^2
+        double q = 0.1;         // rad/s
+
+        double C_star = n_z + (V / g) * q;
+
+        TS_ASSERT_DELTA(C_star, 2.12, 0.01);
+    }
+
+    // Test 65: Direct law (manual reversion)
+    void testDirectLaw() {
+        double stick_input = 0.6;
+        double surface_gain = 1.0;  // Direct relationship
+
+        double surface_cmd = stick_input * surface_gain;
+
+        TS_ASSERT_DELTA(surface_cmd, 0.6, EPSILON);
+    }
+
+    // Test 66: Alternate law with degraded protection
+    void testAlternateLaw() {
+        double stick_input = 0.8;
+        double alpha = 13.0 * DEG_TO_RAD;
+        double alpha_prot = 12.0 * DEG_TO_RAD;
+
+        // Reduced envelope protection in alternate law
+        double protection_factor = 0.5;  // 50% protection
+        double protection_cmd = 0.0;
+
+        if (alpha > alpha_prot) {
+            protection_cmd = protection_factor * (alpha - alpha_prot) / DEG_TO_RAD;
+        }
+
+        double final_cmd = stick_input - protection_cmd;
+
+        TS_ASSERT(final_cmd < stick_input);
+    }
+
+    //===========================================================================
+    // Trim System Tests
+    //===========================================================================
+
+    // Test 67: Electric trim rate
+    void testElectricTrimRate() {
+        double trim_rate = 0.5;  // degrees/sec
+        double dt = 0.02;        // sec
+        double trim_position = 0.0;
+
+        // Simulate trim button held for 10 steps
+        for (int i = 0; i < 10; i++) {
+            trim_position += trim_rate * dt;
+        }
+
+        TS_ASSERT_DELTA(trim_position, 0.1, EPSILON);
+    }
+
+    // Test 68: Mach trim compensation
+    void testMachTrimCompensation() {
+        double mach = 0.85;
+        double mach_ref = 0.70;
+
+        // Nose-down trim as Mach increases
+        double K_mach_trim = -2.0;  // deg/Mach
+        double trim_bias = K_mach_trim * (mach - mach_ref);
+
+        TS_ASSERT_DELTA(trim_bias, -0.3, 0.01);
+    }
+
+    // Test 69: CG compensation trim
+    void testCGCompensationTrim() {
+        double cg_current = 0.30;   // MAC fraction
+        double cg_ref = 0.25;       // Reference MAC
+
+        // More aft CG requires more nose-down trim
+        double K_cg = -10.0;  // deg/% MAC
+        double trim_adjust = K_cg * (cg_current - cg_ref);
+
+        TS_ASSERT_DELTA(trim_adjust, -0.5, EPSILON);
+    }
+
+    //===========================================================================
+    // Autopilot Disconnect Tests
+    //===========================================================================
+
+    // Test 70: Force disconnect threshold
+    void testForceDisconnectThreshold() {
+        double stick_force = 35.0;  // lbs
+        double disconnect_threshold = 25.0;  // lbs
+
+        bool force_disconnect = stick_force > disconnect_threshold;
+
+        TS_ASSERT_EQUALS(force_disconnect, true);
+    }
+
+    // Test 71: Quick disconnect button
+    void testQuickDisconnect() {
+        bool autopilot_engaged = true;
+        bool disconnect_button_pressed = true;
+
+        if (disconnect_button_pressed) {
+            autopilot_engaged = false;
+        }
+
+        TS_ASSERT_EQUALS(autopilot_engaged, false);
+    }
+
+    //===========================================================================
+    // Control Harmony Tests
+    //===========================================================================
+
+    // Test 72: Pitch-roll harmony ratio
+    void testPitchRollHarmony() {
+        // Typical harmony ratio: 1.5-2.0
+        double pitch_force_gradient = 4.0;  // lbs/g
+        double roll_force_gradient = 2.5;   // lbs/deg/sec
+
+        double harmony_ratio = pitch_force_gradient / roll_force_gradient;
+
+        TS_ASSERT(harmony_ratio > 1.0);
+        TS_ASSERT(harmony_ratio < 3.0);
+    }
+
+    // Test 73: Control sensitivity
+    void testControlSensitivity() {
+        double stick_deflection = 0.5;  // normalized
+        double control_power = 20.0;    // deg/sec^2 per unit
+
+        double response_rate = control_power * stick_deflection;
+
+        TS_ASSERT_DELTA(response_rate, 10.0, EPSILON);
+    }
+
+    //===========================================================================
+    // Model Following Tests
+    //===========================================================================
+
+    // Test 74: Model reference response
+    void testModelReferenceResponse() {
+        // Desired response: first-order with tau = 0.5 sec
+        double tau = 0.5;
+        double dt = 0.01;
+        double cmd = 1.0;
+        double model_state = 0.0;
+
+        // Simulate for 50 steps (0.5 sec)
+        for (int i = 0; i < 50; i++) {
+            double model_dot = (cmd - model_state) / tau;
+            model_state += model_dot * dt;
+        }
+
+        // After 1 tau, should reach ~63% of command
+        TS_ASSERT_DELTA(model_state, 0.632, 0.02);
+    }
+
+    // Test 75: Model following error
+    void testModelFollowingError() {
+        double model_output = 0.8;
+        double actual_output = 0.75;
+
+        double model_error = model_output - actual_output;
+
+        // Error used to adjust control
+        double K_model = 2.0;
+        double correction = K_model * model_error;
+
+        TS_ASSERT_DELTA(model_error, 0.05, EPSILON);
+        TS_ASSERT_DELTA(correction, 0.1, EPSILON);
     }
 };
 
