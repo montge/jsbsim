@@ -351,4 +351,324 @@ public:
     TS_ASSERT_EQUALS(ptr2->IsConstant(), true);
     TS_ASSERT_EQUALS(ptr3->IsConstant(), false);
   }
+
+  /***************************************************************************
+   * NaN and Special Value Tests
+   ***************************************************************************/
+
+  // Test 39: NaN value handling
+  void testNaNValue() {
+    double nan_val = std::nan("");
+    FGConstantDummy x(nan_val);
+    TS_ASSERT(std::isnan(x.GetValue()));
+  }
+
+  // Test 40: Quiet NaN
+  void testQuietNaN() {
+    double qnan = std::numeric_limits<double>::quiet_NaN();
+    FGConstantDummy x(qnan);
+    TS_ASSERT(std::isnan(x.GetValue()));
+  }
+
+  // Test 41: Signaling NaN
+  void testSignalingNaN() {
+    double snan = std::numeric_limits<double>::signaling_NaN();
+    FGConstantDummy x(snan);
+    TS_ASSERT(std::isnan(x.GetValue()));
+  }
+
+  // Test 42: NaN multiplication
+  void testNaNMultiplication() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(std::nan("")));
+    double result = px * 5.0;
+    TS_ASSERT(std::isnan(result));
+  }
+
+  // Test 43: Infinity multiplication
+  void testInfinityMultiplication() {
+    double inf = std::numeric_limits<double>::infinity();
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(inf));
+    TS_ASSERT_EQUALS(px * 2.0, inf);
+    TS_ASSERT_EQUALS(2.0 * px, inf);
+  }
+
+  // Test 44: Denormalized number
+  void testDenormalizedNumber() {
+    double denorm = std::numeric_limits<double>::denorm_min();
+    FGConstantDummy x(denorm);
+    TS_ASSERT_EQUALS(x.GetValue(), denorm);
+    TS_ASSERT(x.GetValue() > 0.0);
+  }
+
+  // Test 45: Epsilon precision
+  void testEpsilonPrecision() {
+    double eps = std::numeric_limits<double>::epsilon();
+    FGConstantDummy x(1.0 + eps);
+    TS_ASSERT(x.GetValue() > 1.0);
+  }
+
+  /***************************************************************************
+   * Double Precision Tests
+   ***************************************************************************/
+
+  // Test 46: Maximum double value
+  void testMaxDoubleValue() {
+    double max_val = std::numeric_limits<double>::max();
+    FGConstantDummy x(max_val);
+    TS_ASSERT_EQUALS(x.GetValue(), max_val);
+  }
+
+  // Test 47: Minimum positive double value
+  void testMinPositiveDoubleValue() {
+    double min_val = std::numeric_limits<double>::min();
+    FGConstantDummy x(min_val);
+    TS_ASSERT_EQUALS(x.GetValue(), min_val);
+  }
+
+  // Test 48: Lowest double value
+  void testLowestDoubleValue() {
+    double lowest = std::numeric_limits<double>::lowest();
+    FGConstantDummy x(lowest);
+    TS_ASSERT_EQUALS(x.GetValue(), lowest);
+  }
+
+  // Test 49: Near-zero positive
+  void testNearZeroPositive() {
+    FGConstantDummy x(1e-300);
+    TS_ASSERT(x.GetValue() > 0.0);
+    TS_ASSERT(x.GetValue() < 1e-100);
+  }
+
+  // Test 50: Near-zero negative
+  void testNearZeroNegative() {
+    FGConstantDummy x(-1e-300);
+    TS_ASSERT(x.GetValue() < 0.0);
+    TS_ASSERT(x.GetValue() > -1e-100);
+  }
+
+  /***************************************************************************
+   * Mathematical Properties Tests
+   ***************************************************************************/
+
+  // Test 51: Pi value
+  void testPiValue() {
+    FGConstantDummy x(M_PI);
+    TS_ASSERT_DELTA(x.GetValue(), 3.14159265358979, 1e-14);
+  }
+
+  // Test 52: E value
+  void testEValue() {
+    FGConstantDummy x(M_E);
+    TS_ASSERT_DELTA(x.GetValue(), 2.71828182845904, 1e-14);
+  }
+
+  // Test 53: Negative zero
+  void testNegativeZero() {
+    FGConstantDummy x(-0.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 0.0);  // -0.0 == 0.0 in IEEE 754
+  }
+
+  // Test 54: Associative multiplication
+  void testAssociativeMultiplication() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(2.0));
+    double a = 3.0, b = 4.0;
+    // (px * a) * b should equal px * (a * b) for exact arithmetic
+    double result1 = (px * a) * b;
+    double result2 = px->GetValue() * (a * b);
+    TS_ASSERT_EQUALS(result1, result2);
+  }
+
+  // Test 55: Distributive property
+  void testDistributiveProperty() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(5.0));
+    double a = 2.0, b = 3.0;
+    // px * (a + b) should equal px * a + px * b
+    double result1 = px->GetValue() * (a + b);
+    double result2 = px * a + px * b;
+    TS_ASSERT_EQUALS(result1, result2);
+  }
+
+  /***************************************************************************
+   * Sign Handling Tests
+   ***************************************************************************/
+
+  // Test 56: Sign of positive
+  void testSignPositive() {
+    FGConstantDummy x(42.0);
+    TS_ASSERT(x.GetValue() > 0);
+  }
+
+  // Test 57: Sign of negative
+  void testSignNegative() {
+    FGConstantDummy x(-42.0);
+    TS_ASSERT(x.GetValue() < 0);
+  }
+
+  // Test 58: Negate via multiplication
+  void testNegateViaMultiplication() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(100.0));
+    TS_ASSERT_EQUALS(px * (-1.0), -100.0);
+    TS_ASSERT_EQUALS((-1.0) * px, -100.0);
+  }
+
+  // Test 59: Double negate
+  void testDoubleNegate() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(50.0));
+    double result = px * (-1.0) * (-1.0);
+    TS_ASSERT_EQUALS(result, 50.0);
+  }
+
+  /***************************************************************************
+   * Name Pattern Tests
+   ***************************************************************************/
+
+  // Test 60: Name with dots
+  void testNameWithDots() {
+    FGNamedDummy x("fcs.aileron.position", 1.0);
+    TS_ASSERT_EQUALS(x.GetName(), "fcs.aileron.position");
+  }
+
+  // Test 61: Name with brackets
+  void testNameWithBrackets() {
+    FGNamedDummy x("propulsion/engine[0]/thrust", 1000.0);
+    TS_ASSERT_EQUALS(x.GetName(), "propulsion/engine[0]/thrust");
+  }
+
+  // Test 62: Name with numbers
+  void testNameWithNumbers() {
+    FGNamedDummy x("param123", 123.0);
+    TS_ASSERT_EQUALS(x.GetName(), "param123");
+  }
+
+  // Test 63: Name with underscores
+  void testNameWithUnderscores() {
+    FGNamedDummy x("my_parameter_name", 42.0);
+    TS_ASSERT_EQUALS(x.GetName(), "my_parameter_name");
+  }
+
+  // Test 64: Name with dashes
+  void testNameWithDashes() {
+    FGNamedDummy x("my-parameter-name", 42.0);
+    TS_ASSERT_EQUALS(x.GetName(), "my-parameter-name");
+  }
+
+  // Test 65: Unicode in name (ASCII-safe representation)
+  void testNameASCII() {
+    FGNamedDummy x("alpha-deg", 10.0);
+    TS_ASSERT_EQUALS(x.GetName(), "alpha-deg");
+  }
+
+  /***************************************************************************
+   * Counting Parameter Tests
+   ***************************************************************************/
+
+  // Test 66: Counting after many calls
+  void testCountingManyIterations() {
+    FGDummy x;
+    for (int i = 0; i < 100; i++) {
+      TS_ASSERT_EQUALS(x.GetValue(), static_cast<double>(i));
+    }
+  }
+
+  // Test 67: Counting with getDoubleValue
+  void testCountingViaGetDoubleValue() {
+    FGDummy x;
+    // GetValue returns 0, then getDoubleValue returns 1
+    TS_ASSERT_EQUALS(x.GetValue(), 0.0);
+    TS_ASSERT_EQUALS(x.getDoubleValue(), 1.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 2.0);
+    TS_ASSERT_EQUALS(x.getDoubleValue(), 3.0);
+  }
+
+  // Test 68: Counting independence between instances
+  void testCountingIndependence() {
+    FGDummy a, b, c;
+    TS_ASSERT_EQUALS(a.GetValue(), 0.0);
+    TS_ASSERT_EQUALS(b.GetValue(), 0.0);
+    TS_ASSERT_EQUALS(c.GetValue(), 0.0);
+
+    TS_ASSERT_EQUALS(a.GetValue(), 1.0);
+    TS_ASSERT_EQUALS(a.GetValue(), 2.0);
+
+    TS_ASSERT_EQUALS(b.GetValue(), 1.0);
+    TS_ASSERT_EQUALS(c.GetValue(), 1.0);
+  }
+
+  /***************************************************************************
+   * Shared Pointer Advanced Tests
+   ***************************************************************************/
+
+  // Test 69: Shared pointer reassignment
+  void testSharedPointerReassignment() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(10.0));
+    TS_ASSERT_EQUALS(px->GetValue(), 10.0);
+
+    px = SGSharedPtr<FGConstantDummy>(new FGConstantDummy(20.0));
+    TS_ASSERT_EQUALS(px->GetValue(), 20.0);
+  }
+
+  // Test 70: Shared pointer comparison via operator->
+  void testSharedPointerComparison() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(50.0));
+    SGSharedPtr<FGConstantDummy> py = px;
+    SGSharedPtr<FGConstantDummy> pz(new FGConstantDummy(50.0));
+
+    // py points to same object as px, pz is different
+    TS_ASSERT(px.valid() && py.valid() && pz.valid());
+    TS_ASSERT_EQUALS(px->GetValue(), py->GetValue());
+    TS_ASSERT_EQUALS(px->GetValue(), 50.0);
+    TS_ASSERT_EQUALS(pz->GetValue(), 50.0);
+  }
+
+  // Test 71: Multiple shared pointer copies
+  void testMultipleSharedPointerCopies() {
+    SGSharedPtr<FGConstantDummy> p1(new FGConstantDummy(100.0));
+    SGSharedPtr<FGConstantDummy> p2 = p1;
+    SGSharedPtr<FGConstantDummy> p3 = p2;
+    SGSharedPtr<FGConstantDummy> p4 = p1;
+
+    TS_ASSERT(p1.valid());
+    TS_ASSERT(p2.valid());
+    TS_ASSERT(p3.valid());
+    TS_ASSERT(p4.valid());
+
+    TS_ASSERT_EQUALS(p1->GetValue(), 100.0);
+    TS_ASSERT_EQUALS(p4->GetValue(), 100.0);
+  }
+
+  /***************************************************************************
+   * Value Comparison Tests
+   ***************************************************************************/
+
+  // Test 72: Compare two parameter values
+  void testCompareParameterValues() {
+    FGConstantDummy a(10.0);
+    FGConstantDummy b(20.0);
+
+    TS_ASSERT(a.GetValue() < b.GetValue());
+    TS_ASSERT(b.GetValue() > a.GetValue());
+  }
+
+  // Test 73: Equal parameter values
+  void testEqualParameterValues() {
+    FGConstantDummy a(42.5);
+    FGConstantDummy b(42.5);
+
+    TS_ASSERT_EQUALS(a.GetValue(), b.GetValue());
+  }
+
+  // Test 74: Near-equal values
+  void testNearEqualValues() {
+    FGConstantDummy a(1.0);
+    FGConstantDummy b(1.0 + 1e-15);
+
+    TS_ASSERT_DELTA(a.GetValue(), b.GetValue(), 1e-14);
+  }
+
+  // Test 75: Fractional values
+  void testFractionalValues() {
+    FGConstantDummy x(0.1 + 0.2);
+    // Classic floating-point issue: 0.1 + 0.2 != 0.3 exactly
+    TS_ASSERT_DELTA(x.GetValue(), 0.3, 1e-15);
+  }
 };
