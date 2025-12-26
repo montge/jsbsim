@@ -421,4 +421,621 @@ public:
     TS_ASSERT_DELTA(output[1], 5.3, epsilon);
     TS_ASSERT_DELTA(output[2], 40.8, epsilon);
   }
+
+  /***************************************************************************
+   * Additional Heading Tests
+   ***************************************************************************/
+
+  // Test 30: Heading northeast (45 degrees)
+  void testHeadingNortheast() {
+    double Bx = 14.14;  // Equal components
+    double By = 14.14;
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT_DELTA(heading, 45.0, 0.1);
+  }
+
+  // Test 31: Heading southeast (135 degrees)
+  void testHeadingSoutheast() {
+    double Bx = -14.14;
+    double By = 14.14;
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT_DELTA(heading, 135.0, 0.1);
+  }
+
+  // Test 32: Heading southwest (225 degrees)
+  void testHeadingSouthwest() {
+    double Bx = -14.14;
+    double By = -14.14;
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT_DELTA(heading, 225.0, 0.1);
+  }
+
+  // Test 33: Heading northwest (315 degrees)
+  void testHeadingNorthwest() {
+    double Bx = 14.14;
+    double By = -14.14;
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT_DELTA(heading, 315.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Cross-Axis Sensitivity Tests
+   ***************************************************************************/
+
+  // Test 34: Cross-axis sensitivity modeling
+  void testCrossAxisSensitivity() {
+    double Bx_true = 20.0, By_true = 5.0, Bz_true = 40.0;
+
+    // Cross-axis coefficients (typically 1-2%)
+    double k_xy = 0.02, k_xz = 0.01;
+    double k_yx = 0.015, k_yz = 0.02;
+    double k_zx = 0.01, k_zy = 0.015;
+
+    double Bx_meas = Bx_true + k_xy * By_true + k_xz * Bz_true;
+    double By_meas = k_yx * Bx_true + By_true + k_yz * Bz_true;
+    double Bz_meas = k_zx * Bx_true + k_zy * By_true + Bz_true;
+
+    // Cross-axis errors should be small but measurable
+    TS_ASSERT(std::abs(Bx_meas - Bx_true) < 1.5);
+    TS_ASSERT(std::abs(By_meas - By_true) < 1.5);
+    TS_ASSERT(std::abs(Bz_meas - Bz_true) < 1.5);
+  }
+
+  // Test 35: Cross-axis matrix correction
+  void testCrossAxisCorrection() {
+    // Correction matrix (inverse of cross-axis)
+    double corr[3][3] = {
+      {1.0, -0.02, -0.01},
+      {-0.015, 1.0, -0.02},
+      {-0.01, -0.015, 1.0}
+    };
+
+    double B_meas[3] = {20.5, 5.8, 40.2};
+    double B_corr[3] = {0, 0, 0};
+
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        B_corr[i] += corr[i][j] * B_meas[j];
+      }
+    }
+
+    // Corrected values should be close to true
+    TS_ASSERT(std::abs(B_corr[0] - 20.0) < 0.5);
+    TS_ASSERT(std::abs(B_corr[1] - 5.0) < 0.5);
+  }
+
+  /***************************************************************************
+   * Temperature Effects Tests
+   ***************************************************************************/
+
+  // Test 36: Temperature coefficient
+  void testTemperatureCoefficient() {
+    double B_at_25C = 20.0;
+    double temp_coeff = 0.01;  // 1% per 10°C
+    double temp = 45.0;        // Operating temp
+    double ref_temp = 25.0;
+
+    double B_at_temp = B_at_25C * (1.0 + temp_coeff * (temp - ref_temp) / 10.0);
+    TS_ASSERT_DELTA(B_at_temp, 20.4, 0.01);  // 2% increase
+  }
+
+  // Test 37: Temperature compensation
+  void testTemperatureCompensation() {
+    double B_measured = 20.4;
+    double temp = 45.0;
+    double ref_temp = 25.0;
+    double temp_coeff = 0.01;
+
+    double B_compensated = B_measured / (1.0 + temp_coeff * (temp - ref_temp) / 10.0);
+    TS_ASSERT_DELTA(B_compensated, 20.0, 0.01);
+  }
+
+  /***************************************************************************
+   * Hard Iron Calibration Tests
+   ***************************************************************************/
+
+  // Test 38: Hard iron offset detection
+  void testHardIronOffsetDetection() {
+    // Simulate measurements in a circle (rotating aircraft)
+    double bias_x = 2.0, bias_y = -1.5;
+    double field_strength = 20.0;
+
+    double min_x = 1e10, max_x = -1e10;
+    double min_y = 1e10, max_y = -1e10;
+
+    for (int i = 0; i < 360; i += 10) {
+      double angle = i * DEG_TO_RAD;
+      double Bx = field_strength * std::cos(angle) + bias_x;
+      double By = field_strength * std::sin(angle) + bias_y;
+
+      min_x = std::min(min_x, Bx);
+      max_x = std::max(max_x, Bx);
+      min_y = std::min(min_y, By);
+      max_y = std::max(max_y, By);
+    }
+
+    double est_bias_x = (max_x + min_x) / 2.0;
+    double est_bias_y = (max_y + min_y) / 2.0;
+
+    TS_ASSERT_DELTA(est_bias_x, bias_x, 0.1);
+    TS_ASSERT_DELTA(est_bias_y, bias_y, 0.1);
+  }
+
+  // Test 39: Hard iron removal
+  void testHardIronRemoval() {
+    double Bx_meas = 22.0;  // Includes 2.0 bias
+    double By_meas = 3.5;   // Includes -1.5 bias
+    double bias_x = 2.0, bias_y = -1.5;
+
+    double Bx_cal = Bx_meas - bias_x;
+    double By_cal = By_meas - bias_y;
+
+    TS_ASSERT_DELTA(Bx_cal, 20.0, epsilon);
+    TS_ASSERT_DELTA(By_cal, 5.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Soft Iron Calibration Tests
+   ***************************************************************************/
+
+  // Test 40: Soft iron ellipse detection
+  void testSoftIronEllipse() {
+    // Soft iron creates an ellipse instead of circle
+    double scale_x = 1.1, scale_y = 0.9;
+    double field_strength = 20.0;
+
+    double max_radius = 0, min_radius = 1e10;
+
+    for (int i = 0; i < 360; i += 10) {
+      double angle = i * DEG_TO_RAD;
+      double Bx = field_strength * scale_x * std::cos(angle);
+      double By = field_strength * scale_y * std::sin(angle);
+      double radius = std::sqrt(Bx*Bx + By*By);
+
+      max_radius = std::max(max_radius, radius);
+      min_radius = std::min(min_radius, radius);
+    }
+
+    // Eccentricity should be detectable
+    TS_ASSERT(max_radius > min_radius * 1.1);
+  }
+
+  // Test 41: Soft iron correction matrix
+  void testSoftIronCorrection() {
+    // Apply inverse soft iron matrix
+    double corr_xx = 1.0/1.1, corr_yy = 1.0/0.9;
+    double Bx_meas = 22.0;  // Scaled by 1.1
+    double By_meas = 4.5;   // Scaled by 0.9
+
+    double Bx_cal = Bx_meas * corr_xx;
+    double By_cal = By_meas * corr_yy;
+
+    TS_ASSERT_DELTA(Bx_cal, 20.0, 0.01);
+    TS_ASSERT_DELTA(By_cal, 5.0, 0.01);
+  }
+
+  /***************************************************************************
+   * Magnetic Anomaly Detection Tests
+   ***************************************************************************/
+
+  // Test 42: Field magnitude anomaly
+  void testMagnitudeAnomaly() {
+    double normal_field = 45.0;
+    double measured_field = 65.0;  // Near ferrous material
+    double threshold = 10.0;
+
+    bool anomaly = std::abs(measured_field - normal_field) > threshold;
+    TS_ASSERT(anomaly);
+  }
+
+  // Test 43: Heading rate anomaly
+  void testHeadingRateAnomaly() {
+    double prev_heading = 90.0;
+    double curr_heading = 150.0;
+    double dt = 0.1;
+    double max_rate = 100.0;  // degrees per second
+
+    double rate = std::abs(curr_heading - prev_heading) / dt;
+    bool anomaly = rate > max_rate;
+    TS_ASSERT(anomaly);
+  }
+
+  /***************************************************************************
+   * More Tilt Compensation Tests
+   ***************************************************************************/
+
+  // Test 44: Tilt compensation with pitch
+  void testTiltCompensationPitch() {
+    double Bx = 20.0, By = 0.0, Bz = 40.0;
+    double roll = 0.0, pitch = 20.0;
+    double Bx_comp, By_comp;
+
+    tiltCompensate(Bx, By, Bz, roll, pitch, Bx_comp, By_comp);
+
+    // With pitch, Bx_comp should change due to Bz contribution
+    TS_ASSERT(std::abs(Bx_comp - Bx) > 5.0);
+  }
+
+  // Test 45: Combined roll and pitch compensation
+  void testTiltCompensationCombined() {
+    double Bx = 20.0, By = 5.0, Bz = 40.0;
+    double roll = 15.0, pitch = 10.0;
+    double Bx_comp, By_comp;
+
+    tiltCompensate(Bx, By, Bz, roll, pitch, Bx_comp, By_comp);
+
+    // Compensated heading should be calculable
+    double heading = calculateHeading(Bx_comp, By_comp);
+    TS_ASSERT(heading >= 0 && heading < 360.0);
+  }
+
+  // Test 46: Extreme tilt (near gimbal lock)
+  void testExtremeTilt() {
+    double Bx = 20.0, By = 5.0, Bz = 40.0;
+    double roll = 0.0, pitch = 85.0;  // Nearly vertical
+    double Bx_comp, By_comp;
+
+    tiltCompensate(Bx, By, Bz, roll, pitch, Bx_comp, By_comp);
+
+    // Should still produce finite values
+    TS_ASSERT(!std::isnan(Bx_comp));
+    TS_ASSERT(!std::isnan(By_comp));
+  }
+
+  /***************************************************************************
+   * Declination Model Tests
+   ***************************************************************************/
+
+  // Test 47: Large positive declination (Alaska)
+  void testLargePositiveDeclination() {
+    double trueHeading = 270.0;
+    double declination = 20.0;  // Large east variation
+
+    double magHeading = magneticFromTrue(trueHeading, declination);
+    TS_ASSERT_DELTA(magHeading, 250.0, epsilon);
+  }
+
+  // Test 48: Large negative declination (Eastern US)
+  void testLargeNegativeDeclination() {
+    double trueHeading = 90.0;
+    double declination = -20.0;  // Large west variation
+
+    double magHeading = magneticFromTrue(trueHeading, declination);
+    TS_ASSERT_DELTA(magHeading, 110.0, epsilon);
+  }
+
+  // Test 49: Declination near agonic line
+  void testAgonicLine() {
+    double trueHeading = 45.0;
+    double declination = 0.0;  // On agonic line
+
+    double magHeading = magneticFromTrue(trueHeading, declination);
+    TS_ASSERT_DELTA(magHeading, 45.0, epsilon);
+  }
+
+  // Test 50: True to magnetic roundtrip
+  void testDeclinationRoundtrip() {
+    double originalTrue = 137.5;
+    double declination = 12.3;
+
+    double magnetic = magneticFromTrue(originalTrue, declination);
+    double backToTrue = trueFromMagnetic(magnetic, declination);
+
+    TS_ASSERT_DELTA(backToTrue, originalTrue, epsilon);
+  }
+
+  /***************************************************************************
+   * Rate Limiting Tests
+   ***************************************************************************/
+
+  // Test 51: Output rate limiting
+  void testOutputRateLimit() {
+    double prev_output = 20.0;
+    double raw_input = 35.0;  // Large jump
+    double max_rate = 5.0;    // Per sample
+
+    double change = raw_input - prev_output;
+    if (std::abs(change) > max_rate) {
+      change = (change > 0) ? max_rate : -max_rate;
+    }
+    double limited_output = prev_output + change;
+
+    TS_ASSERT_DELTA(limited_output, 25.0, epsilon);
+  }
+
+  // Test 52: Heading wrap-around rate limiting
+  void testHeadingWrapRateLimit() {
+    double prev_heading = 350.0;
+    double new_heading = 10.0;
+    double max_rate = 30.0;  // degrees per sample
+
+    // Compute shortest angular distance
+    double diff = new_heading - prev_heading;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+
+    // Limit the change
+    if (std::abs(diff) > max_rate) {
+      diff = (diff > 0) ? max_rate : -max_rate;
+    }
+
+    double limited = prev_heading + diff;
+    if (limited >= 360) limited -= 360;
+    if (limited < 0) limited += 360;
+
+    TS_ASSERT(std::abs(limited - prev_heading) <= max_rate ||
+              std::abs(limited - prev_heading) >= 360 - max_rate);
+  }
+
+  /***************************************************************************
+   * Geographic/Magnetic Coordinate Tests
+   ***************************************************************************/
+
+  // Test 53: Isogonic line interpolation
+  void testIsogonalInterpolation() {
+    // Two isogonic line values
+    double dec_at_A = 10.0;   // Declination at point A
+    double dec_at_B = 15.0;   // Declination at point B
+    double fraction = 0.4;    // 40% along from A to B
+
+    double interpolated = dec_at_A + fraction * (dec_at_B - dec_at_A);
+    TS_ASSERT_DELTA(interpolated, 12.0, epsilon);
+  }
+
+  // Test 54: Secular variation
+  void testSecularVariation() {
+    double dec_2020 = 10.0;
+    double annual_change = 0.1;  // degrees per year
+    double years = 5.0;
+
+    double dec_2025 = dec_2020 + annual_change * years;
+    TS_ASSERT_DELTA(dec_2025, 10.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Filter Response Tests
+   ***************************************************************************/
+
+  // Test 55: Low-pass filter step response
+  void testLowPassStepResponse() {
+    double cutoff_freq = 5.0;   // Hz
+    double sample_rate = 100.0; // Hz
+    double dt = 1.0 / sample_rate;
+    double rc = 1.0 / (2.0 * M_PI * cutoff_freq);
+    double alpha = dt / (rc + dt);
+
+    double input = 20.0;  // Step input
+    double output = 0.0;
+
+    // Run filter for 5 time constants to reach steady state
+    int samples = static_cast<int>(5.0 * rc * sample_rate);
+    for (int i = 0; i < samples; i++) {
+      output = alpha * input + (1 - alpha) * output;
+    }
+
+    // After 5 time constants, should reach ~99.3% of input
+    TS_ASSERT_DELTA(output, input, 0.5);
+  }
+
+  // Test 56: Moving average filter
+  void testMovingAverageFilter() {
+    const int window = 5;
+    double samples[window] = {20.0, 21.0, 19.5, 20.5, 20.0};
+
+    double sum = 0;
+    for (int i = 0; i < window; i++) {
+      sum += samples[i];
+    }
+    double average = sum / window;
+
+    TS_ASSERT_DELTA(average, 20.2, epsilon);
+  }
+
+  /***************************************************************************
+   * Compass Swinging Tests
+   ***************************************************************************/
+
+  // Test 57: Four-point compass swing
+  void testFourPointSwing() {
+    // Measurements at N, E, S, W
+    double meas_N = 0.0 + 3.0;    // 3° bias
+    double meas_E = 90.0 + 3.0;
+    double meas_S = 180.0 + 3.0;
+    double meas_W = 270.0 + 3.0;
+
+    double avg_error = (meas_N - 0.0 + meas_E - 90.0 +
+                        meas_S - 180.0 + meas_W - 270.0) / 4.0;
+    TS_ASSERT_DELTA(avg_error, 3.0, epsilon);
+  }
+
+  // Test 58: Eight-point compass swing coefficients
+  void testEightPointSwingCoefficients() {
+    // Coefficient A (constant error)
+    double errors[8] = {3.0, 2.5, 3.0, 3.5, 3.0, 2.5, 3.0, 3.5};
+
+    double A = 0;
+    for (int i = 0; i < 8; i++) {
+      A += errors[i];
+    }
+    A /= 8.0;
+
+    TS_ASSERT_DELTA(A, 3.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Multi-sensor Redundancy Tests
+   ***************************************************************************/
+
+  // Test 59: Dual magnetometer averaging
+  void testDualMagAveraging() {
+    double mag1_x = 20.1, mag1_y = 5.05;
+    double mag2_x = 19.9, mag2_y = 4.95;
+
+    double avg_x = (mag1_x + mag2_x) / 2.0;
+    double avg_y = (mag1_y + mag2_y) / 2.0;
+
+    TS_ASSERT_DELTA(avg_x, 20.0, epsilon);
+    TS_ASSERT_DELTA(avg_y, 5.0, epsilon);
+  }
+
+  // Test 60: Sensor disagreement detection
+  void testSensorDisagreement() {
+    double mag1_heading = 90.0;
+    double mag2_heading = 95.0;
+    double threshold = 3.0;
+
+    bool disagreement = std::abs(mag1_heading - mag2_heading) > threshold;
+    TS_ASSERT(disagreement);
+  }
+
+  /***************************************************************************
+   * Quantization Resolution Tests
+   ***************************************************************************/
+
+  // Test 61: Higher resolution ADC
+  void testHighResolutionADC() {
+    int bits = 16;
+    double min_field = -100.0;
+    double max_field = 100.0;
+
+    double resolution = (max_field - min_field) / (1 << bits);
+    TS_ASSERT(resolution < 0.01);  // Sub-0.01 microtesla
+  }
+
+  // Test 62: Low resolution ADC
+  void testLowResolutionADC() {
+    int bits = 8;
+    double min_field = -100.0;
+    double max_field = 100.0;
+
+    double resolution = (max_field - min_field) / (1 << bits);
+    TS_ASSERT(resolution > 0.5);  // Coarser than 0.5 microtesla
+  }
+
+  /***************************************************************************
+   * Inclination Correction Tests
+   ***************************************************************************/
+
+  // Test 63: Southern hemisphere inclination
+  void testSouthernHemisphereInclination() {
+    double Bh = 20.0;
+    double Bz = -40.0;  // Pointing up in southern hemisphere
+
+    double inclination = calculateInclination(Bh, Bz);
+    TS_ASSERT(inclination < 0);  // Negative inclination
+  }
+
+  // Test 64: Zero inclination (magnetic equator)
+  void testMagneticEquator() {
+    double Bh = 35.0;
+    double Bz = 0.0;
+
+    double inclination = calculateInclination(Bh, Bz);
+    TS_ASSERT_DELTA(inclination, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Bias Stability Tests
+   ***************************************************************************/
+
+  // Test 65: Bias stability measurement
+  void testBiasStability() {
+    std::mt19937 gen(123);
+    std::normal_distribution<double> dist(0.0, 0.1);
+
+    double bias_samples[100];
+    double nominal_bias = 0.5;
+
+    for (int i = 0; i < 100; i++) {
+      bias_samples[i] = nominal_bias + dist(gen);
+    }
+
+    // Calculate Allan variance proxy (simple std dev)
+    double sum = 0, sum_sq = 0;
+    for (int i = 0; i < 100; i++) {
+      sum += bias_samples[i];
+      sum_sq += bias_samples[i] * bias_samples[i];
+    }
+    double mean = sum / 100;
+    double variance = sum_sq / 100 - mean * mean;
+
+    TS_ASSERT(variance < 0.02);  // Stable bias
+  }
+
+  // Test 66: Long-term drift
+  void testLongTermDrift() {
+    double initial_bias = 0.5;
+    double drift_rate = 0.0001;  // microtesla per hour
+    double hours = 24.0;
+
+    double final_bias = initial_bias + drift_rate * hours;
+    TS_ASSERT_DELTA(final_bias, 0.5024, 0.0001);
+  }
+
+  /***************************************************************************
+   * More Edge Cases
+   ***************************************************************************/
+
+  // Test 67: Negative saturation
+  void testNegativeSaturation() {
+    double measured = -1000.0;
+    double min_range = -100.0;
+
+    double saturated = std::max(measured, min_range);
+    TS_ASSERT_DELTA(saturated, min_range, epsilon);
+  }
+
+  // Test 68: Very small field magnitude (near null)
+  void testNearNullField() {
+    double Bx = 0.001, By = 0.002, Bz = 0.001;
+    double magnitude = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+
+    TS_ASSERT(magnitude < 0.01);  // Near null
+  }
+
+  // Test 69: Field magnitude preservation through rotation
+  void testMagnitudePreservation() {
+    double Bx = 20.0, By = 5.0, Bz = 40.0;
+    double original_mag = std::sqrt(Bx*Bx + By*By + Bz*Bz);
+
+    // Rotate by 45 degrees in X-Y plane
+    double angle = 45.0 * DEG_TO_RAD;
+    double Bx_rot = Bx * std::cos(angle) - By * std::sin(angle);
+    double By_rot = Bx * std::sin(angle) + By * std::cos(angle);
+    double Bz_rot = Bz;
+
+    double rotated_mag = std::sqrt(Bx_rot*Bx_rot + By_rot*By_rot + Bz_rot*Bz_rot);
+    TS_ASSERT_DELTA(rotated_mag, original_mag, epsilon);
+  }
+
+  // Test 70: Heading calculation with dominant By
+  void testDominantByHeading() {
+    double Bx = 1.0;
+    double By = 50.0;
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT(heading > 85.0 && heading < 90.0);  // Nearly east
+  }
+
+  // Test 71: Heading stability near north
+  void testHeadingStabilityNearNorth() {
+    double Bx = 20.0;
+    double By = 0.01;  // Small east component
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT(heading < 1.0 || heading > 359.0);  // Very close to north
+  }
+
+  // Test 72: Heading stability near 180
+  void testHeadingStabilityNearSouth() {
+    double Bx = -20.0;
+    double By = 0.01;
+
+    double heading = calculateHeading(Bx, By);
+    TS_ASSERT(heading > 179.0 && heading < 181.0);
+  }
 };
