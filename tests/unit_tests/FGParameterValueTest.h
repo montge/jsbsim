@@ -488,4 +488,415 @@ public:
     TS_ASSERT(p.valid());
     TS_ASSERT_EQUALS(p->GetValue(), 50.0);
   }
+
+  /***************************************************************************
+   * Additional Real Value Tests
+   ***************************************************************************/
+
+  // Test 41: Positive sign prefix
+  void testRealConstructorPositiveSign() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("+3.5", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 3.5);
+  }
+
+  // Test 42: Scientific notation uppercase E
+  void testRealConstructorScientificUpperE() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("2.5E8", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 2.5e8);
+  }
+
+  // Test 43: Scientific notation negative with uppercase E
+  void testRealConstructorNegativeScientific() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("-1.0E-3", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), -1.0e-3);
+  }
+
+  // Test 44: Very large exponent
+  void testRealConstructorLargeExponent() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("1e200", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 1e200);
+  }
+
+  // Test 45: Very small exponent
+  void testRealConstructorSmallExponent() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("1e-200", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 1e-200);
+  }
+
+  /***************************************************************************
+   * Property Path Variations Tests
+   ***************************************************************************/
+
+  // Test 46: Deeply nested property
+  void testDeeplyNestedProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("a/b/c/d/e", true);
+    FGParameterValue x("a/b/c/d/e", pm, nullptr);
+
+    TS_ASSERT(!x.IsConstant());
+    node->setDoubleValue(42.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 42.0);
+  }
+
+  // Test 47: Property with index
+  void testPropertyWithIndex() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("propulsion/engine[0]/thrust-lbs", true);
+    FGParameterValue x("propulsion/engine[0]/thrust-lbs", pm, nullptr);
+
+    TS_ASSERT(!x.IsConstant());
+    node->setDoubleValue(5000.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 5000.0);
+  }
+
+  // Test 48: Property with underscore
+  void testPropertyWithUnderscore() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("my_property_name", true);
+    FGParameterValue x("my_property_name", pm, nullptr);
+
+    TS_ASSERT(!x.IsConstant());
+    node->setDoubleValue(100.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 100.0);
+  }
+
+  // Test 49: Property with dash
+  void testPropertyWithDash() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("velocities/ve-fps", true);
+    FGParameterValue x("velocities/ve-fps", pm, nullptr);
+
+    TS_ASSERT(!x.IsConstant());
+    node->setDoubleValue(500.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 500.0);
+  }
+
+  // Test 50: Single character property name
+  void testSingleCharProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("q", true);
+    FGParameterValue x("q", pm, nullptr);
+
+    TS_ASSERT(!x.IsConstant());
+    node->setDoubleValue(0.1);
+    TS_ASSERT_EQUALS(x.GetValue(), 0.1);
+  }
+
+  /***************************************************************************
+   * Sign Handling Tests
+   ***************************************************************************/
+
+  // Test 51: Negative sign on zero-valued property
+  void testNegativeSignOnZero() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("-x", pm, nullptr);
+
+    node->setDoubleValue(0.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 0.0);  // -0.0 == 0.0
+  }
+
+  // Test 52: Negative sign on negative value
+  void testNegativeSignOnNegative() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("-x", pm, nullptr);
+
+    node->setDoubleValue(-5.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 5.0);  // Double negative
+  }
+
+  // Test 53: Negative sign on large value
+  void testNegativeSignOnLarge() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("-x", pm, nullptr);
+
+    node->setDoubleValue(1e50);
+    TS_ASSERT_EQUALS(x.GetValue(), -1e50);
+  }
+
+  // Test 54: Nested property with negative sign
+  void testNegativeNestedProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("aero/qbar-psf", true);
+    FGParameterValue x("-aero/qbar-psf", pm, nullptr);
+
+    node->setDoubleValue(100.0);
+    TS_ASSERT_EQUALS(x.GetValue(), -100.0);
+  }
+
+  /***************************************************************************
+   * XML Value Tests
+   ***************************************************************************/
+
+  // Test 55: XML with leading whitespace
+  void testXMLLeadingWhitespace() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>   5.5</dummy>");
+    FGParameterValue x(elm, pm);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 5.5);
+  }
+
+  // Test 56: XML with trailing whitespace
+  void testXMLTrailingWhitespace() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>7.7   </dummy>");
+    FGParameterValue x(elm, pm);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 7.7);
+  }
+
+  // Test 57: XML zero value
+  void testXMLZeroValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>0</dummy>");
+    FGParameterValue x(elm, pm);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 0.0);
+  }
+
+  // Test 58: XML positive sign
+  void testXMLPositiveSign() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>+42.0</dummy>");
+    FGParameterValue x(elm, pm);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 42.0);
+  }
+
+  // Test 59: XML signed property
+  void testXMLSignedProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("alpha", true);
+    Element_ptr elm = readFromXML("<dummy>-alpha</dummy>");
+    FGParameterValue x(elm, pm);
+
+    TS_ASSERT(!x.IsConstant());
+    node->setDoubleValue(10.0);
+    TS_ASSERT_EQUALS(x.GetValue(), -10.0);
+  }
+
+  /***************************************************************************
+   * Precision and Accuracy Tests
+   ***************************************************************************/
+
+  // Test 60: High precision constant
+  void testHighPrecisionConstant() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("3.14159265358979323846", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_DELTA(x.GetValue(), M_PI, 1e-14);
+  }
+
+  // Test 61: Precision maintained in property
+  void testPropertyPrecision() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    double precise = 1.23456789012345;
+    node->setDoubleValue(precise);
+    TS_ASSERT_DELTA(x.GetValue(), precise, 1e-14);
+  }
+
+  // Test 62: Small difference detection
+  void testSmallDifferenceDetection() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    node->setDoubleValue(1.0);
+    double v1 = x.GetValue();
+    node->setDoubleValue(1.0 + 1e-15);
+    double v2 = x.GetValue();
+
+    TS_ASSERT(v2 > v1);
+  }
+
+  /***************************************************************************
+   * Multiple Access Pattern Tests
+   ***************************************************************************/
+
+  // Test 63: Multiple accesses same value
+  void testMultipleAccessesSameValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    node->setDoubleValue(42.0);
+    for (int i = 0; i < 100; i++) {
+      TS_ASSERT_EQUALS(x.GetValue(), 42.0);
+    }
+  }
+
+  // Test 64: Interleaved property accesses
+  void testInterleavedAccesses() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node_a = pm->GetNode("a", true);
+    auto node_b = pm->GetNode("b", true);
+    FGParameterValue pa("a", pm, nullptr);
+    FGParameterValue pb("b", pm, nullptr);
+
+    for (int i = 0; i < 10; i++) {
+      node_a->setDoubleValue(static_cast<double>(i));
+      node_b->setDoubleValue(static_cast<double>(i * 2));
+      TS_ASSERT_EQUALS(pa.GetValue(), static_cast<double>(i));
+      TS_ASSERT_EQUALS(pb.GetValue(), static_cast<double>(i * 2));
+    }
+  }
+
+  // Test 65: Rapid value changes
+  void testRapidValueChanges() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    for (int i = 0; i < 1000; i++) {
+      double val = static_cast<double>(i) * 0.001;
+      node->setDoubleValue(val);
+      TS_ASSERT_EQUALS(x.GetValue(), val);
+    }
+  }
+
+  /***************************************************************************
+   * Special Value Handling Tests
+   ***************************************************************************/
+
+  // Test 66: Negative infinity
+  void testNegativeInfinity() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    double neg_inf = -std::numeric_limits<double>::infinity();
+    node->setDoubleValue(neg_inf);
+    TS_ASSERT_EQUALS(x.GetValue(), neg_inf);
+  }
+
+  // Test 67: Denormalized value
+  void testDenormalizedValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    double denorm = std::numeric_limits<double>::denorm_min();
+    node->setDoubleValue(denorm);
+    TS_ASSERT_EQUALS(x.GetValue(), denorm);
+  }
+
+  // Test 68: Max double value
+  void testMaxDoubleValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("x", pm, nullptr);
+
+    double max_val = std::numeric_limits<double>::max();
+    node->setDoubleValue(max_val);
+    TS_ASSERT_EQUALS(x.GetValue(), max_val);
+  }
+
+  // Test 69: Negated infinity via sign
+  void testNegatedInfinity() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("x", true);
+    FGParameterValue x("-x", pm, nullptr);
+
+    double inf = std::numeric_limits<double>::infinity();
+    node->setDoubleValue(inf);
+    TS_ASSERT_EQUALS(x.GetValue(), -inf);
+  }
+
+  /***************************************************************************
+   * IsConstant and IsLateBound Interaction Tests
+   ***************************************************************************/
+
+  // Test 70: Constant is never late bound
+  void testConstantNeverLateBound() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("123.456", pm, nullptr);
+
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT(!x.IsLateBound());
+  }
+
+  // Test 71: Resolved property is not late bound
+  void testResolvedPropertyNotLateBound() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("y", true);
+    FGParameterValue x("y", pm, nullptr);
+
+    TS_ASSERT(!x.IsConstant());
+    TS_ASSERT(!x.IsLateBound());
+  }
+
+  // Test 72: Late bound becomes resolved
+  void testLateBoundBecomesResolved() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("z", pm, nullptr);
+
+    TS_ASSERT(x.IsLateBound());
+
+    auto node = pm->GetNode("z", true);
+    node->setDoubleValue(100.0);
+    x.GetValue();  // This resolves the late binding
+
+    TS_ASSERT(!x.IsLateBound());
+  }
+
+  /***************************************************************************
+   * Name Variations Tests
+   ***************************************************************************/
+
+  // Test 73: Property name with multiple indexes
+  void testPropertyMultipleIndexes() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("systems/electrical/bus[0]/load[1]", true);
+    FGParameterValue x("systems/electrical/bus[0]/load[1]", pm, nullptr);
+
+    node->setDoubleValue(25.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 25.0);
+  }
+
+  // Test 74: GetName for signed property
+  void testGetNameSignedProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("throttle", true);
+    FGParameterValue x("-throttle", pm, nullptr);
+
+    // The name should not include the sign
+    TS_ASSERT(x.GetName().find("throttle") != std::string::npos);
+  }
+
+  // Test 75: Very long property path
+  void testVeryLongPropertyPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    std::string longPath = "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p";
+    auto node = pm->GetNode(longPath, true);
+    FGParameterValue x(longPath, pm, nullptr);
+
+    node->setDoubleValue(99.9);
+    TS_ASSERT_EQUALS(x.GetValue(), 99.9);
+  }
 };
