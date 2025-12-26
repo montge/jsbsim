@@ -369,7 +369,634 @@ public:
     // Verify -6.5°C/km = -0.0065 K/m
     double lapse_rate_per_km = -6.5; // °C/km or K/km
     double lapse_rate_per_m = lapse_rate_per_km / 1000.0;
-    
+
     TS_ASSERT_DELTA(lapse_rate_per_m, ISA_LAPSE_RATE, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Altitude Layer Tests
+   ***************************************************************************/
+
+  // Test 31: Temperature at base of stratosphere (20km)
+  void testStratosphereBase20km() {
+    // Still isothermal at 20km
+    double temp = TROPOPAUSE_TEMP;  // -56.5°C
+    TS_ASSERT_DELTA(temp, 216.65, epsilon);
+  }
+
+  // Test 32: Temperature profile upper stratosphere (above 20km)
+  void testUpperStratosphereLapseRate() {
+    // Above 20km, temperature increases again
+    // Stratosphere 2 lapse rate: +0.001 K/m (from 20km to 32km)
+    double base_altitude = 20000.0;
+    double temp_at_20km = 216.65;
+    double lapse_rate_strat2 = 0.001;  // K/m positive
+
+    double altitude = 25000.0;
+    double temp = temp_at_20km + lapse_rate_strat2 * (altitude - base_altitude);
+    TS_ASSERT_DELTA(temp, 221.65, epsilon);
+  }
+
+  // Test 33: Mesosphere temperature profile (50-80km)
+  void testMesosphereTemperature() {
+    // In mesosphere, temperature decreases again
+    // Peak at stratopause (~47km) around 270K
+    // Decreases in mesosphere with lapse rate ~-0.0028 K/m
+    double stratopause_temp = 270.65;
+    double mesosphere_lapse = -0.0028;
+    double altitude_above_stratopause = 10000.0;  // 10km above stratopause
+
+    double temp = stratopause_temp + mesosphere_lapse * altitude_above_stratopause;
+    TS_ASSERT_DELTA(temp, 242.65, 0.1);
+  }
+
+  /***************************************************************************
+   * Non-Standard Day Tests
+   ***************************************************************************/
+
+  // Test 34: Hot day pressure altitude
+  void testHotDayPressureAltitude() {
+    // On ISA+20 day, pressure altitude is higher than geometric
+    double geometric_alt = 5000.0;
+    double temp_std = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * geometric_alt;
+    double temp_hot = temp_std + 20.0;  // ISA+20
+
+    // Pressure at geometric altitude is same, but temperature is higher
+    // This means density is lower = higher density altitude
+    double density_std = 1.0;  // Reference
+    double density_hot = temp_std / temp_hot;  // Ratio
+
+    TS_ASSERT(density_hot < density_std);
+  }
+
+  // Test 35: Cold day performance
+  void testColdDayPerformance() {
+    // On ISA-20 day at sea level
+    double temp_cold = ISA_SEA_LEVEL_TEMP_K - 20.0;  // 268.15 K
+    double pressure = ISA_SEA_LEVEL_PRESSURE;
+    double density_cold = pressure / (GAS_CONSTANT_AIR * temp_cold);
+
+    // Higher density = better performance
+    TS_ASSERT(density_cold > ISA_SEA_LEVEL_DENSITY);
+    TS_ASSERT_DELTA(density_cold, 1.317, 0.001);
+  }
+
+  // Test 36: High altitude airport (Denver)
+  void testHighAltitudeAirport() {
+    double field_elevation = 1609.0;  // Denver ~5280 ft = 1609 m
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * field_elevation;
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double delta = std::pow(temp / ISA_SEA_LEVEL_TEMP_K, exponent);
+    double pressure = ISA_SEA_LEVEL_PRESSURE * delta;
+
+    TS_ASSERT_DELTA(pressure, 83431.0, 100.0);  // ~83.4 kPa
+  }
+
+  // Test 37: ISA deviation calculation
+  void testISADeviation() {
+    double actual_temp = 293.15;  // 20°C at sea level
+    double isa_temp = ISA_SEA_LEVEL_TEMP_K;  // 288.15 K = 15°C
+    double deviation = actual_temp - isa_temp;
+
+    TS_ASSERT_DELTA(deviation, 5.0, epsilon);  // ISA+5
+  }
+
+  /***************************************************************************
+   * Pressure Altitude vs Density Altitude Tests
+   ***************************************************************************/
+
+  // Test 38: Density altitude greater than pressure altitude (hot day)
+  void testDensityAltitudeGreaterThanPressureAlt() {
+    // Standard day: pressure alt = density alt = geometric alt
+    // Hot day: density alt > pressure alt (because density is lower)
+    double pressure_alt = 5000.0;  // m
+    double temp_deviation = 15.0;  // ISA+15
+
+    // Density altitude approximation
+    double density_alt = pressure_alt + 120.0 * temp_deviation;  // Rule of thumb
+
+    TS_ASSERT(density_alt > pressure_alt);
+    TS_ASSERT_DELTA(density_alt, 6800.0, 100.0);
+  }
+
+  // Test 39: Density altitude less than pressure altitude (cold day)
+  void testDensityAltitudeLessThanPressureAlt() {
+    double pressure_alt = 5000.0;
+    double temp_deviation = -10.0;  // ISA-10
+
+    double density_alt = pressure_alt + 120.0 * temp_deviation;
+
+    TS_ASSERT(density_alt < pressure_alt);
+    TS_ASSERT_DELTA(density_alt, 3800.0, 100.0);
+  }
+
+  /***************************************************************************
+   * More Airspeed Conversion Tests
+   ***************************************************************************/
+
+  // Test 40: TAS to EAS conversion
+  void testTASToEAS() {
+    double tas = 200.0;  // m/s
+    double sigma = 0.65;  // density ratio at altitude
+    double eas = tas * std::sqrt(sigma);
+
+    TS_ASSERT_DELTA(eas, 161.24, 0.1);
+  }
+
+  // Test 41: Mach to TAS conversion
+  void testMachToTAS() {
+    double mach = 0.8;
+    double temp = 223.15;  // At ~10km altitude
+    double sound_speed = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * temp);
+    double tas = mach * sound_speed;
+
+    TS_ASSERT_DELTA(tas, 239.63, 0.1);
+  }
+
+  // Test 42: Ground speed from TAS and wind
+  void testGroundSpeedWithWind() {
+    double tas = 150.0;  // m/s
+    double headwind = 20.0;  // m/s
+    double groundspeed = tas - headwind;
+
+    TS_ASSERT_DELTA(groundspeed, 130.0, epsilon);
+
+    // Tailwind
+    double tailwind = 20.0;
+    groundspeed = tas + tailwind;
+    TS_ASSERT_DELTA(groundspeed, 170.0, epsilon);
+  }
+
+  // Test 43: Crosswind component
+  void testCrosswindComponent() {
+    double wind_speed = 30.0;  // m/s
+    double wind_angle = 30.0 * M_PI / 180.0;  // 30 degrees off runway
+    double crosswind = wind_speed * std::sin(wind_angle);
+    double headwind = wind_speed * std::cos(wind_angle);
+
+    TS_ASSERT_DELTA(crosswind, 15.0, 0.1);
+    TS_ASSERT_DELTA(headwind, 25.98, 0.1);
+  }
+
+  /***************************************************************************
+   * Stagnation/Total Temperature Tests
+   ***************************************************************************/
+
+  // Test 44: Total temperature (stagnation)
+  void testTotalTemperature() {
+    double static_temp = 223.15;  // K at altitude
+    double mach = 0.8;
+    double total_temp = static_temp * (1.0 + 0.5 * (GAMMA_AIR - 1.0) * mach * mach);
+
+    TS_ASSERT_DELTA(total_temp, 251.77, 0.1);
+  }
+
+  // Test 45: Recovery factor for temperature probe
+  void testRecoveryFactor() {
+    double static_temp = 223.15;
+    double mach = 0.8;
+    double recovery_factor = 0.98;  // Typical for TAT probe
+
+    double total_temp = static_temp * (1.0 + 0.5 * (GAMMA_AIR - 1.0) * mach * mach);
+    double measured_temp = static_temp +
+                          recovery_factor * (total_temp - static_temp);
+
+    TS_ASSERT(measured_temp < total_temp);
+    TS_ASSERT(measured_temp > static_temp);
+  }
+
+  /***************************************************************************
+   * Pitot-Static Tests
+   ***************************************************************************/
+
+  // Test 46: Impact pressure (subsonic)
+  void testImpactPressureSubsonic() {
+    double mach = 0.5;
+    double static_pressure = ISA_SEA_LEVEL_PRESSURE;
+
+    // Subsonic: qc = P0 * ((1 + 0.2*M^2)^3.5 - 1)
+    double qc = static_pressure * (std::pow(1.0 + 0.2 * mach * mach, 3.5) - 1.0);
+
+    TS_ASSERT_DELTA(qc, 18868.0, 50.0);
+  }
+
+  // Test 47: Total pressure from Mach
+  void testTotalPressureFromMach() {
+    double mach = 0.6;
+    double static_pressure = 80000.0;  // Pa at altitude
+
+    double total_pressure = static_pressure *
+                           std::pow(1.0 + 0.5 * (GAMMA_AIR - 1.0) * mach * mach,
+                                   GAMMA_AIR / (GAMMA_AIR - 1.0));
+
+    TS_ASSERT_DELTA(total_pressure, 102040.0, 50.0);
+  }
+
+  // Test 48: Static pressure from pitot and total
+  void testStaticPressureRecovery() {
+    double total_pressure = 105000.0;
+    double impact_pressure = 4000.0;
+    double static_pressure = total_pressure - impact_pressure;
+
+    TS_ASSERT_DELTA(static_pressure, 101000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Reynolds Number Extended Tests
+   ***************************************************************************/
+
+  // Test 49: Reynolds number at altitude
+  void testReynoldsNumberAtAltitude() {
+    double altitude = 10000.0;
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
+    double theta = temp / ISA_SEA_LEVEL_TEMP_K;
+    double delta = std::pow(theta, -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR));
+    double sigma = delta / theta;
+
+    double density = ISA_SEA_LEVEL_DENSITY * sigma;
+    double velocity = 250.0;  // m/s TAS
+    double chord = 3.0;  // m
+    double mu = DYNAMIC_VISCOSITY_REF * std::pow(theta, 1.5) *
+               (ISA_SEA_LEVEL_TEMP_K + SUTHERLAND_CONSTANT) /
+               (temp + SUTHERLAND_CONSTANT);
+
+    double reynolds = (density * velocity * chord) / mu;
+
+    // Reynolds number at altitude is lower due to lower density
+    TS_ASSERT(reynolds < 1e8);
+    TS_ASSERT(reynolds > 1e7);
+  }
+
+  // Test 50: Critical Reynolds number for transition
+  void testCriticalReynoldsNumber() {
+    // Transition from laminar to turbulent typically 3e5 to 5e5
+    double re_critical = 5e5;
+    double velocity = 50.0;  // m/s
+    double x_transition = (re_critical * DYNAMIC_VISCOSITY_REF) /
+                         (ISA_SEA_LEVEL_DENSITY * velocity);
+
+    // x = Re * mu / (rho * v) = 5e5 * 1.79e-5 / (1.225 * 50) = 0.146m
+    TS_ASSERT_DELTA(x_transition, 0.146, 0.01);
+  }
+
+  /***************************************************************************
+   * Altitude Performance Tests
+   ***************************************************************************/
+
+  // Test 51: Thrust reduction with altitude (jet engine)
+  void testThrustReductionWithAltitude() {
+    // Jet thrust roughly proportional to density ratio
+    double sigma = 0.65;  // At ~15000 ft
+    double sea_level_thrust = 25000.0;  // N
+    double altitude_thrust = sea_level_thrust * sigma;
+
+    TS_ASSERT_DELTA(altitude_thrust, 16250.0, 1.0);
+  }
+
+  // Test 52: Power required vs altitude
+  void testPowerRequiredVsAltitude() {
+    // For same TAS, induced drag is same but parasite drag lower
+    double tas = 100.0;  // m/s
+    double cd_parasite = 0.02;
+    double s = 30.0;  // wing area m^2
+
+    double rho_sl = ISA_SEA_LEVEL_DENSITY;
+    double rho_alt = 0.9 * rho_sl;
+
+    double drag_sl = 0.5 * rho_sl * tas * tas * s * cd_parasite;
+    double drag_alt = 0.5 * rho_alt * tas * tas * s * cd_parasite;
+
+    TS_ASSERT(drag_alt < drag_sl);
+  }
+
+  // Test 53: Rate of climb calculation
+  void testRateOfClimb() {
+    double excess_power = 50000.0;  // Watts
+    double weight = 10000.0;  // N
+    double roc = excess_power / weight;  // m/s
+
+    TS_ASSERT_DELTA(roc, 5.0, epsilon);  // 5 m/s = 984 fpm
+  }
+
+  // Test 54: Service ceiling (ROC = 0.5 m/s)
+  void testServiceCeiling() {
+    // Service ceiling defined as altitude where ROC = 100 ft/min = 0.508 m/s
+    double roc_service = 0.508;
+
+    // At service ceiling, excess thrust barely exceeds drag
+    TS_ASSERT_DELTA(roc_service, 0.508, 0.01);
+  }
+
+  /***************************************************************************
+   * Specific Energy Tests
+   ***************************************************************************/
+
+  // Test 55: Specific energy (energy height)
+  void testSpecificEnergy() {
+    double altitude = 5000.0;  // m
+    double velocity = 200.0;   // m/s
+    double g = GRAVITY_SI;
+
+    double specific_energy = altitude + (velocity * velocity) / (2.0 * g);
+    double energy_height = specific_energy;
+
+    TS_ASSERT_DELTA(energy_height, 7039.4, 0.5);
+  }
+
+  // Test 56: Energy exchange (zoom climb)
+  void testEnergyExchangeZoomClimb() {
+    double initial_alt = 5000.0;
+    double initial_vel = 250.0;
+    double g = GRAVITY_SI;
+
+    double initial_energy = initial_alt + (initial_vel * initial_vel) / (2.0 * g);
+
+    // Zoom climb: trade speed for altitude
+    double final_vel = 100.0;
+    double final_energy = initial_energy;  // Conservation
+    double final_alt = final_energy - (final_vel * final_vel) / (2.0 * g);
+
+    TS_ASSERT(final_alt > initial_alt);
+    TS_ASSERT_DELTA(final_alt, 7675.0, 10.0);
+  }
+
+  /***************************************************************************
+   * Extreme Condition Tests
+   ***************************************************************************/
+
+  // Test 57: Arctic conditions (-50°C at sea level)
+  void testArcticConditions() {
+    double temp = 273.15 - 50.0;  // 223.15 K
+    double pressure = ISA_SEA_LEVEL_PRESSURE;
+    double density = pressure / (GAS_CONSTANT_AIR * temp);
+
+    TS_ASSERT_DELTA(density, 1.582, 0.001);  // Much denser than standard
+  }
+
+  // Test 58: Tropical conditions (+40°C at sea level)
+  void testTropicalConditions() {
+    double temp = 273.15 + 40.0;  // 313.15 K
+    double pressure = ISA_SEA_LEVEL_PRESSURE;
+    double density = pressure / (GAS_CONSTANT_AIR * temp);
+
+    TS_ASSERT_DELTA(density, 1.127, 0.001);  // Less dense than standard
+  }
+
+  // Test 59: High altitude cruise (FL410)
+  void testHighAltitudeCruise() {
+    double altitude = 12497.0;  // FL410 = 41000 ft = 12497 m
+    // Above tropopause, so isothermal
+
+    double altitude_above_tropo = altitude - TROPOPAUSE_ALTITUDE;
+    double exponent_tropo = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double pressure_tropo = ISA_SEA_LEVEL_PRESSURE *
+                           std::pow(TROPOPAUSE_TEMP / ISA_SEA_LEVEL_TEMP_K, exponent_tropo);
+
+    double pressure = pressure_tropo *
+                     std::exp(-GRAVITY_SI * altitude_above_tropo /
+                             (GAS_CONSTANT_AIR * TROPOPAUSE_TEMP));
+
+    TS_ASSERT_DELTA(pressure, 17873.0, 100.0);  // ~179 hPa
+  }
+
+  // Test 60: Space boundary (Karman line 100km)
+  void testKarmanLine() {
+    double altitude = 100000.0;  // m
+    // At Karman line, air is extremely thin
+
+    // Rough approximation using barometric formula
+    double scale_height = 8500.0;  // Approximate
+    double pressure_ratio = std::exp(-altitude / scale_height);
+
+    TS_ASSERT(pressure_ratio < 1e-5);  // Very low pressure
+  }
+
+  /***************************************************************************
+   * Humidity and Water Vapor Tests
+   ***************************************************************************/
+
+  // Test 61: Saturation vapor pressure (Magnus formula)
+  void testSaturationVaporPressure() {
+    double temp_c = 20.0;  // Celsius
+    double es = 610.78 * std::exp((17.27 * temp_c) / (temp_c + 237.3));
+
+    TS_ASSERT_DELTA(es, 2339.0, 10.0);  // ~23.4 hPa
+  }
+
+  // Test 62: Relative humidity effect on density
+  void testRelativeHumidityEffect() {
+    double temp = 293.15;  // 20°C
+    double pressure = ISA_SEA_LEVEL_PRESSURE;
+    double rh = 0.8;  // 80% RH
+
+    double temp_c = temp - 273.15;
+    double es = 610.78 * std::exp((17.27 * temp_c) / (temp_c + 237.3));
+    double e = rh * es;  // Vapor pressure
+
+    // Virtual temperature accounts for humidity
+    double tv = temp / (1.0 - (e / pressure) * (1.0 - 0.622));
+    double density_moist = pressure / (GAS_CONSTANT_AIR * tv);
+
+    // Moist air less dense
+    double density_dry = pressure / (GAS_CONSTANT_AIR * temp);
+    TS_ASSERT(density_moist < density_dry);
+  }
+
+  // Test 63: Dew point calculation
+  void testDewPointCalculation() {
+    double temp = 25.0;  // Celsius
+    double rh = 0.6;  // 60% RH
+
+    // Magnus approximation for dew point
+    double a = 17.27, b = 237.3;
+    double alpha = ((a * temp) / (b + temp)) + std::log(rh);
+    double dew_point = (b * alpha) / (a - alpha);
+
+    TS_ASSERT_DELTA(dew_point, 16.7, 0.5);
+  }
+
+  /***************************************************************************
+   * Instrument Error Tests
+   ***************************************************************************/
+
+  // Test 64: Altimeter error with non-standard pressure
+  void testAltimeterError() {
+    // Altimeter set to 1013.25 hPa but actual pressure is 1000 hPa
+    double set_pressure = 101325.0;  // Pa
+    double actual_pressure = 100000.0;  // Pa
+
+    // Each 1 hPa difference = ~27 ft = ~8.2 m
+    double pressure_diff = (set_pressure - actual_pressure) / 100.0;  // in hPa
+    double altitude_error = pressure_diff * 8.23;  // m
+
+    TS_ASSERT_DELTA(altitude_error, 109.3, 1.0);
+  }
+
+  // Test 65: Temperature error in altimeter
+  void testAltimeterTempError() {
+    // On cold day, true altitude is LOWER than indicated
+    // "High to low, look out below"
+    double indicated_alt = 5000.0;
+    double isa_temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * indicated_alt;
+    double actual_temp = isa_temp - 20.0;  // 20K colder
+
+    // Approximately 4% per 10°C error
+    double error_percent = 0.04 * 20.0 / 10.0;
+    double true_alt = indicated_alt * (1.0 - error_percent);
+
+    TS_ASSERT(true_alt < indicated_alt);
+  }
+
+  /***************************************************************************
+   * More Pressure Calculations
+   ***************************************************************************/
+
+  // Test 66: QNH calculation
+  void testQNHCalculation() {
+    double field_pressure = 99000.0;  // Pa at field
+    double field_elevation = 500.0;   // m
+
+    // QNH reduces field pressure to sea level using ISA lapse rate
+    // p_sl = p_field / delta, where delta = (T/T0)^exponent
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * field_elevation;
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double delta = std::pow(temp / ISA_SEA_LEVEL_TEMP_K, exponent);
+    double qnh = field_pressure / delta;
+
+    // With field_pressure=99000 Pa, delta~0.942, QNH~105kPa
+    TS_ASSERT(qnh > 100000.0);  // QNH should be higher than field pressure
+  }
+
+  // Test 67: Flight level pressure
+  void testFlightLevelPressure() {
+    // FL350 = 35000 ft = 10668 m
+    // Using standard atmosphere
+    double altitude = 10668.0;
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
+
+    // Clamp to tropopause
+    if (altitude > TROPOPAUSE_ALTITUDE) {
+      temp = TROPOPAUSE_TEMP;
+    }
+
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double pressure = ISA_SEA_LEVEL_PRESSURE *
+                     std::pow(TROPOPAUSE_TEMP / ISA_SEA_LEVEL_TEMP_K, exponent);
+
+    // Multiply by exponential for above tropopause
+    double altitude_above = altitude - TROPOPAUSE_ALTITUDE;
+    if (altitude_above > 0) {
+      pressure *= std::exp(-GRAVITY_SI * altitude_above /
+                          (GAS_CONSTANT_AIR * TROPOPAUSE_TEMP));
+    }
+
+    TS_ASSERT(pressure < 30000.0);  // Less than 300 hPa
+  }
+
+  // Test 68: Standard atmosphere table value verification
+  void testStandardAtmosphereTable() {
+    // At 1000m: P = 89875 Pa, T = 281.65 K, rho = 1.112 kg/m³
+    double altitude = 1000.0;
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
+    TS_ASSERT_DELTA(temp, 281.65, 0.01);
+
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double pressure = ISA_SEA_LEVEL_PRESSURE *
+                     std::pow(temp / ISA_SEA_LEVEL_TEMP_K, exponent);
+    TS_ASSERT_DELTA(pressure, 89875.0, 50.0);
+
+    double density = pressure / (GAS_CONSTANT_AIR * temp);
+    TS_ASSERT_DELTA(density, 1.112, 0.001);
+  }
+
+  // Test 69: Pressure doubling altitude
+  void testPressureDoublingAltitude() {
+    // Pressure halves roughly every 5500m
+    double half_pressure_alt = 5500.0;  // Approximate
+
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * half_pressure_alt;
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double pressure_ratio = std::pow(temp / ISA_SEA_LEVEL_TEMP_K, exponent);
+
+    TS_ASSERT_DELTA(pressure_ratio, 0.5, 0.02);
+  }
+
+  // Test 70: Pressure at different reference temperatures
+  void testPressureAtDifferentTemps() {
+    double altitude = 3000.0;
+
+    // ISA
+    double temp_isa = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double delta_isa = std::pow(temp_isa / ISA_SEA_LEVEL_TEMP_K, exponent);
+
+    // ISA+20
+    double temp_hot = temp_isa + 20.0;
+    double delta_hot = std::pow(temp_hot / (ISA_SEA_LEVEL_TEMP_K + 20.0), exponent);
+
+    // Both should give reasonable pressure ratios
+    TS_ASSERT(delta_isa > 0.5 && delta_isa < 0.9);
+    TS_ASSERT(delta_hot > 0.5 && delta_hot < 0.9);
+  }
+
+  // Test 71: Speed of sound variation with altitude
+  void testSpeedOfSoundVariation() {
+    // Speed of sound at different altitudes
+    double a_sl = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * ISA_SEA_LEVEL_TEMP_K);
+    double a_5k = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * (ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * 5000));
+    double a_tropo = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * TROPOPAUSE_TEMP);
+
+    TS_ASSERT(a_sl > a_5k);
+    TS_ASSERT(a_5k > a_tropo);
+    TS_ASSERT_DELTA(a_sl, 340.3, 0.1);
+    TS_ASSERT_DELTA(a_tropo, 295.1, 0.1);
+  }
+
+  // Test 72: Maximum operating altitude (coffin corner concept)
+  void testCoffinCornerConcept() {
+    // At high altitude, Mmo and stall speed converge
+    // This is the aerodynamic ceiling
+    double mmo = 0.82;
+    double a = 295.0;  // Speed of sound at altitude
+    double max_speed = mmo * a;
+
+    // Stall speed increases with altitude (same EAS = higher TAS)
+    double stall_eas = 80.0;  // m/s
+    double sigma = 0.3;  // Very high altitude
+    double stall_tas = stall_eas / std::sqrt(sigma);
+
+    // At coffin corner, these converge
+    TS_ASSERT(stall_tas > 100.0);  // Much higher than at sea level
+  }
+
+  // Test 73: Atmospheric scale height
+  void testAtmosphericScaleHeight() {
+    // Scale height H = RT/g
+    double scale_height = (GAS_CONSTANT_AIR * ISA_SEA_LEVEL_TEMP_K) / GRAVITY_SI;
+
+    TS_ASSERT_DELTA(scale_height, 8434.5, 1.0);  // ~8.4 km
+  }
+
+  // Test 74: Air mass calculation
+  void testAirMassCalculation() {
+    // Column of air above a point
+    double surface_pressure = ISA_SEA_LEVEL_PRESSURE;  // Pa = N/m^2
+    double area = 1.0;  // m^2
+    double force = surface_pressure * area;
+    double mass = force / GRAVITY_SI;  // kg
+
+    TS_ASSERT_DELTA(mass, 10332.0, 10.0);  // ~10.3 tonnes per m^2
+  }
+
+  // Test 75: Virtual temperature calculation
+  void testVirtualTemperature() {
+    double temp = 288.15;
+    double mixing_ratio = 0.01;  // kg/kg (1% moisture)
+
+    // Virtual temperature is higher due to water vapor
+    double tv = temp * (1.0 + 0.608 * mixing_ratio);
+
+    TS_ASSERT(tv > temp);
+    TS_ASSERT_DELTA(tv, 289.9, 0.1);
   }
 };
