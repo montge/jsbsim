@@ -628,3 +628,444 @@ public:
         TS_ASSERT(V_exit > M0 * sqrt(gamma * ThermoConstants::R_AIR * T0));  // Accelerated
     }
 };
+
+/*******************************************************************************
+ * Additional FGThermodynamics Tests (33 new tests)
+ ******************************************************************************/
+
+class FGThermodynamicsAdditionalTest : public CxxTest::TestSuite
+{
+public:
+    //==========================================================================
+    // ENTROPY AND ENTHALPY TESTS
+    //==========================================================================
+
+    // Test 43: Entropy change for isentropic process
+    void testEntropyChange_Isentropic() {
+        // For isentropic process, Δs = 0
+        double gamma = ThermoConstants::GAMMA;
+        double T1 = 300.0;
+        double P1 = 100000.0;
+        double P2 = 200000.0;
+
+        // Isentropic temperature
+        double T2 = T1 * pow(P2 / P1, (gamma - 1.0) / gamma);
+
+        // Entropy change: Δs = cp * ln(T2/T1) - R * ln(P2/P1)
+        double cp = ThermoConstants::CP_AIR;
+        double R = ThermoConstants::R_AIR;
+        double delta_s = cp * log(T2 / T1) - R * log(P2 / P1);
+
+        TS_ASSERT_DELTA(delta_s, 0.0, 0.1);
+    }
+
+    // Test 44: Entropy change for irreversible compression
+    void testEntropyChange_Irreversible() {
+        double gamma = ThermoConstants::GAMMA;
+        double cp = ThermoConstants::CP_AIR;
+        double R = ThermoConstants::R_AIR;
+
+        double T1 = 288.15;
+        double P1 = 101325.0;
+        double P2 = 1013250.0;  // 10:1 pressure ratio
+        double eta_c = 0.85;
+
+        // Ideal (isentropic) temperature
+        double T2s = T1 * pow(P2 / P1, (gamma - 1.0) / gamma);
+        // Actual temperature
+        double T2 = T1 + (T2s - T1) / eta_c;
+
+        // Entropy change
+        double delta_s = cp * log(T2 / T1) - R * log(P2 / P1);
+        TS_ASSERT(delta_s > 0);  // Irreversible process increases entropy
+    }
+
+    // Test 45: Specific enthalpy calculation
+    void testSpecificEnthalpy() {
+        double cp = ThermoConstants::CP_AIR;
+        double T = 500.0;  // K
+        double T_ref = 0.0;  // Reference temperature
+
+        double h = cp * (T - T_ref);
+        TS_ASSERT_DELTA(h, 502500.0, 100.0);  // J/kg
+    }
+
+    // Test 46: Stagnation enthalpy
+    void testStagnationEnthalpy() {
+        double cp = ThermoConstants::CP_AIR;
+        double T = 300.0;  // K (static temp)
+        double V = 200.0;  // m/s
+
+        double h = cp * T;
+        double h0 = h + V * V / 2.0;
+
+        TS_ASSERT_DELTA(h0, 321500.0, 100.0);  // J/kg
+    }
+
+    //==========================================================================
+    // GAS MIXTURE TESTS
+    //==========================================================================
+
+    // Test 47: Molecular weight of air
+    void testMolecularWeightAir() {
+        // Air is ~78% N2, ~21% O2, ~1% Ar
+        double M_N2 = 28.0;
+        double M_O2 = 32.0;
+        double M_Ar = 40.0;
+
+        double M_air = 0.78 * M_N2 + 0.21 * M_O2 + 0.01 * M_Ar;
+        TS_ASSERT_DELTA(M_air, 28.96, 0.1);
+    }
+
+    // Test 48: Specific gas constant from molecular weight
+    void testSpecificGasConstant() {
+        double R_universal = 8314.0;  // J/(kmol·K)
+        double M_air = 28.96;         // kg/kmol
+
+        double R = R_universal / M_air;
+        TS_ASSERT_DELTA(R, 287.05, 0.5);
+    }
+
+    // Test 49: Cp/Cv ratio verification
+    void testCpCvRatio() {
+        double cp = ThermoConstants::CP_AIR;
+        double cv = ThermoConstants::CV_AIR;
+        double gamma_calc = cp / cv;
+
+        TS_ASSERT_DELTA(gamma_calc, ThermoConstants::GAMMA, 0.01);
+    }
+
+    // Test 50: Cp - Cv = R
+    void testCpMinusCvEqualsR() {
+        double cp = ThermoConstants::CP_AIR;
+        double cv = ThermoConstants::CV_AIR;
+        double R = ThermoConstants::R_AIR;
+
+        double diff = cp - cv;
+        TS_ASSERT_DELTA(diff, R, 1.0);
+    }
+
+    //==========================================================================
+    // AFTERBURNER TESTS
+    //==========================================================================
+
+    // Test 51: Afterburner temperature rise
+    void testAfterburnerTemperatureRise() {
+        double T5 = 900.0;   // K (turbine exit)
+        double T6 = 2000.0;  // K (afterburner exit)
+        double cp = ThermoConstants::CP_AIR;
+
+        double delta_T = T6 - T5;
+        double Q_ab = cp * delta_T;
+
+        TS_ASSERT_DELTA(delta_T, 1100.0, 0.1);
+        TS_ASSERT_DELTA(Q_ab, 1105500.0, 100.0);  // J/kg
+    }
+
+    // Test 52: Afterburner fuel flow
+    void testAfterburnerFuelFlow() {
+        double Q_ab = 1105500.0;  // J/kg
+        double LHV = ThermoConstants::FUEL_HEATING_VALUE;
+        double eta_ab = 0.95;
+
+        double f_ab = Q_ab / (eta_ab * LHV);
+        TS_ASSERT_DELTA(f_ab, 0.0271, 0.001);
+    }
+
+    // Test 53: Afterburner thrust augmentation
+    void testAfterburnerThrustAugmentation() {
+        double V_exit_dry = 500.0;  // m/s
+        double T_exit_dry = 800.0;  // K
+        double T_exit_ab = 1800.0;  // K (with afterburner)
+
+        // V_exit ∝ sqrt(T)
+        double V_exit_ab = V_exit_dry * sqrt(T_exit_ab / T_exit_dry);
+        double thrust_ratio = V_exit_ab / V_exit_dry;
+
+        TS_ASSERT_DELTA(V_exit_ab, 750.0, 5.0);
+        TS_ASSERT_DELTA(thrust_ratio, 1.5, 0.05);
+    }
+
+    //==========================================================================
+    // BLADE COOLING TESTS
+    //==========================================================================
+
+    // Test 54: Turbine blade cooling effectiveness
+    void testBladeCoolingEffectiveness() {
+        // η_c = (T_gas - T_blade) / (T_gas - T_coolant)
+        double T_gas = 1700.0;    // K
+        double T_coolant = 700.0; // K (compressor bleed)
+        double T_blade = 1100.0;  // K (metal limit)
+
+        double eta_c = (T_gas - T_blade) / (T_gas - T_coolant);
+        TS_ASSERT_DELTA(eta_c, 0.6, 0.01);
+    }
+
+    // Test 55: Coolant mass flow ratio for blade cooling
+    void testCoolantMassFlowRatio() {
+        // Typical coolant flow is 5-15% of core flow
+        double mdot_gas = 50.0;           // kg/s
+        double coolant_fraction = 0.10;   // 10% coolant flow
+
+        double mdot_coolant = mdot_gas * coolant_fraction;
+        TS_ASSERT_DELTA(mdot_coolant, 5.0, 0.1);
+        TS_ASSERT(mdot_coolant > 0);
+        TS_ASSERT(mdot_coolant < mdot_gas);  // Coolant is fraction of main flow
+    }
+
+    // Test 56: Film cooling temperature
+    void testFilmCoolingTemperature() {
+        double T_gas = 1600.0;    // K
+        double T_coolant = 650.0; // K
+        double film_effectiveness = 0.5;
+
+        double T_film = T_gas - film_effectiveness * (T_gas - T_coolant);
+        TS_ASSERT_DELTA(T_film, 1125.0, 1.0);
+    }
+
+    //==========================================================================
+    // CYCLE EFFICIENCY TESTS
+    //==========================================================================
+
+    // Test 57: Carnot efficiency
+    void testCarnotEfficiency() {
+        double T_hot = 1500.0;   // K
+        double T_cold = 288.15;  // K
+
+        double eta_carnot = 1.0 - T_cold / T_hot;
+        TS_ASSERT_DELTA(eta_carnot, 0.808, 0.001);
+    }
+
+    // Test 58: Brayton cycle thermal efficiency (ideal)
+    void testBraytonCycleEfficiency_Ideal() {
+        double gamma = ThermoConstants::GAMMA;
+        double PR = 25.0;  // Pressure ratio
+
+        double eta_brayton = 1.0 - pow(1.0 / PR, (gamma - 1.0) / gamma);
+        TS_ASSERT_DELTA(eta_brayton, 0.601, 0.001);
+    }
+
+    // Test 59: Actual cycle efficiency
+    void testActualCycleEfficiency() {
+        double W_net = 300000.0;  // J/kg (net work output)
+        double Q_in = 700000.0;   // J/kg (heat input)
+
+        double eta = W_net / Q_in;
+        TS_ASSERT_DELTA(eta, 0.429, 0.001);
+    }
+
+    // Test 60: Specific fuel consumption from efficiency
+    void testSFCFromEfficiency() {
+        double eta = 0.40;        // Thermal efficiency
+        double LHV = ThermoConstants::FUEL_HEATING_VALUE;
+
+        // SFC = 1 / (eta * LHV)
+        double SFC = 1.0 / (eta * LHV);  // kg/(J)
+        double SFC_hr = SFC * 3600.0;     // kg/(kJ·hr)
+
+        TS_ASSERT_DELTA(SFC * 1e6, 0.0581, 0.001);  // μg/J
+    }
+
+    //==========================================================================
+    // SHOCK WAVE THERMODYNAMICS
+    //==========================================================================
+
+    // Test 61: Normal shock temperature ratio
+    void testNormalShockTemperatureRatio() {
+        double gamma = ThermoConstants::GAMMA;
+        double M1 = 2.0;  // Upstream Mach number
+
+        // Correct normal shock relation:
+        // T2/T1 = [1 + 2γ/(γ+1)*(M1²-1)] * [(2 + (γ-1)*M1²) / ((γ+1)*M1²)]
+        double term1 = 1.0 + 2.0 * gamma / (gamma + 1.0) * (M1 * M1 - 1.0);
+        double term2 = (2.0 + (gamma - 1.0) * M1 * M1) / ((gamma + 1.0) * M1 * M1);
+        double T_ratio = term1 * term2;
+
+        // For M1 = 2.0, T2/T1 ≈ 1.687
+        TS_ASSERT_DELTA(T_ratio, 1.687, 0.01);
+        TS_ASSERT(T_ratio > 1.0);  // Temperature always increases across shock
+    }
+
+    // Test 62: Normal shock pressure ratio
+    void testNormalShockPressureRatio() {
+        double gamma = ThermoConstants::GAMMA;
+        double M1 = 2.0;
+
+        double P_ratio = 1.0 + 2.0 * gamma / (gamma + 1.0) * (M1 * M1 - 1.0);
+        TS_ASSERT_DELTA(P_ratio, 4.5, 0.01);
+    }
+
+    // Test 63: Downstream Mach number after normal shock
+    void testNormalShockM2() {
+        double gamma = ThermoConstants::GAMMA;
+        double M1 = 2.0;
+
+        double M2_sq = (1.0 + ((gamma - 1.0) / 2.0) * M1 * M1) /
+                       (gamma * M1 * M1 - (gamma - 1.0) / 2.0);
+        double M2 = sqrt(M2_sq);
+
+        TS_ASSERT_DELTA(M2, 0.577, 0.01);  // Always subsonic after normal shock
+    }
+
+    //==========================================================================
+    // INLET PERFORMANCE TESTS
+    //==========================================================================
+
+    // Test 64: Ram pressure recovery
+    void testRamPressureRecovery() {
+        double gamma = ThermoConstants::GAMMA;
+        double M0 = 0.85;
+        double eta_d = 0.98;  // Diffuser efficiency
+
+        double P0_P = pow(1.0 + ((gamma - 1.0) / 2.0) * M0 * M0, gamma / (gamma - 1.0));
+        double P02_P = eta_d * P0_P;
+
+        TS_ASSERT_DELTA(P0_P, 1.604, 0.01);
+        TS_ASSERT_DELTA(P02_P, 1.572, 0.01);
+    }
+
+    // Test 65: Supersonic inlet total pressure loss
+    void testSupersonicInletLoss() {
+        // MIL-E-5007 pressure recovery for supersonic inlet
+        double M0 = 2.0;
+
+        // Simplified formula
+        double P02_P0 = 1.0 - 0.075 * pow(M0 - 1.0, 1.35);
+        TS_ASSERT_DELTA(P02_P0, 0.925, 0.01);
+    }
+
+    // Test 66: Inlet spillage drag
+    void testInletSpillageDrag() {
+        double mdot_design = 50.0;   // kg/s (design mass flow)
+        double mdot_actual = 45.0;   // kg/s (actual)
+        double V0 = 250.0;           // m/s
+
+        double mdot_spill = mdot_design - mdot_actual;
+        double D_spill = mdot_spill * V0;
+
+        TS_ASSERT_DELTA(D_spill, 1250.0, 1.0);  // N
+    }
+
+    //==========================================================================
+    // PROPULSIVE EFFICIENCY TESTS
+    //==========================================================================
+
+    // Test 67: Propulsive efficiency
+    void testPropulsiveEfficiency() {
+        double V0 = 250.0;    // m/s (flight speed)
+        double V_exit = 500.0; // m/s (exhaust velocity)
+
+        double eta_p = 2.0 / (1.0 + V_exit / V0);
+        TS_ASSERT_DELTA(eta_p, 0.667, 0.01);
+    }
+
+    // Test 68: Overall efficiency
+    void testOverallEfficiency() {
+        double eta_thermal = 0.40;
+        double eta_propulsive = 0.67;
+
+        double eta_overall = eta_thermal * eta_propulsive;
+        TS_ASSERT_DELTA(eta_overall, 0.268, 0.01);
+    }
+
+    // Test 69: Bypass ratio effect on propulsive efficiency
+    void testBypassRatioEffect() {
+        double V0 = 250.0;
+
+        // Low bypass (BPR = 1)
+        double V_exit_low = 450.0;
+        double eta_p_low = 2.0 / (1.0 + V_exit_low / V0);
+
+        // High bypass (BPR = 8)
+        double V_exit_high = 320.0;
+        double eta_p_high = 2.0 / (1.0 + V_exit_high / V0);
+
+        TS_ASSERT(eta_p_high > eta_p_low);  // Higher BPR = better propulsive efficiency
+    }
+
+    //==========================================================================
+    // POWER TURBINE TESTS
+    //==========================================================================
+
+    // Test 70: Free turbine power output
+    void testFreeTurbinePower() {
+        double mdot = 50.0;      // kg/s
+        double cp = ThermoConstants::CP_AIR;
+        double T05 = 1000.0;     // K (power turbine inlet)
+        double T06 = 700.0;      // K (power turbine exit)
+        double eta_t = 0.88;
+
+        double W_dot = mdot * cp * (T05 - T06) * eta_t;
+        TS_ASSERT_DELTA(W_dot, 13.2e6, 0.1e6);  // W (13.2 MW)
+    }
+
+    // Test 71: Power turbine pressure ratio
+    void testPowerTurbinePressureRatio() {
+        double gamma = ThermoConstants::GAMMA;
+        double T05 = 1000.0;
+        double T06 = 700.0;
+        double eta_t = 0.88;
+
+        // Ideal temperature drop
+        double T06_ideal = T05 - (T05 - T06) / eta_t;
+        double PR_pt = pow(T05 / T06_ideal, gamma / (gamma - 1.0));
+
+        TS_ASSERT(PR_pt > 1);
+    }
+
+    //==========================================================================
+    // REAL GAS EFFECTS
+    //==========================================================================
+
+    // Test 72: Variable gamma with temperature
+    void testVariableGamma() {
+        // Gamma decreases with temperature
+        double gamma_300K = 1.40;
+        double gamma_1000K = 1.35;
+        double gamma_1500K = 1.32;
+
+        TS_ASSERT(gamma_300K > gamma_1000K);
+        TS_ASSERT(gamma_1000K > gamma_1500K);
+    }
+
+    // Test 73: Cp variation with temperature
+    void testCpVariation() {
+        // Cp increases with temperature (polynomial fit)
+        // Cp(T) = a + b*T + c*T² (approximate)
+        double a = 1000.0;
+        double b = 0.02;
+        double c = 5e-8;
+
+        double Cp_300 = a + b * 300 + c * 300 * 300;
+        double Cp_1000 = a + b * 1000 + c * 1000 * 1000;
+
+        TS_ASSERT(Cp_1000 > Cp_300);
+    }
+
+    // Test 74: Compressibility factor
+    void testCompressibilityFactor() {
+        // At moderate pressures and temperatures, Z ≈ 1 for air
+        // Z = PV/(nRT)
+        double P = 101325.0;
+        double T = 288.15;
+        double rho = 1.225;
+        double R = ThermoConstants::R_AIR;
+
+        double Z = P / (rho * R * T);
+        TS_ASSERT_DELTA(Z, 1.0, 0.01);  // Should be near 1 for ideal gas
+    }
+
+    // Test 75: High altitude temperature effect
+    void testHighAltitudeTemperature() {
+        double T_SL = 288.15;          // K (sea level)
+        double lapse_rate = 0.0065;    // K/m
+        double altitude = 11000.0;     // m (tropopause)
+
+        double T_alt = T_SL - lapse_rate * altitude;
+        TS_ASSERT_DELTA(T_alt, 216.65, 0.5);  // K (standard tropopause temp)
+
+        // Above tropopause, temperature is constant
+        double T_20km = T_alt;  // Still 216.65 K
+        TS_ASSERT_DELTA(T_20km, 216.65, 0.5);
+    }
+};
