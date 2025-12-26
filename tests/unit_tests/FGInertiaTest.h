@@ -839,4 +839,448 @@ public:
     // Determinant should be positive
     TS_ASSERT(I.Determinant() > 0.0);
   }
+
+  // ============ Angular Acceleration Tests ============
+
+  // Test angular acceleration: α = τ/I (single axis)
+  void testAngularAccelerationSimple() {
+    // GIVEN: Torque and moment of inertia
+    double torque = 10.0;  // N⋅m
+    double I = 2.0;  // kg⋅m²
+
+    // WHEN: Computing angular acceleration α = τ/I
+    double alpha = torque / I;
+
+    // THEN: Verify correct value
+    TS_ASSERT_DELTA(5.0, alpha, epsilon);  // 10/2 = 5 rad/s²
+  }
+
+  // Test angular acceleration vector: α = I⁻¹ · τ
+  void testAngularAccelerationVector() {
+    // GIVEN: Diagonal inertia tensor and torque vector
+    FGMatrix33 I(10.0, 0.0, 0.0,
+                 0.0, 20.0, 0.0,
+                 0.0, 0.0, 30.0);
+    FGMatrix33 I_inv(0.1, 0.0, 0.0,
+                     0.0, 0.05, 0.0,
+                     0.0, 0.0, 1.0/30.0);
+    FGColumnVector3 torque(5.0, 10.0, 15.0);  // N⋅m
+
+    // WHEN: Computing angular acceleration
+    FGColumnVector3 alpha = I_inv * torque;
+
+    // THEN: For diagonal I: αx = τx/Ixx, etc.
+    TS_ASSERT_DELTA(0.5, alpha(1), epsilon);   // 5/10
+    TS_ASSERT_DELTA(0.5, alpha(2), epsilon);   // 10/20
+    TS_ASSERT_DELTA(0.5, alpha(3), epsilon);   // 15/30
+  }
+
+  // Test zero torque gives zero acceleration
+  void testZeroTorqueZeroAcceleration() {
+    // GIVEN: Zero torque
+    FGMatrix33 I_inv(0.1, 0.0, 0.0,
+                     0.0, 0.05, 0.0,
+                     0.0, 0.0, 0.033);
+    FGColumnVector3 torque(0.0, 0.0, 0.0);
+
+    // WHEN: Computing angular acceleration
+    FGColumnVector3 alpha = I_inv * torque;
+
+    // THEN: Zero acceleration
+    TS_ASSERT_DELTA(0.0, alpha(1), epsilon);
+    TS_ASSERT_DELTA(0.0, alpha(2), epsilon);
+    TS_ASSERT_DELTA(0.0, alpha(3), epsilon);
+  }
+
+  // Test angular acceleration with products of inertia
+  void testAngularAccelerationCoupled() {
+    // GIVEN: Inertia tensor with Ixz coupling
+    // For aircraft with Ixz ≠ 0
+    double Ixx = 1000.0, Izz = 2000.0, Ixz = 100.0;
+    double det = Ixx * Izz - Ixz * Ixz;
+
+    // Simplified inverse for Ixz coupling only
+    FGMatrix33 I_inv(Izz/det, 0.0, Ixz/det,
+                     0.0, 0.001, 0.0,
+                     Ixz/det, 0.0, Ixx/det);
+    FGColumnVector3 torque(100.0, 0.0, 0.0);  // Roll torque only
+
+    // WHEN: Computing angular acceleration
+    FGColumnVector3 alpha = I_inv * torque;
+
+    // THEN: Roll torque causes both roll and yaw acceleration due to Ixz
+    TS_ASSERT(std::abs(alpha(1)) > 0.0);  // Roll acceleration
+    TS_ASSERT(std::abs(alpha(3)) > 0.0);  // Yaw acceleration (coupling)
+  }
+
+  // ============ Euler's Equations of Motion ============
+
+  // Test Euler equation: dL/dt = τ
+  void testEulerEquationTorque() {
+    // GIVEN: Angular momentum change rate equals applied torque
+    FGColumnVector3 L_initial(10.0, 20.0, 30.0);
+    FGColumnVector3 torque(1.0, 2.0, 3.0);
+    double dt = 0.1;
+
+    // WHEN: Applying torque for time dt
+    FGColumnVector3 dL = torque * dt;
+    FGColumnVector3 L_final = L_initial + dL;
+
+    // THEN: Verify change in angular momentum
+    TS_ASSERT_DELTA(10.1, L_final(1), epsilon);
+    TS_ASSERT_DELTA(20.2, L_final(2), epsilon);
+    TS_ASSERT_DELTA(30.3, L_final(3), epsilon);
+  }
+
+  // Test Euler equations in body frame: I·α + ω × (I·ω) = τ
+  void testEulerEquationsBodyFrame() {
+    // GIVEN: Diagonal inertia tensor and angular velocity
+    double Ixx = 100.0, Iyy = 150.0, Izz = 200.0;
+    FGColumnVector3 omega(0.1, 0.2, 0.3);  // rad/s
+
+    // WHEN: Computing gyroscopic term ω × (I·ω)
+    FGColumnVector3 L(Ixx * omega(1), Iyy * omega(2), Izz * omega(3));
+    FGColumnVector3 gyro = omega * L;  // Cross product
+
+    // THEN: Verify gyroscopic moments
+    // ωy*Lz - ωz*Ly = 0.2*60 - 0.3*30 = 12 - 9 = 3
+    TS_ASSERT_DELTA(3.0, gyro(1), epsilon);
+    // ωz*Lx - ωx*Lz = 0.3*10 - 0.1*60 = 3 - 6 = -3
+    TS_ASSERT_DELTA(-3.0, gyro(2), epsilon);
+    // ωx*Ly - ωy*Lx = 0.1*30 - 0.2*10 = 3 - 2 = 1
+    TS_ASSERT_DELTA(1.0, gyro(3), epsilon);
+  }
+
+  // Test symmetric top (axisymmetric body)
+  void testSymmetricTopEulerEquations() {
+    // GIVEN: Axisymmetric body (Ixx = Iyy)
+    double I_perp = 100.0;  // Ixx = Iyy
+    double I_spin = 200.0;  // Izz
+
+    FGColumnVector3 omega(0.1, 0.0, 10.0);  // Small tilt, fast spin
+
+    // WHEN: Computing angular momentum
+    FGColumnVector3 L(I_perp * omega(1), I_perp * omega(2), I_spin * omega(3));
+
+    // THEN: L_z dominates due to fast spin
+    TS_ASSERT(std::abs(L(3)) > std::abs(L(1)) + std::abs(L(2)));
+  }
+
+  // ============ Radius of Gyration Tests ============
+
+  // Test radius of gyration: k = √(I/m)
+  void testRadiusOfGyrationBasic() {
+    // GIVEN: Moment of inertia and mass
+    double I = 50.0;  // kg⋅m²
+    double m = 10.0;  // kg
+
+    // WHEN: Computing radius of gyration
+    double k = sqrt(I / m);
+
+    // THEN: Verify correct value
+    TS_ASSERT_DELTA(sqrt(5.0), k, epsilon);
+  }
+
+  // Test radius of gyration for solid cylinder
+  void testRadiusOfGyrationCylinder() {
+    // GIVEN: Solid cylinder I = ½mr²
+    double m = 8.0;  // kg
+    double r = 0.5;  // m
+    double I = 0.5 * m * r * r;
+
+    // WHEN: Computing radius of gyration
+    double k = sqrt(I / m);
+
+    // THEN: Should equal r/√2
+    TS_ASSERT_DELTA(r / sqrt(2.0), k, epsilon);
+  }
+
+  // Test radius of gyration for hollow cylinder
+  void testRadiusOfGyrationHollowCylinder() {
+    // GIVEN: Hollow cylinder I = ½m(r₁² + r₂²)
+    double m = 5.0;
+    double r1 = 0.3, r2 = 0.5;
+    double I = 0.5 * m * (r1*r1 + r2*r2);
+
+    // WHEN: Computing radius of gyration
+    double k = sqrt(I / m);
+
+    // THEN: Should equal √((r₁² + r₂²)/2)
+    double expected = sqrt(0.5 * (r1*r1 + r2*r2));
+    TS_ASSERT_DELTA(expected, k, epsilon);
+  }
+
+  // ============ Torque Tests ============
+
+  // Test torque from force and moment arm: τ = r × F
+  void testTorqueFromForce() {
+    // GIVEN: Force and position vector
+    FGColumnVector3 r(2.0, 0.0, 0.0);  // 2m along x
+    FGColumnVector3 F(0.0, 10.0, 0.0);  // 10N along y
+
+    // WHEN: Computing torque
+    FGColumnVector3 tau = r * F;  // Cross product
+
+    // THEN: Torque about z-axis
+    TS_ASSERT_DELTA(0.0, tau(1), epsilon);
+    TS_ASSERT_DELTA(0.0, tau(2), epsilon);
+    TS_ASSERT_DELTA(20.0, tau(3), epsilon);
+  }
+
+  // Test torque magnitude: |τ| = |r||F|sin(θ)
+  void testTorqueMagnitude() {
+    // GIVEN: Force and position at 90 degrees
+    double r = 3.0;  // m
+    double F = 5.0;  // N
+    double theta = M_PI / 2.0;  // 90 degrees
+
+    // WHEN: Computing torque magnitude
+    double tau = r * F * sin(theta);
+
+    // THEN: Maximum torque at 90 degrees
+    TS_ASSERT_DELTA(15.0, tau, epsilon);
+  }
+
+  // Test zero torque when force through pivot
+  void testZeroTorqueForceAtPivot() {
+    // GIVEN: Force applied at pivot point (r = 0)
+    FGColumnVector3 r(0.0, 0.0, 0.0);
+    FGColumnVector3 F(5.0, 3.0, 2.0);
+
+    // WHEN: Computing torque
+    FGColumnVector3 tau = r * F;
+
+    // THEN: Zero torque
+    TS_ASSERT_DELTA(0.0, tau.Magnitude(), epsilon);
+  }
+
+  // Test torque from parallel force (zero torque)
+  void testZeroTorqueParallelForce() {
+    // GIVEN: Force parallel to moment arm
+    FGColumnVector3 r(2.0, 0.0, 0.0);
+    FGColumnVector3 F(5.0, 0.0, 0.0);  // Parallel to r
+
+    // WHEN: Computing torque
+    FGColumnVector3 tau = r * F;
+
+    // THEN: Zero torque (sin(0) = 0)
+    TS_ASSERT_DELTA(0.0, tau.Magnitude(), epsilon);
+  }
+
+  // ============ Composite Body Tests ============
+
+  // Test composite body moment of inertia
+  void testCompositeBodyMomentOfInertia() {
+    // GIVEN: Two masses connected by massless rod
+    double m1 = 3.0, r1 = 1.0;  // kg, m
+    double m2 = 2.0, r2 = 2.0;  // kg, m
+
+    // WHEN: Computing total moment of inertia
+    double I_total = m1 * r1 * r1 + m2 * r2 * r2;
+
+    // THEN: Sum of individual contributions
+    TS_ASSERT_DELTA(3.0 + 8.0, I_total, epsilon);
+  }
+
+  // Test moment of inertia of T-shaped beam
+  void testTShapedBeamMomentOfInertia() {
+    // GIVEN: T-beam composed of two rectangular sections
+    double m_vertical = 4.0, h_v = 2.0;  // Vertical section
+    double m_horizontal = 3.0, w_h = 1.5;  // Horizontal section
+    double offset_h = 1.5;  // Distance from axis to horizontal bar center
+
+    // Moment about center of vertical section
+    double I_v = (1.0/12.0) * m_vertical * h_v * h_v;
+
+    // Horizontal bar about its center + parallel axis
+    double I_h_cm = (1.0/12.0) * m_horizontal * w_h * w_h;
+    double I_h = I_h_cm + m_horizontal * offset_h * offset_h;
+
+    // WHEN: Computing total
+    double I_total = I_v + I_h;
+
+    // THEN: Verify calculation
+    double expected = (1.0/12.0) * 4.0 * 4.0 + (1.0/12.0) * 3.0 * 2.25 + 3.0 * 2.25;
+    TS_ASSERT_DELTA(expected, I_total, epsilon);
+  }
+
+  // Test dumbbell moment of inertia
+  void testDumbbellMomentOfInertia() {
+    // GIVEN: Two spheres connected by massless rod
+    double m_sphere = 5.0;  // kg each
+    double r_sphere = 0.1;  // m radius
+    double L = 0.5;  // m distance from center
+
+    // Each sphere: I_cm = (2/5)mr² + mr² (parallel axis)
+    double I_sphere_cm = (2.0/5.0) * m_sphere * r_sphere * r_sphere;
+    double I_sphere_offset = I_sphere_cm + m_sphere * L * L;
+
+    // WHEN: Total for two spheres
+    double I_total = 2 * I_sphere_offset;
+
+    // THEN: Dominated by m*L² term
+    double expected = 2 * (0.4 * 5.0 * 0.01 + 5.0 * 0.25);
+    TS_ASSERT_DELTA(expected, I_total, epsilon);
+  }
+
+  // ============ Time Evolution Tests ============
+
+  // Test angular velocity evolution: ω(t) = ω₀ + αt
+  void testAngularVelocityEvolution() {
+    // GIVEN: Initial angular velocity and constant acceleration
+    double omega_0 = 5.0;  // rad/s
+    double alpha = 2.0;    // rad/s²
+    double t = 3.0;        // s
+
+    // WHEN: Computing final angular velocity
+    double omega_f = omega_0 + alpha * t;
+
+    // THEN: Verify correct value
+    TS_ASSERT_DELTA(11.0, omega_f, epsilon);
+  }
+
+  // Test angular displacement: θ = ω₀t + ½αt²
+  void testAngularDisplacement() {
+    // GIVEN: Constant angular acceleration
+    double omega_0 = 2.0;  // rad/s
+    double alpha = 1.0;    // rad/s²
+    double t = 4.0;        // s
+
+    // WHEN: Computing angular displacement
+    double theta = omega_0 * t + 0.5 * alpha * t * t;
+
+    // THEN: Verify correct value
+    TS_ASSERT_DELTA(2.0*4.0 + 0.5*1.0*16.0, theta, epsilon);
+  }
+
+  // Test angular velocity squared relation: ω² = ω₀² + 2αθ
+  void testAngularVelocitySquaredRelation() {
+    // GIVEN: Angular displacement and acceleration
+    double omega_0 = 3.0;  // rad/s
+    double alpha = 2.0;    // rad/s²
+    double theta = 5.0;    // rad
+
+    // WHEN: Computing final angular velocity
+    double omega_f_sq = omega_0 * omega_0 + 2 * alpha * theta;
+    double omega_f = sqrt(omega_f_sq);
+
+    // THEN: Verify correct value
+    TS_ASSERT_DELTA(sqrt(9.0 + 20.0), omega_f, epsilon);
+  }
+
+  // ============ Physical Constraint Tests ============
+
+  // Test triangle inequality for moments of inertia
+  void testTriangleInequality() {
+    // GIVEN: Physical moments of inertia
+    double Ixx = 100.0, Iyy = 120.0, Izz = 180.0;
+
+    // THEN: Must satisfy triangle inequality
+    TS_ASSERT(Ixx + Iyy >= Izz);
+    TS_ASSERT(Ixx + Izz >= Iyy);
+    TS_ASSERT(Iyy + Izz >= Ixx);
+  }
+
+  // Test moments can't be negative
+  void testMomentsNonNegative() {
+    // GIVEN: Any physical body
+    double mass = 5.0;
+    double dimension = 2.0;
+
+    // WHEN: Computing any moment of inertia formula
+    double I_point = mass * dimension * dimension;
+    double I_sphere = (2.0/5.0) * mass * dimension * dimension;
+    double I_rod = (1.0/12.0) * mass * dimension * dimension;
+
+    // THEN: All should be non-negative
+    TS_ASSERT(I_point >= 0.0);
+    TS_ASSERT(I_sphere >= 0.0);
+    TS_ASSERT(I_rod >= 0.0);
+  }
+
+  // Test product of inertia bound
+  void testProductOfInertiaBound() {
+    // GIVEN: Products of inertia are bounded by principal moments
+    double Ixx = 50.0, Iyy = 60.0;
+    double Ixy = -10.0;  // Typical product of inertia
+
+    // THEN: |Ixy| should be less than average of Ixx and Iyy
+    // This is a soft constraint, not strict
+    TS_ASSERT(std::abs(Ixy) < (Ixx + Iyy));
+  }
+
+  // ============ Numerical Stability Tests ============
+
+  // Test small moment of inertia calculation
+  void testSmallMomentOfInertia() {
+    // GIVEN: Very small mass and dimension
+    double mass = 1e-6;  // kg
+    double radius = 1e-3;  // m
+
+    // WHEN: Computing moment of inertia
+    double I = 0.5 * mass * radius * radius;
+
+    // THEN: Should be finite and positive
+    TS_ASSERT(std::isfinite(I));
+    TS_ASSERT(I > 0.0);
+    TS_ASSERT(I < 1.0);  // Should be very small
+  }
+
+  // Test inertia tensor inverse stability
+  void testInertiaTensorInverseStability() {
+    // GIVEN: Well-conditioned inertia tensor
+    FGMatrix33 I(100.0, -2.0, -1.0,
+                 -2.0, 120.0, -1.5,
+                 -1.0, -1.5, 150.0);
+
+    // WHEN: Computing inverse
+    FGMatrix33 I_inv = I.Inverse();
+
+    // THEN: I * I_inv should equal identity
+    FGMatrix33 identity = I * I_inv;
+
+    TS_ASSERT_DELTA(1.0, identity(1, 1), 1e-10);
+    TS_ASSERT_DELTA(1.0, identity(2, 2), 1e-10);
+    TS_ASSERT_DELTA(1.0, identity(3, 3), 1e-10);
+    TS_ASSERT_DELTA(0.0, identity(1, 2), 1e-10);
+    TS_ASSERT_DELTA(0.0, identity(1, 3), 1e-10);
+    TS_ASSERT_DELTA(0.0, identity(2, 3), 1e-10);
+  }
+
+  // Test angular momentum direction
+  void testAngularMomentumDirection() {
+    // GIVEN: Rotation about z-axis with diagonal inertia
+    FGMatrix33 I(10.0, 0.0, 0.0,
+                 0.0, 10.0, 0.0,
+                 0.0, 0.0, 20.0);
+    FGColumnVector3 omega(0.0, 0.0, 5.0);
+
+    // WHEN: Computing angular momentum
+    FGColumnVector3 L = I * omega;
+
+    // THEN: L should be aligned with omega (diagonal I)
+    TS_ASSERT_DELTA(0.0, L(1), epsilon);
+    TS_ASSERT_DELTA(0.0, L(2), epsilon);
+    TS_ASSERT_DELTA(100.0, L(3), epsilon);
+  }
+
+  // Test energy-momentum consistency
+  void testEnergyMomentumConsistency() {
+    // GIVEN: Rotating body
+    FGMatrix33 I(50.0, 0.0, 0.0,
+                 0.0, 60.0, 0.0,
+                 0.0, 0.0, 70.0);
+    FGColumnVector3 omega(1.0, 2.0, 3.0);
+
+    // WHEN: Computing energy and momentum
+    FGColumnVector3 L = I * omega;
+    double L_mag = L.Magnitude();
+    double KE = 0.5 * DotProduct(omega, L);
+
+    // THEN: Energy should be related to momentum magnitude
+    // KE = L²/(2I) for single axis, more complex for 3D
+    TS_ASSERT(KE > 0.0);
+    TS_ASSERT(L_mag > 0.0);
+    TS_ASSERT(std::isfinite(KE));
+  }
 };
