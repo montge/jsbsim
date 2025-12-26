@@ -827,4 +827,315 @@ public:
     TS_ASSERT(majorityOf3(true, true, false));
     TS_ASSERT(majorityOf3(true, true, true));
   }
+
+  /***************************************************************************
+   * Flight Mode Distribution Tests
+   ***************************************************************************/
+
+  // Test flight phase detection
+  void testFlightPhaseDetection() {
+    enum Phase { PREFLIGHT, TAXI, TAKEOFF, CLIMB, CRUISE, DESCENT, APPROACH, LANDING };
+
+    auto detectPhase = [](double altitude, double vs, bool onGround, double airspeed) -> int {
+      if (onGround && airspeed < 30) return PREFLIGHT;
+      if (onGround && airspeed >= 30) return TAXI;
+      if (!onGround && altitude < 1500 && vs > 500) return TAKEOFF;
+      if (!onGround && vs > 100 && altitude < 35000) return CLIMB;
+      if (!onGround && std::abs(vs) < 100 && altitude > 10000) return CRUISE;
+      if (!onGround && vs < -100 && altitude > 3000) return DESCENT;
+      if (!onGround && altitude < 3000 && altitude > 50) return APPROACH;
+      if (!onGround && altitude < 50) return LANDING;
+      return PREFLIGHT;
+    };
+
+    TS_ASSERT_EQUALS(detectPhase(0, 0, true, 0), PREFLIGHT);
+    TS_ASSERT_EQUALS(detectPhase(0, 0, true, 50), TAXI);
+    TS_ASSERT_EQUALS(detectPhase(500, 1500, false, 150), TAKEOFF);
+    TS_ASSERT_EQUALS(detectPhase(15000, 1000, false, 300), CLIMB);
+    TS_ASSERT_EQUALS(detectPhase(35000, 0, false, 450), CRUISE);
+    TS_ASSERT_EQUALS(detectPhase(8000, -1500, false, 300), DESCENT);
+    TS_ASSERT_EQUALS(detectPhase(1500, -700, false, 150), APPROACH);
+    TS_ASSERT_EQUALS(detectPhase(30, -300, false, 130), LANDING);
+  }
+
+  // Test engine mode selection
+  void testEngineModeSelection() {
+    enum EngineMode { IDLE, CLIMB, CRUISE, DESCENT, TOGA };
+
+    auto selectEngineMode = [](double throttle, bool toga, double altitude, double vs) -> int {
+      if (toga) return TOGA;
+      if (throttle < 0.3) return IDLE;
+      if (vs > 500 && altitude < 10000) return CLIMB;
+      if (std::abs(vs) < 200) return CRUISE;
+      if (vs < -500) return DESCENT;
+      return CRUISE;
+    };
+
+    TS_ASSERT_EQUALS(selectEngineMode(0.9, true, 1000, 1500), TOGA);
+    TS_ASSERT_EQUALS(selectEngineMode(0.2, false, 0, 0), IDLE);
+    TS_ASSERT_EQUALS(selectEngineMode(0.8, false, 5000, 1500), CLIMB);
+    TS_ASSERT_EQUALS(selectEngineMode(0.5, false, 35000, 0), CRUISE);
+    TS_ASSERT_EQUALS(selectEngineMode(0.3, false, 20000, -2000), DESCENT);
+  }
+
+  // Test warning priority system
+  void testWarningPrioritySystem() {
+    auto getWarningLevel = [](bool fire, bool engine_fail, bool hydraulic_low,
+                              bool fuel_low, bool cabin_alt_high) -> int {
+      if (fire) return 5;  // EMERGENCY
+      if (engine_fail) return 4;  // WARNING
+      if (hydraulic_low || cabin_alt_high) return 3;  // CAUTION
+      if (fuel_low) return 2;  // ADVISORY
+      return 0;  // NORMAL
+    };
+
+    TS_ASSERT_EQUALS(getWarningLevel(true, true, true, true, true), 5);
+    TS_ASSERT_EQUALS(getWarningLevel(false, true, true, true, true), 4);
+    TS_ASSERT_EQUALS(getWarningLevel(false, false, true, true, true), 3);
+    TS_ASSERT_EQUALS(getWarningLevel(false, false, false, true, false), 2);
+    TS_ASSERT_EQUALS(getWarningLevel(false, false, false, false, false), 0);
+  }
+
+  /***************************************************************************
+   * Control Surface Distribution Tests
+   ***************************************************************************/
+
+  // Test aileron distribution
+  void testAileronDistribution() {
+    auto distributeAileron = [](double command, bool spoilerAssist) -> std::pair<double, double> {
+      double left = -command;
+      double right = command;
+      if (spoilerAssist && std::abs(command) > 0.5) {
+        // Spoiler assist for large commands
+        double spoiler_add = (std::abs(command) - 0.5) * 0.5;
+        if (command > 0) left -= spoiler_add;
+        else right -= spoiler_add;
+      }
+      return {left, right};
+    };
+
+    auto result = distributeAileron(0.3, false);
+    TS_ASSERT_DELTA(result.first, -0.3, epsilon);
+    TS_ASSERT_DELTA(result.second, 0.3, epsilon);
+  }
+
+  // Test rudder distribution
+  void testRudderDistribution() {
+    auto distributeRudder = [](double command, double yaw_damper) -> double {
+      return command + yaw_damper;
+    };
+
+    TS_ASSERT_DELTA(distributeRudder(0.5, 0.1), 0.6, epsilon);
+    TS_ASSERT_DELTA(distributeRudder(-0.3, 0.05), -0.25, epsilon);
+  }
+
+  // Test elevator distribution
+  void testElevatorDistribution() {
+    auto distributeElevator = [](double command, double trim, double mach_compensation) -> double {
+      return command + trim + mach_compensation;
+    };
+
+    TS_ASSERT_DELTA(distributeElevator(-0.2, 0.05, 0.02), -0.13, epsilon);
+  }
+
+  /***************************************************************************
+   * Selector Logic Tests
+   ***************************************************************************/
+
+  // Test min selector
+  void testMinSelector() {
+    auto minOf3 = [](double a, double b, double c) {
+      return std::min({a, b, c});
+    };
+
+    TS_ASSERT_DELTA(minOf3(5.0, 3.0, 7.0), 3.0, epsilon);
+    TS_ASSERT_DELTA(minOf3(-2.0, -5.0, -1.0), -5.0, epsilon);
+  }
+
+  // Test max selector
+  void testMaxSelector() {
+    auto maxOf3 = [](double a, double b, double c) {
+      return std::max({a, b, c});
+    };
+
+    TS_ASSERT_DELTA(maxOf3(5.0, 3.0, 7.0), 7.0, epsilon);
+    TS_ASSERT_DELTA(maxOf3(-2.0, -5.0, -1.0), -1.0, epsilon);
+  }
+
+  // Test median selector
+  void testMedianSelector() {
+    auto medianOf3 = [](double a, double b, double c) {
+      double arr[] = {a, b, c};
+      std::sort(arr, arr + 3);
+      return arr[1];
+    };
+
+    TS_ASSERT_DELTA(medianOf3(5.0, 3.0, 7.0), 5.0, epsilon);
+    TS_ASSERT_DELTA(medianOf3(1.0, 2.0, 3.0), 2.0, epsilon);
+  }
+
+  // Test average selector
+  void testAverageSelector() {
+    auto avgOf3 = [](double a, double b, double c) {
+      return (a + b + c) / 3.0;
+    };
+
+    TS_ASSERT_DELTA(avgOf3(3.0, 6.0, 9.0), 6.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Timer/Delay Distribution Tests
+   ***************************************************************************/
+
+  // Test delayed activation
+  void testDelayedActivation() {
+    double timer = 0.0;
+    double delay = 0.5;
+    double dt = 0.1;
+    bool input = true;
+    bool output = false;
+
+    for (int i = 0; i < 10; i++) {
+      if (input) {
+        timer += dt;
+        if (timer >= delay) output = true;
+      } else {
+        timer = 0.0;
+        output = false;
+      }
+    }
+
+    TS_ASSERT(output);  // After 1.0 seconds, should be active
+  }
+
+  // Test one-shot trigger
+  void testOneShotTrigger() {
+    bool prev_input = false;
+    bool input = true;
+    bool triggered = false;
+
+    // Rising edge detection
+    triggered = input && !prev_input;
+    TS_ASSERT(triggered);
+
+    prev_input = input;
+    triggered = input && !prev_input;
+    TS_ASSERT(!triggered);  // No longer rising edge
+  }
+
+  // Test flip-flop
+  void testFlipFlop() {
+    bool state = false;
+    bool set = true;
+    bool reset = false;
+
+    // Set-dominant SR flip-flop
+    if (set) state = true;
+    else if (reset) state = false;
+
+    TS_ASSERT(state);
+
+    set = false;
+    reset = true;
+    if (set) state = true;
+    else if (reset) state = false;
+
+    TS_ASSERT(!state);
+  }
+
+  /***************************************************************************
+   * Limit Distribution Tests
+   ***************************************************************************/
+
+  // Test rate limiting
+  void testRateLimiting() {
+    double prev_output = 0.0;
+    double rate_limit = 1.0;
+    double dt = 0.1;
+
+    auto rateLimitedOutput = [&](double target) {
+      double max_change = rate_limit * dt;
+      double delta = target - prev_output;
+      if (delta > max_change) delta = max_change;
+      if (delta < -max_change) delta = -max_change;
+      prev_output += delta;
+      return prev_output;
+    };
+
+    TS_ASSERT_DELTA(rateLimitedOutput(10.0), 0.1, epsilon);
+    TS_ASSERT_DELTA(rateLimitedOutput(10.0), 0.2, epsilon);
+  }
+
+  // Test position limiting
+  void testPositionLimiting() {
+    auto limitPosition = [](double input, double min, double max) {
+      if (input < min) return min;
+      if (input > max) return max;
+      return input;
+    };
+
+    TS_ASSERT_DELTA(limitPosition(5.0, 0.0, 10.0), 5.0, epsilon);
+    TS_ASSERT_DELTA(limitPosition(-5.0, 0.0, 10.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(limitPosition(15.0, 0.0, 10.0), 10.0, epsilon);
+  }
+
+  // Test asymmetric limiting
+  void testAsymmetricLimiting() {
+    auto asymLimit = [](double input, double min, double max) {
+      return std::max(min, std::min(max, input));
+    };
+
+    TS_ASSERT_DELTA(asymLimit(0.0, -5.0, 25.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(asymLimit(-10.0, -5.0, 25.0), -5.0, epsilon);
+    TS_ASSERT_DELTA(asymLimit(30.0, -5.0, 25.0), 25.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Failure Mode Distribution Tests
+   ***************************************************************************/
+
+  // Test fail-safe logic
+  void testFailSafeLogic() {
+    auto failSafe = [](double primary, double backup, bool primary_valid) {
+      return primary_valid ? primary : backup;
+    };
+
+    TS_ASSERT_DELTA(failSafe(100.0, 50.0, true), 100.0, epsilon);
+    TS_ASSERT_DELTA(failSafe(100.0, 50.0, false), 50.0, epsilon);
+  }
+
+  // Test triple redundancy voting
+  void testTripleRedundancyVoting() {
+    auto vote3 = [](double a, double b, double c, double threshold) {
+      // Return median if all agree within threshold
+      if (std::abs(a - b) < threshold && std::abs(b - c) < threshold) {
+        double arr[] = {a, b, c};
+        std::sort(arr, arr + 3);
+        return arr[1];
+      }
+      // Otherwise find the two that agree
+      if (std::abs(a - b) < threshold) return (a + b) / 2.0;
+      if (std::abs(b - c) < threshold) return (b + c) / 2.0;
+      if (std::abs(a - c) < threshold) return (a + c) / 2.0;
+      return (a + b + c) / 3.0;  // Fallback
+    };
+
+    TS_ASSERT_DELTA(vote3(10.0, 10.1, 10.0, 0.5), 10.0, 0.1);
+    TS_ASSERT_DELTA(vote3(10.0, 10.0, 50.0, 0.5), 10.0, 0.1);
+  }
+
+  // Test fail-operational logic
+  void testFailOperationalLogic() {
+    auto failOp = [](bool ch1_valid, bool ch2_valid, double ch1, double ch2) {
+      if (ch1_valid && ch2_valid) return (ch1 + ch2) / 2.0;
+      if (ch1_valid) return ch1;
+      if (ch2_valid) return ch2;
+      return 0.0;  // Both failed
+    };
+
+    TS_ASSERT_DELTA(failOp(true, true, 10.0, 12.0), 11.0, epsilon);
+    TS_ASSERT_DELTA(failOp(true, false, 10.0, 12.0), 10.0, epsilon);
+    TS_ASSERT_DELTA(failOp(false, true, 10.0, 12.0), 12.0, epsilon);
+    TS_ASSERT_DELTA(failOp(false, false, 10.0, 12.0), 0.0, epsilon);
+  }
 };
