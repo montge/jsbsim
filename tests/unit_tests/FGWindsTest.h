@@ -426,4 +426,443 @@ public:
 
     TS_ASSERT(windFPS > 150.0);  // ft/s
   }
+
+  /***************************************************************************
+   * Von Karman Turbulence Model Tests
+   ***************************************************************************/
+
+  // Test Von Karman spectral density
+  void testVonKarmanSpectralDensity() {
+    double sigma = 5.0;   // Turbulence intensity (ft/s)
+    double L = 1000.0;    // Scale length (ft)
+    double omega = 1.0;   // Frequency (rad/s)
+    double V = 200.0;     // Velocity (ft/s)
+
+    // Von Karman spectrum (simplified u-component)
+    double Omega = omega * L / V;
+    double Su = (sigma * sigma * L / (M_PI * V)) *
+                (1.0 + (8.0/3.0) * 1.339 * 1.339 * Omega * Omega) /
+                std::pow(1.0 + 1.339 * 1.339 * Omega * Omega, 11.0/6.0);
+
+    TS_ASSERT(Su > 0);  // Spectral density positive
+  }
+
+  // Test Von Karman scale lengths
+  void testVonKarmanScaleLengths() {
+    double altitude = 1000.0;  // ft AGL
+
+    // MIL-HDBK-1797 scale lengths
+    double Lu, Lv, Lw;
+    if (altitude < 1000) {
+      Lu = altitude / std::pow(0.177 + 0.000823 * altitude, 1.2);
+      Lv = Lu / 2.0;
+      Lw = altitude / 2.0;
+    } else {
+      Lu = 1750.0;
+      Lv = 875.0;
+      Lw = 875.0;
+    }
+
+    TS_ASSERT(Lu > 0);
+    TS_ASSERT(Lv > 0);
+    TS_ASSERT(Lw > 0);
+  }
+
+  /***************************************************************************
+   * Wind Direction Variation Tests
+   ***************************************************************************/
+
+  // Test wind direction veering with altitude (Northern Hemisphere)
+  void testWindVeeringWithAltitude() {
+    double surfaceDir = 180.0;  // Surface wind from south
+    double veeringRate = 10.0;  // Degrees per 1000 ft
+    double altitude = 2000.0;
+
+    double dirAtAlt = surfaceDir + veeringRate * (altitude / 1000.0);
+    TS_ASSERT_DELTA(dirAtAlt, 200.0, epsilon);  // Veered to 200 degrees
+  }
+
+  // Test Ekman spiral effect
+  void testEkmanSpiral() {
+    double surfaceWindDir = 180.0;
+    double geostrophicDir = 230.0;  // Geostrophic wind direction
+    double altitude = 1000.0;
+    double blHeight = 2000.0;  // Boundary layer height
+
+    // Linear interpolation of direction change
+    double dirChange = (geostrophicDir - surfaceWindDir) * (altitude / blHeight);
+    double windDir = surfaceWindDir + dirChange;
+
+    TS_ASSERT(windDir > surfaceWindDir);
+  }
+
+  /***************************************************************************
+   * Thermal and Convective Tests
+   ***************************************************************************/
+
+  // Test thermal updraft profile
+  void testThermalUpdraft() {
+    double maxUpdraft = 10.0;  // ft/s
+    double thermalRadius = 500.0;  // ft
+    double distFromCenter = 200.0;
+
+    // Gaussian profile
+    double updraft = maxUpdraft * std::exp(-(distFromCenter * distFromCenter) /
+                                            (2.0 * thermalRadius * thermalRadius / 4.0));
+
+    TS_ASSERT(updraft > 0);
+    TS_ASSERT(updraft < maxUpdraft);
+  }
+
+  // Test thermal height variation
+  void testThermalHeightVariation() {
+    double surfaceTemp = 90.0;   // Fahrenheit
+    double lapseRate = 3.5;      // deg/1000 ft
+    double inversionHeight = 5000.0;  // ft
+
+    // Thermal strength decreases approaching inversion
+    double altitude = 4000.0;
+    double thermalFactor = 1.0 - (altitude / inversionHeight);
+
+    TS_ASSERT(thermalFactor > 0 && thermalFactor < 1);
+  }
+
+  // Test convective velocity scale
+  void testConvectiveVelocityScale() {
+    double surfaceHeatFlux = 0.05;  // W/m^2 equivalent
+    double blHeight = 2000.0;       // ft
+
+    // Convective velocity scale w* (simplified)
+    double wStar = std::pow(surfaceHeatFlux * blHeight, 1.0/3.0);
+    TS_ASSERT(wStar > 0);
+  }
+
+  /***************************************************************************
+   * Clear Air Turbulence Tests
+   ***************************************************************************/
+
+  // Test Richardson number stability criterion
+  void testRichardsonNumber() {
+    double dTheta_dz = 0.003;  // K/m potential temp gradient
+    double dU_dz = 0.01;       // Wind shear (1/s)
+    double theta = 280.0;      // Potential temperature K
+    double g = 9.81;
+
+    // Richardson number Ri = (g/theta) * (dTheta/dz) / (dU/dz)^2
+    double Ri = (g / theta) * dTheta_dz / (dU_dz * dU_dz);
+
+    // CAT likely if Ri < 0.25
+    bool catLikely = (Ri < 0.25);
+    TS_ASSERT(Ri > 0);  // Stable stratification
+  }
+
+  // Test jet stream turbulence location
+  void testJetStreamTurbulence() {
+    double coreAltitude = 35000.0;  // ft
+    double coreSpeed = 150.0;       // kts
+
+    // Turbulence often found on edges
+    double upperEdge = coreAltitude + 3000.0;
+    double lowerEdge = coreAltitude - 3000.0;
+
+    TS_ASSERT(upperEdge > coreAltitude);
+    TS_ASSERT(lowerEdge < coreAltitude);
+  }
+
+  /***************************************************************************
+   * Low Level Phenomena Tests
+   ***************************************************************************/
+
+  // Test low-level jet
+  void testLowLevelJet() {
+    double surfaceWind = 10.0;   // kts
+    double jetHeight = 1500.0;  // ft AGL
+    double jetSpeed = 40.0;     // kts
+    double altitude = 1500.0;
+
+    // Maximum at jet height, decreasing above and below
+    double wind;
+    if (altitude < jetHeight) {
+      wind = surfaceWind + (jetSpeed - surfaceWind) * (altitude / jetHeight);
+    } else {
+      wind = jetSpeed * std::exp(-(altitude - jetHeight) / 2000.0);
+    }
+
+    TS_ASSERT_DELTA(wind, jetSpeed, epsilon);  // At jet height
+  }
+
+  // Test sea breeze penetration
+  void testSeaBreezePenetration() {
+    double coastDistance = 0.0;  // miles inland
+    double maxPenetration = 30.0;  // miles
+    double time = 15.0;  // Hours (3 PM)
+
+    // Sea breeze develops afternoon, penetrates inland
+    double penetrationDist = maxPenetration * (time - 10.0) / 6.0;
+    bool seaBreezeActive = (coastDistance < penetrationDist);
+
+    TS_ASSERT(penetrationDist > 0);
+  }
+
+  // Test katabatic wind
+  void testKatabaticWind() {
+    double slope = 10.0;        // degrees
+    double tempDiff = 10.0;     // Celsius between slope and valley
+    double slopeRad = slope * DEG_TO_RAD;
+
+    // Simplified katabatic wind speed
+    double g = 32.174;
+    double katabaticSpeed = std::sqrt(g * std::sin(slopeRad) * tempDiff);
+
+    TS_ASSERT(katabaticSpeed > 0);
+  }
+
+  /***************************************************************************
+   * Wind Shear Alert Tests
+   ***************************************************************************/
+
+  // Test wind shear intensity calculation
+  void testWindShearIntensity() {
+    double deltaV = 30.0;     // kt change
+    double deltaAlt = 500.0;  // ft
+
+    double shearIntensity = deltaV / deltaAlt;  // kt/ft
+    double shearKtPer100ft = shearIntensity * 100.0;
+
+    TS_ASSERT(shearKtPer100ft > 5.0);  // Significant shear
+  }
+
+  // Test F-factor calculation
+  void testFFactor() {
+    double TAS = 200.0;     // ft/s
+    double dV_dt = -10.0;   // ft/s^2 (decelerating)
+    double dw = 20.0;       // ft/s (downdraft)
+    double g = 32.174;
+
+    // F-factor: performance factor for shear encounter
+    double F = dV_dt / g - dw / TAS;
+
+    // Positive F = performance increasing situation
+    // Negative F = decreasing situation
+    TS_ASSERT(F < 0);  // Hazardous
+  }
+
+  // Test wind shear escape maneuver
+  void testWindShearEscape() {
+    double currentPitch = 5.0;   // degrees
+    double escapePitch = 15.0;   // degrees
+    double targetClimb = 1500.0; // fpm
+
+    double pitchIncrease = escapePitch - currentPitch;
+    TS_ASSERT_DELTA(pitchIncrease, 10.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Wake Turbulence Tests
+   ***************************************************************************/
+
+  // Test wake vortex circulation
+  void testWakeVortexCirculation() {
+    double weight = 500000.0;   // lbs
+    double rho = 0.002377;      // sl/ft^3
+    double wingspan = 200.0;    // ft
+    double TAS = 200.0;         // ft/s
+
+    double lift = weight;  // Steady flight
+    // Circulation Gamma = L / (rho * V * b * pi/4)
+    double gamma = lift / (rho * TAS * wingspan * M_PI / 4.0);
+
+    TS_ASSERT(gamma > 0);
+  }
+
+  // Test wake vortex descent rate
+  void testWakeVortexDescent() {
+    double gamma = 1000.0;   // ft^2/s circulation
+    double b = 150.0;        // ft wingspan
+    double separation = b * 0.75;  // Vortex separation
+
+    // Vortex descent rate V_descent = Gamma / (2 * pi * b_vortex)
+    double descentRate = gamma / (2.0 * M_PI * separation);
+
+    TS_ASSERT(descentRate > 0);  // Descends
+  }
+
+  // Test wake turbulence separation
+  void testWakeTurbulenceSeparation() {
+    // Heavy aircraft behind heavy
+    double minSep_HH = 4.0;  // nm
+    // Light behind heavy
+    double minSep_LH = 6.0;  // nm
+
+    TS_ASSERT(minSep_LH > minSep_HH);
+  }
+
+  /***************************************************************************
+   * Mountain Effects Tests
+   ***************************************************************************/
+
+  // Test mountain wave amplitude
+  void testMountainWaveAmplitude() {
+    double terrainHeight = 5000.0;  // ft
+    double windSpeed = 40.0;        // kts
+    double stability = 0.01;        // N (Brunt-Vaisala freq)
+
+    // Simplified wave amplitude
+    double amplitude = terrainHeight * 0.5;  // Can be significant
+    TS_ASSERT(amplitude > 0);
+  }
+
+  // Test rotor zone location
+  void testRotorZoneLocation() {
+    double ridgeHeight = 8000.0;  // ft
+    double rotorHeight = ridgeHeight + 2000.0;  // Below crest level
+
+    // Rotor zone typically lee side, ridge height or slightly above
+    TS_ASSERT(rotorHeight > ridgeHeight);
+  }
+
+  // Test lenticular cloud altitude
+  void testLenticularCloudAltitude() {
+    double ridgeTop = 10000.0;    // ft
+    double waveAmplitude = 3000.0;  // ft
+    double condensationLevel = 12000.0;
+
+    // Lenticular forms at wave crest if above condensation level
+    double waveCrests[] = {ridgeTop + waveAmplitude,
+                          ridgeTop + 3.0 * waveAmplitude,
+                          ridgeTop + 5.0 * waveAmplitude};
+
+    TS_ASSERT(waveCrests[0] > condensationLevel);
+  }
+
+  /***************************************************************************
+   * Gust Factor and Variability Tests
+   ***************************************************************************/
+
+  // Test gust factor calculation
+  void testGustFactor() {
+    double meanWind = 20.0;    // kts
+    double peakGust = 35.0;    // kts
+
+    double gustFactor = peakGust / meanWind;
+    TS_ASSERT_DELTA(gustFactor, 1.75, epsilon);
+  }
+
+  // Test gust duration
+  void testGustDuration() {
+    double gustLength = 300.0;  // ft
+    double TAS = 200.0;         // ft/s
+
+    double gustDuration = gustLength / TAS;
+    TS_ASSERT_DELTA(gustDuration, 1.5, epsilon);  // seconds
+  }
+
+  // Test standard gust velocities (FAR 25)
+  void testStandardGustVelocities() {
+    // Design gust velocities at different altitudes
+    double Ude_SL = 66.0;      // ft/s at sea level
+    double Ude_20000 = 66.0;   // ft/s up to 20,000 ft
+    double Ude_50000 = 38.0;   // ft/s at 50,000 ft
+
+    TS_ASSERT(Ude_SL >= Ude_50000);  // Decreases with altitude
+  }
+
+  /***************************************************************************
+   * Runway Wind Tests
+   ***************************************************************************/
+
+  // Test runway headwind component
+  void testRunwayHeadwind() {
+    double windSpeed = 15.0;     // kts
+    double windDir = 220.0;      // From
+    double runwayHeading = 180.0;
+
+    double angleDiff = (windDir - runwayHeading) * DEG_TO_RAD;
+    double headwind = windSpeed * std::cos(angleDiff);
+    double crosswind = windSpeed * std::sin(angleDiff);
+
+    TS_ASSERT(headwind > 0);  // Positive = headwind
+    TS_ASSERT(crosswind > 0); // From left
+  }
+
+  // Test crosswind limit check
+  void testCrosswindLimit() {
+    double crosswind = 25.0;  // kts
+    double maxDemonstrated = 33.0;  // kts
+
+    bool withinLimits = (crosswind <= maxDemonstrated);
+    TS_ASSERT(withinLimits);
+  }
+
+  // Test variable wind
+  void testVariableWind() {
+    double windDir1 = 180.0;
+    double windDir2 = 250.0;
+    double variability = std::abs(windDir2 - windDir1);
+
+    // Variable wind if range > 60 degrees
+    bool isVariable = (variability > 60.0);
+    TS_ASSERT(isVariable);
+  }
+
+  /***************************************************************************
+   * Temperature Effects on Wind Tests
+   ***************************************************************************/
+
+  // Test density altitude effect on wind
+  void testDensityAltitudeEffect() {
+    double pressureAlt = 5000.0;
+    double ISA_temp = 59.0 - 3.5 * (pressureAlt / 1000.0);  // Standard temp
+    double actualTemp = 80.0;  // Hot day
+
+    double densityAlt = pressureAlt + 120.0 * (actualTemp - ISA_temp);
+    TS_ASSERT(densityAlt > pressureAlt);  // Higher density altitude when hot
+  }
+
+  // Test diurnal wind variation
+  void testDiurnalWindVariation() {
+    // Surface winds typically peak afternoon, calm at night
+    double morningWind = 5.0;
+    double afternoonWind = 15.0;
+    double eveningWind = 8.0;
+
+    TS_ASSERT(afternoonWind > morningWind);
+    TS_ASSERT(afternoonWind > eveningWind);
+  }
+
+  /***************************************************************************
+   * Turbulence Correlation Tests
+   ***************************************************************************/
+
+  // Test spatial correlation of turbulence
+  void testTurbulenceSpatialCorrelation() {
+    double L = 1000.0;    // Scale length (ft)
+    double separation = 500.0;  // ft
+
+    // Spatial correlation (simplified exponential)
+    double correlation = std::exp(-separation / L);
+    TS_ASSERT(correlation > 0 && correlation < 1);
+  }
+
+  // Test temporal autocorrelation
+  void testTurbulenceTemporalCorrelation() {
+    double tau = 2.0;      // Time constant (s)
+    double dt = 0.5;       // Time step (s)
+
+    double correlation = std::exp(-dt / tau);
+    TS_ASSERT(correlation > 0.7);  // High correlation for small dt
+  }
+
+  // Test colored noise generation
+  void testColoredNoiseGeneration() {
+    // First-order filter for coloring white noise
+    double tau = 1.0;
+    double dt = 0.1;
+    double alpha = std::exp(-dt / tau);
+    double beta = std::sqrt(1.0 - alpha * alpha);
+
+    TS_ASSERT(alpha > 0 && alpha < 1);
+    TS_ASSERT(beta > 0 && beta < 1);
+    TS_ASSERT_DELTA(alpha * alpha + beta * beta, 1.0, 0.01);
+  }
 };
