@@ -981,4 +981,400 @@ public:
     TS_ASSERT_DELTA(q1(3), result(3), epsilon);
     TS_ASSERT_DELTA(q1(4), result(4), epsilon);
   }
+
+  // ============================================================================
+  // Additional Edge Case and Validation Tests
+  // ============================================================================
+
+  void testDoubleCoverProperty() {
+    // Test that q and -q represent the same rotation
+    JSBSim::FGQuaternion q(0.3, 0.4, 0.5);
+    JSBSim::FGQuaternion neg_q = -1.0 * q;
+
+    // Both should produce identical transformation matrices
+    JSBSim::FGMatrix33 T1 = q.GetT();
+    JSBSim::FGMatrix33 T2 = neg_q.GetT();
+
+    TS_ASSERT_MATRIX_EQUALS(T1, T2);
+
+    // And identical Euler angles (or differ by 2*pi)
+    JSBSim::FGColumnVector3 e1 = q.GetEuler();
+    JSBSim::FGColumnVector3 e2 = neg_q.GetEuler();
+
+    for (int i = 1; i <= 3; i++) {
+      double diff = fabs(e1(i) - e2(i));
+      // Either same or differ by 2*pi
+      TS_ASSERT(diff < epsilon || fabs(diff - 2.0 * M_PI) < epsilon);
+    }
+  }
+
+  void testSmallAngleApproximation() {
+    // For small angles, sin(theta/2) ≈ theta/2, cos(theta/2) ≈ 1
+    double small_angle = 0.001;  // radians
+
+    JSBSim::FGQuaternion q(1, small_angle);  // Roll by small angle
+
+    // q ≈ (1, small_angle/2, 0, 0)
+    TS_ASSERT_DELTA(1.0, q(1), small_angle);
+    TS_ASSERT_DELTA(small_angle / 2.0, q(2), small_angle * small_angle);
+    TS_ASSERT_DELTA(0.0, q(3), epsilon);
+    TS_ASSERT_DELTA(0.0, q(4), epsilon);
+  }
+
+  void testQuaternionFromArbitraryAxis() {
+    // Test rotation around arbitrary axis
+    JSBSim::FGColumnVector3 axis(1.0, 1.0, 1.0);  // Diagonal axis
+    double angle = M_PI / 4.0;  // 45 degrees
+
+    JSBSim::FGQuaternion q(angle, axis);
+
+    // Should be unit quaternion
+    TS_ASSERT_DELTA(1.0, q.Magnitude(), epsilon);
+
+    // Verify the axis direction is preserved
+    axis.Normalize();
+    double half_angle = angle / 2.0;
+    TS_ASSERT_DELTA(cos(half_angle), q(1), epsilon);
+    TS_ASSERT_DELTA(sin(half_angle) * axis(1), q(2), epsilon);
+    TS_ASSERT_DELTA(sin(half_angle) * axis(2), q(3), epsilon);
+    TS_ASSERT_DELTA(sin(half_angle) * axis(3), q(4), epsilon);
+  }
+
+  void testIdentityQuaternionProperties() {
+    // Test properties of identity quaternion
+    JSBSim::FGQuaternion identity;
+
+    // Should be (1, 0, 0, 0)
+    TS_ASSERT_DELTA(1.0, identity(1), epsilon);
+    TS_ASSERT_DELTA(0.0, identity(2), epsilon);
+    TS_ASSERT_DELTA(0.0, identity(3), epsilon);
+    TS_ASSERT_DELTA(0.0, identity(4), epsilon);
+
+    // Identity * q = q
+    JSBSim::FGQuaternion q(0.3, 0.4, 0.5);
+    JSBSim::FGQuaternion product = identity * q;
+
+    TS_ASSERT_DELTA(q(1), product(1), epsilon);
+    TS_ASSERT_DELTA(q(2), product(2), epsilon);
+    TS_ASSERT_DELTA(q(3), product(3), epsilon);
+    TS_ASSERT_DELTA(q(4), product(4), epsilon);
+
+    // q * identity = q
+    product = q * identity;
+    TS_ASSERT_DELTA(q(1), product(1), epsilon);
+    TS_ASSERT_DELTA(q(2), product(2), epsilon);
+    TS_ASSERT_DELTA(q(3), product(3), epsilon);
+    TS_ASSERT_DELTA(q(4), product(4), epsilon);
+
+    // Identity transformation matrix is identity
+    JSBSim::FGMatrix33 T = identity.GetT();
+    TS_ASSERT_MATRIX_IS_IDENTITY(T);
+
+    // Identity Euler angles are zero
+    JSBSim::FGColumnVector3 euler = identity.GetEuler();
+    TS_ASSERT_DELTA(0.0, euler(1), epsilon);
+    TS_ASSERT_DELTA(0.0, euler(2), epsilon);
+    TS_ASSERT_DELTA(0.0, euler(3), epsilon);
+  }
+
+  void test180DegreeRotations() {
+    // Test 180 degree rotations around each axis
+    double angle = M_PI;
+
+    // 180° around X
+    JSBSim::FGQuaternion qx(1, angle);
+    JSBSim::FGMatrix33 Tx = qx.GetT();
+    // Should negate Y and Z
+    TS_ASSERT_DELTA(1.0, Tx(1, 1), epsilon);
+    TS_ASSERT_DELTA(-1.0, Tx(2, 2), epsilon);
+    TS_ASSERT_DELTA(-1.0, Tx(3, 3), epsilon);
+
+    // 180° around Y
+    JSBSim::FGQuaternion qy(2, angle);
+    JSBSim::FGMatrix33 Ty = qy.GetT();
+    // Should negate X and Z
+    TS_ASSERT_DELTA(-1.0, Ty(1, 1), epsilon);
+    TS_ASSERT_DELTA(1.0, Ty(2, 2), epsilon);
+    TS_ASSERT_DELTA(-1.0, Ty(3, 3), epsilon);
+
+    // 180° around Z
+    JSBSim::FGQuaternion qz(3, angle);
+    JSBSim::FGMatrix33 Tz = qz.GetT();
+    // Should negate X and Y
+    TS_ASSERT_DELTA(-1.0, Tz(1, 1), epsilon);
+    TS_ASSERT_DELTA(-1.0, Tz(2, 2), epsilon);
+    TS_ASSERT_DELTA(1.0, Tz(3, 3), epsilon);
+  }
+
+  void testNegativeAngles() {
+    // Test negative rotation angles
+    double angle = -M_PI / 4.0;  // -45 degrees
+
+    JSBSim::FGQuaternion q_neg(1, angle);
+    JSBSim::FGQuaternion q_pos(1, -angle);
+
+    // Should be conjugates
+    JSBSim::FGQuaternion q_neg_conj = q_neg.Conjugate();
+    TS_ASSERT_DELTA(q_pos(1), q_neg_conj(1), epsilon);
+    TS_ASSERT_DELTA(q_pos(2), q_neg_conj(2), epsilon);
+    TS_ASSERT_DELTA(q_pos(3), q_neg_conj(3), epsilon);
+    TS_ASSERT_DELTA(q_pos(4), q_neg_conj(4), epsilon);
+  }
+
+  void testQuaternionNorm() {
+    // Test that quaternion norm equals magnitude squared
+    JSBSim::FGQuaternion q(0.3, 0.4, 0.5);
+
+    double sqrMag = q.SqrMagnitude();
+    double mag = q.Magnitude();
+
+    TS_ASSERT_DELTA(sqrMag, mag * mag, epsilon);
+
+    // For unit quaternion, norm should be 1
+    TS_ASSERT_DELTA(1.0, sqrMag, epsilon);
+  }
+
+  void testSuccessiveRotationsEquivalence() {
+    // Test that successive rotations match combined Euler angles
+    double phi = 0.1;
+    double tht = 0.2;
+    double psi = 0.3;
+
+    // Method 1: Single quaternion from Euler angles
+    JSBSim::FGQuaternion q_euler(phi, tht, psi);
+
+    // Method 2: Successive rotations (Euler sequence: ZYX)
+    JSBSim::FGQuaternion qx(1, phi);
+    JSBSim::FGQuaternion qy(2, tht);
+    JSBSim::FGQuaternion qz(3, psi);
+    JSBSim::FGQuaternion q_successive = qz * qy * qx;
+
+    // Should be equivalent
+    TS_ASSERT_DELTA(q_euler(1), q_successive(1), epsilon);
+    TS_ASSERT_DELTA(q_euler(2), q_successive(2), epsilon);
+    TS_ASSERT_DELTA(q_euler(3), q_successive(3), epsilon);
+    TS_ASSERT_DELTA(q_euler(4), q_successive(4), epsilon);
+  }
+
+  void testMatrixOrthogonality() {
+    // Test that transformation matrix is orthogonal for various quaternions
+    std::vector<std::tuple<double, double, double>> angles = {
+      {0.0, 0.0, 0.0},
+      {0.5, 0.0, 0.0},
+      {0.0, 0.5, 0.0},
+      {0.0, 0.0, 0.5},
+      {0.3, 0.4, 0.5},
+      {M_PI / 2, 0.0, 0.0},
+      {0.0, M_PI / 2, 0.0}
+    };
+
+    for (const auto& [phi, tht, psi] : angles) {
+      JSBSim::FGQuaternion q(phi, tht, psi);
+      JSBSim::FGMatrix33 T = q.GetT();
+      JSBSim::FGMatrix33 TT = T.Transposed();
+      JSBSim::FGMatrix33 product = T * TT;
+
+      TS_ASSERT_MATRIX_IS_IDENTITY(product);
+    }
+  }
+
+  void testLargeAngles() {
+    // Test with angles larger than 2*pi
+    double large_angle = 5.0 * M_PI;  // 900 degrees
+
+    JSBSim::FGQuaternion q(1, large_angle);
+
+    // Should still be unit quaternion
+    TS_ASSERT_DELTA(1.0, q.Magnitude(), epsilon);
+
+    // Equivalent to large_angle mod 2*pi
+    double equiv_angle = fmod(large_angle, 2.0 * M_PI);
+    JSBSim::FGQuaternion q_equiv(1, equiv_angle);
+
+    // Transformation matrices should be equal
+    TS_ASSERT_MATRIX_EQUALS(q.GetT(), q_equiv.GetT());
+  }
+
+  void testZeroVectorRotation() {
+    // Rotating a zero vector should give zero vector
+    JSBSim::FGQuaternion q(0.3, 0.4, 0.5);
+    JSBSim::FGMatrix33 T = q.GetT();
+
+    JSBSim::FGColumnVector3 zero(0.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 result = T * zero;
+
+    TS_ASSERT_DELTA(0.0, result(1), epsilon);
+    TS_ASSERT_DELTA(0.0, result(2), epsilon);
+    TS_ASSERT_DELTA(0.0, result(3), epsilon);
+  }
+
+  void testUnitVectorRotationPreservesLength() {
+    // Rotating unit vectors should preserve unit length
+    JSBSim::FGQuaternion q(0.5, 0.6, 0.7);
+    JSBSim::FGMatrix33 T = q.GetT();
+
+    JSBSim::FGColumnVector3 x_unit(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 y_unit(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 z_unit(0.0, 0.0, 1.0);
+
+    JSBSim::FGColumnVector3 x_rot = T * x_unit;
+    JSBSim::FGColumnVector3 y_rot = T * y_unit;
+    JSBSim::FGColumnVector3 z_rot = T * z_unit;
+
+    TS_ASSERT_DELTA(1.0, x_rot.Magnitude(), epsilon);
+    TS_ASSERT_DELTA(1.0, y_rot.Magnitude(), epsilon);
+    TS_ASSERT_DELTA(1.0, z_rot.Magnitude(), epsilon);
+  }
+
+  void testRotatedVectorsOrthogonality() {
+    // Rotating orthogonal vectors should preserve orthogonality
+    JSBSim::FGQuaternion q(0.4, 0.5, 0.6);
+    JSBSim::FGMatrix33 T = q.GetT();
+
+    JSBSim::FGColumnVector3 x_unit(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 y_unit(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 z_unit(0.0, 0.0, 1.0);
+
+    JSBSim::FGColumnVector3 x_rot = T * x_unit;
+    JSBSim::FGColumnVector3 y_rot = T * y_unit;
+    JSBSim::FGColumnVector3 z_rot = T * z_unit;
+
+    // Dot products should be zero (orthogonal)
+    double xy_dot = x_rot(1) * y_rot(1) + x_rot(2) * y_rot(2) + x_rot(3) * y_rot(3);
+    double xz_dot = x_rot(1) * z_rot(1) + x_rot(2) * z_rot(2) + x_rot(3) * z_rot(3);
+    double yz_dot = y_rot(1) * z_rot(1) + y_rot(2) * z_rot(2) + y_rot(3) * z_rot(3);
+
+    TS_ASSERT_DELTA(0.0, xy_dot, epsilon);
+    TS_ASSERT_DELTA(0.0, xz_dot, epsilon);
+    TS_ASSERT_DELTA(0.0, yz_dot, epsilon);
+  }
+
+  void testMultiplicationAssociativity() {
+    // Test that quaternion multiplication is associative: (q1*q2)*q3 = q1*(q2*q3)
+    JSBSim::FGQuaternion q1(0.1, 0.2, 0.3);
+    JSBSim::FGQuaternion q2(0.4, 0.5, 0.6);
+    JSBSim::FGQuaternion q3(0.7, 0.8, 0.9);
+
+    JSBSim::FGQuaternion left = (q1 * q2) * q3;
+    JSBSim::FGQuaternion right = q1 * (q2 * q3);
+
+    TS_ASSERT_DELTA(left(1), right(1), epsilon);
+    TS_ASSERT_DELTA(left(2), right(2), epsilon);
+    TS_ASSERT_DELTA(left(3), right(3), epsilon);
+    TS_ASSERT_DELTA(left(4), right(4), epsilon);
+  }
+
+  void testMultiplicationDistributivity() {
+    // Test (q1 + q2) * q3 vs q1*q3 + q2*q3
+    // Note: quaternion addition isn't geometrically meaningful, but algebraically valid
+    JSBSim::FGQuaternion q1(0.1, 0.2, 0.3);
+    JSBSim::FGQuaternion q2(0.4, 0.5, 0.6);
+    JSBSim::FGQuaternion q3(0.7, 0.8, 0.9);
+
+    JSBSim::FGQuaternion left = (q1 + q2) * q3;
+    JSBSim::FGQuaternion right = q1 * q3 + q2 * q3;
+
+    TS_ASSERT_DELTA(left(1), right(1), epsilon);
+    TS_ASSERT_DELTA(left(2), right(2), epsilon);
+    TS_ASSERT_DELTA(left(3), right(3), epsilon);
+    TS_ASSERT_DELTA(left(4), right(4), epsilon);
+  }
+
+  void testQDotIntegration() {
+    // Test that integrating QDot gives expected rotation
+    JSBSim::FGQuaternion q;  // Identity
+    JSBSim::FGColumnVector3 omega(0.1, 0.0, 0.0);  // Small roll rate
+    double dt = 0.001;
+
+    // Simple Euler integration
+    for (int i = 0; i < 100; i++) {
+      JSBSim::FGQuaternion qDot = q.GetQDot(omega);
+      q = q + dt * qDot;  // scalar must come first
+      q.Normalize();
+    }
+
+    // After 100 steps of 0.001s = 0.1s at 0.1 rad/s, should have rotated 0.01 rad
+    double expected_angle = 0.1 * 0.1;  // omega * total_time
+    JSBSim::FGColumnVector3 euler = q.GetEuler();
+
+    TS_ASSERT_DELTA(expected_angle, euler(1), 0.001);
+    TS_ASSERT_DELTA(0.0, euler(2), epsilon);
+    TS_ASSERT_DELTA(0.0, euler(3), epsilon);
+  }
+
+  void testEntryAccessModification() {
+    // Test Entry() access for reading and writing
+    JSBSim::FGQuaternion q(0.3, 0.4, 0.5);
+    double original1 = q.Entry(1);
+    double original2 = q.Entry(2);
+    double original3 = q.Entry(3);
+    double original4 = q.Entry(4);
+
+    // Modify using Entry()
+    q.Entry(1) = 0.9;
+    q.Entry(2) = 0.1;
+    q.Entry(3) = 0.2;
+    q.Entry(4) = 0.3;
+
+    TS_ASSERT_DELTA(0.9, q.Entry(1), epsilon);
+    TS_ASSERT_DELTA(0.1, q.Entry(2), epsilon);
+    TS_ASSERT_DELTA(0.2, q.Entry(3), epsilon);
+    TS_ASSERT_DELTA(0.3, q.Entry(4), epsilon);
+
+    // Verify operator() gives same values
+    TS_ASSERT_DELTA(q(1), q.Entry(1), epsilon);
+    TS_ASSERT_DELTA(q(2), q.Entry(2), epsilon);
+    TS_ASSERT_DELTA(q(3), q.Entry(3), epsilon);
+    TS_ASSERT_DELTA(q(4), q.Entry(4), epsilon);
+  }
+
+  void testNearGimbalLockStability() {
+    // Test numerical stability near gimbal lock (theta ≈ ±90°)
+    double near_90 = M_PI / 2.0 - 0.001;
+
+    JSBSim::FGQuaternion q(0.1, near_90, 0.2);
+
+    // Should still produce valid Euler angles
+    JSBSim::FGColumnVector3 euler = q.GetEuler();
+    TS_ASSERT(!std::isnan(euler(1)));
+    TS_ASSERT(!std::isnan(euler(2)));
+    TS_ASSERT(!std::isnan(euler(3)));
+    TS_ASSERT(!std::isinf(euler(1)));
+    TS_ASSERT(!std::isinf(euler(2)));
+    TS_ASSERT(!std::isinf(euler(3)));
+
+    // Theta should be close to 90 degrees
+    TS_ASSERT_DELTA(near_90, euler(2), 0.01);
+  }
+
+  void testInverseMultiplicationOrder() {
+    // Test (q1 * q2)^-1 = q2^-1 * q1^-1
+    JSBSim::FGQuaternion q1(0.2, 0.3, 0.4);
+    JSBSim::FGQuaternion q2(0.5, 0.6, 0.7);
+
+    JSBSim::FGQuaternion product = q1 * q2;
+    JSBSim::FGQuaternion productInv = product.Inverse();
+    JSBSim::FGQuaternion expected = q2.Inverse() * q1.Inverse();
+
+    TS_ASSERT_DELTA(expected(1), productInv(1), epsilon);
+    TS_ASSERT_DELTA(expected(2), productInv(2), epsilon);
+    TS_ASSERT_DELTA(expected(3), productInv(3), epsilon);
+    TS_ASSERT_DELTA(expected(4), productInv(4), epsilon);
+  }
+
+  void testScaledQuaternionInverse() {
+    // Test inverse of non-unit quaternion
+    JSBSim::FGQuaternion q(0.3, 0.4, 0.5);
+    JSBSim::FGQuaternion q_scaled = 2.0 * q;  // scalar must come first
+
+    JSBSim::FGQuaternion q_scaled_inv = q_scaled.Inverse();
+    JSBSim::FGQuaternion product = q_scaled * q_scaled_inv;
+
+    // Should give identity
+    JSBSim::FGQuaternion identity;
+    TS_ASSERT_DELTA(identity(1), product(1), epsilon);
+    TS_ASSERT_DELTA(identity(2), product(2), epsilon);
+    TS_ASSERT_DELTA(identity(3), product(3), epsilon);
+    TS_ASSERT_DELTA(identity(4), product(4), epsilon);
+  }
 };
