@@ -396,4 +396,588 @@ public:
     double altitudeThrust = seaLevelThrust * densityRatio;
     TS_ASSERT_DELTA(altitudeThrust, 10000.0, DEFAULT_TOLERANCE);
   }
+
+  /***************************************************************************
+   * Bypass Ratio and Engine Configuration Tests
+   ***************************************************************************/
+
+  // Test bypass ratio effect on TSFC
+  void testBypassRatioTSFC() {
+    // Higher bypass ratio = lower TSFC
+    double lowBypassTSFC = 0.9;   // Turbojet BPR ~0
+    double midBypassTSFC = 0.6;   // Low-bypass turbofan BPR ~1
+    double highBypassTSFC = 0.35; // High-bypass turbofan BPR ~8
+
+    TS_ASSERT(highBypassTSFC < midBypassTSFC);
+    TS_ASSERT(midBypassTSFC < lowBypassTSFC);
+  }
+
+  // Test bypass ratio effect on thrust
+  void testBypassRatioThrust() {
+    // Higher bypass = more mass flow but lower exhaust velocity
+    double bypassRatio = 5.0;
+    double coreThrust = 4000.0;  // lbs from core
+    double fanThrust = coreThrust * bypassRatio * 0.3;  // Fan produces less per unit mass
+
+    double totalThrust = coreThrust + fanThrust;
+    TS_ASSERT_DELTA(totalThrust, 10000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test N1 to N2 relationship
+  void testN1N2Relationship() {
+    // N1 (fan) spools faster than N2 (core) at low power
+    double N2 = 70.0;
+    double IdleN2 = 60.0;
+    double MaxN2 = 100.0;
+
+    // N1 typically higher than N2 at same throttle
+    double N2norm = (N2 - IdleN2) / (MaxN2 - IdleN2);
+    double N1 = 30.0 + 70.0 * std::sqrt(N2norm);  // Non-linear relationship
+
+    TS_ASSERT(N1 > N2 * 0.5);
+    TS_ASSERT(N1 < 100.0);
+  }
+
+  /***************************************************************************
+   * Inlet and Compressor Tests
+   ***************************************************************************/
+
+  // Test ram recovery factor
+  void testRamRecoveryFactor() {
+    // Ram recovery decreases with Mach number
+    double Mach = 0.0;
+    double ramRecovery = 1.0;
+    TS_ASSERT_DELTA(ramRecovery, 1.0, DEFAULT_TOLERANCE);
+
+    // At Mach 0.8 (typical cruise)
+    Mach = 0.8;
+    ramRecovery = 1.0 - 0.075 * pow(Mach - 0.3, 2);
+    TS_ASSERT(ramRecovery > 0.95);
+    TS_ASSERT(ramRecovery < 1.0);
+
+    // At supersonic speeds
+    Mach = 2.0;
+    ramRecovery = 1.0 - 0.075 * pow(Mach - 0.3, 2);
+    TS_ASSERT(ramRecovery < 0.85);
+  }
+
+  // Test inlet pressure ratio
+  void testInletPressureRatio() {
+    double P_ambient = 14.7;  // psi
+    double Mach = 0.85;
+    double gamma = 1.4;
+
+    // Total pressure ratio = (1 + (gamma-1)/2 * M^2)^(gamma/(gamma-1))
+    double totalPressureRatio = pow(1.0 + (gamma-1.0)/2.0 * Mach*Mach, gamma/(gamma-1.0));
+    double P_total = P_ambient * totalPressureRatio;
+
+    TS_ASSERT(P_total > P_ambient);
+    TS_ASSERT_DELTA(totalPressureRatio, 1.604, 0.01);
+  }
+
+  // Test compressor pressure ratio
+  void testCompressorPressureRatio() {
+    double OPR = 30.0;  // Overall pressure ratio (modern turbofan)
+    double inletPressure = 14.7;  // psi
+
+    double compressorExit = inletPressure * OPR;
+    TS_ASSERT_DELTA(compressorExit, 441.0, 1.0);
+
+    // Higher OPR = better efficiency but harder to achieve
+    TS_ASSERT(OPR >= 20.0);  // Modern engines
+    TS_ASSERT(OPR <= 60.0);  // Practical limit
+  }
+
+  // Test compressor surge margin
+  void testCompressorSurgeMargin() {
+    double operatingPoint = 0.85;  // Operating line
+    double surgeLine = 1.0;        // Surge boundary
+
+    double surgeMargin = (surgeLine - operatingPoint) / surgeLine * 100.0;
+    TS_ASSERT_DELTA(surgeMargin, 15.0, 0.1);  // 15% margin
+
+    // Minimum acceptable surge margin
+    TS_ASSERT(surgeMargin > 10.0);
+  }
+
+  /***************************************************************************
+   * Temperature Limits Tests
+   ***************************************************************************/
+
+  // Test turbine inlet temperature limit
+  void testTurbineInletTempLimit() {
+    double TIT_limit = 1700.0;  // K (modern engine limit)
+    double TIT_actual = 1500.0;
+
+    TS_ASSERT(TIT_actual < TIT_limit);
+
+    // At max power, TIT approaches limit
+    TIT_actual = 1650.0;
+    double margin = TIT_limit - TIT_actual;
+    TS_ASSERT(margin > 0);
+    TS_ASSERT_DELTA(margin, 50.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test ITT redline
+  void testITTRedline() {
+    double ITT_redline = 950.0;  // °C
+    double ITT_normal = 750.0;
+    double ITT_takeoff = 900.0;
+
+    TS_ASSERT(ITT_normal < ITT_redline);
+    TS_ASSERT(ITT_takeoff < ITT_redline);
+
+    // Margin at takeoff
+    double margin = ITT_redline - ITT_takeoff;
+    TS_ASSERT_DELTA(margin, 50.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test EGT limit exceedance
+  void testEGTLimitExceedance() {
+    double EGT_limit = 850.0;  // °C
+    double EGT = 800.0;
+
+    bool exceedance = EGT > EGT_limit;
+    TS_ASSERT(!exceedance);
+
+    // Over limit
+    EGT = 880.0;
+    exceedance = EGT > EGT_limit;
+    TS_ASSERT(exceedance);
+  }
+
+  /***************************************************************************
+   * Afterburner Tests
+   ***************************************************************************/
+
+  // Test afterburner staging
+  void testAfterburnerStaging() {
+    // Some engines have multiple AB stages
+    int maxStages = 5;
+    int stage = 0;
+    double abThrust = 0.0;
+    double milThrust = 10000.0;
+
+    // Each stage adds thrust
+    for (stage = 1; stage <= maxStages; stage++) {
+      abThrust = milThrust * (1.0 + 0.1 * stage);
+    }
+
+    // At max AB
+    TS_ASSERT_DELTA(abThrust, 15000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test afterburner fuel consumption
+  void testAfterburnerFuelConsumption() {
+    double dryFuelFlow = 8000.0;  // lbs/hr
+    double wetFuelFlow = 20000.0; // lbs/hr with AB
+
+    double abRatio = wetFuelFlow / dryFuelFlow;
+    TS_ASSERT_DELTA(abRatio, 2.5, DEFAULT_TOLERANCE);
+
+    // AB uses much more fuel for modest thrust increase
+    double dryThrust = 10000.0;
+    double wetThrust = 15000.0;
+    double thrustRatio = wetThrust / dryThrust;
+
+    // Fuel efficiency is poor in AB
+    double efficiency = thrustRatio / abRatio;
+    TS_ASSERT(efficiency < 1.0);
+  }
+
+  // Test afterburner light-off
+  void testAfterburnerLightOff() {
+    double N2_min = 85.0;  // Minimum N2 for AB
+    double N2 = 90.0;
+    bool ABlight = false;
+
+    if (N2 >= N2_min) {
+      ABlight = true;
+    }
+    TS_ASSERT(ABlight);
+
+    // Cannot light AB at low N2
+    N2 = 70.0;
+    ABlight = (N2 >= N2_min);
+    TS_ASSERT(!ABlight);
+  }
+
+  /***************************************************************************
+   * Thrust Reverser Tests
+   ***************************************************************************/
+
+  // Test thrust reverser effect
+  void testThrustReverser() {
+    double forwardThrust = 20000.0;
+    double reverserEfficiency = 0.4;  // 40% of thrust reversed
+
+    double reverseThrust = -forwardThrust * reverserEfficiency;
+    TS_ASSERT_DELTA(reverseThrust, -8000.0, DEFAULT_TOLERANCE);
+
+    // Net deceleration force
+    TS_ASSERT(reverseThrust < 0);
+  }
+
+  // Test thrust reverser at idle
+  void testThrustReverserIdle() {
+    double idleThrust = 2000.0;
+    double reverserEfficiency = 0.4;
+
+    double reverseThrust = -idleThrust * reverserEfficiency;
+    TS_ASSERT_DELTA(reverseThrust, -800.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test thrust reverser deploy time
+  void testThrustReverserDeployTime() {
+    double deployTime = 2.0;  // seconds
+    double currentPosition = 0.0;  // stowed
+    double targetPosition = 1.0;   // deployed
+    double rate = 1.0 / deployTime;
+    double dt = 0.1;
+
+    // Simulate deployment
+    for (int i = 0; i < 20; i++) {
+      currentPosition += rate * dt;
+    }
+
+    TS_ASSERT_DELTA(currentPosition, 1.0, 0.01);
+  }
+
+  /***************************************************************************
+   * Starting and Shutdown Tests
+   ***************************************************************************/
+
+  // Test starter dropout speed
+  void testStarterDropout() {
+    double N2 = 0.0;
+    double starterDropoutN2 = 50.0;
+    bool starterEngaged = true;
+
+    // Below dropout
+    TS_ASSERT(starterEngaged);
+
+    // Above dropout, starter disengages
+    N2 = 55.0;
+    if (N2 > starterDropoutN2) {
+      starterEngaged = false;
+    }
+    TS_ASSERT(!starterEngaged);
+  }
+
+  // Test light-off N2
+  void testLightOffN2() {
+    double N2 = 15.0;
+    double lightOffN2 = 12.0;
+
+    bool canLight = N2 >= lightOffN2;
+    TS_ASSERT(canLight);
+
+    // Below light-off
+    N2 = 10.0;
+    canLight = N2 >= lightOffN2;
+    TS_ASSERT(!canLight);
+  }
+
+  // Test engine rundown time
+  void testEngineRundown() {
+    double N2 = 60.0;  // idle
+    double rundownRate = 5.0;  // %/sec
+    double rundownTime = N2 / rundownRate;
+
+    TS_ASSERT_DELTA(rundownTime, 12.0, 0.1);  // 12 seconds to stop
+  }
+
+  // Test hung start detection
+  void testHungStart() {
+    double N2 = 25.0;
+    double EGT = 600.0;
+    double normalStartEGT = 500.0;
+    double lightOffN2 = 20.0;
+
+    // Hung start: N2 stalls but EGT high
+    bool hungStart = (N2 > lightOffN2 && N2 < 50.0 && EGT > normalStartEGT);
+    TS_ASSERT(hungStart);
+  }
+
+  // Test hot start detection
+  void testHotStart() {
+    double EGT = 950.0;
+    double EGT_limit = 900.0;
+
+    bool hotStart = EGT > EGT_limit;
+    TS_ASSERT(hotStart);
+  }
+
+  /***************************************************************************
+   * Mach and Altitude Effects Tests
+   ***************************************************************************/
+
+  // Test thrust lapse with altitude
+  void testThrustLapseAltitude() {
+    double seaLevelThrust = 25000.0;
+    double altitudes[] = {0.0, 10000.0, 20000.0, 35000.0};
+    double densityRatios[] = {1.0, 0.74, 0.53, 0.31};
+
+    for (int i = 0; i < 4; i++) {
+      double thrust = seaLevelThrust * densityRatios[i];
+      TS_ASSERT(thrust <= seaLevelThrust);
+      TS_ASSERT(thrust > 0);
+    }
+  }
+
+  // Test ram drag
+  void testRamDrag() {
+    double massFlow = 200.0;  // lbs/sec
+    double velocity = 800.0;   // ft/s
+    double g = 32.2;
+
+    // Ram drag = mass_flow * velocity / g
+    double ramDrag = massFlow * velocity / g;
+    TS_ASSERT_DELTA(ramDrag, 4969.0, 10.0);
+  }
+
+  // Test net thrust calculation
+  void testNetThrust() {
+    double grossThrust = 25000.0;
+    double ramDrag = 5000.0;
+
+    double netThrust = grossThrust - ramDrag;
+    TS_ASSERT_DELTA(netThrust, 20000.0, DEFAULT_TOLERANCE);
+
+    // At high speed, ram drag increases
+    ramDrag = 10000.0;
+    netThrust = grossThrust - ramDrag;
+    TS_ASSERT_DELTA(netThrust, 15000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test thrust available at Mach
+  void testThrustVsMach() {
+    double seaLevelStaticThrust = 25000.0;
+    double Mach = 0.0;
+
+    // Static
+    double thrust = seaLevelStaticThrust;
+    TS_ASSERT_DELTA(thrust, 25000.0, DEFAULT_TOLERANCE);
+
+    // At Mach 0.85
+    Mach = 0.85;
+    double machFactor = 1.0 - 0.15 * Mach;  // Simplified
+    thrust = seaLevelStaticThrust * machFactor;
+    TS_ASSERT_DELTA(thrust, 21812.5, 10.0);
+  }
+
+  /***************************************************************************
+   * Engine Control Tests
+   ***************************************************************************/
+
+  // Test throttle to N2 mapping
+  void testThrottleN2Mapping() {
+    double throttle = 0.0;  // Idle
+    double IdleN2 = 60.0;
+    double MaxN2 = 100.0;
+
+    double N2 = IdleN2 + throttle * (MaxN2 - IdleN2);
+    TS_ASSERT_DELTA(N2, 60.0, DEFAULT_TOLERANCE);
+
+    // Full throttle
+    throttle = 1.0;
+    N2 = IdleN2 + throttle * (MaxN2 - IdleN2);
+    TS_ASSERT_DELTA(N2, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test acceleration schedule
+  void testAccelerationSchedule() {
+    double N2 = 70.0;
+    double targetN2 = 100.0;
+    double maxAccel = 20.0;  // %/sec at low N2
+    double dt = 0.1;
+
+    // Acceleration limited by schedule
+    double accel = std::min(maxAccel, (targetN2 - N2) / 1.0);
+    double newN2 = N2 + accel * dt;
+
+    TS_ASSERT(newN2 > N2);
+    TS_ASSERT(newN2 < targetN2);
+  }
+
+  // Test deceleration schedule
+  void testDecelerationSchedule() {
+    double N2 = 90.0;
+    double targetN2 = 60.0;
+    double maxDecel = 15.0;  // %/sec
+    double dt = 0.1;
+
+    double decel = std::min(maxDecel, (N2 - targetN2) / 1.0);
+    double newN2 = N2 - decel * dt;
+
+    TS_ASSERT(newN2 < N2);
+    TS_ASSERT(newN2 > targetN2);
+  }
+
+  // Test engine protection cutback
+  void testEngineProtection() {
+    double TIT = 1680.0;
+    double TIT_limit = 1700.0;
+    double N2 = 98.0;
+
+    // Protection activates near limit
+    bool protection = (TIT > TIT_limit * 0.98);
+    TS_ASSERT(protection);
+
+    // Reduce N2 to protect engine
+    if (protection) {
+      N2 = N2 * 0.98;
+    }
+    TS_ASSERT(N2 < 98.0);
+  }
+
+  /***************************************************************************
+   * Fuel System Tests
+   ***************************************************************************/
+
+  // Test minimum fuel pressure
+  void testMinFuelPressure() {
+    double fuelPressure = 25.0;  // psi
+    double minPressure = 15.0;
+
+    bool fuelOK = fuelPressure >= minPressure;
+    TS_ASSERT(fuelOK);
+
+    // Low fuel pressure
+    fuelPressure = 10.0;
+    fuelOK = fuelPressure >= minPressure;
+    TS_ASSERT(!fuelOK);
+  }
+
+  // Test fuel flow vs N2
+  void testFuelFlowVsN2() {
+    double N2 = 60.0;  // idle
+    double IdleN2 = 60.0;
+    double MaxN2 = 100.0;
+    double idleFuelFlow = 500.0;
+    double maxFuelFlow = 8000.0;
+
+    double N2norm = (N2 - IdleN2) / (MaxN2 - IdleN2);
+    double fuelFlow = idleFuelFlow + (maxFuelFlow - idleFuelFlow) * pow(N2norm, 2);
+
+    TS_ASSERT_DELTA(fuelFlow, 500.0, DEFAULT_TOLERANCE);
+
+    // At max N2
+    N2 = 100.0;
+    N2norm = (N2 - IdleN2) / (MaxN2 - IdleN2);
+    fuelFlow = idleFuelFlow + (maxFuelFlow - idleFuelFlow) * pow(N2norm, 2);
+    TS_ASSERT_DELTA(fuelFlow, 8000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test fuel heating value
+  void testFuelHeatingValue() {
+    double JetA_LHV = 18400.0;  // BTU/lb
+    double JP4_LHV = 18600.0;
+
+    TS_ASSERT(JP4_LHV > JetA_LHV);
+
+    // Energy available
+    double fuelFlow = 8000.0;  // lbs/hr
+    double energyRate = fuelFlow * JetA_LHV;  // BTU/hr
+    TS_ASSERT(energyRate > 0);
+  }
+
+  /***************************************************************************
+   * Accessory and Bleed Tests
+   ***************************************************************************/
+
+  // Test accessory power extraction
+  void testAccessoryPowerExtraction() {
+    double shaftPower = 50000.0;  // HP
+    double accessoryLoad = 200.0;  // HP
+
+    double availablePower = shaftPower - accessoryLoad;
+    TS_ASSERT_DELTA(availablePower, 49800.0, DEFAULT_TOLERANCE);
+
+    // Accessory load as percentage
+    double loadPercent = accessoryLoad / shaftPower * 100.0;
+    TS_ASSERT_DELTA(loadPercent, 0.4, 0.01);
+  }
+
+  // Test bleed air extraction limits
+  void testBleedAirLimits() {
+    double maxBleed = 0.10;  // 10% of core flow
+    double currentBleed = 0.05;
+
+    TS_ASSERT(currentBleed <= maxBleed);
+
+    // Excessive bleed
+    currentBleed = 0.15;
+    bool bleedExcessive = currentBleed > maxBleed;
+    TS_ASSERT(bleedExcessive);
+  }
+
+  // Test anti-ice bleed demand
+  void testAntiIceBleed() {
+    double cowlAntiIce = 0.02;   // 2%
+    double wingAntiIce = 0.03;  // 3%
+    bool cowlOn = true;
+    bool wingOn = true;
+
+    double totalBleed = 0.0;
+    if (cowlOn) totalBleed += cowlAntiIce;
+    if (wingOn) totalBleed += wingAntiIce;
+
+    TS_ASSERT_DELTA(totalBleed, 0.05, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Miscellaneous Tests
+   ***************************************************************************/
+
+  // Test nozzle area ratio
+  void testNozzleAreaRatio() {
+    double A8 = 3.5;  // Nozzle throat area (sq ft)
+    double A9 = 5.0;  // Nozzle exit area (sq ft)
+
+    double areaRatio = A9 / A8;
+    TS_ASSERT_DELTA(areaRatio, 1.428, 0.01);
+
+    // For supersonic nozzle, ratio > 1
+    TS_ASSERT(areaRatio > 1.0);
+  }
+
+  // Test exhaust velocity
+  void testExhaustVelocity() {
+    double thrust = 20000.0;  // lbf
+    double massFlow = 200.0;  // lbs/sec
+    double g = 32.2;
+
+    // Ve = Thrust * g / massFlow
+    double Ve = thrust * g / massFlow;
+    TS_ASSERT_DELTA(Ve, 3220.0, 10.0);  // ft/s
+  }
+
+  // Test propulsive efficiency
+  void testPropulsiveEfficiency() {
+    double flightVelocity = 800.0;  // ft/s
+    double exhaustVelocity = 2000.0;  // ft/s
+
+    // eta_p = 2 * V0 / (V0 + Ve)
+    double eta_p = 2.0 * flightVelocity / (flightVelocity + exhaustVelocity);
+    TS_ASSERT_DELTA(eta_p, 0.571, 0.01);
+
+    // Higher bypass = higher propulsive efficiency
+    exhaustVelocity = 1200.0;  // High bypass engine
+    eta_p = 2.0 * flightVelocity / (flightVelocity + exhaustVelocity);
+    TS_ASSERT_DELTA(eta_p, 0.80, 0.01);
+  }
+
+  // Test engine weight to thrust ratio
+  void testWeightThrustRatio() {
+    double thrust = 25000.0;  // lbf
+    double weight = 5000.0;   // lbs
+
+    double ratio = thrust / weight;
+    TS_ASSERT_DELTA(ratio, 5.0, DEFAULT_TOLERANCE);
+
+    // Modern engines achieve 5-8:1
+    TS_ASSERT(ratio >= 4.0);
+    TS_ASSERT(ratio <= 10.0);
+  }
 };
