@@ -1018,3 +1018,337 @@ public:
     TS_ASSERT_DELTA(forces(3), 0.0, epsilon);   // Lift = Weight
   }
 };
+
+/*******************************************************************************
+ * FGAircraftAdditionalTest - Extended aircraft tests
+ ******************************************************************************/
+class FGAircraftAdditionalTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Static Margin Tests
+   ***************************************************************************/
+
+  // Test static margin formula
+  void testStaticMarginFormula() {
+    // Static margin = (x_np - x_cg) / MAC
+    double x_np = 120.0;   // Neutral point (inches from nose)
+    double x_cg = 100.0;   // CG position
+    double MAC = 50.0;     // Mean aerodynamic chord
+
+    double staticMargin = (x_np - x_cg) / MAC;
+
+    // Typical static margin: 5-15%
+    TS_ASSERT(staticMargin > 0.0);  // Stable
+    TS_ASSERT_DELTA(staticMargin, 0.4, 0.01);  // 40% MAC
+  }
+
+  // Test negative static margin (unstable)
+  void testNegativeStaticMargin() {
+    double x_np = 95.0;   // Neutral point
+    double x_cg = 100.0;  // CG aft of NP
+    double MAC = 50.0;
+
+    double staticMargin = (x_np - x_cg) / MAC;
+
+    // Negative = unstable
+    TS_ASSERT(staticMargin < 0.0);
+    TS_ASSERT_DELTA(staticMargin, -0.1, 0.01);
+  }
+
+  // Test static margin limits
+  void testStaticMarginLimits() {
+    double MAC = 50.0;
+    double x_np = 115.0;
+    double x_cg_fwd = 90.0;   // Forward CG limit
+    double x_cg_aft = 110.0;  // Aft CG limit
+
+    double sm_fwd = (x_np - x_cg_fwd) / MAC;  // At forward limit
+    double sm_aft = (x_np - x_cg_aft) / MAC;  // At aft limit
+
+    TS_ASSERT(sm_fwd > sm_aft);  // More stable at forward CG
+    TS_ASSERT(sm_aft > 0);       // Still stable at aft limit
+  }
+
+  /***************************************************************************
+   * Center of Gravity Tests
+   ***************************************************************************/
+
+  // Test CG range calculation
+  void testCGRangeCalculation() {
+    double MAC = 50.0;
+    double cg_fwd_pct = 0.15;  // 15% MAC
+    double cg_aft_pct = 0.35;  // 35% MAC
+    double wing_le = 80.0;     // Wing LE position
+
+    double cg_fwd = wing_le + cg_fwd_pct * MAC;
+    double cg_aft = wing_le + cg_aft_pct * MAC;
+    double cg_range = cg_aft - cg_fwd;
+
+    TS_ASSERT(cg_range > 0);
+    TS_ASSERT_DELTA(cg_fwd, 87.5, 0.1);
+    TS_ASSERT_DELTA(cg_aft, 97.5, 0.1);
+    TS_ASSERT_DELTA(cg_range, 10.0, 0.1);
+  }
+
+  // Test CG envelope at different weights
+  void testCGEnvelopeWeights() {
+    // CG envelope typically narrows at higher weights
+    double cg_range_light = 12.0;  // inches at light weight
+    double cg_range_heavy = 8.0;   // inches at heavy weight
+
+    TS_ASSERT(cg_range_heavy < cg_range_light);
+  }
+
+  /***************************************************************************
+   * Neutral Point Tests
+   ***************************************************************************/
+
+  // Test neutral point from stability derivatives
+  void testNeutralPointCalculation() {
+    // x_np = x_ac + (Cm_alpha / CL_alpha) * MAC
+    double x_ac = 100.0;      // Aerodynamic center
+    double Cm_alpha = -1.0;   // Pitch stiffness (stable)
+    double CL_alpha = 5.0;    // Lift slope
+    double MAC = 50.0;
+
+    double x_np = x_ac - (Cm_alpha / CL_alpha) * MAC;
+
+    TS_ASSERT(x_np > x_ac);  // NP aft of AC for stable aircraft
+    TS_ASSERT_DELTA(x_np, 110.0, 0.1);
+  }
+
+  // Test stick-free vs stick-fixed neutral point
+  void testStickFreeVsFixedNP() {
+    double x_np_fixed = 115.0;  // Stick-fixed NP
+    double x_np_free = 110.0;   // Stick-free NP (further forward)
+
+    // Stick-free NP is typically forward of stick-fixed
+    TS_ASSERT(x_np_free < x_np_fixed);
+  }
+
+  /***************************************************************************
+   * Load Factor Tests
+   ***************************************************************************/
+
+  // Test load factor from lift and weight
+  void testLoadFactorCalculation() {
+    double lift = 6000.0;   // lbs
+    double weight = 3000.0; // lbs
+
+    double n = lift / weight;
+
+    TS_ASSERT_DELTA(n, 2.0, epsilon);  // 2G maneuver
+  }
+
+  // Test maximum load factor limits
+  void testMaxLoadFactorLimits() {
+    // FAR 23 limits for normal category
+    double n_pos_max = 3.8;
+    double n_neg_max = -1.52;
+
+    TS_ASSERT(n_pos_max > 0);
+    TS_ASSERT(n_neg_max < 0);
+    TS_ASSERT(std::abs(n_pos_max) > std::abs(n_neg_max));
+  }
+
+  // Test gust load factor
+  void testGustLoadFactor() {
+    // Simplified gust formula: delta_n = (rho * U * V * CL_alpha) / (2 * W/S)
+    double rho = 0.002377; // Air density (slug/ft^3)
+    double U = 30.0;       // Gust velocity (ft/s)
+    double V = 150.0;      // Aircraft velocity (ft/s)
+    double CL_alpha = 5.0; // Lift curve slope
+    double W_S = 20.0;     // Wing loading (lb/ft^2)
+
+    double delta_n = (rho * U * V * CL_alpha) / (2.0 * W_S);
+
+    TS_ASSERT(delta_n > 0);
+    TS_ASSERT_DELTA(delta_n, 1.336, 0.01);  // About 1.3 G increment
+  }
+
+  /***************************************************************************
+   * Force Resolution Tests
+   ***************************************************************************/
+
+  // Test body to stability axis transformation
+  void testBodyToStabilityAxis() {
+    double alpha = 5.0 * M_PI / 180.0;  // 5 degree AOA
+
+    double Fx_body = -100.0;  // Drag in body
+    double Fz_body = -1000.0; // Lift in body
+
+    // Transform to stability axis
+    double Fx_stab = Fx_body * cos(alpha) + Fz_body * sin(alpha);
+    double Fz_stab = -Fx_body * sin(alpha) + Fz_body * cos(alpha);
+
+    // Drag (stability) should be more negative
+    TS_ASSERT(Fx_stab < Fx_body);
+    // Lift (stability) should be slightly different
+    TS_ASSERT(!std::isnan(Fz_stab));
+  }
+
+  // Test wind axis forces
+  void testWindAxisForces() {
+    double lift = 3000.0;
+    double drag = 300.0;
+    double sideforce = 50.0;
+
+    // In wind axis, lift is perpendicular to relative wind
+    TS_ASSERT(lift > drag);  // L/D > 1 for reasonable flight
+    TS_ASSERT(std::abs(sideforce) < lift);  // Side force typically small
+  }
+
+  /***************************************************************************
+   * Moment Arm Tests
+   ***************************************************************************/
+
+  // Test tail moment arm effectiveness
+  void testTailMomentArm() {
+    double tail_force = 500.0;   // lbs
+    double tail_arm = 15.0;      // ft from CG
+
+    double pitching_moment = tail_force * tail_arm;
+
+    TS_ASSERT_DELTA(pitching_moment, 7500.0, epsilon);
+  }
+
+  // Test thrust moment arm
+  void testThrustMomentArm() {
+    double thrust = 2000.0;    // lbs
+    double arm = 0.5;          // ft below CG
+
+    double nose_up_moment = thrust * arm;
+
+    TS_ASSERT(nose_up_moment > 0);  // Thrust below CG pitches nose up
+    TS_ASSERT_DELTA(nose_up_moment, 1000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Dynamic Pressure Tests
+   ***************************************************************************/
+
+  // Test dynamic pressure calculation
+  void testDynamicPressure() {
+    double rho = 0.002377;  // slug/ft^3
+    double V = 200.0;       // ft/s
+
+    double q = 0.5 * rho * V * V;
+
+    TS_ASSERT_DELTA(q, 47.54, 0.1);  // psf
+  }
+
+  // Test force coefficient to force conversion
+  void testCoefficientToForce() {
+    double CL = 0.5;
+    double q = 50.0;      // psf
+    double S = 180.0;     // sq ft
+
+    double lift = CL * q * S;
+
+    TS_ASSERT_DELTA(lift, 4500.0, epsilon);
+  }
+
+  // Test moment coefficient to moment conversion
+  void testCoefficientToMoment() {
+    double Cm = -0.05;
+    double q = 50.0;      // psf
+    double S = 180.0;     // sq ft
+    double c = 5.0;       // MAC, ft
+
+    double moment = Cm * q * S * c;
+
+    TS_ASSERT_DELTA(moment, -2250.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Aircraft Type Tests
+   ***************************************************************************/
+
+  // Test typical fighter configuration
+  void testFighterConfiguration() {
+    double wingspan = 35.0;
+    double wingArea = 350.0;
+    double AR = wingspan * wingspan / wingArea;
+    double wingLoading = 70.0;  // typical fighter
+
+    TS_ASSERT(AR < 5.0);        // Low aspect ratio
+    TS_ASSERT(wingLoading > 50.0); // High wing loading
+  }
+
+  // Test typical transport configuration
+  void testTransportConfiguration() {
+    double wingspan = 120.0;
+    double wingArea = 1400.0;
+    double AR = wingspan * wingspan / wingArea;
+    double wingLoading = 110.0;
+
+    TS_ASSERT(AR > 7.0);        // High aspect ratio
+    TS_ASSERT(AR < 12.0);
+    TS_ASSERT(wingLoading > 100.0);
+  }
+
+  // Test typical glider configuration
+  void testGliderConfiguration() {
+    double wingspan = 50.0;
+    double wingArea = 120.0;
+    double AR = wingspan * wingspan / wingArea;
+    double wingLoading = 6.0;
+
+    TS_ASSERT(AR > 15.0);       // Very high aspect ratio
+    TS_ASSERT(wingLoading < 10.0); // Very low wing loading
+  }
+
+  /***************************************************************************
+   * Moment Balance Tests
+   ***************************************************************************/
+
+  // Test trimmed flight condition
+  void testTrimmedCondition() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // Set up trimmed condition: all moments sum to zero
+    aircraft->in.AeroMoment = FGColumnVector3(0.0, -500.0, 0.0);  // Wing moment
+    aircraft->in.PropMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(0.0, 500.0, 0.0); // Tail trim
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.AeroForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.PropForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 moments = aircraft->GetMoments();
+    TS_ASSERT_DELTA(moments(2), 0.0, epsilon);  // Pitch trimmed
+  }
+
+  // Test roll moment balance
+  void testRollMomentBalance() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // Aileron creates roll, dihedral effect opposes
+    double aileron_roll = 500.0;
+    double dihedral_roll = -500.0;
+
+    aircraft->in.AeroMoment = FGColumnVector3(aileron_roll + dihedral_roll, 0.0, 0.0);
+    aircraft->in.PropMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.AeroForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.PropForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 moments = aircraft->GetMoments();
+    TS_ASSERT_DELTA(moments(1), 0.0, epsilon);  // Roll balanced
+  }
+};
