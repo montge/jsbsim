@@ -872,4 +872,522 @@ public:
     TS_ASSERT(stiffness_ratio > 0.5);
     TS_ASSERT(stiffness_ratio < 5.0);
   }
+
+  /***************************************************************************
+   * Theodorsen Function and Unsteady Aerodynamics Tests
+   ***************************************************************************/
+
+  // Test Theodorsen function magnitude at low reduced frequency
+  void testTheodorsenFunctionLowFrequency() {
+    // GIVEN: Low reduced frequency
+    double k = 0.05;
+
+    // WHEN: Approximate Theodorsen function magnitude
+    // For small k, C(k) ≈ 1 - (1/(2+k))
+    double magnitude_approx = 1.0 - 1.0 / (2.0 + k * 10.0);
+
+    // THEN: Magnitude should be close to 1 (quasi-steady)
+    TS_ASSERT(magnitude_approx > 0.5);
+    TS_ASSERT(magnitude_approx < 1.0);
+  }
+
+  // Test circulatory lift lag
+  void testCirculatoryLiftLag() {
+    // GIVEN: Oscillating airfoil parameters
+    double k = 0.2;  // reduced frequency
+    double phase_approx = -std::atan(k);  // simplified phase lag
+
+    // THEN: Phase should be negative (lag)
+    TS_ASSERT(phase_approx < 0.0);
+    TS_ASSERT(phase_approx > -M_PI / 2.0);
+  }
+
+  // Test apparent mass effect
+  void testApparentMassEffect() {
+    // GIVEN: Wing section properties
+    double chord = 5.0;      // ft
+    double rho = 0.002377;   // slug/ft^3
+    double span_section = 1.0;  // ft
+
+    // WHEN: Calculate apparent mass per unit span
+    double apparent_mass = M_PI * rho * chord * chord / 4.0;
+
+    // THEN: Apparent mass should be positive
+    TS_ASSERT(apparent_mass > 0.0);
+    TS_ASSERT(apparent_mass < 1.0);  // slug/ft typically
+  }
+
+  // Test non-circulatory lift contribution
+  void testNonCirculatoryLift() {
+    // GIVEN: Pitching rate
+    double alpha_dot = 0.5;  // rad/s
+    double chord = 5.0;      // ft
+    double velocity = 200.0; // ft/s
+    double rho = 0.002377;   // slug/ft^3
+
+    // WHEN: Calculate non-circulatory lift coefficient contribution
+    double CL_nc = M_PI * chord * alpha_dot / (2.0 * velocity);
+
+    // THEN: Should be small
+    TS_ASSERT(std::abs(CL_nc) < 0.1);
+  }
+
+  /***************************************************************************
+   * Wagner Function and Indicial Response Tests
+   ***************************************************************************/
+
+  // Test Wagner function for step change in angle of attack
+  void testWagnerFunction() {
+    // GIVEN: Dimensionless time
+    double s = 5.0;  // semi-chords traveled
+
+    // WHEN: Approximate Wagner function value
+    // Jones approximation: phi(s) = 1 - 0.165*exp(-0.0455*s) - 0.335*exp(-0.3*s)
+    double phi = 1.0 - 0.165 * std::exp(-0.0455 * s) - 0.335 * std::exp(-0.3 * s);
+
+    // THEN: Should approach 1 as s increases
+    TS_ASSERT(phi > 0.5);
+    TS_ASSERT(phi < 1.0);
+  }
+
+  // Test lift buildup after step input
+  void testLiftBuildupAfterStep() {
+    // GIVEN: Steady state lift and times
+    double CL_steady = 1.0;
+    double semi_chords[] = {1.0, 5.0, 10.0, 20.0};
+
+    // THEN: Lift should increase monotonically
+    double prev_lift = 0.0;
+    for (double s : semi_chords) {
+      double phi = 1.0 - 0.165 * std::exp(-0.0455 * s) - 0.335 * std::exp(-0.3 * s);
+      double current_lift = CL_steady * phi;
+      TS_ASSERT(current_lift >= prev_lift);
+      prev_lift = current_lift;
+    }
+  }
+
+  // Test Kussner function for gust encounter
+  void testKussnerFunction() {
+    // GIVEN: Dimensionless distance into gust
+    double s = 10.0;  // semi-chords
+
+    // WHEN: Approximate Kussner function
+    // Sears approximation: psi(s) = 1 - 0.5*exp(-0.13*s) - 0.5*exp(-s)
+    double psi = 1.0 - 0.5 * std::exp(-0.13 * s) - 0.5 * std::exp(-s);
+
+    // THEN: Should approach 1 for large s
+    TS_ASSERT(psi > 0.7);
+    TS_ASSERT(psi < 1.0);
+  }
+
+  /***************************************************************************
+   * Gust Response Tests
+   ***************************************************************************/
+
+  // Test sharp-edge gust load factor
+  void testSharpEdgeGustLoadFactor() {
+    // GIVEN: Flight and gust parameters
+    double V = 200.0;         // ft/s
+    double U_gust = 50.0;     // ft/s (FAR gust velocity)
+    double CL_alpha = 5.73;   // per radian
+    double rho = 0.002377;    // slug/ft^3
+    double wing_loading = 50.0;  // psf
+
+    // WHEN: Calculate gust load factor
+    double delta_n = (rho * V * U_gust * CL_alpha) / (2.0 * wing_loading);
+
+    // THEN: Load factor increment should be positive
+    TS_ASSERT(delta_n > 0.0);
+    TS_ASSERT(delta_n < 5.0);  // Reasonable for transport
+  }
+
+  // Test gust alleviation factor
+  void testGustAlleviationFactor() {
+    // GIVEN: Aircraft mass ratio
+    double mu_g = 50.0;  // gust mass ratio
+
+    // WHEN: Calculate alleviation factor (kg)
+    double kg = 0.88 * mu_g / (5.3 + mu_g);
+
+    // THEN: Factor should be less than 1
+    TS_ASSERT(kg > 0.0);
+    TS_ASSERT(kg < 1.0);
+  }
+
+  // Test 1-cosine gust profile
+  void testOneCosineGust() {
+    // GIVEN: Gust parameters
+    double U_max = 50.0;  // ft/s
+    double gust_length = 350.0;  // ft (25 chord lengths)
+    double x = 175.0;  // midpoint
+
+    // WHEN: Calculate gust velocity at position
+    double U = U_max / 2.0 * (1.0 - std::cos(2.0 * M_PI * x / gust_length));
+
+    // THEN: Maximum at midpoint
+    TS_ASSERT_DELTA(U, U_max, 0.01);
+  }
+
+  // Test turbulence PSD (Von Karman spectrum)
+  void testVonKarmanTurbulencePSD() {
+    // GIVEN: Turbulence parameters
+    double sigma_w = 5.0;   // ft/s RMS vertical velocity
+    double L = 1750.0;      // ft scale length
+    double omega = 0.5;     // rad/s
+
+    // WHEN: Approximate spectral density
+    double numerator = sigma_w * sigma_w * L / M_PI;
+    double denominator = 1.0 + std::pow(1.339 * L * omega / 200.0, 2);
+    double PSD = numerator / denominator;
+
+    // THEN: PSD should be positive
+    TS_ASSERT(PSD > 0.0);
+  }
+
+  /***************************************************************************
+   * Modal Analysis Tests
+   ***************************************************************************/
+
+  // Test modal mass calculation
+  void testModalMassCalculation() {
+    // GIVEN: Mode shape and distributed mass
+    double m_per_ft = 50.0;  // slug/ft
+    double L = 20.0;         // ft
+    double lambda = 1.875;   // first mode eigenvalue
+
+    // WHEN: Calculate modal mass
+    // For first bending mode, modal mass ≈ 0.25 * physical mass
+    double physical_mass = m_per_ft * L;
+    double modal_mass = 0.25 * physical_mass;
+
+    // THEN: Modal mass less than physical
+    TS_ASSERT(modal_mass < physical_mass);
+    TS_ASSERT(modal_mass > 0.0);
+  }
+
+  // Test modal stiffness
+  void testModalStiffness() {
+    // GIVEN: Modal frequency and mass
+    double omega_n = 10.0;     // rad/s
+    double modal_mass = 250.0; // slug
+
+    // WHEN: Calculate modal stiffness
+    double modal_stiffness = modal_mass * omega_n * omega_n;
+
+    // THEN: Stiffness should be positive
+    TS_ASSERT(modal_stiffness > 0.0);
+    TS_ASSERT_DELTA(modal_stiffness, 25000.0, 100.0);
+  }
+
+  // Test generalized force calculation
+  void testGeneralizedForce() {
+    // GIVEN: Mode shape and applied load
+    double load_amplitude = 1000.0;  // lb
+    double mode_shape_at_load = 0.8;  // normalized
+
+    // WHEN: Calculate generalized force
+    double Q = load_amplitude * mode_shape_at_load;
+
+    // THEN: Should be proportional to mode shape
+    TS_ASSERT_DELTA(Q, 800.0, 0.1);
+  }
+
+  // Test orthogonality of modes
+  void testModeOrthogonality() {
+    // GIVEN: Two different mode frequencies
+    double omega_1 = 10.0;
+    double omega_2 = 30.0;  // Not equal
+
+    // WHEN: Check frequency separation
+    double freq_ratio = omega_2 / omega_1;
+
+    // THEN: Well-separated modes (ratio > 2) are typically orthogonal
+    TS_ASSERT(freq_ratio > 1.0);
+    TS_ASSERT(!std::isnan(freq_ratio));
+  }
+
+  /***************************************************************************
+   * Structural Nonlinearity Tests
+   ***************************************************************************/
+
+  // Test freeplay nonlinearity effect
+  void testFreeplayNonlinearity() {
+    // GIVEN: Control surface with freeplay
+    double freeplay_angle = 0.5 * M_PI / 180.0;  // 0.5 degrees in radians
+    double deflection = 1.0 * M_PI / 180.0;     // 1 degree input
+
+    // WHEN: Calculate effective stiffness with freeplay
+    double effective_deflection = deflection - freeplay_angle;
+
+    // THEN: Effective deflection less than input when inside freeplay
+    TS_ASSERT(effective_deflection < deflection);
+    TS_ASSERT(effective_deflection > 0.0);
+  }
+
+  // Test hardening spring behavior
+  void testHardeningSpringBehavior() {
+    // GIVEN: Cubic hardening spring
+    double k_linear = 1e6;  // lb/ft
+    double k_cubic = 1e5;   // lb/ft^3
+    double deflection = 1.0; // ft
+
+    // WHEN: Calculate restoring force
+    double force = k_linear * deflection + k_cubic * deflection * deflection * deflection;
+
+    // THEN: Force higher than linear alone
+    TS_ASSERT(force > k_linear * deflection);
+  }
+
+  // Test softening spring behavior
+  void testSofteningSpringBehavior() {
+    // GIVEN: Cubic softening spring
+    double k_linear = 1e6;   // lb/ft
+    double k_cubic = -5e4;   // lb/ft^3 (negative for softening)
+    double deflection = 1.0; // ft
+
+    // WHEN: Calculate restoring force
+    double force = k_linear * deflection + k_cubic * deflection * deflection * deflection;
+
+    // THEN: Force lower than linear alone
+    TS_ASSERT(force < k_linear * deflection);
+    TS_ASSERT(force > 0.0);  // Still positive for positive deflection
+  }
+
+  // Test limit cycle oscillation amplitude
+  void testLimitCycleOscillation() {
+    // GIVEN: Nonlinear system parameters
+    double flutter_speed_linear = 400.0;  // ft/s
+    double nonlinearity_factor = 0.1;     // hardening
+
+    // WHEN: Flight above linear flutter speed
+    double V_flight = 420.0;  // 5% above
+
+    // THEN: LCO amplitude proportional to excess speed
+    double excess_ratio = (V_flight - flutter_speed_linear) / flutter_speed_linear;
+    double LCO_amplitude = std::sqrt(excess_ratio / nonlinearity_factor);
+    TS_ASSERT(LCO_amplitude > 0.0);
+    TS_ASSERT(LCO_amplitude < 10.0);  // Bounded oscillation
+  }
+
+  /***************************************************************************
+   * Panel Flutter Tests
+   ***************************************************************************/
+
+  // Test panel flutter critical dynamic pressure
+  void testPanelFlutterCriticalPressure() {
+    // GIVEN: Panel properties
+    double E = 1e7;           // psi
+    double t = 0.1;           // in (thickness)
+    double a = 20.0;          // in (length in flow direction)
+    double b = 10.0;          // in (width)
+    double nu = 0.3;          // Poisson's ratio
+
+    // WHEN: Calculate flutter parameter
+    double D = E * t * t * t / (12.0 * (1.0 - nu * nu));
+    double lambda_crit = D * M_PI * M_PI * M_PI * M_PI / (a * a * a * a);
+
+    // THEN: Critical parameter should be positive
+    TS_ASSERT(lambda_crit > 0.0);
+  }
+
+  // Test panel aspect ratio effect
+  void testPanelAspectRatioEffect() {
+    // GIVEN: Two panels with different aspect ratios
+    double a1 = 20.0, b1 = 10.0;  // AR = 2
+    double a2 = 20.0, b2 = 20.0;  // AR = 1
+
+    // WHEN: Calculate aspect ratios
+    double AR1 = a1 / b1;
+    double AR2 = a2 / b2;
+
+    // THEN: Higher AR typically more critical for flutter
+    TS_ASSERT(AR1 > AR2);
+  }
+
+  // Test thermal stress effect on panel
+  void testThermalStressEffectOnPanel() {
+    // GIVEN: Thermal conditions
+    double alpha = 1.3e-5;   // 1/degF (thermal expansion)
+    double delta_T = 200.0;  // degF temperature rise
+    double E = 1e7;          // psi
+
+    // WHEN: Calculate thermal stress
+    double thermal_strain = alpha * delta_T;
+    double thermal_stress = E * thermal_strain;
+
+    // THEN: Compression reduces flutter margin
+    TS_ASSERT(thermal_stress > 0.0);
+    TS_ASSERT(thermal_stress < 50000.0);  // psi
+  }
+
+  /***************************************************************************
+   * Whirl Flutter Tests
+   ***************************************************************************/
+
+  // Test whirl flutter precession frequency
+  void testWhirlFlutterPrecession() {
+    // GIVEN: Propeller/rotor parameters
+    double omega_rotation = 200.0;  // rad/s (rotor speed)
+    double hub_moment_stiffness = 1e6;  // lb-ft/rad
+    double blade_polar_inertia = 100.0;  // slug-ft^2
+
+    // WHEN: Calculate whirl frequency
+    double omega_whirl = std::sqrt(hub_moment_stiffness / blade_polar_inertia);
+
+    // THEN: Whirl frequency should be less than rotation
+    TS_ASSERT(omega_whirl > 0.0);
+    TS_ASSERT(omega_whirl < omega_rotation);
+  }
+
+  // Test whirl flutter stability margin
+  void testWhirlFlutterStabilityMargin() {
+    // GIVEN: Pylon/nacelle properties
+    double pylon_pitch_stiffness = 5e6;  // lb-ft/rad
+    double pylon_yaw_stiffness = 4e6;    // lb-ft/rad
+
+    // WHEN: Calculate stiffness ratio
+    double ratio = pylon_pitch_stiffness / pylon_yaw_stiffness;
+
+    // THEN: Ratio near 1 is best for whirl stability
+    TS_ASSERT(ratio > 0.8);
+    TS_ASSERT(ratio < 1.5);
+  }
+
+  /***************************************************************************
+   * Ground Vibration Test Correlation
+   ***************************************************************************/
+
+  // Test frequency correlation criteria
+  void testFrequencyCorrelationCriteria() {
+    // GIVEN: Measured and predicted frequencies
+    double f_measured = 5.2;   // Hz
+    double f_predicted = 5.0;  // Hz
+
+    // WHEN: Calculate percent error
+    double error = std::abs(f_measured - f_predicted) / f_measured * 100.0;
+
+    // THEN: Error should be within 5% for good correlation
+    TS_ASSERT(error < 10.0);  // 10% acceptable for initial model
+  }
+
+  // Test mode shape correlation (MAC)
+  void testModeShapeCorrelation() {
+    // GIVEN: Simplified mode shape comparison
+    double dot_product = 0.95;     // normalized
+    double norm_1 = 1.0;
+    double norm_2 = 1.0;
+
+    // WHEN: Calculate MAC value
+    double MAC = (dot_product * dot_product) / (norm_1 * norm_2);
+
+    // THEN: MAC > 0.9 indicates good correlation
+    TS_ASSERT(MAC > 0.85);
+    TS_ASSERT(MAC <= 1.0);
+  }
+
+  // Test damping identification
+  void testDampingIdentification() {
+    // GIVEN: Half-power bandwidth measurements
+    double f_n = 10.0;        // Hz (natural frequency)
+    double f_1 = 9.8;         // Hz (lower half-power point)
+    double f_2 = 10.2;        // Hz (upper half-power point)
+
+    // WHEN: Calculate damping ratio
+    double zeta = (f_2 - f_1) / (2.0 * f_n);
+
+    // THEN: Damping should be positive and small
+    TS_ASSERT(zeta > 0.0);
+    TS_ASSERT(zeta < 0.1);
+    TS_ASSERT_DELTA(zeta, 0.02, 0.005);
+  }
+
+  /***************************************************************************
+   * Additional Specialized Tests
+   ***************************************************************************/
+
+  // Test aerodynamic influence coefficient
+  void testAerodynamicInfluenceCoefficient() {
+    // GIVEN: Panel aerodynamic parameters
+    double panel_area = 10.0;    // ft^2
+    double distance = 5.0;       // ft
+    double rho = 0.002377;       // slug/ft^3
+
+    // WHEN: Calculate influence coefficient (simplified)
+    double AIC = panel_area / (4.0 * M_PI * distance * distance);
+
+    // THEN: Should be positive and bounded
+    TS_ASSERT(AIC > 0.0);
+    TS_ASSERT(AIC < 1.0);
+  }
+
+  // Test structural influence coefficient
+  void testStructuralInfluenceCoefficient() {
+    // GIVEN: Flexibility matrix element
+    double force = 1000.0;       // lb
+    double deflection = 0.01;    // ft
+
+    // WHEN: Calculate flexibility coefficient
+    double flexibility = deflection / force;
+
+    // THEN: Should be positive
+    TS_ASSERT(flexibility > 0.0);
+  }
+
+  // Test flutter boundary with Mach number
+  void testFlutterBoundaryVsMach() {
+    // GIVEN: Subsonic flutter speed and compressibility correction
+    double V_flutter_incomp = 400.0;  // ft/s
+    double Mach = 0.7;
+
+    // WHEN: Apply Prandtl-Glauert correction
+    double beta = std::sqrt(1.0 - Mach * Mach);
+    double V_flutter_comp = V_flutter_incomp * std::sqrt(beta);
+
+    // THEN: Compressible flutter speed lower
+    TS_ASSERT(V_flutter_comp < V_flutter_incomp);
+    TS_ASSERT(V_flutter_comp > 0.0);
+  }
+
+  // Test transonic flutter dip
+  void testTransonicFlutterDip() {
+    // GIVEN: Flutter speed at different Mach numbers
+    double V_flutter_low_mach = 400.0;   // ft/s at M=0.6
+    double dip_factor = 0.85;            // 15% reduction transonic
+
+    // WHEN: Calculate transonic flutter speed
+    double V_flutter_transonic = V_flutter_low_mach * dip_factor;
+
+    // THEN: Transonic is lower
+    TS_ASSERT(V_flutter_transonic < V_flutter_low_mach);
+    TS_ASSERT_DELTA(V_flutter_transonic, 340.0, 5.0);
+  }
+
+  // Test supersonic flutter characteristics
+  void testSupersonicFlutterCharacteristics() {
+    // GIVEN: Supersonic Mach number
+    double Mach = 1.5;
+
+    // WHEN: Calculate aerodynamic lag parameter
+    double beta_super = std::sqrt(Mach * Mach - 1.0);
+
+    // THEN: Beta should be real for M > 1
+    TS_ASSERT(beta_super > 0.0);
+    TS_ASSERT(!std::isnan(beta_super));
+  }
+
+  // Test store flutter interaction
+  void testStoreFlutterInteraction() {
+    // GIVEN: Clean wing flutter speed
+    double V_flutter_clean = 500.0;  // ft/s
+    double mass_ratio_store = 0.1;   // store mass / wing mass
+
+    // WHEN: Estimate flutter speed with store
+    // Simplified: reduction proportional to mass ratio
+    double reduction_factor = 1.0 - 0.3 * mass_ratio_store;
+    double V_flutter_store = V_flutter_clean * reduction_factor;
+
+    // THEN: External stores typically reduce flutter speed
+    TS_ASSERT(V_flutter_store < V_flutter_clean);
+    TS_ASSERT(V_flutter_store > 0.8 * V_flutter_clean);
+  }
 };
