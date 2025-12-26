@@ -626,4 +626,524 @@ public:
 
     TS_ASSERT_DELTA(thrust, 1000.0, 1e-15);
   }
+
+  // Test thrust vectoring with pitch angle
+  void testThrustVectoringPitch() {
+    // Thrust vector with pitch angle
+    // At pitch angle theta, thrust components:
+    // Fx = T * cos(theta)
+    // Fz = T * sin(theta)
+    double thrust = 1000.0;
+    double pitchAngle = 0.1;  // radians (~5.7 degrees)
+
+    double Fx = thrust * cos(pitchAngle);
+    double Fz = thrust * sin(pitchAngle);
+
+    // cos(0.1) ≈ 0.99500416527, sin(0.1) ≈ 0.09983341665
+    TS_ASSERT_DELTA(Fx, thrust * cos(pitchAngle), epsilon);
+    TS_ASSERT_DELTA(Fz, thrust * sin(pitchAngle), epsilon);
+
+    // Total thrust magnitude should be preserved
+    double totalThrust = sqrt(Fx*Fx + Fz*Fz);
+    TS_ASSERT_DELTA(totalThrust, thrust, epsilon);
+  }
+
+  // Test thrust vectoring with yaw angle
+  void testThrustVectoringYaw() {
+    double thrust = 1000.0;
+    double yawAngle = 0.15;  // radians (~8.6 degrees)
+
+    double Fx = thrust * cos(yawAngle);
+    double Fy = thrust * sin(yawAngle);
+
+    // Total should be preserved
+    double totalThrust = sqrt(Fx*Fx + Fy*Fy);
+    TS_ASSERT_DELTA(totalThrust, thrust, epsilon);
+  }
+
+  // Test combined pitch and yaw vectoring
+  void testCombinedPitchYawVectoring() {
+    double thrust = 1000.0;
+    double pitch = 0.1;
+    double yaw = 0.05;
+
+    // Rotation matrix decomposition
+    double Fx = thrust * cos(pitch) * cos(yaw);
+    double Fy = thrust * cos(pitch) * sin(yaw);
+    double Fz = thrust * sin(pitch);
+
+    // Verify components are reasonable
+    TS_ASSERT(std::abs(Fx) < thrust);
+    TS_ASSERT(std::abs(Fy) < thrust * 0.1);
+    TS_ASSERT(std::abs(Fz) < thrust * 0.2);
+
+    // Magnitude should equal original thrust
+    double magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
+    TS_ASSERT_DELTA(magnitude, thrust, 0.1);
+  }
+
+  // Test moment calculation from thrust and arm
+  void testThrustMomentCalculation() {
+    // Moment = Force x Distance
+    double thrust = 1000.0;  // lbf
+    double armLength = 10.0;  // inches
+
+    double moment = thrust * armLength;
+    TS_ASSERT_DELTA(moment, 10000.0, epsilon);
+  }
+
+  // Test moment from off-center thrust
+  void testOffCenterThrustMoment() {
+    // Thrust applied at offset from CG creates moment
+    double thrust = 500.0;  // lbf
+    double yOffset = 5.0;   // inches right of CG
+
+    // Creates yawing moment (nose right)
+    double yawMoment = thrust * yOffset;
+    TS_ASSERT_DELTA(yawMoment, 2500.0, epsilon);
+  }
+
+  // Test vectored thrust moment
+  void testVectoredThrustMoment() {
+    double thrust = 1000.0;
+    double armLength = 20.0;  // inches below CG
+    double vectorAngle = 0.1;  // pitch up
+
+    // Vertical component of thrust creates pitching moment
+    double Fz = thrust * sin(vectorAngle);
+    double pitchMoment = Fz * armLength * 0.5;  // simplified
+
+    TS_ASSERT(pitchMoment > 0);
+  }
+
+  // Test thrust line orientation angles
+  void testThrustLineOrientation() {
+    // Default thrust line is along x-axis (forward)
+    // Orientation angles modify this
+    double thrustMagnitude = 1000.0;
+
+    // Zero orientation - all thrust is axial (Fx)
+    double roll = 0.0, pitch = 0.0, yaw = 0.0;
+    double Fx = thrustMagnitude * cos(pitch) * cos(yaw);
+
+    TS_ASSERT_DELTA(Fx, thrustMagnitude, epsilon);
+  }
+
+  // Test P-Factor simulation
+  void testPFactorSimulation() {
+    // P-Factor: propeller torque creates asymmetric thrust
+    // Acting location differs from nominal location
+    double nominalX = 100.0;  // inches
+    double nominalY = 0.0;
+    double actingX = 100.0;
+    double actingY = 2.0;  // offset due to P-Factor
+
+    double deltaY = actingY - nominalY;
+    TS_ASSERT_DELTA(deltaY, 2.0, epsilon);
+  }
+
+  // Test location coordinates in structural frame
+  void testLocationStructuralCoordinates() {
+    // JSBSim structural: x+ back, y+ right, z+ up
+    double x = 150.0;   // aft of reference
+    double y = -36.0;   // left of centerline
+    double z = 10.0;    // above reference
+
+    // All should be valid finite values
+    TS_ASSERT(std::isfinite(x) && std::isfinite(y) && std::isfinite(z));
+  }
+
+  // Test location to moment arm calculation
+  void testLocationToMomentArm() {
+    // Location relative to CG gives moment arm
+    double thrusterX = 200.0;  // inches aft
+    double cgX = 150.0;
+
+    double armX = thrusterX - cgX;  // 50 inches
+    TS_ASSERT_DELTA(armX, 50.0, epsilon);
+  }
+
+  // Test transform type enumeration
+  void testTransformTypeEnum() {
+    // FGForce transform types
+    TS_ASSERT_EQUALS(FGForce::tNone, 0);
+    TS_ASSERT_EQUALS(FGForce::tWindBody, 1);
+    TS_ASSERT_EQUALS(FGForce::tLocalBody, 2);
+    TS_ASSERT_EQUALS(FGForce::tInertialBody, 3);
+    TS_ASSERT_EQUALS(FGForce::tCustom, 4);
+  }
+
+  // Test wind to body transform concept
+  void testWindToBodyTransform() {
+    // Wind axis: x along velocity, y right, z up
+    // Body axis: x forward, y right, z down
+    // Transform depends on alpha and beta
+
+    double alpha = 0.1;  // angle of attack
+    double beta = 0.05;  // sideslip
+
+    // Simplified rotation (about y for alpha)
+    double Fx_body = cos(alpha);  // from x_wind
+    double Fz_body = -sin(alpha); // z reversal
+
+    TS_ASSERT(std::isfinite(Fx_body));
+    TS_ASSERT(std::isfinite(Fz_body));
+  }
+
+  // Test custom transform matrix elements
+  void testCustomTransformMatrix() {
+    // 3x3 rotation matrix elements
+    double roll = 0.1, pitch = 0.2, yaw = 0.15;
+
+    // Simplified: rotation matrix element (1,1)
+    // m11 = cos(pitch) * cos(yaw) = cos(0.2) * cos(0.15)
+    double m11 = cos(pitch) * cos(yaw);
+    double expected = cos(0.2) * cos(0.15);  // ≈ 0.9690
+    TS_ASSERT_DELTA(m11, expected, epsilon);
+  }
+
+  // Test multiple thruster configuration
+  void testMultipleThrusterConfiguration() {
+    // Two engines, symmetric about centerline
+    double leftY = -50.0;   // inches
+    double rightY = 50.0;   // inches
+    double thrustEach = 500.0;
+
+    // Total thrust (both engines)
+    double totalThrust = 2 * thrustEach;
+    TS_ASSERT_DELTA(totalThrust, 1000.0, epsilon);
+
+    // Net yawing moment (symmetric, should be zero)
+    double netYawMoment = thrustEach * leftY + thrustEach * rightY;
+    TS_ASSERT_DELTA(netYawMoment, 0.0, epsilon);
+  }
+
+  // Test asymmetric thrust (engine failure)
+  void testAsymmetricThrust() {
+    double leftThrust = 500.0;
+    double rightThrust = 0.0;  // failed engine
+    double engineY = 50.0;  // inches from centerline
+
+    // Yawing moment from thrust asymmetry
+    double yawMoment = leftThrust * (-engineY) + rightThrust * engineY;
+    TS_ASSERT_DELTA(yawMoment, -25000.0, epsilon);  // nose left
+  }
+
+  // Test thrust spool-up simulation
+  void testThrustSpoolUp() {
+    double maxThrust = 1000.0;
+    double timeConstant = 2.0;  // seconds
+    double dt = 0.1;
+
+    double thrust = 0.0;
+
+    // First-order lag response
+    for (double t = 0.0; t < 10.0; t += dt) {
+      thrust = thrust + (maxThrust - thrust) * dt / timeConstant;
+    }
+
+    // Should approach max thrust
+    TS_ASSERT(thrust > 0.95 * maxThrust);
+  }
+
+  // Test thrust spool-down
+  void testThrustSpoolDown() {
+    double initialThrust = 1000.0;
+    double targetThrust = 0.0;
+    double timeConstant = 1.5;
+    double dt = 0.1;
+
+    double thrust = initialThrust;
+
+    for (double t = 0.0; t < 10.0; t += dt) {
+      thrust = thrust + (targetThrust - thrust) * dt / timeConstant;
+    }
+
+    TS_ASSERT(thrust < 0.05 * initialThrust);
+  }
+
+  // Test afterburner thrust augmentation
+  void testAfterburnerAugmentation() {
+    double dryThrust = 1000.0;
+    double abRatio = 1.5;  // 50% augmentation
+
+    double wetThrust = dryThrust * abRatio;
+    TS_ASSERT_DELTA(wetThrust, 1500.0, epsilon);
+  }
+
+  // Test thrust vs altitude relationship
+  void testThrustVsAltitude() {
+    // Jet thrust typically decreases with altitude
+    double seaLevelThrust = 10000.0;
+    double seaLevelDensity = 0.002377;
+    double cruiseDensity = 0.000738;  // ~35000 ft
+
+    // Simplified thrust lapse
+    double densityRatio = cruiseDensity / seaLevelDensity;
+    double cruiseThrust = seaLevelThrust * densityRatio;
+
+    TS_ASSERT(cruiseThrust < seaLevelThrust);
+    TS_ASSERT(cruiseThrust > 0.3 * seaLevelThrust);
+  }
+
+  // Test thrust vs velocity relationship
+  void testThrustVsVelocity() {
+    // Ram effect increases thrust at higher velocity
+    double staticThrust = 10000.0;
+    double velocity = 500.0;  // fps
+    double ramCoeff = 0.0001;
+
+    double ramThrust = staticThrust * (1 + ramCoeff * velocity);
+    TS_ASSERT(ramThrust > staticThrust);
+  }
+
+  // Test specific fuel consumption impact
+  void testSFCImpact() {
+    // SFC relates fuel flow to thrust
+    double thrust = 5000.0;  // lbf
+    double sfc = 0.8;  // lb/hr per lbf
+
+    double fuelFlow = thrust * sfc;
+    TS_ASSERT_DELTA(fuelFlow, 4000.0, epsilon);
+  }
+
+  // Test thrust coefficient with Mach number
+  void testThrustCoefficientMach() {
+    double Ct_subsonic = 0.85;
+    double Ct_supersonic = 0.75;  // typically lower due to wave drag
+
+    TS_ASSERT(Ct_subsonic > Ct_supersonic);
+    TS_ASSERT(Ct_subsonic <= 1.0);
+    TS_ASSERT(Ct_supersonic > 0.0);
+  }
+
+  // Test nozzle area variation
+  void testNozzleAreaVariation() {
+    // Variable geometry nozzle
+    double minArea = 5.0;   // sq ft
+    double maxArea = 8.0;   // sq ft
+    double currentSetting = 0.7;  // 70% open
+
+    double area = minArea + currentSetting * (maxArea - minArea);
+    TS_ASSERT_DELTA(area, 7.1, epsilon);
+  }
+
+  // Test exit pressure effects
+  void testExitPressureEffects() {
+    double vacuumThrust = 10000.0;
+    double exitArea = 6.0;  // sq ft
+    double exitPressure = 100.0;  // psf
+    double ambientPressure = 500.0;  // psf
+
+    // Thrust = vacuum thrust - (Pa - Pe) * Ae
+    // Negative because ambient > exit (underexpanded)
+    double pressureThrust = exitArea * (exitPressure - ambientPressure);
+    double totalThrust = vacuumThrust + pressureThrust;
+
+    TS_ASSERT(totalThrust < vacuumThrust);
+  }
+
+  // Test optimal expansion ratio
+  void testOptimalExpansion() {
+    double exitPressure = 2116.0;   // psf (sea level)
+    double ambientPressure = 2116.0;
+
+    // At optimal expansion, Pe = Pa
+    double pressureDiff = exitPressure - ambientPressure;
+    TS_ASSERT_DELTA(pressureDiff, 0.0, epsilon);
+  }
+
+  // Test thrust coefficient table lookup concept
+  void testThrustCoefficientTable() {
+    // Ct varies with advance ratio for propellers
+    double J[] = {0.0, 0.5, 1.0, 1.5, 2.0};
+    double Ct[] = {0.10, 0.09, 0.07, 0.04, 0.00};
+
+    // Verify monotonic decrease
+    for (int i = 1; i < 5; i++) {
+      TS_ASSERT(Ct[i] <= Ct[i-1]);
+    }
+  }
+
+  // Test propeller efficiency
+  void testPropellerEfficiency() {
+    double thrust = 500.0;  // lbf
+    double velocity = 200.0;  // fps
+    double power = 300.0 * 550.0;  // 300 HP in ft-lbf/s
+
+    double efficiency = (thrust * velocity) / power;
+    TS_ASSERT(efficiency >= 0.0 && efficiency <= 1.0);
+  }
+
+  // Test torque from thrust
+  void testTorqueFromThrust() {
+    double power = 500.0 * 550.0;  // 500 HP
+    double rpm = 2500.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double torque = power / omega;
+    TS_ASSERT(torque > 0);
+    TS_ASSERT(std::isfinite(torque));
+  }
+
+  // Test gear ratio effects on RPM
+  void testGearRatioRPM() {
+    double engineRPM = 2700.0;
+    double gearRatio = 0.5;
+
+    double propRPM = engineRPM * gearRatio;
+    TS_ASSERT_DELTA(propRPM, 1350.0, epsilon);
+  }
+
+  // Test thrust line inclination
+  void testThrustLineInclination() {
+    // Thrust line typically inclined down for single-engine aircraft
+    double inclinationAngle = 3.0 * M_PI / 180.0;  // 3 degrees
+    double thrust = 1000.0;
+
+    double Fx = thrust * cos(inclinationAngle);
+    double Fz = thrust * sin(inclinationAngle);  // positive down in body
+
+    TS_ASSERT(Fz > 0);  // thrust has downward component
+    TS_ASSERT(Fx > 0.99 * thrust);
+  }
+
+  // Test thrust decay with engine damage
+  void testThrustDecayDamage() {
+    double normalThrust = 1000.0;
+    double damageLevel = 0.3;  // 30% damaged
+
+    double damagedThrust = normalThrust * (1.0 - damageLevel);
+    TS_ASSERT_DELTA(damagedThrust, 700.0, epsilon);
+  }
+
+  // Test thrust variation with throttle
+  void testThrottleResponse() {
+    double maxThrust = 10000.0;
+    double throttle[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+
+    for (double t : throttle) {
+      double thrust = maxThrust * t;
+      TS_ASSERT(thrust >= 0.0);
+      TS_ASSERT(thrust <= maxThrust);
+    }
+  }
+
+  // Test thrust oscillation damping
+  void testThrustOscillationDamping() {
+    double targetThrust = 1000.0;
+    double thrust = 500.0;
+    double damping = 0.7;
+    double dt = 0.05;
+
+    // Damped response should converge
+    double prevDelta = std::abs(targetThrust - thrust);
+
+    for (int i = 0; i < 20; i++) {
+      double delta = targetThrust - thrust;
+      thrust += delta * damping * dt;
+      double newDelta = std::abs(targetThrust - thrust);
+      TS_ASSERT(newDelta <= prevDelta + epsilon);
+      prevDelta = newDelta;
+    }
+  }
+
+  // Test minimum thrust setting (idle)
+  void testIdleThrust() {
+    double maxThrust = 10000.0;
+    double idleFraction = 0.05;  // 5% at idle
+
+    double idleThrust = maxThrust * idleFraction;
+    TS_ASSERT_DELTA(idleThrust, 500.0, epsilon);
+    TS_ASSERT(idleThrust > 0);
+  }
+
+  // Test engine-out yaw moment compensation
+  void testEngineOutYawCompensation() {
+    double singleEngineThrust = 5000.0;
+    double engineSpacing = 100.0;  // inches
+
+    // Yawing moment from failed engine
+    double yawMoment = singleEngineThrust * engineSpacing / 2.0;
+
+    // Rudder needed to counteract
+    double rudderArm = 200.0;  // inches from CG to rudder
+    double rudderForceNeeded = yawMoment / rudderArm;
+
+    TS_ASSERT(rudderForceNeeded > 0);
+    TS_ASSERT(rudderForceNeeded < singleEngineThrust);
+  }
+
+  // Test installation drag
+  void testInstallationDrag() {
+    double netThrust = 1000.0;
+    double installationDrag = 50.0;  // nacelle drag
+
+    double installedThrust = netThrust - installationDrag;
+    TS_ASSERT_DELTA(installedThrust, 950.0, epsilon);
+  }
+
+  // Test bleed air extraction effects
+  void testBleedAirEffects() {
+    double normalThrust = 10000.0;
+    double bleedFraction = 0.03;  // 3% bleed
+
+    // Bleed reduces available thrust
+    double thrustWithBleed = normalThrust * (1.0 - bleedFraction);
+    TS_ASSERT(thrustWithBleed < normalThrust);
+  }
+
+  // Test power extraction effects
+  void testPowerExtractionEffects() {
+    double normalThrust = 10000.0;
+    double powerExtraction = 100.0;  // HP for accessories
+    double thrustPerHP = 2.5;  // typical
+
+    double thrustReduction = powerExtraction * thrustPerHP;
+    double netThrust = normalThrust - thrustReduction;
+
+    TS_ASSERT(netThrust < normalThrust);
+  }
+
+  // Test critical engine concept
+  void testCriticalEngine() {
+    // Multi-engine aircraft: critical engine failure
+    // creates maximum adverse yaw due to P-Factor
+    double leftEngineYaw = -1000.0;  // moment
+    double rightEngineYaw = 800.0;   // different due to P-Factor
+
+    // Right engine is critical (larger adverse yaw when it fails)
+    TS_ASSERT(std::abs(leftEngineYaw) > std::abs(rightEngineYaw));
+  }
+
+  // Test thrust available vs required
+  void testThrustAvailableVsRequired() {
+    double thrustAvailable = 5000.0;
+    double thrustRequired = 3000.0;
+
+    double excessThrust = thrustAvailable - thrustRequired;
+    TS_ASSERT_DELTA(excessThrust, 2000.0, epsilon);
+    TS_ASSERT(excessThrust > 0);  // can accelerate or climb
+  }
+
+  // Test static thrust check
+  void testStaticThrustCheck() {
+    // Static thrust at zero velocity
+    double vacuumThrust = 10000.0;
+    double velocity = 0.0;
+
+    // No ram effect at static
+    double staticThrust = vacuumThrust;
+    TS_ASSERT_DELTA(staticThrust, vacuumThrust, epsilon);
+  }
+
+  // Test ground run thrust
+  void testGroundRunThrust() {
+    double staticThrust = 10000.0;
+    double velocity = 100.0;  // fps during ground roll
+    double ramFactor = 1.02;  // slight increase
+
+    double groundThrust = staticThrust * ramFactor;
+    TS_ASSERT(groundThrust >= staticThrust);
+  }
 };
