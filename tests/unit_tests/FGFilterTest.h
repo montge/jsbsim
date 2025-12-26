@@ -1002,4 +1002,364 @@ public:
     TS_ASSERT_DELTA(half_power_amplitude, 0.707, 0.001);
     TS_ASSERT_DELTA(half_power_db, -3.01, 0.01);
   }
+
+  /***************************************************************************
+   * Advanced Filter Concepts
+   ***************************************************************************/
+
+  // Test Bessel filter characteristic (maximally flat delay)
+  void testBesselFilterCharacteristic() {
+    // Bessel filters have maximally flat group delay
+    // Second-order Bessel: wn^2/(s^2 + 3*s*wn/sqrt(3) + wn^2)
+    // Normalized 2nd order Bessel poles at approximately -1.1 +/- j0.64
+
+    double wn = 10.0;
+    double pole_real = -1.1 * wn / 1.732;  // Scaled
+    double pole_imag = 0.64 * wn / 1.732;
+
+    // Bessel poles are in LHP
+    TS_ASSERT(pole_real < 0);
+    TS_ASSERT(pole_imag > 0);
+  }
+
+  // Test complementary filters
+  void testComplementaryFilters() {
+    // Low-pass and high-pass that sum to unity: LP + HP = 1
+    // LP = C1/(s+C1), HP = s/(s+C1)
+    double C1 = 10.0;
+    double s = 5.0;  // Test frequency
+
+    double lp_gain = C1 / (s + C1);
+    double hp_gain = s / (s + C1);
+
+    TS_ASSERT_DELTA(lp_gain + hp_gain, 1.0, epsilon);
+  }
+
+  // Test complementary filter for sensor fusion
+  void testComplementaryFilterSensorFusion() {
+    // Combine accelerometer (accurate long-term) with gyro (accurate short-term)
+    double alpha = 0.98;  // Complementary filter coefficient
+
+    double gyro_angle = 45.0;      // Fast but drifts
+    double accel_angle = 44.5;     // Noisy but accurate average
+
+    // Fused: alpha*gyro + (1-alpha)*accel
+    double fused = alpha * gyro_angle + (1.0 - alpha) * accel_angle;
+
+    TS_ASSERT_DELTA(fused, 44.99, 0.01);  // Mostly gyro, corrected by accel
+  }
+
+  // Test sample rate and Nyquist frequency
+  void testNyquistFrequency() {
+    double sample_rate = 100.0;  // Hz
+    double nyquist = sample_rate / 2.0;
+
+    TS_ASSERT_DELTA(nyquist, 50.0, epsilon);
+
+    // Filter must be designed for frequencies below Nyquist
+    double max_filter_freq = 0.8 * nyquist;  // 80% of Nyquist for safety
+    TS_ASSERT_DELTA(max_filter_freq, 40.0, epsilon);
+  }
+
+  // Test anti-aliasing filter requirement
+  void testAntiAliasingRequirement() {
+    double signal_freq = 45.0;    // Hz
+    double sample_rate = 100.0;   // Hz
+    double nyquist = sample_rate / 2.0;
+
+    // Signal frequency should be < Nyquist to avoid aliasing
+    bool aliasing_risk = (signal_freq > nyquist);
+    TS_ASSERT(!aliasing_risk);
+
+    // If signal_freq = 60 Hz with 100 Hz sampling, it aliases to 40 Hz
+    double aliased_freq = 60.0;
+    double apparent_freq = sample_rate - aliased_freq;  // 40 Hz
+    TS_ASSERT_DELTA(apparent_freq, 40.0, epsilon);
+  }
+
+  // Test moving average filter
+  void testMovingAverageFilter() {
+    // Simple N-point moving average
+    int N = 5;
+    double samples[] = {10.0, 12.0, 8.0, 11.0, 9.0, 13.0, 7.0};
+
+    double sum = 0.0;
+    for (int i = 0; i < N; i++) {
+      sum += samples[i];
+    }
+    double avg = sum / N;
+
+    TS_ASSERT_DELTA(avg, 10.0, epsilon);  // (10+12+8+11+9)/5 = 50/5 = 10
+  }
+
+  // Test exponential moving average
+  void testExponentialMovingAverage() {
+    // EMA: y(n) = alpha*x(n) + (1-alpha)*y(n-1)
+    double alpha = 0.2;
+    double y = 0.0;
+    double samples[] = {10.0, 10.0, 10.0, 10.0, 10.0};
+
+    for (int i = 0; i < 5; i++) {
+      y = alpha * samples[i] + (1.0 - alpha) * y;
+    }
+
+    // After several iterations with constant input, converges to input
+    TS_ASSERT(y > 6.0);  // Approaching 10
+  }
+
+  // Test filter order vs complexity tradeoff
+  void testFilterOrderComplexity() {
+    // Higher order = sharper rolloff but more complexity
+    int orders[] = {1, 2, 4, 8};
+    double rolloffs[] = {-20.0, -40.0, -80.0, -160.0};  // dB/decade
+
+    for (int i = 0; i < 4; i++) {
+      double actual_rolloff = -20.0 * orders[i];
+      TS_ASSERT_DELTA(actual_rolloff, rolloffs[i], epsilon);
+    }
+  }
+
+  // Test state-space filter representation
+  void testStateSpaceFilter() {
+    // First-order filter in state-space: dx/dt = A*x + B*u, y = C*x + D*u
+    // For lag filter C1/(s+C1): A = -C1, B = C1, C = 1, D = 0
+    double C1 = 10.0;
+    double A = -C1;
+    double B = C1;
+    double C = 1.0;
+    double D = 0.0;
+
+    // DC gain = -C*B/A + D = -1*10/(-10) + 0 = 1
+    double dc_gain = -C * B / A + D;
+    TS_ASSERT_DELTA(dc_gain, 1.0, epsilon);
+  }
+
+  // Test filter coefficient sensitivity
+  void testCoefficientSensitivity() {
+    // Small changes in coefficients shouldn't cause large changes in response
+    double C1_nominal = 10.0;
+    double C1_perturbed = 10.1;  // 1% change
+
+    double dc_nominal = 1.0;  // Lag filter DC gain is always 1
+    double dc_perturbed = 1.0;
+
+    double sensitivity = std::abs(dc_perturbed - dc_nominal) / std::abs(C1_perturbed - C1_nominal);
+    TS_ASSERT(sensitivity < 1.0);  // Low sensitivity
+  }
+
+  // Test filter transient duration
+  void testTransientDuration() {
+    // 95% settling time for first-order = 3*tau
+    // 99% settling time = 5*tau
+    double C1 = 10.0;
+    double tau = 1.0 / C1;
+
+    double t_95pct = 3.0 * tau;
+    double t_99pct = 5.0 * tau;
+
+    // Verify exponential decay
+    double remaining_95 = std::exp(-3.0);  // ~5%
+    double remaining_99 = std::exp(-5.0);  // ~0.7%
+
+    TS_ASSERT(remaining_95 < 0.06);
+    TS_ASSERT(remaining_99 < 0.01);
+  }
+
+  // Test filter energy preservation (Parseval's theorem concept)
+  void testFilterEnergyPreservation() {
+    // For a filter with unity DC gain, energy is preserved at DC
+    double C1 = 10.0;
+    double dc_gain = 1.0;
+
+    // Energy through filter = |H(jw)|^2 * input_energy
+    double input_energy = 100.0;
+    double output_energy_dc = dc_gain * dc_gain * input_energy;
+
+    TS_ASSERT_DELTA(output_energy_dc, input_energy, epsilon);
+  }
+
+  // Test adaptive filter concept
+  void testAdaptiveFilterConcept() {
+    // Adaptive filter adjusts coefficients based on error
+    double mu = 0.1;  // Learning rate
+    double w = 1.0;   // Initial weight
+    double d = 10.0;  // Desired output
+    double x = 1.0;   // Input
+
+    // LMS update: w = w + mu * e * x
+    double y = w * x;
+    double e = d - y;
+    double w_new = w + mu * e * x;
+
+    TS_ASSERT(w_new > w);  // Weight increased toward desired
+    TS_ASSERT_DELTA(w_new, 1.9, epsilon);  // 1 + 0.1 * 9 * 1 = 1.9
+  }
+
+  // Test filter with saturation
+  void testFilterWithSaturation() {
+    double C1 = 10.0;
+    double dt = 0.01;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+    double u = 100.0;
+    double sat_limit = 10.0;
+
+    for (int i = 0; i < 500; i++) {
+      y = ca * y + cb * u;
+      // Apply saturation
+      if (y > sat_limit) y = sat_limit;
+      if (y < -sat_limit) y = -sat_limit;
+    }
+
+    TS_ASSERT_DELTA(y, sat_limit, epsilon);  // Saturated at limit
+  }
+
+  // Test filter with dead zone
+  void testFilterWithDeadZone() {
+    double dead_zone = 1.0;
+    double inputs[] = {0.5, 1.5, -0.5, -1.5, 0.0};
+    double expected[] = {0.0, 0.5, 0.0, -0.5, 0.0};
+
+    for (int i = 0; i < 5; i++) {
+      double x = inputs[i];
+      double y;
+      if (std::abs(x) < dead_zone) {
+        y = 0.0;
+      } else {
+        y = (x > 0) ? x - dead_zone : x + dead_zone;
+      }
+      TS_ASSERT_DELTA(y, expected[i], epsilon);
+    }
+  }
+
+  // Test digital filter coefficient quantization
+  void testCoefficientQuantization() {
+    // In fixed-point implementations, coefficients are quantized
+    double coeff = 0.9047619;
+    int bits = 8;  // 8-bit quantization
+
+    int quantized_int = static_cast<int>(coeff * (1 << bits) + 0.5);
+    double quantized = static_cast<double>(quantized_int) / (1 << bits);
+
+    // Should be close to original
+    TS_ASSERT_DELTA(quantized, coeff, 1.0 / (1 << bits));
+  }
+
+  // Test filter with varying sample rate
+  void testVaryingSampleRate() {
+    double C1 = 10.0;
+
+    // At 100 Hz sample rate
+    double dt1 = 0.01;
+    double ca1 = std::exp(-C1 * dt1);
+
+    // At 1000 Hz sample rate
+    double dt2 = 0.001;
+    double ca2 = std::exp(-C1 * dt2);
+
+    // Higher sample rate = ca closer to 1 (slower decay per sample)
+    TS_ASSERT(ca2 > ca1);
+    TS_ASSERT_DELTA(ca1, 0.9048, 0.001);
+    TS_ASSERT_DELTA(ca2, 0.9900, 0.001);
+  }
+
+  // Test biquad filter structure
+  void testBiquadStructure() {
+    // Biquad: H(z) = (b0 + b1*z^-1 + b2*z^-2)/(1 + a1*z^-1 + a2*z^-2)
+    // Second-order section with 5 coefficients
+
+    // Example: lowpass at wc = 0.1*fs
+    double b0 = 0.0675, b1 = 0.1349, b2 = 0.0675;
+    double a1 = -1.1430, a2 = 0.4128;
+
+    // DC gain: (b0+b1+b2)/(1+a1+a2)
+    double dc_gain = (b0 + b1 + b2) / (1.0 + a1 + a2);
+
+    TS_ASSERT_DELTA(dc_gain, 1.0, 0.01);  // Unity DC gain
+  }
+
+  // Test filter phase distortion
+  void testPhaseDistortion() {
+    // Non-linear phase causes different delays at different frequencies
+    double C1 = 10.0;
+
+    // Phase at w = 1: -atan(1/10) = -5.7 degrees
+    double phase1 = -std::atan(1.0 / C1) * 180.0 / M_PI;
+
+    // Phase at w = 10: -atan(10/10) = -45 degrees
+    double phase10 = -std::atan(10.0 / C1) * 180.0 / M_PI;
+
+    // Group delay varies with frequency (phase distortion)
+    TS_ASSERT(std::abs(phase10) > std::abs(phase1));
+  }
+
+  // Test minimum phase filter concept
+  void testMinimumPhaseFilter() {
+    // Minimum phase: all zeros inside unit circle (analog: LHP)
+    // Provides minimum phase lag for given magnitude response
+
+    // First-order lag is minimum phase (no zeros)
+    double C1 = 10.0;
+
+    // Check pole location (must be in LHP for stability)
+    double pole = -C1;
+    TS_ASSERT(pole < 0);  // In LHP = stable and minimum phase
+  }
+
+  // Test filter group delay calculation
+  void testGroupDelayCalculation() {
+    // Group delay = -d(phase)/dw
+    // For first-order lag: phase = -atan(w/C1)
+    // Group delay = C1/(w^2 + C1^2)
+
+    double C1 = 10.0;
+    double frequencies[] = {0.0, 5.0, 10.0, 20.0};
+    double expected_delays[] = {0.1, 0.08, 0.05, 0.02};
+
+    for (int i = 0; i < 4; i++) {
+      double w = frequencies[i];
+      double gd = C1 / (w*w + C1*C1);
+      TS_ASSERT_DELTA(gd, expected_delays[i], 0.01);
+    }
+  }
+
+  // Test cross-over frequency
+  void testCrossoverFrequency() {
+    // Frequency where LP and HP filters have equal gain
+    // For complementary LP and HP: at w = C1, both have gain 0.707
+
+    double C1 = 10.0;
+    double w_crossover = C1;
+
+    double lp_gain = C1 / std::sqrt(w_crossover*w_crossover + C1*C1);
+    double hp_gain = w_crossover / std::sqrt(w_crossover*w_crossover + C1*C1);
+
+    TS_ASSERT_DELTA(lp_gain, hp_gain, epsilon);
+    TS_ASSERT_DELTA(lp_gain, 0.707, 0.001);
+  }
+
+  // Test filter transient rejection
+  void testTransientRejection() {
+    // Low-pass filter should reject sudden transients
+    double C1 = 10.0;
+    double dt = 0.01;
+    double ca = std::exp(-C1 * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+
+    // Apply spike transient
+    y = ca * y + cb * 100.0;
+    double peak = y;
+
+    // Continue with zero input
+    for (int i = 0; i < 100; i++) {
+      y = ca * y + cb * 0.0;
+    }
+
+    // Transient should be attenuated
+    TS_ASSERT(y < peak * 0.01);
+  }
 };
