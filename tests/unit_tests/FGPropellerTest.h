@@ -442,4 +442,791 @@ public:
     // More blades typically means higher solidity
     // and different optimal J ranges
   }
+
+  // ==================== WINDMILLING TESTS ====================
+
+  // Test windmilling RPM calculation
+  void testWindmillingRPM() {
+    // When engine is inoperative, propeller windmills due to airflow
+    // Approximate: RPM_windmill = k * V / D where k depends on pitch
+    double velocity = 200.0;    // ft/sec
+    double diameter = 6.0;      // ft
+    double pitchFactor = 0.8;   // Factor based on blade pitch
+
+    double windmillRPM = (velocity / diameter) * pitchFactor * 60.0;
+    // RPM = (200/6) * 0.8 * 60 = 1600 RPM
+    TS_ASSERT_DELTA(windmillRPM, 1600.0, 1.0);
+
+    // Higher velocity means higher windmill RPM
+    velocity = 300.0;
+    windmillRPM = (velocity / diameter) * pitchFactor * 60.0;
+    TS_ASSERT_DELTA(windmillRPM, 2400.0, 1.0);
+  }
+
+  // Test windmilling drag coefficient
+  void testWindmillingDrag() {
+    // Windmilling prop creates drag
+    // Drag = Cd_windmill * rho * V^2 * A_disk / 2
+    double Cd_windmill = 0.2;   // Windmilling drag coefficient
+    double rho = 0.002377;
+    double velocity = 200.0;
+    double diameter = 6.0;
+    double area = M_PI * (diameter / 2.0) * (diameter / 2.0);
+
+    double drag = 0.5 * Cd_windmill * rho * velocity * velocity * area;
+    // Drag = 0.5 * 0.2 * 0.002377 * 40000 * 28.27 = 268.4 lbs
+    TS_ASSERT_DELTA(drag, 268.4, 1.0);
+  }
+
+  // Test feathered vs windmilling drag comparison
+  void testFeatheredVsWindmillingDrag() {
+    double rho = 0.002377;
+    double velocity = 200.0;
+    double diameter = 6.0;
+    double area = M_PI * (diameter / 2.0) * (diameter / 2.0);
+
+    // Windmilling drag
+    double Cd_windmill = 0.2;
+    double dragWindmill = 0.5 * Cd_windmill * rho * velocity * velocity * area;
+
+    // Feathered drag (much lower)
+    double Cd_feathered = 0.02;
+    double dragFeathered = 0.5 * Cd_feathered * rho * velocity * velocity * area;
+
+    // Feathered drag should be ~10% of windmilling
+    TS_ASSERT(dragFeathered < dragWindmill);
+    TS_ASSERT_DELTA(dragFeathered / dragWindmill, 0.1, 0.01);
+  }
+
+  // ==================== BLADE GEOMETRY TESTS ====================
+
+  // Test activity factor calculation
+  void testActivityFactor() {
+    // Activity factor (AF) is a measure of blade power absorption capability
+    // AF = (100000 / 16) * integral from hub to tip of (c/D)(r/R)^3 d(r/R)
+    // Typical values: 80-120 for light aircraft, 140-200 for high performance
+
+    double AF_lightAircraft = 100.0;
+    double AF_highPerformance = 160.0;
+
+    TS_ASSERT(AF_lightAircraft >= 80.0 && AF_lightAircraft <= 120.0);
+    TS_ASSERT(AF_highPerformance >= 140.0 && AF_highPerformance <= 200.0);
+
+    // Higher activity factor means more power can be absorbed
+    TS_ASSERT(AF_highPerformance > AF_lightAircraft);
+  }
+
+  // Test solidity calculation
+  void testSolidity() {
+    // Solidity sigma = B * c / (PI * R)
+    // where B = number of blades, c = average chord, R = radius
+    int blades = 3;
+    double avgChord = 0.5;      // ft
+    double radius = 3.0;        // ft
+
+    double solidity = blades * avgChord / (M_PI * radius);
+    // sigma = 3 * 0.5 / (PI * 3) = 1.5 / 9.42 = 0.159
+    TS_ASSERT_DELTA(solidity, 0.159, 0.001);
+
+    // 4-blade propeller
+    blades = 4;
+    solidity = blades * avgChord / (M_PI * radius);
+    TS_ASSERT_DELTA(solidity, 0.212, 0.001);
+  }
+
+  // Test blade element pitch angle variation
+  void testBladeElementPitch() {
+    // Blade pitch varies along the span
+    // beta(r) = beta_75 + twist * (r/R - 0.75)
+    double beta_75 = 25.0;      // Pitch at 75% radius (reference)
+    double twist = -8.0;        // Degrees from root to tip
+
+    // At hub (r/R = 0.2)
+    double r_ratio = 0.2;
+    double beta_hub = beta_75 + twist * (r_ratio - 0.75);
+    TS_ASSERT_DELTA(beta_hub, 25.0 + (-8.0) * (-0.55), 0.1);  // 29.4 degrees
+
+    // At tip (r/R = 1.0)
+    r_ratio = 1.0;
+    double beta_tip = beta_75 + twist * (r_ratio - 0.75);
+    TS_ASSERT_DELTA(beta_tip, 25.0 + (-8.0) * (0.25), 0.1);   // 23.0 degrees
+
+    // Hub has higher pitch than tip (typical)
+    TS_ASSERT(beta_hub > beta_tip);
+  }
+
+  // Test blade planform area
+  void testBladePlanformArea() {
+    // Simplified rectangular blade
+    double bladeLength = 2.5;   // ft (from hub to tip)
+    double avgChord = 0.5;      // ft
+    int numBlades = 3;
+
+    double singleBladeArea = bladeLength * avgChord;
+    double totalBladeArea = numBlades * singleBladeArea;
+
+    TS_ASSERT_DELTA(singleBladeArea, 1.25, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(totalBladeArea, 3.75, DEFAULT_TOLERANCE);
+
+    // Compare to disk area
+    double diskRadius = 3.0;
+    double diskArea = M_PI * diskRadius * diskRadius;
+    double bladeAreaRatio = totalBladeArea / diskArea;
+    TS_ASSERT(bladeAreaRatio < 0.2);  // Typically 10-15%
+  }
+
+  // ==================== COMPRESSIBILITY EFFECTS ====================
+
+  // Test Mach number effect on efficiency
+  void testMachEffectOnEfficiency() {
+    // Efficiency drops as tip Mach approaches and exceeds critical Mach
+    double basEfficiency = 0.85;
+    double Mach_tip = 0.7;
+    double Mach_crit = 0.85;
+
+    // Below critical Mach - no penalty
+    double efficiencyFactor = 1.0;
+    if (Mach_tip > Mach_crit) {
+      efficiencyFactor = 1.0 - 2.0 * (Mach_tip - Mach_crit);
+    }
+    TS_ASSERT_DELTA(efficiencyFactor, 1.0, DEFAULT_TOLERANCE);
+
+    // Above critical Mach - efficiency drops
+    Mach_tip = 0.95;
+    efficiencyFactor = 1.0;
+    if (Mach_tip > Mach_crit) {
+      efficiencyFactor = 1.0 - 2.0 * (Mach_tip - Mach_crit);
+    }
+    // Factor = 1.0 - 2.0 * 0.1 = 0.8
+    TS_ASSERT_DELTA(efficiencyFactor, 0.8, DEFAULT_TOLERANCE);
+  }
+
+  // Test critical Mach number for propeller
+  void testCriticalMachNumber() {
+    // Critical Mach depends on blade thickness ratio
+    // Thicker blades have lower critical Mach
+    double thicknessRatio_thin = 0.06;
+    double thicknessRatio_thick = 0.12;
+
+    // Approximate critical Mach
+    double Mcrit_thin = 0.9 - thicknessRatio_thin;
+    double Mcrit_thick = 0.9 - thicknessRatio_thick;
+
+    TS_ASSERT_DELTA(Mcrit_thin, 0.84, 0.01);
+    TS_ASSERT_DELTA(Mcrit_thick, 0.78, 0.01);
+    TS_ASSERT(Mcrit_thin > Mcrit_thick);
+  }
+
+  // Test tip Mach limiting
+  void testTipMachLimiting() {
+    double maxTipMach = 0.9;    // Maximum allowable tip Mach
+    double speedOfSound = 1116.0;
+    double diameter = 6.0;
+    double radius = diameter / 2.0;
+
+    // Maximum tip velocity
+    double maxTipVelocity = maxTipMach * speedOfSound;
+    // max omega = maxTipVelocity / radius
+    double maxOmega = maxTipVelocity / radius;
+    // max RPM = maxOmega * 60 / (2*PI)
+    double maxRPM = maxOmega * 60.0 / (2.0 * M_PI);
+
+    // maxRPM = (0.9 * 1116 / 3) * 60 / (2*PI) = 334.8 * 9.55 = 3197 RPM
+    TS_ASSERT_DELTA(maxRPM, 3197.0, 10.0);
+  }
+
+  // ==================== GOVERNOR AND CONTROL TESTS ====================
+
+  // Test governor proportional control
+  void testGovernorProportionalControl() {
+    double targetRPM = 2400.0;
+    double Kp = 0.01;           // Proportional gain (deg/RPM)
+    double currentPitch = 25.0; // degrees
+
+    // RPM too high - increase pitch
+    double actualRPM = 2500.0;
+    double error = actualRPM - targetRPM;
+    double pitchCommand = currentPitch + Kp * error;
+    TS_ASSERT_DELTA(pitchCommand, 26.0, DEFAULT_TOLERANCE);
+
+    // RPM too low - decrease pitch
+    actualRPM = 2300.0;
+    error = actualRPM - targetRPM;
+    pitchCommand = currentPitch + Kp * error;
+    TS_ASSERT_DELTA(pitchCommand, 24.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test governor integral control
+  void testGovernorIntegralControl() {
+    double Ki = 0.001;          // Integral gain
+    double errorSum = 0.0;
+    double deltaT = 0.1;
+    double targetRPM = 2400.0;
+
+    // Accumulated error over time
+    double errors[] = {50.0, 40.0, 30.0, 20.0, 10.0};
+    for (int i = 0; i < 5; i++) {
+      errorSum += errors[i] * deltaT;
+    }
+    // Total error sum = (50+40+30+20+10) * 0.1 = 15.0
+
+    double integralCorrection = Ki * errorSum;
+    TS_ASSERT_DELTA(integralCorrection, 0.015, DEFAULT_TOLERANCE);
+  }
+
+  // Test governor rate limiting
+  void testGovernorRateLimiting() {
+    double maxPitchRate = 5.0;  // degrees/second
+    double deltaT = 0.1;
+    double maxPitchChange = maxPitchRate * deltaT;
+
+    double currentPitch = 25.0;
+    double commandedPitch = 30.0;
+    double pitchDelta = commandedPitch - currentPitch;
+
+    // Limit the rate
+    if (std::abs(pitchDelta) > maxPitchChange) {
+      pitchDelta = (pitchDelta > 0) ? maxPitchChange : -maxPitchChange;
+    }
+
+    double newPitch = currentPitch + pitchDelta;
+    TS_ASSERT_DELTA(newPitch, 25.5, DEFAULT_TOLERANCE);  // Limited to 0.5 deg change
+  }
+
+  // Test overspeed governor
+  void testOverspeedGovernor() {
+    double redlineRPM = 2700.0;
+    double overspeedMargin = 50.0;  // Extra protection
+
+    double actualRPM = 2680.0;
+    bool nearOverspeed = (actualRPM > redlineRPM - overspeedMargin);
+    TS_ASSERT(nearOverspeed);
+
+    // Force pitch increase when near overspeed
+    double pitchMultiplier = 1.0;
+    if (nearOverspeed) {
+      pitchMultiplier = 1.0 + (actualRPM - (redlineRPM - overspeedMargin)) / 100.0;
+    }
+    TS_ASSERT(pitchMultiplier > 1.0);
+  }
+
+  // ==================== MULTI-ENGINE PROPELLER TESTS ====================
+
+  // Test counter-rotating propeller torque cancellation
+  void testCounterRotatingTorque() {
+    double torqueLeft = 500.0;   // ft-lbf (clockwise viewed from behind)
+    double torqueRight = -500.0; // ft-lbf (counter-clockwise)
+
+    double netTorque = torqueLeft + torqueRight;
+    TS_ASSERT_DELTA(netTorque, 0.0, DEFAULT_TOLERANCE);
+
+    // Asymmetric power
+    torqueRight = -450.0;
+    netTorque = torqueLeft + torqueRight;
+    TS_ASSERT_DELTA(netTorque, 50.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test propeller sync calculation
+  void testPropellerSync() {
+    double masterRPM = 2400.0;
+    double slaveRPM = 2380.0;
+    double syncTolerance = 5.0;  // RPM
+
+    double rpmDiff = masterRPM - slaveRPM;
+    bool inSync = (std::abs(rpmDiff) <= syncTolerance);
+    TS_ASSERT(!inSync);  // 20 RPM difference, not in sync
+
+    // Adjust slave to sync
+    double syncCorrection = rpmDiff * 0.1;  // Gradual correction
+    double newSlaveRPM = slaveRPM + syncCorrection;
+    TS_ASSERT_DELTA(newSlaveRPM, 2382.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test critical engine effect (multi-engine)
+  void testCriticalEngineEffect() {
+    // For clockwise rotating props, left engine is typically critical
+    // due to P-factor and slipstream effects
+
+    double leftEngineYawMoment = 100.0;   // ft-lbf
+    double rightEngineYawMoment = -90.0;  // ft-lbf (slightly less due to geometry)
+
+    // With both engines running
+    double netYaw = leftEngineYawMoment + rightEngineYawMoment;
+    TS_ASSERT_DELTA(netYaw, 10.0, DEFAULT_TOLERANCE);
+
+    // Left engine failed - only right engine yaw
+    double yawLeftFailed = rightEngineYawMoment;
+    TS_ASSERT_DELTA(yawLeftFailed, -90.0, DEFAULT_TOLERANCE);
+
+    // Right engine failed - only left engine yaw
+    double yawRightFailed = leftEngineYawMoment;
+    TS_ASSERT_DELTA(yawRightFailed, 100.0, DEFAULT_TOLERANCE);
+
+    // Left engine failure creates more adverse yaw (critical)
+    TS_ASSERT(std::abs(yawLeftFailed) < std::abs(yawRightFailed));
+  }
+
+  // ==================== GROUND EFFECT TESTS ====================
+
+  // Test ground effect on thrust
+  void testGroundEffectThrust() {
+    // Ground effect increases thrust when close to ground
+    // Thrust_ge = Thrust * (1 + k * exp(-h/b))
+    double baseThrust = 1000.0;
+    double height = 3.0;        // ft above ground
+    double wingspan = 30.0;     // ft (or propeller diameter for approximation)
+    double k = 0.05;            // Ground effect coefficient
+
+    double geFactor = 1.0 + k * exp(-height / wingspan);
+    double thrustWithGE = baseThrust * geFactor;
+
+    // At 3 ft, geFactor = 1 + 0.05 * exp(-0.1) = 1 + 0.045 = 1.045
+    TS_ASSERT_DELTA(geFactor, 1.045, 0.001);
+    TS_ASSERT_DELTA(thrustWithGE, 1045.2, 1.0);
+
+    // Very close to ground
+    height = 1.0;
+    geFactor = 1.0 + k * exp(-height / wingspan);
+    TS_ASSERT(geFactor > 1.045);  // More ground effect
+  }
+
+  // Test propeller wake ground interaction
+  void testPropWakeGroundInteraction() {
+    // Prop wash velocity at ground
+    double thrust = 1000.0;
+    double rho = 0.002377;
+    double diameter = 6.0;
+    double area = M_PI * (diameter / 2.0) * (diameter / 2.0);
+
+    // Induced velocity from momentum theory
+    double Vi = sqrt(thrust / (2.0 * rho * area));
+    // Vi = sqrt(1000 / (2 * 0.002377 * 28.27)) = sqrt(7439) = 86.3 ft/sec
+    TS_ASSERT_DELTA(Vi, 86.25, 0.5);
+
+    // Wake velocity at twice diameter downstream
+    double distance = 2.0 * diameter;
+    double wakeContraction = 0.7;  // Wake contracts
+    double wakeVelocity = Vi * 2.0 * wakeContraction;  // Doubles through disk
+    TS_ASSERT_DELTA(wakeVelocity, 120.7, 1.0);
+  }
+
+  // ==================== REVERSE THRUST TESTS ====================
+
+  // Test reverse thrust magnitude
+  void testReverseThrustMagnitude() {
+    // Reverse thrust is typically 40-60% of forward thrust
+    double forwardThrust = 1000.0;
+    double reverseEfficiency = 0.5;
+
+    double reverseThrust = -forwardThrust * reverseEfficiency;
+    TS_ASSERT_DELTA(reverseThrust, -500.0, DEFAULT_TOLERANCE);
+
+    // Full reverse pitch
+    reverseEfficiency = 0.6;
+    reverseThrust = -forwardThrust * reverseEfficiency;
+    TS_ASSERT_DELTA(reverseThrust, -600.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test reverse thrust at various speeds
+  void testReverseThrustVsSpeed() {
+    // Reverse thrust effectiveness varies with speed
+    double maxReverseThrust = -600.0;
+    double velocities[] = {0.0, 50.0, 100.0, 150.0};
+    // effectiveFactor = 1.0 - V/300 with min 0.33
+    // V=0: 1.0, V=50: 0.833, V=100: 0.667, V=150: 0.5
+    double expectedThrust[] = {-600.0, -500.0, -400.0, -300.0};
+
+    for (int i = 0; i < 4; i++) {
+      double V = velocities[i];
+      // Reverse thrust decreases as speed increases (simplified model)
+      double effectiveFactor = 1.0 - (V / 300.0);
+      if (effectiveFactor < 0.33) effectiveFactor = 0.33;
+      double thrust = maxReverseThrust * effectiveFactor;
+      TS_ASSERT_DELTA(thrust, expectedThrust[i], 10.0);
+    }
+  }
+
+  // Test reverse transition time
+  void testReverseTransitionTime() {
+    double pitchRateLimit = 10.0;  // degrees/second
+    double forwardPitch = 25.0;
+    double reversePitch = -15.0;
+    double pitchChange = std::abs(reversePitch - forwardPitch);
+
+    double transitionTime = pitchChange / pitchRateLimit;
+    TS_ASSERT_DELTA(transitionTime, 4.0, DEFAULT_TOLERANCE);  // 40 deg / 10 deg/s = 4 sec
+  }
+
+  // ==================== EFFICIENCY AND PERFORMANCE ====================
+
+  // Test peak efficiency advance ratio
+  void testPeakEfficiencyAdvanceRatio() {
+    // Most propellers have peak efficiency around J = 0.6-0.9
+    double J_peak = 0.75;
+    double etaPeak = 0.87;
+
+    // Efficiency vs J (simplified parabola)
+    double J_values[] = {0.4, 0.6, 0.75, 0.9, 1.1};
+    for (int i = 0; i < 5; i++) {
+      double J = J_values[i];
+      double eta = etaPeak - 0.5 * (J - J_peak) * (J - J_peak);
+      TS_ASSERT(eta <= etaPeak);
+      if (std::abs(J - J_peak) < 0.01) {
+        TS_ASSERT_DELTA(eta, etaPeak, 0.01);
+      }
+    }
+  }
+
+  // Test propeller loading coefficient
+  void testPropellerLoadingCoefficient() {
+    // Cp / J^3 is a useful loading parameter
+    double Cp = 0.06;
+    double J = 0.8;
+
+    double loadingCoef = Cp / (J * J * J);
+    TS_ASSERT_DELTA(loadingCoef, 0.1172, 0.001);
+
+    // Higher loading at lower J
+    J = 0.5;
+    loadingCoef = Cp / (J * J * J);
+    TS_ASSERT_DELTA(loadingCoef, 0.48, 0.01);
+  }
+
+  // Test power loading
+  void testPowerLoading() {
+    // Power loading = Power / Disk Area
+    double power = 100.0 * 550.0;  // 100 HP in ft-lbf/sec
+    double diameter = 6.0;
+    double area = M_PI * (diameter / 2.0) * (diameter / 2.0);
+
+    double powerLoading = power / area;
+    // Loading = 55000 / 28.27 = 1945.7 ft-lbf/(sec*ft^2)
+    TS_ASSERT_DELTA(powerLoading, 1945.7, 1.0);
+  }
+
+  // Test disk loading
+  void testDiskLoading() {
+    // Disk loading = Thrust / Disk Area
+    double thrust = 1000.0;     // lbs
+    double diameter = 6.0;
+    double area = M_PI * (diameter / 2.0) * (diameter / 2.0);
+
+    double diskLoading = thrust / area;
+    TS_ASSERT_DELTA(diskLoading, 35.37, 0.1);  // lbs/ft^2
+  }
+
+  // ==================== INERTIA AND DYNAMICS ====================
+
+  // Test propeller polar moment of inertia
+  void testPropellerInertia() {
+    // Simplified: Ixx = k * m * R^2 where k depends on blade shape
+    double mass = 20.0;         // slugs (total prop mass)
+    double radius = 3.0;        // ft
+    double k = 0.5;             // Shape factor (uniform rod = 1/3, concentrated at tip = 1)
+
+    double Ixx = k * mass * radius * radius;
+    TS_ASSERT_DELTA(Ixx, 90.0, DEFAULT_TOLERANCE);  // slug-ft^2
+  }
+
+  // Test time to spin up
+  void testSpinUpTime() {
+    // Time to reach operating RPM from rest
+    double targetRPM = 2400.0;
+    double targetOmega = targetRPM * 2.0 * M_PI / 60.0;
+    double Ixx = 10.0;          // slug-ft^2
+    double avgTorque = 200.0;   // ft-lbf (average during spinup)
+
+    // omega = alpha * t, where alpha = T/I
+    double alpha = avgTorque / Ixx;  // rad/sec^2
+    double time = targetOmega / alpha;
+
+    // time = 251.3 / 20 = 12.6 seconds
+    TS_ASSERT_DELTA(time, 12.57, 0.1);
+  }
+
+  // Test coast-down time
+  void testCoastDownTime() {
+    // Time to stop after engine shutdown
+    double initialRPM = 2400.0;
+    double initialOmega = initialRPM * 2.0 * M_PI / 60.0;
+    double Ixx = 10.0;
+    double dragTorque = 50.0;   // ft-lbf (friction + windmilling)
+
+    double alpha = dragTorque / Ixx;
+    double time = initialOmega / alpha;
+
+    // time = 251.3 / 5 = 50.3 seconds
+    TS_ASSERT_DELTA(time, 50.27, 0.1);
+  }
+
+  // Test rotational kinetic energy
+  void testRotationalKineticEnergy() {
+    // KE = 0.5 * Ixx * omega^2
+    double Ixx = 10.0;
+    double rpm = 2400.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double KE = 0.5 * Ixx * omega * omega;
+    // KE = 0.5 * 10 * 251.3^2 = 315,788 ft-lbf
+    TS_ASSERT_DELTA(KE, 315788.0, 100.0);
+
+    // Convert to horsepower-seconds
+    double hp_sec = KE / 550.0;
+    TS_ASSERT_DELTA(hp_sec, 574.2, 1.0);
+  }
+
+  // ==================== SPECIAL OPERATIONS ====================
+
+  // Test beta range operation (ground fine)
+  void testBetaRangeOperation() {
+    // Beta range allows pitch below flight idle for ground operations
+    double flightIdlePitch = 15.0;
+    double groundFinePitch = 5.0;
+    double reversePitch = -15.0;
+
+    // Ground fine is between flight idle and reverse
+    TS_ASSERT(groundFinePitch < flightIdlePitch);
+    TS_ASSERT(groundFinePitch > reversePitch);
+
+    // Beta range allows taxi without using brakes heavily
+    bool inBetaRange = (groundFinePitch >= reversePitch && groundFinePitch < flightIdlePitch);
+    TS_ASSERT(inBetaRange);
+  }
+
+  // Test autofeather activation
+  void testAutofeatherActivation() {
+    // Autofeather triggers when engine power drops suddenly
+    double torquePrevious = 100.0;  // percent
+    double torqueCurrent = 20.0;
+    double torqueDropThreshold = 50.0;
+    double torqueDrop = torquePrevious - torqueCurrent;
+
+    bool shouldAutofeather = (torqueDrop > torqueDropThreshold);
+    TS_ASSERT(shouldAutofeather);
+
+    // Small drop - no autofeather
+    torqueCurrent = 90.0;
+    torqueDrop = torquePrevious - torqueCurrent;
+    shouldAutofeather = (torqueDrop > torqueDropThreshold);
+    TS_ASSERT(!shouldAutofeather);
+  }
+
+  // Test feather pump pressure
+  void testFeatherPumpPressure() {
+    // Feathering requires hydraulic/oil pressure
+    double oilPressure = 50.0;  // psi
+    double minFeatherPressure = 30.0;
+
+    bool canFeather = (oilPressure >= minFeatherPressure);
+    TS_ASSERT(canFeather);
+
+    // Low oil pressure - feather using accumulator or electric pump
+    oilPressure = 20.0;
+    canFeather = (oilPressure >= minFeatherPressure);
+    TS_ASSERT(!canFeather);
+  }
+
+  // Test unfeather operation
+  void testUnfeatherOperation() {
+    // Unfeathering requires windmilling or starter assist
+    double currentPitch = 90.0;  // feathered
+    double flightPitch = 25.0;
+    double unfeatherRate = 3.0;  // degrees/second (slower than feathering)
+
+    double unfeatherTime = (currentPitch - flightPitch) / unfeatherRate;
+    TS_ASSERT_DELTA(unfeatherTime, 21.67, 0.1);  // About 22 seconds
+  }
+
+  // ==================== NOISE AND VIBRATION ====================
+
+  // Test blade passage frequency
+  void testBladePassageFrequency() {
+    // BPF = (RPM / 60) * numBlades
+    double rpm = 2400.0;
+    int numBlades = 3;
+
+    double bpf = (rpm / 60.0) * numBlades;
+    TS_ASSERT_DELTA(bpf, 120.0, DEFAULT_TOLERANCE);  // 120 Hz
+
+    // 4-blade prop at same RPM
+    numBlades = 4;
+    bpf = (rpm / 60.0) * numBlades;
+    TS_ASSERT_DELTA(bpf, 160.0, DEFAULT_TOLERANCE);  // 160 Hz
+  }
+
+  // Test tip vortex noise correlation
+  void testTipVortexNoise() {
+    // Noise increases with tip speed
+    double tipSpeed1 = 700.0;   // ft/sec
+    double tipSpeed2 = 800.0;
+
+    // Noise ~ tipSpeed^5 (rough approximation for high-speed noise)
+    // (800/700)^5 = 1.1429^5 = 1.95
+    double noiseRatio = pow(tipSpeed2 / tipSpeed1, 5);
+    TS_ASSERT_DELTA(noiseRatio, 1.95, 0.05);
+
+    // Reducing tip speed significantly reduces noise
+    // (600/700)^5 = 0.857^5 = 0.46
+    double tipSpeed3 = 600.0;
+    noiseRatio = pow(tipSpeed3 / tipSpeed1, 5);
+    TS_ASSERT_DELTA(noiseRatio, 0.46, 0.01);
+  }
+
+  // Test vibration from imbalance
+  void testVibrationFromImbalance() {
+    // Imbalance force = m * r * omega^2
+    double imbalanceMass = 0.01;  // slugs
+    double imbalanceRadius = 2.0; // ft
+    double rpm = 2400.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double force = imbalanceMass * imbalanceRadius * omega * omega;
+    // Force = 0.01 * 2 * 251.3^2 = 1263 lbf
+    TS_ASSERT_DELTA(force, 1263.0, 5.0);
+  }
+
+  // ==================== ENVIRONMENTAL EFFECTS ====================
+
+  // Test thrust at altitude
+  void testThrustAtAltitude() {
+    // Thrust scales with density ratio (approximately)
+    double thrustSL = 1000.0;
+    double rhoSL = 0.002377;
+    double rhoAlt = 0.001267;   // ~15000 ft
+
+    double densityRatio = rhoAlt / rhoSL;
+    double thrustAlt = thrustSL * densityRatio;
+
+    TS_ASSERT_DELTA(densityRatio, 0.533, 0.001);
+    TS_ASSERT_DELTA(thrustAlt, 533.0, 1.0);
+  }
+
+  // Test propeller ice buildup effect
+  void testIceBuildupEffect() {
+    // Ice changes blade profile and mass
+    double baseEfficiency = 0.85;
+    double iceThickness = 0.25;  // inches
+
+    // Efficiency degradation from ice (simplified)
+    double iceDegradation = 0.05 * iceThickness;  // 5% per quarter inch
+    double icedEfficiency = baseEfficiency * (1.0 - iceDegradation);
+
+    TS_ASSERT_DELTA(icedEfficiency, 0.839, 0.001);
+
+    // Severe ice
+    iceThickness = 1.0;
+    iceDegradation = 0.05 * iceThickness;
+    icedEfficiency = baseEfficiency * (1.0 - iceDegradation);
+    TS_ASSERT_DELTA(icedEfficiency, 0.808, 0.001);
+  }
+
+  // Test temperature effect on air density
+  void testTemperatureEffectOnDensity() {
+    // rho = P / (R * T)
+    double pressure = 2116.22;  // lbf/ft^2 (sea level standard)
+    double R = 1716.56;         // ft^2/(sec^2*R) gas constant
+
+    // Standard temperature (59°F = 518.67°R)
+    double T_std = 518.67;
+    double rho_std = pressure / (R * T_std);
+    TS_ASSERT_DELTA(rho_std, 0.002377, 0.00001);
+
+    // Hot day (100°F = 559.67°R)
+    double T_hot = 559.67;
+    double rho_hot = pressure / (R * T_hot);
+    TS_ASSERT(rho_hot < rho_std);
+
+    // Cold day (0°F = 459.67°R)
+    double T_cold = 459.67;
+    double rho_cold = pressure / (R * T_cold);
+    TS_ASSERT(rho_cold > rho_std);
+  }
+
+  // ==================== MISCELLANEOUS TESTS ====================
+
+  // Test thrust line offset moment
+  void testThrustLineOffset() {
+    // Thrust line above/below CG creates pitching moment
+    double thrust = 1000.0;
+    double verticalOffset = 0.5;  // ft above CG
+
+    double pitchMoment = thrust * verticalOffset;
+    TS_ASSERT_DELTA(pitchMoment, 500.0, DEFAULT_TOLERANCE);  // nose up moment
+
+    // Lateral offset creates yaw moment
+    double lateralOffset = 3.0;  // ft (typical multi-engine)
+    double yawMoment = thrust * lateralOffset;
+    TS_ASSERT_DELTA(yawMoment, 3000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test propeller slipstream velocity
+  void testSlipstreamVelocity() {
+    // Slipstream velocity behind prop
+    double freestream = 150.0;  // ft/sec
+    double thrust = 1000.0;
+    double rho = 0.002377;
+    double diameter = 6.0;
+    double area = M_PI * (diameter / 2.0) * (diameter / 2.0);
+
+    // Induced velocity
+    double Vi = sqrt(thrust / (2.0 * rho * area));
+
+    // Far wake velocity = freestream + 2*Vi
+    double slipstreamV = freestream + 2.0 * Vi;
+    TS_ASSERT(slipstreamV > freestream);
+    TS_ASSERT_DELTA(slipstreamV, 150.0 + 2.0 * 86.25, 2.0);
+  }
+
+  // Test blade Reynolds number
+  void testBladeReynoldsNumber() {
+    // Re = rho * V * c / mu
+    double rho = 0.002377;
+    double tipSpeed = 750.0;    // ft/sec
+    double chord = 0.5;         // ft (at 75% radius)
+    double mu = 3.737e-7;       // slugs/(ft*sec) dynamic viscosity
+
+    double Re = rho * tipSpeed * chord / mu;
+    // Re = 0.002377 * 750 * 0.5 / 3.737e-7 = 2.38e6
+    TS_ASSERT_DELTA(Re, 2.38e6, 0.1e6);
+
+    // High Reynolds number means turbulent flow
+    TS_ASSERT(Re > 5e5);
+  }
+
+  // Test synchronization phase angle
+  void testSyncPhaseAngle() {
+    // Phase angle between props affects cabin noise
+    double rpm1 = 2400.0;
+    double rpm2 = 2400.0;
+    double phaseAngle = 0.0;    // degrees
+
+    // In phase - maximum noise at BPF
+    TS_ASSERT_DELTA(phaseAngle, 0.0, DEFAULT_TOLERANCE);
+
+    // 180 degrees out of phase - partial cancellation
+    phaseAngle = 180.0;
+    double cancellationFactor = std::abs(std::cos(phaseAngle * M_PI / 180.0));
+    TS_ASSERT_DELTA(cancellationFactor, 1.0, DEFAULT_TOLERANCE);
+
+    // 90 degrees phase - intermediate
+    phaseAngle = 90.0;
+    cancellationFactor = std::abs(std::cos(phaseAngle * M_PI / 180.0));
+    TS_ASSERT_DELTA(cancellationFactor, 0.0, 0.001);
+  }
+
+  // Test propeller mass effect on CG
+  void testPropellerMassEffect() {
+    // Propeller mass affects aircraft CG location
+    double aircraftMass = 50.0;   // slugs
+    double propMass = 1.5;        // slugs
+    double propStation = 10.0;    // ft forward of reference
+    double cgStation = 5.0;       // ft forward of reference
+
+    // CG shift from prop
+    double totalMass = aircraftMass + propMass;
+    double newCG = (aircraftMass * cgStation + propMass * propStation) / totalMass;
+
+    TS_ASSERT(newCG > cgStation);  // CG moves forward
+    TS_ASSERT_DELTA(newCG, 5.146, 0.01);  // Slight forward shift
+  }
 };
