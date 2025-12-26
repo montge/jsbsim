@@ -324,4 +324,541 @@ public:
     hp = mw * 1000000.0 / 745.7;
     TS_ASSERT_DELTA(hp, 1341.0, 1.0);
   }
+
+  /***************************************************************************
+   * Extended Power Calculation Tests
+   ***************************************************************************/
+
+  // Test power at very small throttle
+  void testVerySmallThrottle() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+    double throttle = 0.001;  // 0.1%
+
+    double hp = maxPowerWatts * throttle / hptowatts;
+    TS_ASSERT_DELTA(hp, 0.1, 0.01);
+    TS_ASSERT(hp > 0.0);
+  }
+
+  // Test power at throttle just below max
+  void testNearMaxThrottle() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+    double throttle = 0.999;  // 99.9%
+
+    double hp = maxPowerWatts * throttle / hptowatts;
+    TS_ASSERT_DELTA(hp, 99.9, 0.01);
+    TS_ASSERT(hp < 100.0);
+  }
+
+  // Test power linearity over fine increments
+  void testPowerLinearityFineIncrements() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+
+    double prevHP = 0.0;
+    for (double throttle = 0.0; throttle <= 1.0; throttle += 0.001) {
+      double hp = maxPowerWatts * throttle / hptowatts;
+
+      // Each increment should add same amount
+      if (throttle > 0.0) {
+        double increment = hp - prevHP;
+        TS_ASSERT_DELTA(increment, 0.1, 0.01);  // 0.1 HP per 0.1% throttle
+      }
+      prevHP = hp;
+    }
+  }
+
+  // Test power available at mid-range
+  void testMidRangePower() {
+    double hptoftlbssec = 550.0;
+    double hp = 50.0;  // Mid-range for 100 HP motor
+
+    double powerAvailable = hp * hptoftlbssec;
+    TS_ASSERT_DELTA(powerAvailable, 27500.0, 0.1);
+  }
+
+  /***************************************************************************
+   * RPM and Gear Ratio Tests
+   ***************************************************************************/
+
+  // Test RPM with various gear ratios
+  void testVariousGearRatios() {
+    double thrusterRPM = 5000.0;
+    double gearRatios[] = {0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0};
+    double expectedRPM[] = {1250.0, 2500.0, 5000.0, 7500.0, 10000.0, 15000.0, 20000.0};
+
+    for (int i = 0; i < 7; i++) {
+      double engineRPM = thrusterRPM * gearRatios[i];
+      TS_ASSERT_DELTA(engineRPM, expectedRPM[i], 0.1);
+    }
+  }
+
+  // Test RPM at zero
+  void testZeroRPM() {
+    double thrusterRPM = 0.0;
+    double gearRatio = 2.0;
+
+    double engineRPM = thrusterRPM * gearRatio;
+    TS_ASSERT_DELTA(engineRPM, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test very high RPM (high-speed electric motor)
+  void testHighSpeedMotorRPM() {
+    double thrusterRPM = 30000.0;  // High-speed motor
+    double gearRatio = 0.1;  // Significant reduction
+
+    double engineRPM = thrusterRPM * gearRatio;
+    TS_ASSERT_DELTA(engineRPM, 3000.0, 0.1);
+  }
+
+  // Test RPM at boundary (0.1 threshold)
+  void testRPMBoundaryThreshold() {
+    double rpm = 0.1;
+    double power = -100.0;
+
+    // At exactly 0.1, negative power is filtered
+    if (rpm <= 0.1) {
+      power = std::max(power, 0.0);
+    }
+    TS_ASSERT_DELTA(power, 0.0, DEFAULT_TOLERANCE);
+
+    // Just above 0.1
+    rpm = 0.11;
+    power = -100.0;
+    if (rpm <= 0.1) {
+      power = std::max(power, 0.0);
+    }
+    TS_ASSERT_DELTA(power, -100.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Torque Tests
+   ***************************************************************************/
+
+  // Test torque at various RPM levels
+  void testTorqueAtVariousRPM() {
+    double hptoftlbssec = 550.0;
+    double hp = 100.0;
+    double power = hp * hptoftlbssec;
+
+    double rpms[] = {1000.0, 2000.0, 3000.0, 5000.0, 10000.0};
+    double expectedTorques[] = {525.21, 262.61, 175.07, 105.04, 52.52};
+
+    for (int i = 0; i < 5; i++) {
+      double omega = rpms[i] * 2.0 * M_PI / 60.0;
+      double torque = power / omega;
+      TS_ASSERT_DELTA(torque, expectedTorques[i], 0.1);
+    }
+  }
+
+  // Test torque at low RPM (high torque)
+  void testHighTorqueLowRPM() {
+    double hptoftlbssec = 550.0;
+    double hp = 100.0;
+    double power = hp * hptoftlbssec;
+    double rpm = 500.0;
+
+    double omega = rpm * 2.0 * M_PI / 60.0;
+    double torque = power / omega;
+
+    // Low RPM should give high torque
+    TS_ASSERT(torque > 1000.0);
+    TS_ASSERT_DELTA(torque, 1050.42, 0.1);
+  }
+
+  // Test torque at high RPM (low torque)
+  void testLowTorqueHighRPM() {
+    double hptoftlbssec = 550.0;
+    double hp = 100.0;
+    double power = hp * hptoftlbssec;
+    double rpm = 20000.0;
+
+    double omega = rpm * 2.0 * M_PI / 60.0;
+    double torque = power / omega;
+
+    // High RPM should give low torque
+    TS_ASSERT(torque < 30.0);
+    TS_ASSERT_DELTA(torque, 26.26, 0.1);
+  }
+
+  // Test torque-speed curve inversely proportional
+  void testTorqueSpeedInverse() {
+    double hptoftlbssec = 550.0;
+    double hp = 100.0;
+    double power = hp * hptoftlbssec;
+
+    double rpm1 = 2000.0;
+    double rpm2 = 4000.0;  // Double the RPM
+
+    double omega1 = rpm1 * 2.0 * M_PI / 60.0;
+    double omega2 = rpm2 * 2.0 * M_PI / 60.0;
+
+    double torque1 = power / omega1;
+    double torque2 = power / omega2;
+
+    // Doubling RPM should halve torque
+    TS_ASSERT_DELTA(torque1, torque2 * 2.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Electric Motor Characteristics Tests
+   ***************************************************************************/
+
+  // Test typical eVTOL power requirements
+  void testEVTOLPowerRequirements() {
+    double hptowatts = 745.7;
+
+    // Lilium Jet: approximately 320 kW peak per motor
+    double liliumMotorKW = 320.0;
+    double liliumHP = liliumMotorKW * 1000.0 / hptowatts;
+    TS_ASSERT_DELTA(liliumHP, 429.1, 1.0);
+
+    // Small multicopter: 10 kW per motor
+    double multicopterKW = 10.0;
+    double multicopterHP = multicopterKW * 1000.0 / hptowatts;
+    TS_ASSERT_DELTA(multicopterHP, 13.41, 0.1);
+  }
+
+  // Test typical drone motor power
+  void testDroneMotorPower() {
+    double hptowatts = 745.7;
+
+    // DJI-class motor: 200W
+    double djiWatts = 200.0;
+    double djiHP = djiWatts / hptowatts;
+    TS_ASSERT_DELTA(djiHP, 0.268, 0.01);
+
+    // Racing drone motor: 500W
+    double racingWatts = 500.0;
+    double racingHP = racingWatts / hptowatts;
+    TS_ASSERT_DELTA(racingHP, 0.670, 0.01);
+  }
+
+  // Test electric aircraft examples
+  void testElectricAircraftPower() {
+    double hptowatts = 745.7;
+
+    // Pipistrel Alpha Electro: 60 kW
+    double alphaKW = 60.0;
+    double alphaHP = alphaKW * 1000.0 / hptowatts;
+    TS_ASSERT_DELTA(alphaHP, 80.46, 0.1);
+
+    // Bye Aerospace eFlyer 2: 90 kW
+    double eflyerKW = 90.0;
+    double eflyerHP = eflyerKW * 1000.0 / hptowatts;
+    TS_ASSERT_DELTA(eflyerHP, 120.69, 0.1);
+
+    // Eviation Alice: 640 kW total
+    double aliceKW = 640.0;
+    double aliceHP = aliceKW * 1000.0 / hptowatts;
+    TS_ASSERT_DELTA(aliceHP, 858.28, 0.1);
+  }
+
+  // Test power density considerations
+  void testPowerDensityCalculation() {
+    double hptowatts = 745.7;
+
+    // Modern electric motor: 5 kW/kg
+    double motorMassKg = 20.0;
+    double powerDensityKWperKg = 5.0;
+    double motorPowerKW = motorMassKg * powerDensityKWperKg;  // 100 kW
+    double motorHP = motorPowerKW * 1000.0 / hptowatts;
+
+    TS_ASSERT_DELTA(motorHP, 134.1, 0.1);
+  }
+
+  /***************************************************************************
+   * Regenerative Braking Concept Tests
+   ***************************************************************************/
+
+  // Test regenerative power at various descent rates
+  void testRegenerativeDescendPower() {
+    // Conceptual: Power recovered during descent
+    // Negative throttle could represent regen
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;  // 100 HP motor
+
+    // 10% regeneration
+    double regenFraction = 0.1;
+    double regenPower = -maxPowerWatts * regenFraction / hptowatts;
+    TS_ASSERT_DELTA(regenPower, -10.0, 0.1);  // -10 HP (power returning)
+
+    // 25% regeneration
+    regenFraction = 0.25;
+    regenPower = -maxPowerWatts * regenFraction / hptowatts;
+    TS_ASSERT_DELTA(regenPower, -25.0, 0.1);
+  }
+
+  // Test regen filtering at low RPM
+  void testRegenFilteringLowRPM() {
+    double rpm = 0.05;  // Very low RPM
+    double regenPower = -50.0;
+
+    // Regen filtered at low RPM
+    if (rpm <= 0.1) {
+      regenPower = std::max(regenPower, 0.0);
+    }
+    TS_ASSERT_DELTA(regenPower, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test regen allowed at operating RPM
+  void testRegenAllowedOperatingRPM() {
+    double rpm = 1000.0;
+    double regenPower = -50.0;
+
+    if (rpm <= 0.1) {
+      regenPower = std::max(regenPower, 0.0);
+    }
+    TS_ASSERT_DELTA(regenPower, -50.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Multi-Motor Configuration Tests
+   ***************************************************************************/
+
+  // Test dual motor configuration
+  void testDualMotorPower() {
+    double singleMotorHP = 100.0;
+    double numMotors = 2;
+
+    double totalHP = singleMotorHP * numMotors;
+    double totalPowerFtLbSec = totalHP * 550.0;
+
+    TS_ASSERT_DELTA(totalHP, 200.0, 0.1);
+    TS_ASSERT_DELTA(totalPowerFtLbSec, 110000.0, 1.0);
+  }
+
+  // Test quad motor configuration (eVTOL)
+  void testQuadMotorPower() {
+    double singleMotorHP = 50.0;
+    double numMotors = 4;
+
+    double totalHP = singleMotorHP * numMotors;
+    TS_ASSERT_DELTA(totalHP, 200.0, 0.1);
+  }
+
+  // Test octo-motor configuration
+  void testOctoMotorPower() {
+    double singleMotorHP = 25.0;
+    double numMotors = 8;
+
+    double totalHP = singleMotorHP * numMotors;
+    TS_ASSERT_DELTA(totalHP, 200.0, 0.1);
+
+    // Each motor contribution
+    double motorContribution = totalHP / numMotors;
+    TS_ASSERT_DELTA(motorContribution, 25.0, 0.1);
+  }
+
+  // Test differential motor power (turns)
+  void testDifferentialMotorPower() {
+    // Simulating a turn with left/right motor differential
+    double leftMotorHP = 80.0;   // Reduced
+    double rightMotorHP = 100.0; // Full power
+
+    double differential = rightMotorHP - leftMotorHP;
+    TS_ASSERT_DELTA(differential, 20.0, 0.1);
+
+    double averageHP = (leftMotorHP + rightMotorHP) / 2.0;
+    TS_ASSERT_DELTA(averageHP, 90.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Efficiency Concept Tests
+   ***************************************************************************/
+
+  // Test motor efficiency impact (conceptual)
+  void testMotorEfficiencyImpact() {
+    double inputPowerWatts = 100000.0;  // 100 kW input
+    double efficiency = 0.95;  // 95% efficient (typical for modern motors)
+
+    double outputPowerWatts = inputPowerWatts * efficiency;
+    double lossWatts = inputPowerWatts * (1.0 - efficiency);
+
+    TS_ASSERT_DELTA(outputPowerWatts, 95000.0, 0.1);
+    TS_ASSERT_DELTA(lossWatts, 5000.0, 0.1);
+  }
+
+  // Test efficiency at different load points
+  void testEfficiencyVsLoad() {
+    // Motors are most efficient at ~75% load
+    double peakEfficiency = 0.96;
+    double lowLoadEfficiency = 0.85;
+    double overloadEfficiency = 0.90;
+
+    TS_ASSERT(peakEfficiency > lowLoadEfficiency);
+    TS_ASSERT(peakEfficiency > overloadEfficiency);
+  }
+
+  // Test heat generation from losses
+  void testHeatFromLosses() {
+    double inputPowerWatts = 100000.0;
+    double efficiency = 0.95;
+
+    double heatWatts = inputPowerWatts * (1.0 - efficiency);
+    TS_ASSERT_DELTA(heatWatts, 5000.0, 0.1);  // 5 kW of heat
+  }
+
+  /***************************************************************************
+   * Edge Cases and Boundary Tests
+   ***************************************************************************/
+
+  // Test very small power motor
+  void testVerySmallMotor() {
+    double hptowatts = 745.7;
+    double smallMotorWatts = 10.0;  // 10W motor (tiny)
+
+    double hp = smallMotorWatts / hptowatts;
+    TS_ASSERT_DELTA(hp, 0.0134, 0.0001);
+    TS_ASSERT(hp > 0.0);
+  }
+
+  // Test very large power motor
+  void testVeryLargeMotor() {
+    double hptowatts = 745.7;
+    double largeMW = 5.0;  // 5 MW (large industrial)
+
+    double hp = largeMW * 1000000.0 / hptowatts;
+    TS_ASSERT_DELTA(hp, 6705.0, 1.0);
+  }
+
+  // Test throttle at float precision limit
+  void testThrottlePrecisionLimit() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+
+    double throttle = 0.0000001;  // Very small
+    double hp = maxPowerWatts * throttle / hptowatts;
+
+    TS_ASSERT(hp > 0.0);
+    TS_ASSERT(hp < 0.001);
+  }
+
+  // Test power calculation stability
+  void testPowerCalculationStability() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+
+    // Same calculation multiple times should give same result
+    double hp1 = maxPowerWatts * 0.5 / hptowatts;
+    double hp2 = maxPowerWatts * 0.5 / hptowatts;
+    double hp3 = maxPowerWatts * 0.5 / hptowatts;
+
+    TS_ASSERT_DELTA(hp1, hp2, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(hp2, hp3, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  // Test rapid throttle changes
+  void testStressRapidThrottleChanges() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+
+    for (int i = 0; i < 1000; i++) {
+      double throttle = (i % 101) / 100.0;  // 0.00 to 1.00
+      double hp = maxPowerWatts * throttle / hptowatts;
+
+      TS_ASSERT(hp >= 0.0);
+      TS_ASSERT(hp <= 100.1);  // Allow small tolerance
+      TS_ASSERT(!std::isnan(hp));
+    }
+  }
+
+  // Test many torque calculations
+  void testStressTorqueCalculations() {
+    double hptoftlbssec = 550.0;
+    double hp = 100.0;
+    double power = hp * hptoftlbssec;
+
+    for (int rpm = 100; rpm <= 10000; rpm += 10) {
+      double omega = rpm * 2.0 * M_PI / 60.0;
+      double torque = power / omega;
+
+      TS_ASSERT(torque > 0.0);
+      TS_ASSERT(!std::isnan(torque));
+      TS_ASSERT(!std::isinf(torque));
+    }
+  }
+
+  // Test oscillating power demand
+  void testOscillatingPowerDemand() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+
+    for (int i = 0; i < 500; i++) {
+      double throttle = 0.5 + 0.5 * std::sin(i * 0.1);  // 0.0 to 1.0
+      double hp = maxPowerWatts * throttle / hptowatts;
+
+      TS_ASSERT(hp >= 0.0);
+      TS_ASSERT(hp <= 100.1);
+    }
+  }
+
+  // Test full throttle cycle (0 to max to 0)
+  void testFullThrottleCycle() {
+    double hptowatts = 745.7;
+    double maxPowerWatts = 74570.0;
+
+    // Ramp up
+    for (double t = 0.0; t <= 1.0; t += 0.01) {
+      double hp = maxPowerWatts * t / hptowatts;
+      TS_ASSERT(hp >= 0.0);
+      TS_ASSERT(hp <= 100.1);
+    }
+
+    // Ramp down
+    for (double t = 1.0; t >= 0.0; t -= 0.01) {
+      double hp = maxPowerWatts * t / hptowatts;
+      TS_ASSERT(hp >= 0.0);
+      TS_ASSERT(hp <= 100.1);
+    }
+  }
+
+  /***************************************************************************
+   * Additional Unit Conversion Tests
+   ***************************************************************************/
+
+  // Test Newton-meters to ft-lbf
+  void testNmToFtLbf() {
+    double nm = 100.0;  // Newton-meters
+    double ftlbf = nm * 0.7376;  // Conversion factor
+
+    TS_ASSERT_DELTA(ftlbf, 73.76, 0.01);
+  }
+
+  // Test kW to ft-lbf/sec
+  void testKWToFtLbfPerSec() {
+    double kw = 1.0;
+    double ftlbfPerSec = kw * 1000.0 / 1.3558;  // 1 W = 1/1.3558 ft-lbf/s
+
+    TS_ASSERT_DELTA(ftlbfPerSec, 737.56, 0.1);
+  }
+
+  // Test rad/s to RPM
+  void testRadPerSecToRPM() {
+    double radPerSec = 314.159;  // ~3000 RPM
+    double rpm = radPerSec * 60.0 / (2.0 * M_PI);
+
+    TS_ASSERT_DELTA(rpm, 3000.0, 0.1);
+  }
+
+  // Test HP to kW
+  void testHPToKW() {
+    double hp = 100.0;
+    double kw = hp * 0.7457;
+
+    TS_ASSERT_DELTA(kw, 74.57, 0.01);
+  }
+
+  // Test ft-lbf/sec to watts
+  void testFtLbfPerSecToWatts() {
+    double ftlbfPerSec = 550.0;  // 1 HP
+    double watts = ftlbfPerSec * 1.3558;
+
+    TS_ASSERT_DELTA(watts, 745.69, 0.1);
+  }
 };
