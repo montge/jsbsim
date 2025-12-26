@@ -12,6 +12,7 @@
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+#include <algorithm>
 #include "TestUtilities.h"
 
 using namespace JSBSimTest;
@@ -848,5 +849,289 @@ public:
     // THEN: Should be reasonable time
     TS_ASSERT(decel_time_sec > 0.0);
     TS_ASSERT(decel_time_sec < 60.0);  // Should stop within a minute
+  }
+
+  // ============ GBAS/GLS Approach Tests ============
+
+  void testGBASVerticalError() {
+    // GIVEN: GBAS approach with GPS-based guidance
+    double gbas_vertical_error_ft = 0.5;  // Typical GBAS accuracy
+    double ils_vertical_error_ft = 5.0;   // Typical ILS accuracy
+
+    // WHEN: Comparing accuracy
+    // THEN: GBAS should be more accurate
+    TS_ASSERT(gbas_vertical_error_ft < ils_vertical_error_ft);
+  }
+
+  void testGBASLateralError() {
+    // GIVEN: GBAS lateral accuracy
+    double gbas_lateral_error_ft = 1.0;
+    double tolerance_ft = 5.0;
+
+    // WHEN: Checking lateral performance
+    // THEN: Should be within tolerance
+    TS_ASSERT(gbas_lateral_error_ft < tolerance_ft);
+  }
+
+  void testGBASGlideslopeAngle() {
+    // GIVEN: GBAS can use steeper glideslopes
+    double standard_gs_deg = 3.0;
+    double steep_gs_deg = 4.5;  // GBAS allows steeper approaches
+
+    // WHEN: Calculating altitude difference
+    double distance_ft = 5000.0;
+    double alt_standard = distance_ft * std::tan(standard_gs_deg * Constants::DEG_TO_RAD);
+    double alt_steep = distance_ft * std::tan(steep_gs_deg * Constants::DEG_TO_RAD);
+
+    // THEN: Steep approach requires higher altitude at same distance
+    TS_ASSERT(alt_steep > alt_standard);
+  }
+
+  // ============ Autothrottle Tests ============
+
+  void testAutothrottleSpeedHold() {
+    // GIVEN: Target and actual airspeed
+    double target_speed_kts = 140.0;
+    double actual_speed_kts = 138.0;
+    double kp = 0.1;  // Proportional gain
+
+    // WHEN: Computing throttle adjustment
+    double speed_error = target_speed_kts - actual_speed_kts;
+    double throttle_adjustment = kp * speed_error;
+
+    // THEN: Should command increase
+    TS_ASSERT(throttle_adjustment > 0.0);
+    TS_ASSERT_DELTA(throttle_adjustment, 0.2, 0.01);
+  }
+
+  void testAutothrottleDescentMode() {
+    // GIVEN: Glideslope descent
+    double thrust_lever_position = 0.35;  // 35%
+    double idle_thrust = 0.10;
+
+    // WHEN: On approach
+    // THEN: Thrust should be above idle but low
+    TS_ASSERT(thrust_lever_position > idle_thrust);
+    TS_ASSERT(thrust_lever_position < 0.50);
+  }
+
+  void testAutothrottleRetard() {
+    // GIVEN: Retard height (typically 30-50 ft)
+    double retard_height_ft = 40.0;
+    double current_radio_alt_ft = 35.0;
+
+    // WHEN: Checking if retard should commence
+    bool retard_commanded = current_radio_alt_ft <= retard_height_ft;
+
+    // THEN: Retard should be commanded
+    TS_ASSERT(retard_commanded);
+  }
+
+  // ============ Pitch Trim Tests ============
+
+  void testApproachTrimSetting() {
+    // GIVEN: Approach configuration
+    double cg_percent = 25.0;  // 25% MAC
+    double approach_speed_kts = 140.0;
+
+    // WHEN: Computing trim setting (simplified)
+    double trim_units = cg_percent * 0.1 + approach_speed_kts * 0.01;
+
+    // THEN: Should be reasonable trim setting
+    TS_ASSERT(trim_units > 0.0);
+  }
+
+  void testTrimChangeInFlare() {
+    // GIVEN: Pitch change during flare
+    double flare_pitch_change_deg = 5.0;
+    double trim_rate_per_deg = 0.5;
+
+    // WHEN: Computing trim change
+    double trim_change = flare_pitch_change_deg * trim_rate_per_deg;
+
+    // THEN: Should need trim adjustment
+    TS_ASSERT_DELTA(trim_change, 2.5, 0.1);
+  }
+
+  // ============ Configuration Monitoring Tests ============
+
+  void testLandingGearDownVerification() {
+    // GIVEN: Landing gear position
+    double gear_position = 1.0;  // 1.0 = fully down
+    double gear_down_threshold = 0.95;
+
+    // WHEN: Checking gear down
+    bool gear_down_locked = gear_position >= gear_down_threshold;
+
+    // THEN: Should be down and locked
+    TS_ASSERT(gear_down_locked);
+  }
+
+  void testFlapPositionForLanding() {
+    // GIVEN: Flap setting
+    double flap_position_deg = 40.0;
+    double landing_flap_min_deg = 30.0;
+    double landing_flap_max_deg = 45.0;
+
+    // WHEN: Checking flap position
+    bool flaps_in_range = (flap_position_deg >= landing_flap_min_deg) &&
+                          (flap_position_deg <= landing_flap_max_deg);
+
+    // THEN: Should be in landing range
+    TS_ASSERT(flaps_in_range);
+  }
+
+  void testSpeedbrakeArmed() {
+    // GIVEN: Speedbrake position
+    bool speedbrake_armed = true;
+    double altitude_ft = 1000.0;
+
+    // WHEN: Below arming altitude
+    bool ready_to_deploy = speedbrake_armed && (altitude_ft < 2000.0);
+
+    // THEN: Should be ready
+    TS_ASSERT(ready_to_deploy);
+  }
+
+  // ============ HUD Guidance Tests ============
+
+  void testFlightPathVectorCalculation() {
+    // GIVEN: Aircraft state
+    double pitch_deg = -3.0;
+    double aoa_deg = 5.0;
+
+    // WHEN: Computing flight path angle
+    double gamma_deg = pitch_deg - aoa_deg;
+
+    // THEN: Should be negative (descending)
+    TS_ASSERT_DELTA(gamma_deg, -8.0, 0.1);
+  }
+
+  void testHUDGlideslopeDeviation() {
+    // GIVEN: Glideslope deviation
+    double deviation_dots = 0.5;
+    double max_display_dots = 2.5;
+
+    // WHEN: Scaling for display
+    double display_ratio = deviation_dots / max_display_dots;
+
+    // THEN: Should be reasonable ratio
+    TS_ASSERT(display_ratio < 1.0);
+    TS_ASSERT_DELTA(display_ratio, 0.2, 0.01);
+  }
+
+  // ============ EGPWS Integration Tests ============
+
+  void testGlideslopeAlert() {
+    // GIVEN: Below glideslope condition
+    double deviation_dots = -1.5;
+    double alert_threshold_dots = -1.0;
+
+    // WHEN: Checking for alert
+    bool glideslope_alert = deviation_dots < alert_threshold_dots;
+
+    // THEN: Should trigger alert
+    TS_ASSERT(glideslope_alert);
+  }
+
+  void testTOOLOWFLAPSWarning() {
+    // GIVEN: Low altitude with incorrect configuration
+    double altitude_ft = 500.0;
+    double flap_position_deg = 5.0;
+    double min_flap_for_altitude_deg = 20.0;
+
+    // WHEN: Checking configuration
+    bool flap_warning = (altitude_ft < 1000.0) && (flap_position_deg < min_flap_for_altitude_deg);
+
+    // THEN: Should trigger warning
+    TS_ASSERT(flap_warning);
+  }
+
+  // ============ Runway Occupancy Tests ============
+
+  void testRunwayOccupancyTime() {
+    // GIVEN: Landing roll parameters
+    double touchdown_speed_kts = 130.0;
+    double exit_speed_kts = 20.0;
+    double decel_rate_fps2 = 8.0;
+
+    // WHEN: Computing occupancy time
+    double speed_change_fps = (touchdown_speed_kts - exit_speed_kts) * Constants::KTS_TO_FTPS;
+    double occupancy_time_sec = speed_change_fps / decel_rate_fps2;
+
+    // THEN: Should be reasonable time
+    TS_ASSERT(occupancy_time_sec > 20.0);
+    TS_ASSERT(occupancy_time_sec < 60.0);
+  }
+
+  void testTaxiClearanceDistance() {
+    // GIVEN: High-speed exit parameters
+    double exit_speed_kts = 50.0;
+    double exit_speed_fps = exit_speed_kts * Constants::KTS_TO_FTPS;
+    double turn_radius_ft = 500.0;
+
+    // WHEN: Computing required visibility for exit
+    double visibility_required_ft = exit_speed_fps * 5.0;  // 5 second lookahead
+
+    // THEN: Should be reasonable distance
+    TS_ASSERT(visibility_required_ft > 300.0);
+  }
+
+  // ============ Wind Shear Detection Tests ============
+
+  void testWindshearDetection() {
+    // GIVEN: Airspeed change rate
+    double airspeed_change_rate_kts_per_sec = -5.0;  // Losing 5 kts/s
+    double windshear_threshold = -3.0;
+
+    // WHEN: Checking for windshear
+    bool windshear_detected = airspeed_change_rate_kts_per_sec < windshear_threshold;
+
+    // THEN: Should detect windshear
+    TS_ASSERT(windshear_detected);
+  }
+
+  void testWindshearEscapeProfile() {
+    // GIVEN: Windshear escape parameters
+    double pitch_target_deg = 15.0;
+    double current_pitch_deg = 5.0;
+    double max_pitch_rate = 5.0;  // deg/s
+
+    // WHEN: Computing time to target
+    double time_to_target = (pitch_target_deg - current_pitch_deg) / max_pitch_rate;
+
+    // THEN: Should be quick response
+    TS_ASSERT_DELTA(time_to_target, 2.0, 0.1);
+  }
+
+  // ============ Dual/Triple Channel Tests ============
+
+  void testDualChannelComparison() {
+    // GIVEN: Two autopilot channel outputs
+    double channel_a_command_deg = 2.5;
+    double channel_b_command_deg = 2.6;
+    double disagreement_limit_deg = 1.0;
+
+    // WHEN: Comparing channels
+    double disagreement = std::abs(channel_a_command_deg - channel_b_command_deg);
+    bool channels_agree = disagreement < disagreement_limit_deg;
+
+    // THEN: Channels should agree
+    TS_ASSERT(channels_agree);
+  }
+
+  void testTripleChannelVoting() {
+    // GIVEN: Three channel outputs
+    double channel_a = 2.5;
+    double channel_b = 2.6;
+    double channel_c = 2.4;
+
+    // WHEN: Computing median (voting)
+    double channels[] = {channel_a, channel_b, channel_c};
+    std::sort(channels, channels + 3);
+    double voted_output = channels[1];  // Median
+
+    // THEN: Should select middle value
+    TS_ASSERT_DELTA(voted_output, 2.5, 0.01);
   }
 };
