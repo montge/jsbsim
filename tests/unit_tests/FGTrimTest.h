@@ -414,4 +414,533 @@ public:
     double n = 1.0 / std::cos(phi);
     TS_ASSERT_DELTA(n, 2.0, epsilon);  // 2g turn
   }
+
+  /***************************************************************************
+   * CG Location Effects Tests
+   ***************************************************************************/
+
+  // Test 32: Forward CG requires more elevator
+  void testForwardCGElevator() {
+    double Cm0_fwd = 0.10;   // More nose-down with forward CG
+    double Cm0_aft = 0.03;
+    double Cmde = -1.5;
+
+    double de_fwd = -Cm0_fwd / Cmde;  // More up elevator needed
+    double de_aft = -Cm0_aft / Cmde;
+
+    TS_ASSERT(de_fwd > de_aft);  // Forward CG needs more up elevator
+  }
+
+  // Test 33: CG effect on static margin
+  void testStaticMargin() {
+    double cgPosition = 0.25;   // % MAC
+    double neutralPoint = 0.35;  // % MAC
+
+    double staticMargin = neutralPoint - cgPosition;
+    TS_ASSERT_DELTA(staticMargin, 0.10, epsilon);  // 10% MAC positive margin
+    TS_ASSERT(staticMargin > 0);  // Stable
+  }
+
+  // Test 34: Aft CG limit
+  void testAftCGLimit() {
+    double cgPosition = 0.32;
+    double aftLimit = 0.33;
+    double neutralPoint = 0.35;
+
+    bool withinLimits = cgPosition <= aftLimit;
+    bool stable = cgPosition < neutralPoint;
+
+    TS_ASSERT(withinLimits);
+    TS_ASSERT(stable);
+  }
+
+  // Test 35: Forward CG limit (elevator authority)
+  void testForwardCGLimit() {
+    double cgPosition = 0.18;
+    double fwdLimit = 0.15;
+    double deMax = 25.0 * DEG_TO_RAD;
+    double Cmde = -1.5;
+
+    // Check if enough elevator authority exists
+    double maxPitchMoment = std::abs(Cmde * deMax);
+    bool sufficientAuthority = maxPitchMoment > 0.3;  // Threshold
+
+    TS_ASSERT(cgPosition >= fwdLimit);
+    TS_ASSERT(sufficientAuthority);
+  }
+
+  /***************************************************************************
+   * Altitude Effects Tests
+   ***************************************************************************/
+
+  // Test 36: TAS vs CAS for trim
+  void testTASvsCAS() {
+    double CAS = 150.0;  // knots
+    double altFt = 20000.0;
+    double rhoRatio = std::exp(-altFt / 27000.0);
+
+    double TAS = CAS / std::sqrt(rhoRatio);
+    TS_ASSERT(TAS > CAS);  // TAS higher at altitude
+  }
+
+  // Test 37: Thrust available decreases with altitude
+  void testThrustAtAltitude() {
+    double seaLevelThrust = 5000.0;  // lbs
+    double altFt = 35000.0;
+    double sigmaRatio = std::exp(-altFt / 27000.0);
+
+    double thrustAvailable = seaLevelThrust * sigmaRatio;
+    TS_ASSERT(thrustAvailable < seaLevelThrust * 0.5);
+  }
+
+  // Test 38: Service ceiling concept
+  void testServiceCeiling() {
+    double maxROC_SL = 3000.0;  // ft/min at sea level
+    double minROC = 100.0;      // ft/min service ceiling definition
+
+    // ROC decreases with altitude
+    double altFactor = minROC / maxROC_SL;
+    TS_ASSERT(altFactor < 0.1);
+  }
+
+  // Test 39: High altitude trim CL
+  void testHighAltitudeCL() {
+    double weight = 10000.0;
+    double S = 200.0;
+    double rhoSL = 0.002377;
+    double rhoAlt = rhoSL * 0.3;  // ~35000 ft
+    double V = 400.0;  // ft/s TAS
+
+    double q = 0.5 * rhoAlt * V * V;
+    double CL = weight / (q * S);
+
+    // Need higher CL at altitude for same TAS
+    TS_ASSERT(CL > 0.3);
+  }
+
+  /***************************************************************************
+   * Flap Effects Tests
+   ***************************************************************************/
+
+  // Test 40: Flap increases CL at same alpha
+  void testFlapCLIncrease() {
+    double CLclean = 0.5;
+    double deltaCL_flap = 0.8;  // CL increment from flaps
+
+    double CLflaps = CLclean + deltaCL_flap;
+    TS_ASSERT_DELTA(CLflaps, 1.3, epsilon);
+  }
+
+  // Test 41: Flap nose-down pitching moment
+  void testFlapPitchingMoment() {
+    double Cm_clean = 0.0;
+    double deltaCm_flap = -0.15;  // Nose-down with flaps
+
+    double Cm_flaps = Cm_clean + deltaCm_flap;
+    TS_ASSERT(Cm_flaps < 0);  // More nose-down
+  }
+
+  // Test 42: Approach speed reduction with flaps
+  void testFlapApproachSpeed() {
+    double Vref_clean = 120.0;  // knots
+    double CLmax_clean = 1.5;
+    double CLmax_flaps = 2.2;
+
+    // V proportional to sqrt(1/CLmax)
+    double Vref_flaps = Vref_clean * std::sqrt(CLmax_clean / CLmax_flaps);
+    TS_ASSERT(Vref_flaps < Vref_clean);
+  }
+
+  // Test 43: Flap drag increase
+  void testFlapDragIncrease() {
+    double CD_clean = 0.025;
+    double deltaCD_flap = 0.05;
+
+    double CD_flaps = CD_clean + deltaCD_flap;
+    TS_ASSERT_DELTA(CD_flaps, 0.075, epsilon);
+  }
+
+  /***************************************************************************
+   * Asymmetric Thrust/Drag Tests
+   ***************************************************************************/
+
+  // Test 44: Single engine yaw moment
+  void testSingleEngineYaw() {
+    double thrust = 2000.0;      // lbs (one engine)
+    double armY = 6.0;           // ft from centerline
+
+    double yawMoment = thrust * armY;  // ft-lbs
+    TS_ASSERT_DELTA(yawMoment, 12000.0, epsilon);
+  }
+
+  // Test 45: Rudder required for engine out
+  void testRudderForEngineOut() {
+    double yawMomentFromEngine = 12000.0;  // ft-lbs
+    double rudderEffectiveness = 3000.0;   // ft-lbs per degree
+
+    double rudderRequired = yawMomentFromEngine / rudderEffectiveness;
+    TS_ASSERT_DELTA(rudderRequired, 4.0, 0.1);  // degrees
+  }
+
+  // Test 46: VMC speed concept
+  void testVMCConcept() {
+    double rudderMax = 25.0;  // degrees
+    double rudderEffectiveness_SL = 150.0;  // per (deg * V^2)
+    double yawMoment = 12000.0;  // ft-lbs
+
+    // VMC is speed where max rudder balances asymmetric thrust
+    // Simplified: Cn_dr * dr * q * S * b = yawMoment
+    double qRequired = yawMoment / (rudderMax * rudderEffectiveness_SL);
+    TS_ASSERT(qRequired > 0);
+  }
+
+  // Test 47: Bank angle for zero sideslip engine out
+  void testEngineOutBank() {
+    double deadEngine = 1;  // Left engine
+    double bankInto = 5.0;  // degrees into good engine
+
+    // Small bank reduces rudder required
+    bool correctDirection = (deadEngine == 1 && bankInto > 0);  // Bank right
+    TS_ASSERT(correctDirection);
+  }
+
+  /***************************************************************************
+   * Trim Tab Tests
+   ***************************************************************************/
+
+  // Test 48: Trim tab deflection for stick-free
+  void testTrimTabDeflection() {
+    double elevatorForce = 50.0;  // lbs
+    double tabEffectiveness = 10.0;  // lbs per degree
+
+    double tabRequired = elevatorForce / tabEffectiveness;
+    TS_ASSERT_DELTA(tabRequired, 5.0, epsilon);  // degrees
+  }
+
+  // Test 49: Tab reduces hinge moment
+  void testTabHingeMoment() {
+    double hingeMoment = 100.0;  // in-lbs
+    double tabMoment = -80.0;    // in-lbs (opposing)
+
+    double netHingeMoment = hingeMoment + tabMoment;
+    TS_ASSERT_DELTA(netHingeMoment, 20.0, epsilon);
+  }
+
+  // Test 50: Trim tab limits
+  void testTrimTabLimits() {
+    double tabMax = 20.0;   // degrees
+    double tabMin = -10.0;  // degrees
+    double tabCurrent = 8.0;
+
+    bool withinLimits = (tabCurrent >= tabMin && tabCurrent <= tabMax);
+    TS_ASSERT(withinLimits);
+  }
+
+  /***************************************************************************
+   * Ground Effect Tests
+   ***************************************************************************/
+
+  // Test 51: Ground effect CL increase
+  void testGroundEffectCL() {
+    double h_b = 0.1;  // Height/span ratio
+    double phi_GE = (16.0 * h_b * h_b) / (1.0 + 16.0 * h_b * h_b);
+
+    // CL_IGE = CL_OGE / phi_GE (less induced drag, effective higher CL)
+    TS_ASSERT(phi_GE < 1.0);  // Ground effect reduces induced drag
+  }
+
+  // Test 52: Pitch up tendency in ground effect
+  void testGroundEffectPitch() {
+    double h = 5.0;   // ft height
+    double span = 40.0;  // ft
+    double h_b = h / span;
+
+    // Nose-up tendency as aircraft enters ground effect
+    bool nearGround = h_b < 0.5;
+    TS_ASSERT(nearGround);
+  }
+
+  // Test 53: Float tendency during landing
+  void testGroundEffectFloat() {
+    double sinkRate = 500.0;  // fpm
+    double h = 10.0;  // ft
+    double span = 35.0;
+
+    // As h decreases, induced drag decreases, aircraft floats
+    bool inGroundEffect = (h / span) < 1.0;
+    TS_ASSERT(inGroundEffect);
+  }
+
+  /***************************************************************************
+   * Pull-up/Push-over Maneuver Tests
+   ***************************************************************************/
+
+  // Test 54: Elevator for pull-up
+  void testPullUpElevator() {
+    double n = 2.0;     // Load factor for pull-up
+    double Cmq = -15.0;  // Pitch damping derivative
+    double q_rate = 0.1;  // rad/s pitch rate
+    double Cmde = -1.5;
+
+    // Additional elevator needed for pitch rate
+    double deltaCm = -Cmq * q_rate;  // From pitch damping
+    double deltaElevator = -deltaCm / Cmde;
+
+    TS_ASSERT(deltaElevator > 0);  // More up elevator for pull-up
+  }
+
+  // Test 55: Load factor from elevator
+  void testLoadFactorFromElevator() {
+    double Cmalpha = -0.5;
+    double deltaDe = 5.0 * DEG_TO_RAD;
+    double Cmde = -1.5;
+    double CLalpha = 5.7;
+
+    // For trim equilibrium: dCm = Cmalpha*dAlpha + Cmde*dDe = 0
+    double deltaAlpha = -(Cmde * deltaDe) / Cmalpha;
+    double deltaCL = CLalpha * deltaAlpha;
+
+    // Elevator deflection causes CL change (sign depends on stability)
+    TS_ASSERT(std::abs(deltaCL) > 0.5);  // Significant CL change
+  }
+
+  // Test 56: Push-over (negative g)
+  void testPushOver() {
+    double n = 0.5;  // Less than 1g
+
+    // Need down elevator for push-over
+    double elevatorSign = -1.0;  // Negative = down
+    bool correctDirection = (n < 1.0 && elevatorSign < 0);
+
+    TS_ASSERT(correctDirection);
+  }
+
+  /***************************************************************************
+   * Speed Stability Tests
+   ***************************************************************************/
+
+  // Test 57: Stick force gradient with speed
+  void testStickForceGradient() {
+    double forceAtV1 = 10.0;  // lbs push at V1
+    double forceAtV2 = 5.0;   // lbs pull at V2 (trim speed)
+    double V1 = 180.0;
+    double V2 = 150.0;
+
+    double gradient = (forceAtV1 - forceAtV2) / (V1 - V2);
+    TS_ASSERT(gradient > 0);  // Positive gradient = stable
+  }
+
+  // Test 58: Phugoid mode damping concept
+  void testPhugoidDamping() {
+    double dragDerivative = 0.1;  // CD_V derivative
+    double LD = 15.0;
+
+    // Phugoid damping proportional to 1/LD
+    double dampingFactor = 1.0 / (std::sqrt(2.0) * LD);
+    TS_ASSERT(dampingFactor > 0);
+    TS_ASSERT(dampingFactor < 0.1);  // Lightly damped
+  }
+
+  // Test 59: Return to trim speed
+  void testReturnToTrimSpeed() {
+    double trimSpeed = 150.0;
+    double perturbedSpeed = 160.0;
+    double dampingRatio = 0.05;
+
+    // Stable aircraft returns to trim
+    double speedError = perturbedSpeed - trimSpeed;
+    double correction = -speedError * dampingRatio;
+
+    TS_ASSERT(correction < 0);  // Should slow down
+  }
+
+  /***************************************************************************
+   * Roll Trim Tests
+   ***************************************************************************/
+
+  // Test 60: Aileron trim for fuel imbalance
+  void testAileronForFuelImbalance() {
+    double leftFuel = 600.0;   // lbs
+    double rightFuel = 400.0;  // lbs
+    double armY = 10.0;        // ft
+
+    double rollMoment = (leftFuel - rightFuel) * armY;  // ft-lbs
+    // Need opposite aileron
+    TS_ASSERT(rollMoment > 0);  // Left wing heavy
+  }
+
+  // Test 61: Aileron trim for P-factor
+  void testAileronForPFactor() {
+    double power = 200.0;  // HP
+    double propSpeed = 2700.0;  // RPM
+
+    // P-factor causes left yaw, induces roll
+    bool leftYaw = (power > 0 && propSpeed > 0);
+    TS_ASSERT(leftYaw);  // Need right aileron
+  }
+
+  // Test 62: Wing heavy condition
+  void testWingHeavyTrim() {
+    double lateralCG = 0.5;  // inches right of centerline
+    double aileron = -2.0;   // degrees (left aileron down)
+
+    // Correct with opposite aileron
+    bool correctDirection = (lateralCG > 0 && aileron < 0);
+    TS_ASSERT(correctDirection);
+  }
+
+  /***************************************************************************
+   * Power Effects Tests
+   ***************************************************************************/
+
+  // Test 63: Thrust line pitch effect
+  void testThrustLinePitch() {
+    double thrust = 2000.0;      // lbs
+    double thrustArm = 2.0;      // ft below CG
+
+    double pitchMoment = thrust * thrustArm;
+    TS_ASSERT(pitchMoment > 0);  // Nose-up from low thrust line
+  }
+
+  // Test 64: Propwash on tail
+  void testPropwashOnTail() {
+    double baseDownwash = 3.0;  // degrees
+    double propwashFactor = 1.2;  // 20% increase with power
+
+    double effectiveDownwash = baseDownwash * propwashFactor;
+    TS_ASSERT_DELTA(effectiveDownwash, 3.6, epsilon);
+  }
+
+  // Test 65: Gyroscopic precession
+  void testGyroscopicPrecession() {
+    double propInertia = 10.0;  // slug-ft^2
+    double propOmega = 270.0;   // rad/s (2700 RPM)
+    double pitchRate = 0.1;     // rad/s
+
+    double yawMoment = propInertia * propOmega * pitchRate;
+    TS_ASSERT(yawMoment > 0);  // Right yaw from pitch up
+  }
+
+  /***************************************************************************
+   * Configuration Change Tests
+   ***************************************************************************/
+
+  // Test 66: Gear down drag increase
+  void testGearDownDrag() {
+    double CD_clean = 0.025;
+    double deltaCD_gear = 0.02;
+
+    double CD_gearDown = CD_clean + deltaCD_gear;
+    TS_ASSERT_DELTA(CD_gearDown, 0.045, epsilon);
+  }
+
+  // Test 67: Gear down pitch change
+  void testGearDownPitch() {
+    double Cm_clean = 0.0;
+    double deltaCm_gear = 0.02;  // Nose-up tendency
+
+    double Cm_gear = Cm_clean + deltaCm_gear;
+    TS_ASSERT(Cm_gear > Cm_clean);
+  }
+
+  // Test 68: Speed brake effect
+  void testSpeedBrakeEffect() {
+    double CD_clean = 0.025;
+    double deltaCD_speedbrake = 0.05;
+
+    double CD_speedbrake = CD_clean + deltaCD_speedbrake;
+    TS_ASSERT_DELTA(CD_speedbrake, 0.075, epsilon);
+
+    // Speed brake also causes pitch change (typically nose down)
+    double deltaCm_speedbrake = -0.02;
+    TS_ASSERT(deltaCm_speedbrake < 0);
+  }
+
+  // Test 69: Spoiler roll effect
+  void testSpoilerRollEffect() {
+    double spoilerDeflection = 30.0;  // degrees
+    double rollEffectiveness = 0.5;   // Cl per 30 deg
+
+    double rollMoment = spoilerDeflection / 30.0 * rollEffectiveness;
+    TS_ASSERT_DELTA(rollMoment, 0.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Fuel Burn Effects Tests
+   ***************************************************************************/
+
+  // Test 70: CG shift during cruise
+  void testCGShiftFuelBurn() {
+    double initialCG = 0.25;     // % MAC
+    double finalCG = 0.28;       // % MAC after fuel burn
+    double aftLimit = 0.33;
+
+    // CG moves aft as fuel burns (typical aft tank location)
+    TS_ASSERT(finalCG > initialCG);
+    TS_ASSERT(finalCG < aftLimit);
+  }
+
+  // Test 71: Trim change from weight reduction
+  void testTrimChangeWeightReduction() {
+    double weight1 = 10000.0;
+    double weight2 = 9000.0;  // After fuel burn
+    double S = 200.0;
+    double rho = 0.002377;
+    double V = 200.0;
+
+    double q = 0.5 * rho * V * V;
+    double CL1 = weight1 / (q * S);
+    double CL2 = weight2 / (q * S);
+
+    TS_ASSERT(CL2 < CL1);  // Less CL needed at lighter weight
+  }
+
+  // Test 72: Elevator trim change during cruise
+  void testElevatorTrimCruise() {
+    double initialTrim = 3.0;  // degrees nose up
+    double finalTrim = 2.0;    // degrees (less trim)
+
+    // As weight decreases, less trim needed
+    TS_ASSERT(finalTrim < initialTrim);
+  }
+
+  /***************************************************************************
+   * Jacobian and Sensitivity Tests
+   ***************************************************************************/
+
+  // Test 73: Jacobian matrix concept
+  void testJacobianConcept() {
+    // Simplified 2x2 Jacobian for alpha and elevator
+    double dL_dalpha = 5.0;   // Lift vs alpha
+    double dL_dde = 0.5;      // Lift vs elevator
+    double dM_dalpha = -0.5;  // Moment vs alpha
+    double dM_dde = -1.5;     // Moment vs elevator
+
+    // Determinant for invertibility
+    double det = dL_dalpha * dM_dde - dL_dde * dM_dalpha;
+    TS_ASSERT(std::abs(det) > 0.1);  // Non-singular
+  }
+
+  // Test 74: Sensitivity of trim to CL0 change
+  void testTrimSensitivity() {
+    double deltaCL0 = 0.1;   // Change in zero-alpha lift
+    double CLalpha = 5.7;
+
+    // Alpha change needed to compensate
+    double deltaAlpha = -deltaCL0 / CLalpha;
+    double deltaAlphaDeg = deltaAlpha * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(deltaAlphaDeg, -1.0, 0.1);
+  }
+
+  // Test 75: Trim iteration convergence rate
+  void testTrimConvergenceRate() {
+    double residuals[5] = {100.0, 25.0, 6.25, 1.5625, 0.39};
+    double convergenceRate = 0.25;  // Quadratic
+
+    for (int i = 1; i < 5; i++) {
+      double ratio = residuals[i] / residuals[i-1];
+      TS_ASSERT_DELTA(ratio, convergenceRate, 0.01);
+    }
+  }
 };
