@@ -542,4 +542,592 @@ public:
     bool potentialBounce = (compressSpeed < 0);
     TS_ASSERT(potentialBounce);
   }
+
+  /***************************************************************************
+   * Tire Spin-Up Tests
+   ***************************************************************************/
+
+  // Test tire spin-up on touchdown
+  void testTireSpinUp() {
+    double groundSpeed = 150.0;     // ft/s
+    double tireRadius = 0.5;        // ft
+    double tireInertia = 0.5;       // slug*ft^2
+    double spinUpTorque = 100.0;    // ft-lbf
+
+    // Required angular velocity
+    double targetOmega = groundSpeed / tireRadius;
+
+    // Time to spin up: I * alpha = Torque
+    double alpha = spinUpTorque / tireInertia;
+    double spinUpTime = targetOmega / alpha;
+
+    TS_ASSERT_DELTA(targetOmega, 300.0, 0.1);
+    TS_ASSERT_DELTA(spinUpTime, 1.5, 0.01);
+  }
+
+  // Test spin-up drag force
+  void testSpinUpDrag() {
+    double groundSpeed = 150.0;
+    double tireRadius = 0.5;
+    double normalForce = 5000.0;
+    double slipRatio = 1.0;         // Initially locked (100% slip)
+    double slidingMu = 0.5;
+
+    double spinUpDrag = slidingMu * normalForce;
+    TS_ASSERT_DELTA(spinUpDrag, 2500.0, epsilon);
+  }
+
+  // Test wheel angular velocity matching
+  void testWheelVelocityMatch() {
+    double groundSpeed = 150.0;
+    double tireRadius = 0.5;
+    double wheelOmega = 280.0;      // rad/s
+
+    double wheelTangentSpeed = wheelOmega * tireRadius;
+    double slipRatio = (groundSpeed - wheelTangentSpeed) / groundSpeed;
+
+    TS_ASSERT_DELTA(slipRatio, 0.0667, 0.001);
+  }
+
+  /***************************************************************************
+   * Slip Ratio Tests
+   ***************************************************************************/
+
+  // Test slip ratio during acceleration
+  void testSlipRatioAcceleration() {
+    double groundSpeed = 50.0;
+    double wheelSpeed = 55.0;       // Wheel turning faster (drive)
+
+    // Positive slip ratio = acceleration/wheelspin
+    double slipRatio = (wheelSpeed - groundSpeed) / std::max(groundSpeed, 1.0);
+    TS_ASSERT_DELTA(slipRatio, 0.1, epsilon);
+  }
+
+  // Test slip ratio during braking
+  void testSlipRatioBraking() {
+    double groundSpeed = 50.0;
+    double wheelSpeed = 40.0;       // Wheel turning slower (braking)
+
+    // Negative slip ratio = braking
+    double slipRatio = (wheelSpeed - groundSpeed) / std::max(groundSpeed, 1.0);
+    TS_ASSERT_DELTA(slipRatio, -0.2, epsilon);
+  }
+
+  // Test locked wheel slip ratio
+  void testLockedWheelSlip() {
+    double groundSpeed = 50.0;
+    double wheelSpeed = 0.0;
+
+    double slipRatio = (wheelSpeed - groundSpeed) / std::max(groundSpeed, 1.0);
+    TS_ASSERT_DELTA(slipRatio, -1.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Anti-Skid (ABS) Tests
+   ***************************************************************************/
+
+  // Test ABS slip threshold
+  void testABSSlipThreshold() {
+    double targetSlip = 0.15;       // Optimal braking slip
+    double actualSlip = 0.25;       // Wheel starting to lock
+
+    bool absTrigger = (std::abs(actualSlip) > targetSlip);
+    TS_ASSERT(absTrigger);
+  }
+
+  // Test ABS brake modulation
+  void testABSBrakeModulation() {
+    double brakeCmd = 1.0;
+    double slipRatio = -0.25;       // Excessive slip
+    double targetSlip = -0.15;
+
+    // Simple ABS: reduce brake if slip exceeds target (in magnitude)
+    double absGain = 0.5;
+    // When |slipRatio| > |targetSlip|, reduce brake
+    double slipError = std::abs(slipRatio) - std::abs(targetSlip);
+    double modulatedBrake = std::max(0.0, std::min(1.0, brakeCmd - absGain * slipError));
+
+    TS_ASSERT(modulatedBrake < brakeCmd);
+    TS_ASSERT_DELTA(modulatedBrake, 0.95, epsilon);
+  }
+
+  // Test ABS cycling
+  void testABSCycling() {
+    double brakeCmd = 1.0;
+    double slipThreshold = 0.2;
+    double hysteresis = 0.05;
+
+    double slipSequence[] = {-0.1, -0.15, -0.22, -0.18, -0.12, -0.25};
+    bool absActive = false;
+
+    for (double slip : slipSequence) {
+      double threshold = absActive ? (slipThreshold - hysteresis) : slipThreshold;
+      absActive = (std::abs(slip) > threshold);
+    }
+
+    TS_ASSERT(absActive);
+  }
+
+  /***************************************************************************
+   * Tire Blowout Tests
+   ***************************************************************************/
+
+  // Test tire load limit
+  void testTireLoadLimit() {
+    double normalForce = 8000.0;
+    double tireRating = 7500.0;
+
+    double loadFactor = normalForce / tireRating;
+    bool overloaded = (loadFactor > 1.0);
+
+    TS_ASSERT(overloaded);
+    TS_ASSERT_DELTA(loadFactor, 1.0667, 0.001);
+  }
+
+  // Test tire speed rating
+  void testTireSpeedRating() {
+    double groundSpeed = 250.0;     // knots (approx 422 ft/s)
+    double speedRating = 200.0;     // knots
+
+    bool overSpeed = (groundSpeed > speedRating);
+    TS_ASSERT(overSpeed);
+  }
+
+  // Test blowout force change
+  void testBlowoutForceChange() {
+    double normalForce = 5000.0;
+    double normalMu = 0.8;
+    double blowoutMu = 0.4;         // Reduced friction after blowout
+
+    double normalBraking = normalMu * normalForce;
+    double blowoutBraking = blowoutMu * normalForce;
+
+    TS_ASSERT(blowoutBraking < normalBraking);
+    TS_ASSERT_DELTA(blowoutBraking / normalBraking, 0.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Runway Surface Tests
+   ***************************************************************************/
+
+  // Test wet runway friction reduction
+  void testWetRunwayFriction() {
+    double dryMu = 0.8;
+    double wetReduction = 0.7;      // 70% of dry friction
+
+    double wetMu = dryMu * wetReduction;
+    TS_ASSERT_DELTA(wetMu, 0.56, epsilon);
+  }
+
+  // Test icy runway friction
+  void testIcyRunwayFriction() {
+    double dryMu = 0.8;
+    double icyReduction = 0.2;      // 20% of dry friction
+
+    double icyMu = dryMu * icyReduction;
+    TS_ASSERT_DELTA(icyMu, 0.16, epsilon);
+  }
+
+  // Test hydroplaning speed
+  void testHydroplaningSpeed() {
+    double tirePressure = 200.0;    // psi
+
+    // NASA hydroplaning formula: V = 9 * sqrt(P)
+    double hydroSpeed = 9.0 * std::sqrt(tirePressure);  // knots
+    TS_ASSERT_DELTA(hydroSpeed, 127.3, 0.1);
+  }
+
+  // Test runway slope effect
+  void testRunwaySlopeEffect() {
+    double normalForce = 5000.0;
+    double slopeAngle = 2.0 * M_PI / 180.0;  // 2 degree slope
+
+    // Component of weight down slope
+    double slopeForce = normalForce * std::tan(slopeAngle);
+    TS_ASSERT_DELTA(slopeForce, 174.5, 0.5);
+  }
+
+  /***************************************************************************
+   * Shimmy Dynamics Tests
+   ***************************************************************************/
+
+  // Test shimmy frequency
+  void testShimmyFrequency() {
+    double kSteering = 1000.0;      // Steering stiffness
+    double wheelInertia = 0.3;      // Wheel yaw inertia
+
+    // Natural frequency: omega = sqrt(k/I)
+    double omega = std::sqrt(kSteering / wheelInertia);
+    double freq = omega / (2.0 * M_PI);
+
+    TS_ASSERT_DELTA(freq, 9.19, 0.01);
+  }
+
+  // Test shimmy damping
+  void testShimmyDamping() {
+    double criticalDamping = 35.0;  // lbf*s/rad
+    double actualDamping = 17.5;
+
+    double dampingRatio = actualDamping / criticalDamping;
+    bool underdamped = (dampingRatio < 1.0);
+
+    TS_ASSERT(underdamped);
+    TS_ASSERT_DELTA(dampingRatio, 0.5, epsilon);
+  }
+
+  // Test shimmy amplitude decay
+  void testShimmyDecay() {
+    double dampingRatio = 0.5;
+    double omega = 57.7;            // rad/s
+    double initialAmplitude = 10.0; // degrees
+
+    // Amplitude after 1 second
+    double decayRate = dampingRatio * omega;
+    double amplitude1s = initialAmplitude * std::exp(-decayRate);
+
+    TS_ASSERT(amplitude1s < initialAmplitude);
+  }
+
+  /***************************************************************************
+   * Gear Door Sequencing Tests
+   ***************************************************************************/
+
+  // Test door opens before gear extends
+  void testDoorSequencing() {
+    double doorPos = 0.0;           // Closed
+    double gearPos = 0.0;           // Retracted
+
+    // Door must be > 0.8 before gear can start moving
+    bool gearCanMove = (doorPos > 0.8);
+    TS_ASSERT(!gearCanMove);
+  }
+
+  // Test door closes after gear retracts
+  void testDoorCloseSequence() {
+    double doorPos = 1.0;           // Open
+    double gearPos = 0.0;           // Retracted
+
+    // Door should close when gear is retracted
+    bool doorShouldClose = (gearPos < 0.1);
+    TS_ASSERT(doorShouldClose);
+  }
+
+  // Test sequence timing
+  void testSequenceTiming() {
+    double doorTransitTime = 3.0;   // seconds
+    double gearTransitTime = 6.0;   // seconds
+
+    double totalCycleTime = doorTransitTime + gearTransitTime + doorTransitTime;
+    TS_ASSERT_DELTA(totalCycleTime, 12.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Emergency Extension Tests
+   ***************************************************************************/
+
+  // Test free-fall gear extension
+  void testFreeFallExtension() {
+    double gearWeight = 500.0;      // lbs
+    double drag = 200.0;            // lbs (aerodynamic)
+    double extendForce = gearWeight - drag;
+
+    TS_ASSERT(extendForce > 0);
+    TS_ASSERT_DELTA(extendForce, 300.0, epsilon);
+  }
+
+  // Test gravity extension time
+  void testGravityExtensionTime() {
+    double gearTravel = 2.0;        // ft
+    double effectiveAccel = 16.0;   // ft/s^2 (considering drag)
+
+    // t = sqrt(2*d/a)
+    double extensionTime = std::sqrt(2.0 * gearTravel / effectiveAccel);
+    TS_ASSERT_DELTA(extensionTime, 0.5, epsilon);
+  }
+
+  // Test uplock release
+  void testUplockRelease() {
+    double uplockForce = 100.0;     // lbs required to release
+    double releaseActuation = 120.0;
+
+    bool unlocked = (releaseActuation > uplockForce);
+    TS_ASSERT(unlocked);
+  }
+
+  /***************************************************************************
+   * Crosswind Landing Tests
+   ***************************************************************************/
+
+  // Test side load during crab landing
+  void testCrabLandingSideLoad() {
+    double groundSpeed = 150.0;     // ft/s
+    double crabAngle = 10.0 * M_PI / 180.0;  // 10 degrees
+    double normalForce = 5000.0;
+    double sideMu = 0.6;
+
+    double sideVelocity = groundSpeed * std::sin(crabAngle);
+    double maxSideForce = sideMu * normalForce;
+
+    TS_ASSERT_DELTA(sideVelocity, 26.0, 0.5);
+    TS_ASSERT_DELTA(maxSideForce, 3000.0, epsilon);
+  }
+
+  // Test tire side slip
+  void testTireSideSlip() {
+    double sideVelocity = 20.0;
+    double forwardVelocity = 150.0;
+
+    double sideSlipAngle = std::atan2(sideVelocity, forwardVelocity);
+    double sideSlipDeg = sideSlipAngle * 180.0 / M_PI;
+
+    TS_ASSERT_DELTA(sideSlipDeg, 7.59, 0.01);
+  }
+
+  // Test weathervaning tendency
+  void testWeathervaning() {
+    double mainGearX = -3.0;        // ft aft of CG
+    double sideForce = 1000.0;      // lbs
+
+    double yawingMoment = mainGearX * sideForce;
+
+    // Negative moment = nose into wind
+    TS_ASSERT(yawingMoment < 0);
+    TS_ASSERT_DELTA(yawingMoment, -3000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Load Distribution Tests
+   ***************************************************************************/
+
+  // Test tricycle gear load distribution at rest
+  void testTricycleLoadDistribution() {
+    double weight = 10000.0;        // lbs
+    double cgX = 0.0;               // CG location
+    double noseX = 10.0;            // Nose gear X
+    double mainX = -3.0;            // Main gear X
+
+    // Static equilibrium: sum moments = 0
+    double mainLoad = weight * noseX / (noseX - mainX);
+    double noseLoad = weight - mainLoad;
+
+    TS_ASSERT_DELTA(mainLoad, 7692.3, 0.5);
+    TS_ASSERT_DELTA(noseLoad, 2307.7, 0.5);
+  }
+
+  // Test CG limit forward
+  void testCGLimitForward() {
+    double noseGearLimit = 3000.0;  // Max nose gear load
+    double weight = 10000.0;
+    double noseX = 10.0;
+    double mainX = -3.0;
+
+    // Find forward CG limit where nose gear hits limit
+    // noseLoad = weight * (cgX - mainX) / (noseX - mainX) = limit
+    double maxNoseLoadFraction = noseGearLimit / weight;
+    double forwardCGLimit = mainX + maxNoseLoadFraction * (noseX - mainX);
+
+    TS_ASSERT_DELTA(forwardCGLimit, 0.9, 0.01);
+  }
+
+  // Test CG limit aft (tip-back)
+  void testCGLimitAft() {
+    double mainX = -3.0;            // Main gear X
+
+    // CG behind main gear = tip-back
+    double cgX = -4.0;
+    bool tipBack = (cgX < mainX);
+
+    TS_ASSERT(tipBack);
+  }
+
+  /***************************************************************************
+   * Taildragger Tests
+   ***************************************************************************/
+
+  // Test taildragger ground loop tendency
+  void testGroundLoopTendency() {
+    double mainGearX = 0.5;         // Main gear ahead of CG
+    double tailWheelX = -20.0;      // Tail wheel far aft
+    double sideForce = 500.0;       // lbs
+
+    // Destabilizing moment from main gear
+    double destabilizing = mainGearX * sideForce;
+
+    // CG behind main gear = unstable
+    TS_ASSERT(destabilizing > 0);
+  }
+
+  // Test tailwheel shimmy
+  void testTailwheelShimmy() {
+    double tailLoadFraction = 0.1;  // 10% of weight on tail
+    double weight = 5000.0;
+
+    double tailLoad = tailLoadFraction * weight;
+    TS_ASSERT_DELTA(tailLoad, 500.0, epsilon);
+  }
+
+  // Test three-point attitude
+  void testThreePointAttitude() {
+    double mainGearHeight = 4.0;
+    double tailWheelHeight = 0.5;
+    double fuselageLength = 25.0;
+
+    double pitchAngle = std::atan2(mainGearHeight - tailWheelHeight, fuselageLength);
+    double pitchDeg = pitchAngle * 180.0 / M_PI;
+
+    TS_ASSERT_DELTA(pitchDeg, 8.0, 0.5);
+  }
+
+  /***************************************************************************
+   * Tire Deflection Tests
+   ***************************************************************************/
+
+  // Test tire vertical spring rate
+  void testTireSpringRate() {
+    double tirePressure = 200.0;    // psi
+    double contactArea = 50.0;      // sq inches
+
+    // Approximate tire spring rate
+    double tireSpring = tirePressure * contactArea;  // lbs/in for small deflection
+    TS_ASSERT_DELTA(tireSpring, 10000.0, epsilon);
+  }
+
+  // Test tire deflection under load
+  void testTireDeflection() {
+    double load = 5000.0;           // lbs
+    double tireSpring = 10000.0;    // lbs/in
+
+    double deflection = load / tireSpring;
+    TS_ASSERT_DELTA(deflection, 0.5, epsilon);  // 0.5 inches
+  }
+
+  // Test combined strut and tire
+  void testCombinedStrutTire() {
+    double kStrut = 5000.0;         // lbs/ft
+    double kTire = 120000.0;        // lbs/ft (10000 lbs/in)
+
+    // Series spring: 1/k_total = 1/k1 + 1/k2
+    double kTotal = 1.0 / (1.0/kStrut + 1.0/kTire);
+    TS_ASSERT_DELTA(kTotal, 4800.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Brake Fade Tests
+   ***************************************************************************/
+
+  // Test brake temperature rise
+  void testBrakeTemperatureRise() {
+    double brakeEnergy = 1e6;       // ft-lbf
+    double brakeMass = 50.0;        // lbm
+    double specificHeat = 0.12;     // BTU/lbm-F
+
+    // Energy in BTU: 1 BTU = 778 ft-lbf
+    double energyBTU = brakeEnergy / 778.0;
+    double tempRise = energyBTU / (brakeMass * specificHeat);
+
+    TS_ASSERT_DELTA(tempRise, 214.0, 1.0);
+  }
+
+  // Test brake fade coefficient
+  void testBrakeFadeCoefficient() {
+    double baselineMu = 0.5;
+    double temperature = 800.0;     // degrees F
+    double fadeTemp = 500.0;        // Temperature where fade begins
+    double fadeRate = 0.0003;       // Mu reduction per degree
+
+    double fadeFactor = std::max(0.3, 1.0 - fadeRate * std::max(0.0, temperature - fadeTemp));
+    double fadedMu = baselineMu * fadeFactor;
+
+    TS_ASSERT_DELTA(fadedMu, 0.455, 0.001);
+  }
+
+  // Test brake cooling
+  void testBrakeCooling() {
+    double brakeTemp = 600.0;
+    double ambientTemp = 59.0;
+    double coolingRate = 0.02;      // per second
+    double dt = 60.0;               // seconds
+
+    // Exponential cooling: T(t) = T_amb + (T_0 - T_amb) * exp(-k*t)
+    // = 59 + 541 * exp(-1.2) = 59 + 541 * 0.3012 = 222.0
+    double finalTemp = ambientTemp + (brakeTemp - ambientTemp) * std::exp(-coolingRate * dt);
+    TS_ASSERT_DELTA(finalTemp, 222.0, 0.5);
+  }
+
+  /***************************************************************************
+   * Dynamic Load Factor Tests
+   ***************************************************************************/
+
+  // Test braking load transfer
+  void testBrakingLoadTransfer() {
+    double weight = 10000.0;
+    double cgHeight = 3.0;          // ft
+    double wheelbase = 15.0;        // ft
+    double decelG = 0.3;            // g's
+
+    double loadTransfer = weight * decelG * cgHeight / wheelbase;
+    TS_ASSERT_DELTA(loadTransfer, 600.0, epsilon);
+  }
+
+  // Test dynamic nose load
+  void testDynamicNoseLoad() {
+    double staticNoseLoad = 2000.0;
+    double loadTransfer = 600.0;
+
+    double dynamicNoseLoad = staticNoseLoad + loadTransfer;
+    TS_ASSERT_DELTA(dynamicNoseLoad, 2600.0, epsilon);
+  }
+
+  // Test dynamic main load
+  void testDynamicMainLoad() {
+    double staticMainLoad = 8000.0;
+    double loadTransfer = 600.0;
+
+    double dynamicMainLoad = staticMainLoad - loadTransfer;
+    TS_ASSERT_DELTA(dynamicMainLoad, 7400.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Touchdown Transient Tests
+   ***************************************************************************/
+
+  // Test touchdown load factor
+  void testTouchdownLoadFactor() {
+    double sinkRate = 10.0;         // ft/s
+    double kStrut = 10000.0;        // lbs/ft
+    double weight = 5000.0;
+    double mass = weight / 32.174;
+
+    // Peak deceleration: m*a = k*x, a = k*v/sqrt(k*m) = sqrt(k/m)*v
+    double omega = std::sqrt(kStrut / mass);
+    double peakAccel = omega * sinkRate;
+    double loadFactor = peakAccel / 32.174;
+
+    TS_ASSERT(loadFactor > 1.0);
+  }
+
+  // Test oleo rebound
+  void testOleoRebound() {
+    double reboundDamping = 2.0;    // Damping ratio > 1 = overdamped
+
+    // Oleo should not oscillate
+    bool overdamped = (reboundDamping > 1.0);
+    TS_ASSERT(overdamped);
+  }
+
+  // Test multiple bounce sequence
+  void testMultipleBounces() {
+    double bounceEnergy = 1000.0;   // Initial
+    double restitution = 0.3;       // Energy retained per bounce
+
+    double bounces[4];
+    bounces[0] = bounceEnergy;
+    for (int i = 1; i < 4; i++) {
+      bounces[i] = bounces[i-1] * restitution;
+    }
+
+    TS_ASSERT_DELTA(bounces[1], 300.0, epsilon);
+    TS_ASSERT_DELTA(bounces[2], 90.0, epsilon);
+    TS_ASSERT_DELTA(bounces[3], 27.0, epsilon);
+  }
 };
