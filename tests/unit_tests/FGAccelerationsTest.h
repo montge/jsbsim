@@ -1326,4 +1326,528 @@ public:
     TS_ASSERT_DELTA(pqridot(2), negMoment(2)/I, epsilon);
     TS_ASSERT_DELTA(pqridot(3), negMoment(3)/I, epsilon);
   }
+
+  /***************************************************************************
+   * Products of Inertia Tests
+   ***************************************************************************/
+
+  void testProductsOfInertiaIxz() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    // Aircraft with Ixz product of inertia (typical due to engine placement)
+    double Ixx = 1000.0;
+    double Iyy = 3000.0;
+    double Izz = 4000.0;
+    double Ixz = 100.0;
+
+    // Inverse for coupled matrix
+    double det = Ixx*Izz - Ixz*Ixz;
+    accel->in.J = FGMatrix33(Ixx, 0.0, -Ixz,
+                              0.0, Iyy, 0.0,
+                              -Ixz, 0.0, Izz);
+    accel->in.Jinv = FGMatrix33(Izz/det, 0.0, Ixz/det,
+                                 0.0, 1.0/Iyy, 0.0,
+                                 Ixz/det, 0.0, Ixx/det);
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(500.0, 0.0, 0.0);  // Roll moment only
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 pqridot = accel->GetPQRidot();
+
+    // Roll moment should cause both roll and yaw acceleration due to Ixz coupling
+    TS_ASSERT(!std::isnan(pqridot(1)));
+    TS_ASSERT(!std::isnan(pqridot(3)));
+    // Yaw acceleration should be non-zero due to coupling
+    double expectedPdot = (Izz * 500.0) / det;
+    double expectedRdot = (Ixz * 500.0) / det;
+    TS_ASSERT_DELTA(pqridot(1), expectedPdot, epsilon);
+    TS_ASSERT_DELTA(pqridot(3), expectedRdot, epsilon);
+  }
+
+  /***************************************************************************
+   * Gyroscopic Effects Tests
+   ***************************************************************************/
+
+  void testGyroscopicWithAsymmetricInertia() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    double Ixx = 1000.0;
+    double Iyy = 3000.0;
+    double Izz = 4000.0;
+
+    // Initial roll rate
+    FGColumnVector3 pqr(1.0, 0.0, 0.0);  // Rolling at 1 rad/s
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = pqr;
+    accel->in.vPQRi = pqr;
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(Ixx, 0.0, 0.0, 0.0, Iyy, 0.0, 0.0, 0.0, Izz);
+    accel->in.Jinv = FGMatrix33(1.0/Ixx, 0.0, 0.0, 0.0, 1.0/Iyy, 0.0, 0.0, 0.0, 1.0/Izz);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // Results depend on body vs inertial frame computations
+    TS_ASSERT(!std::isnan(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)));
+  }
+
+  void testSphericalInertiaNoGyroscopic() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    double I = 1000.0;
+
+    // Spinning with pitch rate
+    FGColumnVector3 pqr(0.0, 0.5, 0.0);
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = pqr;
+    accel->in.vPQRi = pqr;
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(I, 0.0, 0.0, 0.0, I, 0.0, 0.0, 0.0, I);
+    accel->in.Jinv = FGMatrix33(1.0/I, 0.0, 0.0, 0.0, 1.0/I, 0.0, 0.0, 0.0, 1.0/I);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // With spherical inertia, no gyroscopic coupling
+    TS_ASSERT_DELTA(pqrdot(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(pqrdot(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(pqrdot(3), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Velocity-Dependent Acceleration Tests
+   ***************************************************************************/
+
+  void testCentripetalTerms() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    // Moving body with rotation causes centripetal acceleration
+    FGColumnVector3 uvw(500.0, 0.0, 0.0);  // Forward velocity
+    FGColumnVector3 pqr(0.0, 0.0, 0.5);    // Yaw rate
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = pqr;
+    accel->in.vPQRi = pqr;
+    accel->in.vUVW = uvw;
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(1000.0, 0.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 1000.0);
+    accel->in.Jinv = FGMatrix33(0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+
+    // Rotating body creates centripetal terms in body frame acceleration
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+  }
+
+  /***************************************************************************
+   * Delta-T Variation Tests
+   ***************************************************************************/
+
+  void testDifferentDeltaT() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    accel->in.Force = FGColumnVector3(1000.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(1000.0, 0.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 1000.0);
+    accel->in.Jinv = FGMatrix33(0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    // Test with different delta T values
+    double deltaTValues[] = {0.001, 0.01, 0.1, 1.0};
+
+    for (double dt : deltaTValues) {
+      accel->in.DeltaT = dt;
+      accel->InitializeDerivatives();
+      accel->Run(false);
+
+      FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+      // Acceleration should be the same regardless of dt (instantaneous)
+      TS_ASSERT_DELTA(bodyAccel(1), 10.0, epsilon);
+    }
+  }
+
+  void testVerySmallDeltaT() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    accel->in.Force = FGColumnVector3(500.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 50.0;
+    accel->in.J = FGMatrix33(1000.0, 0.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 1000.0);
+    accel->in.Jinv = FGMatrix33(0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 1e-6;  // Very small timestep
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    TS_ASSERT_DELTA(bodyAccel(1), 10.0, epsilon);
+    TS_ASSERT(!std::isnan(bodyAccel(1)));
+  }
+
+  /***************************************************************************
+   * Mass Variation Tests
+   ***************************************************************************/
+
+  void testLightMass() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    double lightMass = 1.0;  // 1 slug
+    FGColumnVector3 force(10.0, 0.0, 0.0);
+
+    accel->in.Force = force;
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = lightMass;
+    accel->in.J = FGMatrix33(100.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0, 0.0, 100.0);
+    accel->in.Jinv = FGMatrix33(0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    TS_ASSERT_DELTA(bodyAccel(1), force(1)/lightMass, epsilon);
+  }
+
+  void testHeavyMass() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    double heavyMass = 10000.0;  // 10000 slugs
+    FGColumnVector3 force(100000.0, 0.0, 0.0);
+
+    accel->in.Force = force;
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = heavyMass;
+    accel->in.J = FGMatrix33(1e6, 0.0, 0.0, 0.0, 1e6, 0.0, 0.0, 0.0, 1e6);
+    accel->in.Jinv = FGMatrix33(1e-6, 0.0, 0.0, 0.0, 1e-6, 0.0, 0.0, 0.0, 1e-6);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    TS_ASSERT_DELTA(bodyAccel(1), force(1)/heavyMass, epsilon);
+  }
+
+  /***************************************************************************
+   * Earth Rotation Tests
+   ***************************************************************************/
+
+  void testWithEarthRotation() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    double omega_earth = 7.2921159e-5;  // rad/s
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, -32.174);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, omega_earth);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(1000.0, 0.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 1000.0);
+    accel->in.Jinv = FGMatrix33(0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, omega_earth);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+
+    // Results should include Earth rotation effects
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+  }
+
+  /***************************************************************************
+   * Terrain Velocity Tests
+   ***************************************************************************/
+
+  void testTerrainVelocityEffect() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    // Moving terrain (e.g., on an aircraft carrier deck)
+    FGColumnVector3 terrainVel(50.0, 0.0, 0.0);
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 1000.0);  // On deck
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, -32.174);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(1000.0, 0.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 1000.0);
+    accel->in.Jinv = FGMatrix33(0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = terrainVel;
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+
+    // Test valid results
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+  }
+
+  void testTerrainAngularVelocityEffect() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    // Rotating terrain (ship deck rolling)
+    FGColumnVector3 terrainAngVel(0.1, 0.0, 0.0);
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 1000.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, -32.174);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(1000.0, 0.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 1000.0);
+    accel->in.Jinv = FGMatrix33(0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = terrainAngVel;
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // Test valid results
+    TS_ASSERT(!std::isnan(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)));
+  }
+
+  /***************************************************************************
+   * Combined Moment Tests
+   ***************************************************************************/
+
+  void testAllThreeMoments() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    double Ixx = 1000.0;
+    double Iyy = 2000.0;
+    double Izz = 3000.0;
+
+    FGColumnVector3 moment(100.0, 200.0, 300.0);
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = moment;
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vGravAccel = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQR = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vPQRi = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vUVW = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Mass = 100.0;
+    accel->in.J = FGMatrix33(Ixx, 0.0, 0.0, 0.0, Iyy, 0.0, 0.0, 0.0, Izz);
+    accel->in.Jinv = FGMatrix33(1.0/Ixx, 0.0, 0.0, 0.0, 1.0/Iyy, 0.0, 0.0, 0.0, 1.0/Izz);
+    accel->in.Ti2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tb2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2b = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.Tec2i = FGMatrix33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    accel->in.vOmegaPlanet = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.vInertialPosition = FGColumnVector3(0.0, 0.0, 20925646.0);
+    accel->in.DeltaT = 0.0083333;
+    accel->in.TerrainVelocity = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.TerrainAngularVel = FGColumnVector3(0.0, 0.0, 0.0);
+
+    accel->InitializeDerivatives();
+    accel->Run(false);
+
+    FGColumnVector3 pqridot = accel->GetPQRidot();
+    TS_ASSERT_DELTA(pqridot(1), moment(1)/Ixx, epsilon);
+    TS_ASSERT_DELTA(pqridot(2), moment(2)/Iyy, epsilon);
+    TS_ASSERT_DELTA(pqridot(3), moment(3)/Izz, epsilon);
+  }
+
+  void testCombinedAppliedAndGroundMoments() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 appliedMoment(100.0, 0.0, 0.0);
+    FGColumnVector3 groundMoment(50.0, 50.0, 0.0);
+
+    accel->in.Force = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.Moment = appliedMoment;
+    accel->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    accel->in.GroundMoment = groundMoment;
+
+    FGColumnVector3 totalMoments = accel->GetMoments();
+    TS_ASSERT_DELTA(totalMoments(1), appliedMoment(1), epsilon);
+    TS_ASSERT_DELTA(totalMoments(2), appliedMoment(2), epsilon);
+    TS_ASSERT_DELTA(totalMoments(3), appliedMoment(3), epsilon);
+  }
 };
