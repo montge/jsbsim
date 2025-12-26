@@ -553,4 +553,471 @@ public:
     double mu_cold = atm.GetAbsoluteViscosity();
     TS_ASSERT(mu_cold < mu_std);  // Viscosity decreases with temperature
   }
+
+  // ============================================================================
+  // Additional Standard Atmosphere Tests
+  // ============================================================================
+
+  void testSpeedOfSoundVariation()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Speed of sound at sea level (about 1116 ft/s at 518.67R)
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_sl = atm.GetSoundSpeed();
+    TS_ASSERT_DELTA(a_sl, 1116.0, 5.0);
+
+    // Speed of sound at 10000 ft (lower temperature, lower speed)
+    atm.in.altitudeASL = 10000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_10k = atm.GetSoundSpeed();
+    TS_ASSERT(a_10k < a_sl);
+
+    // Speed of sound at tropopause (isothermal region)
+    atm.in.altitudeASL = 36089.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_tropo = atm.GetSoundSpeed();
+    TS_ASSERT(a_tropo < a_10k);
+  }
+
+  void testDensityRatioVariation()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // At sea level, density ratio (sigma) should be 1.0
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double sigma_sl = atm.GetDensityRatio();
+    TS_ASSERT_DELTA(sigma_sl, 1.0, epsilon);
+
+    // At altitude, density ratio should decrease
+    atm.in.altitudeASL = 10000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double sigma_10k = atm.GetDensityRatio();
+    TS_ASSERT(sigma_10k < 1.0);
+    TS_ASSERT(sigma_10k > 0.0);
+
+    // Higher altitude, even lower ratio
+    atm.in.altitudeASL = 30000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double sigma_30k = atm.GetDensityRatio();
+    TS_ASSERT(sigma_30k < sigma_10k);
+  }
+
+  void testPressureRatioVariation()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // At sea level, pressure ratio (delta) should be 1.0
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double delta_sl = atm.GetPressureRatio();
+    TS_ASSERT_DELTA(delta_sl, 1.0, epsilon);
+
+    // At 10000 ft, pressure ratio should be less
+    atm.in.altitudeASL = 10000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double delta_10k = atm.GetPressureRatio();
+    TS_ASSERT(delta_10k < 1.0);
+
+    // Pressure ratio at 18000 ft should be approximately 0.5
+    atm.in.altitudeASL = 18000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double delta_18k = atm.GetPressureRatio();
+    TS_ASSERT_DELTA(delta_18k, 0.5, 0.05);
+  }
+
+  void testTemperatureRatioVariation()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // At sea level, temperature ratio (theta) should be 1.0
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double theta_sl = atm.GetTemperatureRatio();
+    TS_ASSERT_DELTA(theta_sl, 1.0, epsilon);
+
+    // At altitude, temperature ratio should decrease
+    atm.in.altitudeASL = 20000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double theta_20k = atm.GetTemperatureRatio();
+    TS_ASSERT(theta_20k < 1.0);
+  }
+
+  void testIdealGasLawConsistency()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // P = rho * R * T (ideal gas law)
+    // R for air ≈ 1716.49 ft²/(s²·R) or 53.35 ft·lbf/(lbm·R)
+    const double R_specific = 1716.49;  // ft²/(s²·R)
+
+    for (double h = 0.0; h <= 50000.0; h += 10000.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double P = atm.FGAtmosphere::GetPressure();  // psf
+      double rho = atm.GetDensity();  // slug/ft³
+      double T = atm.FGAtmosphere::GetTemperature();  // Rankine
+
+      // P = rho * R * T (with consistent units)
+      // Converting: P (lbf/ft²) should equal rho (slug/ft³) * g * R/g * T
+      double P_calculated = rho * R_specific * T;
+      TS_ASSERT_DELTA(P, P_calculated, P * 0.01);  // Within 1%
+    }
+  }
+
+  void testStratosphereIsothermal()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // In the lower stratosphere (36089 - 65617 ft), temperature is constant
+    double T_36k = atm.GetStdTemperature(36089.0);
+    double T_45k = atm.GetStdTemperature(45000.0);
+    double T_55k = atm.GetStdTemperature(55000.0);
+    double T_65k = atm.GetStdTemperature(65617.0);
+
+    // All should be approximately equal (isothermal)
+    TS_ASSERT_DELTA(T_36k, T_45k, 1.0);
+    TS_ASSERT_DELTA(T_45k, T_55k, 1.0);
+    TS_ASSERT_DELTA(T_55k, T_65k, 1.0);
+  }
+
+  void testTroposphereLapseRate()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Standard lapse rate in troposphere is -3.56616 °R/1000 ft
+    // or -0.00356616 °R/ft
+    double T_0 = atm.GetStdTemperature(0.0);
+    double T_10k = atm.GetStdTemperature(10000.0);
+
+    double lapse = (T_10k - T_0) / 10000.0;  // °R/ft
+    TS_ASSERT_DELTA(lapse, -0.00356616, 0.0001);
+  }
+
+  void testDensityAltitudeHighTemperature()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // On a hot day, density altitude is higher than geometric altitude
+    atm.SetTemperatureSL(560.0, FGAtmosphere::eRankine);  // Hot day (~100°F)
+    atm.in.altitudeASL = 5000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double dens_alt = atm.GetDensityAltitude();
+    TS_ASSERT(dens_alt > 5000.0);  // Higher than geometric due to heat
+  }
+
+  void testDensityAltitudeLowTemperature()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // On a cold day, density altitude is lower than geometric altitude
+    atm.SetTemperatureSL(460.0, FGAtmosphere::eRankine);  // Cold day (~0°F)
+    atm.in.altitudeASL = 5000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double dens_alt = atm.GetDensityAltitude();
+    TS_ASSERT(dens_alt < 5000.0);  // Lower than geometric due to cold
+  }
+
+  void testPressureAltitudeHighPressure()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // High pressure day - pressure altitude lower than geometric
+    atm.SetPressureSL(FGAtmosphere::ePSF, 2200.0);  // High pressure
+    atm.in.altitudeASL = 5000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double press_alt = atm.GetPressureAltitude();
+    TS_ASSERT(press_alt < 5000.0);  // Lower because higher pressure
+  }
+
+  void testPressureAltitudeLowPressure()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Low pressure day - pressure altitude higher than geometric
+    atm.SetPressureSL(FGAtmosphere::ePSF, 2000.0);  // Low pressure
+    atm.in.altitudeASL = 5000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double press_alt = atm.GetPressureAltitude();
+    TS_ASSERT(press_alt > 5000.0);  // Higher because lower pressure
+  }
+
+  void testVeryHighAltitude()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Test at 200,000 ft (near edge of atmosphere model)
+    atm.in.altitudeASL = 200000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    // Should still have valid values
+    double T = atm.FGAtmosphere::GetTemperature();
+    double P = atm.FGAtmosphere::GetPressure();
+    double rho = atm.GetDensity();
+
+    TS_ASSERT(T > 0.0);
+    TS_ASSERT(P > 0.0);
+    TS_ASSERT(rho > 0.0);
+    TS_ASSERT(!std::isnan(T));
+    TS_ASSERT(!std::isnan(P));
+    TS_ASSERT(!std::isnan(rho));
+  }
+
+  void testKinematicViscosityRelation()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // nu = mu / rho (kinematic = dynamic / density)
+    atm.in.altitudeASL = 10000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double mu = atm.GetAbsoluteViscosity();
+    double rho = atm.GetDensity();
+    double nu = atm.GetKinematicViscosity();
+
+    double nu_calculated = mu / rho;
+    TS_ASSERT_DELTA(nu, nu_calculated, nu * 0.001);
+  }
+
+  void testReynoldsNumberAtAltitude()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Reynolds number = V * L / nu
+    // At altitude, nu increases (rho decreases faster than mu)
+    // So for same V and L, Re decreases with altitude
+
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double nu_sl = atm.GetKinematicViscosity();
+
+    atm.in.altitudeASL = 30000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double nu_30k = atm.GetKinematicViscosity();
+
+    TS_ASSERT(nu_30k > nu_sl);  // Higher viscosity at altitude
+  }
+
+  void testSaturationVaporPressure()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Saturation vapor pressure increases with temperature
+    atm.SetTemperatureSL(500.0, FGAtmosphere::eRankine);
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double svp_cold = atm.GetSaturatedVaporPressure(FGAtmosphere::ePSF);
+
+    atm.SetTemperatureSL(540.0, FGAtmosphere::eRankine);
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double svp_hot = atm.GetSaturatedVaporPressure(FGAtmosphere::ePSF);
+
+    TS_ASSERT(svp_hot > svp_cold);
+  }
+
+  void testDewPointTemperature()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Set dew point
+    atm.SetDewPoint(FGAtmosphere::eFahrenheit, 40.0);
+    double dewpoint_F = atm.GetDewPoint(FGAtmosphere::eFahrenheit);
+    TS_ASSERT_DELTA(dewpoint_F, 40.0, 1.0);
+
+    // Get in Celsius
+    double dewpoint_C = atm.GetDewPoint(FGAtmosphere::eCelsius);
+    TS_ASSERT_DELTA(dewpoint_C, (40.0 - 32.0) * 5.0 / 9.0, 1.0);
+  }
+
+  void testHumidityAffectsDensity()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Dry air density
+    atm.SetRelativeHumidity(0.0);
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double rho_dry = atm.GetDensity();
+
+    // Humid air density (water vapor is lighter than dry air)
+    atm.SetRelativeHumidity(100.0);
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double rho_humid = atm.GetDensity();
+
+    // Humid air should be less dense
+    TS_ASSERT(rho_humid <= rho_dry);
+  }
+
+  void testTemperatureBiasAtAltitude()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Set a bias and verify it's uniform with altitude
+    double bias = 10.0;  // degrees Rankine
+    atm.SetTemperatureBias(FGAtmosphere::eRankine, bias);
+
+    // Check at multiple altitudes
+    for (double h = 0.0; h <= 30000.0; h += 5000.0) {
+      double T_std = atm.GetStdTemperature(h);
+      double T_biased = atm.GetTemperature(h);
+      TS_ASSERT_DELTA(T_biased - T_std, bias, 0.1);
+    }
+  }
+
+  void testStdPressureAtKnownAltitudes()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Known ISA pressure values
+    // Sea level: 2116.22 psf
+    TS_ASSERT_DELTA(atm.GetStdPressure(0.0), FGAtmosphere::StdDaySLpressure, 1.0);
+
+    // 5000 ft: ~1760 psf
+    TS_ASSERT_DELTA(atm.GetStdPressure(5000.0), 1760.0, 20.0);
+
+    // 10000 ft: ~1455 psf
+    TS_ASSERT_DELTA(atm.GetStdPressure(10000.0), 1455.0, 20.0);
+
+    // 20000 ft: ~973 psf
+    TS_ASSERT_DELTA(atm.GetStdPressure(20000.0), 973.0, 20.0);
+  }
+
+  void testStdDensityAtKnownAltitudes()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Known ISA density values (slug/ft³)
+    // Sea level: 0.002377 slug/ft³
+    TS_ASSERT_DELTA(atm.GetStdDensity(0.0), 0.002377, 0.00001);
+
+    // 10000 ft: ~0.001756 slug/ft³
+    TS_ASSERT_DELTA(atm.GetStdDensity(10000.0), 0.001756, 0.0001);
+
+    // 20000 ft: ~0.001267 slug/ft³
+    TS_ASSERT_DELTA(atm.GetStdDensity(20000.0), 0.001267, 0.0001);
+  }
+
+  void testAtmosphereLayerBoundaries()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Tropopause boundary (~36,089 ft / 11 km)
+    double T_below_tropo = atm.GetStdTemperature(35000.0);
+    double T_at_tropo = atm.GetStdTemperature(36089.0);
+    double T_above_tropo = atm.GetStdTemperature(40000.0);
+
+    // Temperature should decrease below, then become constant
+    TS_ASSERT(T_below_tropo > T_at_tropo);
+    TS_ASSERT_DELTA(T_at_tropo, T_above_tropo, 1.0);
+
+    // Stratopause boundary (~65,617 ft / 20 km)
+    double T_above_65k = atm.GetStdTemperature(70000.0);
+    double T_at_65k = atm.GetStdTemperature(65617.0);
+
+    // Temperature should start increasing above stratopause
+    TS_ASSERT(T_above_65k >= T_at_65k - 1.0);  // May increase or stay same
+  }
+
+  void testMachOneAtAltitude()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Speed of sound determines Mach 1
+    // At sea level: ~1116 ft/s
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_sl = atm.GetSoundSpeed();
+    TS_ASSERT_DELTA(a_sl, 1116.0, 5.0);
+
+    // At 30000 ft: ~995 ft/s
+    atm.in.altitudeASL = 30000.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_30k = atm.GetSoundSpeed();
+    TS_ASSERT_DELTA(a_30k, 995.0, 10.0);
+
+    // At tropopause: ~968 ft/s
+    atm.in.altitudeASL = 36089.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_tropo = atm.GetSoundSpeed();
+    TS_ASSERT_DELTA(a_tropo, 968.0, 10.0);
+  }
+
+  void testMultipleInitModelCalls()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+
+    // First init
+    TS_ASSERT(atm.InitModel());
+    double T_sl_1 = atm.GetTemperatureSL();
+
+    // Modify state
+    atm.SetTemperatureBias(FGAtmosphere::eRankine, 50.0);
+
+    // Re-init should reset
+    TS_ASSERT(atm.InitModel());
+    double T_sl_2 = atm.GetTemperatureSL();
+
+    TS_ASSERT_DELTA(T_sl_1, T_sl_2, epsilon);
+  }
+
+  void testZeroAltitude()
+  {
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    // All ratios should be 1.0 at sea level
+    TS_ASSERT_DELTA(atm.GetTemperatureRatio(), 1.0, epsilon);
+    TS_ASSERT_DELTA(atm.GetPressureRatio(), 1.0, epsilon);
+    TS_ASSERT_DELTA(atm.GetDensityRatio(), 1.0, epsilon);
+  }
+
+  void testDeltaTProperty()
+  {
+    auto pm = fdmex.GetPropertyManager();
+    TestableStdAtmosphere atm(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Set temperature bias
+    atm.SetTemperatureBias(FGAtmosphere::eRankine, 15.0);
+
+    // Check that the temperature bias was set
+    double T_at_sea = atm.GetTemperature(0.0);
+
+    // At sea level, ISA temp is 518.67 R, plus 15 R bias
+    TS_ASSERT_DELTA(T_at_sea, 518.67 + 15.0, 0.5);
+  }
 };
