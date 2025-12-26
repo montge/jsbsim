@@ -528,4 +528,507 @@ public:
     TS_ASSERT_EQUALS(emptywt->GetAttributeValue("unit"), "LBS");
     TS_ASSERT_DELTA(emptywt->GetDataAsNumber(), 7000.0, epsilon);
   }
+
+  // Test 29: Element name with hyphens
+  void testElementNameWithHyphens() {
+    FGXMLParse parser;
+    std::string xml = "<root><mass-balance>100</mass-balance></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* massBalance = doc->FindElement("mass-balance");
+    TS_ASSERT(massBalance != nullptr);
+    TS_ASSERT_DELTA(massBalance->GetDataAsNumber(), 100.0, epsilon);
+  }
+
+  // Test 30: Element name with underscores
+  void testElementNameWithUnderscores() {
+    FGXMLParse parser;
+    std::string xml = "<root><wing_area>150</wing_area></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* wingArea = doc->FindElement("wing_area");
+    TS_ASSERT(wingArea != nullptr);
+    TS_ASSERT_DELTA(wingArea->GetDataAsNumber(), 150.0, epsilon);
+  }
+
+  // Test 31: Empty attribute value
+  void testEmptyAttributeValue() {
+    FGXMLParse parser;
+    std::string xml = "<element attr=\"\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT(doc->HasAttribute("attr"));
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("attr"), "");
+  }
+
+  // Test 32: Attribute with single quotes
+  void testAttributeWithSingleQuotes() {
+    FGXMLParse parser;
+    std::string xml = "<element attr='value'></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT(doc->HasAttribute("attr"));
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("attr"), "value");
+  }
+
+  // Test 33: FindElementValue method
+  void testFindElementValue() {
+    FGXMLParse parser;
+    std::string xml = "<root><name>TestName</name><value>42</value></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->FindElementValue("name"), "TestName");
+    TS_ASSERT_EQUALS(doc->FindElementValue("value"), "42");
+  }
+
+  // Test 34: FindElementValue for non-existent element
+  void testFindElementValueNonExistent() {
+    FGXMLParse parser;
+    std::string xml = "<root><name>Test</name></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    std::string value = doc->FindElementValue("nonexistent");
+    TS_ASSERT_EQUALS(value, "");
+  }
+
+  // Test 35: GetNumElements without name filter
+  void testGetNumElementsTotal() {
+    FGXMLParse parser;
+    std::string xml = "<root><a>1</a><b>2</b><c>3</c><a>4</a></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetNumElements(), 4u);
+    TS_ASSERT_EQUALS(doc->GetNumElements("a"), 2u);
+    TS_ASSERT_EQUALS(doc->GetNumElements("b"), 1u);
+    TS_ASSERT_EQUALS(doc->GetNumElements("c"), 1u);
+    TS_ASSERT_EQUALS(doc->GetNumElements("d"), 0u);
+  }
+
+  // Test 36: GetElement by index
+  void testGetElementByIndex() {
+    FGXMLParse parser;
+    std::string xml = "<root><first>1</first><second>2</second><third>3</third></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+
+    Element* first = doc->GetElement(0);
+    TS_ASSERT(first != nullptr);
+    TS_ASSERT_EQUALS(first->GetName(), "first");
+
+    Element* second = doc->GetElement(1);
+    TS_ASSERT(second != nullptr);
+    TS_ASSERT_EQUALS(second->GetName(), "second");
+
+    Element* third = doc->GetElement(2);
+    TS_ASSERT(third != nullptr);
+    TS_ASSERT_EQUALS(third->GetName(), "third");
+  }
+
+  // Test 37: Zero numeric value
+  void testZeroNumericValue() {
+    FGXMLParse parser;
+    std::string xml = "<value>0</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 0.0, epsilon);
+  }
+
+  // Test 38: Very small numeric value
+  void testVerySmallNumericValue() {
+    FGXMLParse parser;
+    std::string xml = "<value>1e-15</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 1e-15, 1e-20);
+  }
+
+  // Test 39: Very large numeric value
+  void testVeryLargeNumericValue() {
+    FGXMLParse parser;
+    std::string xml = "<value>1e15</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 1e15, 1e10);
+  }
+
+  // Test 40: Negative scientific notation
+  void testNegativeScientificNotation() {
+    FGXMLParse parser;
+    std::string xml = "<value>-3.5e-2</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), -0.035, epsilon);
+  }
+
+  // Test 41: Multiple same-name elements iteration
+  void testMultipleSameNameIteration() {
+    FGXMLParse parser;
+    std::string xml = "<root><point>1</point><point>2</point><point>3</point><point>4</point></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+
+    std::vector<double> values;
+    Element* point = doc->FindElement("point");
+    while (point != nullptr) {
+      values.push_back(point->GetDataAsNumber());
+      point = doc->FindNextElement("point");
+    }
+
+    TS_ASSERT_EQUALS(values.size(), 4u);
+    TS_ASSERT_DELTA(values[0], 1.0, epsilon);
+    TS_ASSERT_DELTA(values[1], 2.0, epsilon);
+    TS_ASSERT_DELTA(values[2], 3.0, epsilon);
+    TS_ASSERT_DELTA(values[3], 4.0, epsilon);
+  }
+
+  // Test 42: Processing instruction (if supported)
+  void testProcessingInstruction() {
+    FGXMLParse parser;
+    std::string xml = "<?xml version=\"1.0\"?><?custom data=\"value\"?><root>content</root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    // Processing instructions should be ignored
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "root");
+  }
+
+  // Test 43: Tabs and mixed whitespace
+  void testTabsAndMixedWhitespace() {
+    FGXMLParse parser;
+    std::string xml = "<root>\t<child>\t\tdata\t</child>\t</root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* child = doc->FindElement("child");
+    TS_ASSERT(child != nullptr);
+  }
+
+  // Test 44: Attribute value with newlines
+  void testAttributeValueWithWhitespace() {
+    FGXMLParse parser;
+    std::string xml = "<element attr=\"value with spaces\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("attr"), "value with spaces");
+  }
+
+  // Test 45: Checking non-existent attribute
+  void testNonExistentAttribute() {
+    FGXMLParse parser;
+    std::string xml = "<element attr=\"value\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT(!doc->HasAttribute("nonexistent"));
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("nonexistent"), "");
+  }
+
+  // Test 46: GetAttributeValueAsNumber with valid attribute
+  void testAttributeAsNumberValid() {
+    FGXMLParse parser;
+    std::string xml = "<element count=\"42\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT(doc->HasAttribute("count"));
+    double value = doc->GetAttributeValueAsNumber("count");
+    TS_ASSERT_DELTA(value, 42.0, epsilon);
+  }
+
+  // Test 47: Apostrophe in attribute (escaped)
+  void testApostropheInAttribute() {
+    FGXMLParse parser;
+    std::string xml = "<element attr=\"it&apos;s\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    std::string value = doc->GetAttributeValue("attr");
+    TS_ASSERT(value.find("'") != std::string::npos);
+  }
+
+  // Test 48: Deeply nested with mixed children
+  void testDeeplyNestedMixedChildren() {
+    FGXMLParse parser;
+    std::string xml = "<l1><l2a>a</l2a><l2b><l3>deep</l3></l2b></l1>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetNumElements(), 2u);
+
+    Element* l2b = doc->FindElement("l2b");
+    TS_ASSERT(l2b != nullptr);
+
+    Element* l3 = l2b->FindElement("l3");
+    TS_ASSERT(l3 != nullptr);
+    TS_ASSERT_EQUALS(l3->GetDataLine(), "deep");
+  }
+
+  // Test 49: JSBSim function-style XML
+  void testJSBSimFunctionStyleXML() {
+    FGXMLParse parser;
+    std::string xml = "<function name=\"aero/coefficient/CLalpha\">"
+                      "<description>Lift coefficient due to alpha</description>"
+                      "<product>"
+                      "<property>aero/qbar-psf</property>"
+                      "<property>metrics/Sw-sqft</property>"
+                      "<value>4.5</value>"
+                      "</product>"
+                      "</function>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "function");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("name"), "aero/coefficient/CLalpha");
+
+    Element* desc = doc->FindElement("description");
+    TS_ASSERT(desc != nullptr);
+
+    Element* product = doc->FindElement("product");
+    TS_ASSERT(product != nullptr);
+    TS_ASSERT_EQUALS(product->GetNumElements(), 3u);
+
+    Element* value = product->FindElement("value");
+    TS_ASSERT(value != nullptr);
+    TS_ASSERT_DELTA(value->GetDataAsNumber(), 4.5, epsilon);
+  }
+
+  // Test 50: JSBSim table-style XML
+  void testJSBSimTableStyleXML() {
+    FGXMLParse parser;
+    std::string xml = "<table name=\"CLalpha\" type=\"internal\">"
+                      "<independentVar lookup=\"row\">aero/alpha-rad</independentVar>"
+                      "<tableData>"
+                      "-0.20  -0.680\n"
+                      " 0.00   0.200\n"
+                      " 0.23   1.200\n"
+                      " 0.60   0.600"
+                      "</tableData>"
+                      "</table>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "table");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("name"), "CLalpha");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("type"), "internal");
+
+    Element* indVar = doc->FindElement("independentVar");
+    TS_ASSERT(indVar != nullptr);
+    TS_ASSERT_EQUALS(indVar->GetAttributeValue("lookup"), "row");
+
+    Element* tableData = doc->FindElement("tableData");
+    TS_ASSERT(tableData != nullptr);
+    TS_ASSERT(tableData->GetNumDataLines() > 0);
+  }
+
+  // Test 51: Attribute with path-like value
+  void testAttributeWithPathValue() {
+    FGXMLParse parser;
+    std::string xml = "<property>propulsion/engine[0]/thrust-lbs</property>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetDataLine(), "propulsion/engine[0]/thrust-lbs");
+  }
+
+  // Test 52: Boolean-like attribute values
+  void testBooleanLikeAttributes() {
+    FGXMLParse parser;
+    std::string xml = "<element enabled=\"true\" disabled=\"false\" flag=\"1\" noflag=\"0\"/>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("enabled"), "true");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("disabled"), "false");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("flag"), "1");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("noflag"), "0");
+  }
+
+  // Test 53: Data with plus sign
+  void testDataWithPlusSign() {
+    FGXMLParse parser;
+    std::string xml = "<value>+42.5</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 42.5, epsilon);
+  }
+
+  // Test 54: Multiple CDATA sections
+  void testMultipleCDATASections() {
+    FGXMLParse parser;
+    std::string xml = "<code><![CDATA[part1]]><![CDATA[part2]]></code>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    std::string data = doc->GetDataLine();
+    TS_ASSERT(data.find("part1") != std::string::npos);
+  }
+
+  // Test 55: Long element name
+  void testLongElementName() {
+    FGXMLParse parser;
+    std::string xml = "<very_long_element_name_that_goes_on_and_on>data</very_long_element_name_that_goes_on_and_on>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "very_long_element_name_that_goes_on_and_on");
+  }
+
+  // Test 56: Long attribute value
+  void testLongAttributeValue() {
+    FGXMLParse parser;
+    std::string longValue = std::string(200, 'a');
+    std::string xml = "<element attr=\"" + longValue + "\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("attr").length(), 200u);
+  }
+
+  // Test 57: Numeric attribute leading/trailing spaces
+  void testNumericAttributeSpaces() {
+    FGXMLParse parser;
+    std::string xml = "<element value=\" 42.5 \"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    // Parser may trim spaces
+    double val = doc->GetAttributeValueAsNumber("value");
+    TS_ASSERT_DELTA(val, 42.5, epsilon);
+  }
+
+  // Test 58: Element with only whitespace content
+  void testElementWithOnlyWhitespace() {
+    FGXMLParse parser;
+    std::string xml = "<element>   \n\t   </element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    // Should parse successfully even with whitespace-only content
+  }
+
+  // Test 59: Carriage return handling
+  void testCarriageReturnHandling() {
+    FGXMLParse parser;
+    std::string xml = "<root>\r\n<child>data</child>\r\n</root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* child = doc->FindElement("child");
+    TS_ASSERT(child != nullptr);
+    TS_ASSERT_EQUALS(child->GetDataLine(), "data");
+  }
+
+  // Test 60: Pure numeric data extraction
+  void testPureNumericData() {
+    FGXMLParse parser;
+    std::string xml = "<value> 42.5 </value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    // GetDataAsNumber extracts numeric value (whitespace trimmed)
+    double val = doc->GetDataAsNumber();
+    TS_ASSERT_DELTA(val, 42.5, epsilon);
+  }
+
+  // Test 61: Deeply nested same-named elements
+  void testDeeplyNestedSameNamedElements() {
+    FGXMLParse parser;
+    std::string xml = "<group><group><group>deep</group></group></group>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "group");
+
+    Element* level2 = doc->FindElement("group");
+    TS_ASSERT(level2 != nullptr);
+
+    Element* level3 = level2->FindElement("group");
+    TS_ASSERT(level3 != nullptr);
+    TS_ASSERT_EQUALS(level3->GetDataLine(), "deep");
+  }
+
+  // Test 62: Complex attribute names
+  void testComplexAttributeNames() {
+    FGXMLParse parser;
+    std::string xml = "<element data-type=\"number\" xml-lang=\"en\" my_attr=\"val\"/>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT(doc->HasAttribute("data-type"));
+    TS_ASSERT(doc->HasAttribute("xml-lang"));
+    TS_ASSERT(doc->HasAttribute("my_attr"));
+  }
+
+  // Test 63: Sibling and first element access
+  void testSiblingAndFirstElement() {
+    FGXMLParse parser;
+    std::string xml = "<root><a>1</a><b>2</b><c>3</c></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+
+    // Get first element
+    Element* first = doc->GetElement(0);
+    TS_ASSERT(first != nullptr);
+    TS_ASSERT_EQUALS(first->GetName(), "a");
+
+    // Check we can iterate through all children
+    Element* current = doc->GetElement(0);
+    int count = 0;
+    while (current != nullptr) {
+      count++;
+      current = doc->GetElement(count);
+    }
+    TS_ASSERT_EQUALS(count, 3);
+  }
 };
