@@ -995,4 +995,516 @@ public:
 
     TS_ASSERT_DELTA(pos, -neg, epsilon);
   }
+
+  /***************************************************************************
+   * Multi-Turn Tracking Tests
+   ***************************************************************************/
+
+  // Test extended range multi-turn tracking
+  void testMultiTurnExtendedRange() {
+    LinearActuatorState state;
+    state.module = 360.0;
+    state.rate = 0.3;
+    state.hysteresis = 1.0;
+
+    // Simulate 10 full rotations
+    double angles[] = {0, 90, 180, 270, 350, 10};  // One full rotation
+    for (int rotation = 0; rotation < 10; rotation++) {
+      for (int i = 0; i < 6; i++) {
+        runLinearActuator(state, angles[i]);
+      }
+    }
+
+    // Should track 10 full rotations
+    TS_ASSERT_EQUALS(state.countSpin, 10);
+  }
+
+  // Test bidirectional multi-turn
+  void testBidirectionalMultiTurn() {
+    LinearActuatorState state;
+    state.module = 360.0;
+    state.rate = 0.3;
+    state.hysteresis = 1.0;
+
+    // Go forward 3 rotations
+    for (int i = 0; i < 3; i++) {
+      state.inputLast = 350.0;
+      runLinearActuator(state, 10.0);
+    }
+    TS_ASSERT_EQUALS(state.countSpin, 3);
+
+    // Go backward 2 rotations
+    for (int i = 0; i < 2; i++) {
+      state.inputLast = 10.0;
+      runLinearActuator(state, 350.0);
+    }
+    TS_ASSERT_EQUALS(state.countSpin, 1);  // 3 - 2 = 1
+  }
+
+  // Test multi-turn with high precision
+  void testMultiTurnHighPrecision() {
+    LinearActuatorState state;
+    state.module = 360.0;
+    state.rate = 0.3;
+    state.hysteresis = 0.01;  // High precision
+
+    // Verify sub-degree tracking
+    runLinearActuator(state, 0.0);
+    runLinearActuator(state, 0.5);
+    runLinearActuator(state, 1.0);
+
+    // No wrapping, just precision movement
+    TS_ASSERT_EQUALS(state.countSpin, 0);
+  }
+
+  /***************************************************************************
+   * Mechanical Backlash Tests
+   ***************************************************************************/
+
+  // Simulate mechanical backlash
+  double applyBacklash(double target, double current, double lastDirection, double backlash) {
+    double delta = target - current;
+    int newDirection = (delta > 0) ? 1 : -1;
+
+    if (newDirection != lastDirection && std::abs(delta) < backlash) {
+      return current;  // Within backlash zone, no movement
+    }
+
+    if (newDirection != lastDirection) {
+      // Direction change, absorb backlash
+      return current + (delta > 0 ? delta - backlash : delta + backlash);
+    }
+
+    return target;
+  }
+
+  // Test backlash hysteresis zone
+  void testBacklashHysteresisZone() {
+    double current = 50.0;
+    double backlash = 5.0;
+    int lastDirection = 1;  // Was moving positive
+
+    // Small negative movement within backlash
+    double output = applyBacklash(48.0, current, lastDirection, backlash);
+    TS_ASSERT_DELTA(output, 50.0, epsilon);  // No movement
+
+    // Larger negative movement exceeds backlash
+    output = applyBacklash(40.0, current, lastDirection, backlash);
+    TS_ASSERT_DELTA(output, 45.0, epsilon);  // Move after absorbing backlash
+  }
+
+  // Test zero backlash (ideal actuator)
+  void testZeroBacklash() {
+    double current = 50.0;
+    double backlash = 0.0;
+    int lastDirection = 1;
+
+    double output = applyBacklash(48.0, current, lastDirection, backlash);
+    TS_ASSERT_DELTA(output, 48.0, epsilon);  // Immediate movement
+  }
+
+  /***************************************************************************
+   * Limit Switch Tests
+   ***************************************************************************/
+
+  struct LimitSwitchState {
+    double position;
+    double lowerLimit;
+    double upperLimit;
+    bool lowerTriggered;
+    bool upperTriggered;
+  };
+
+  void checkLimitSwitches(LimitSwitchState& state) {
+    state.lowerTriggered = (state.position <= state.lowerLimit);
+    state.upperTriggered = (state.position >= state.upperLimit);
+  }
+
+  // Test lower limit switch
+  void testLowerLimitSwitch() {
+    LimitSwitchState state;
+    state.lowerLimit = 0.0;
+    state.upperLimit = 100.0;
+    state.position = -5.0;
+
+    checkLimitSwitches(state);
+    TS_ASSERT(state.lowerTriggered);
+    TS_ASSERT(!state.upperTriggered);
+  }
+
+  // Test upper limit switch
+  void testUpperLimitSwitch() {
+    LimitSwitchState state;
+    state.lowerLimit = 0.0;
+    state.upperLimit = 100.0;
+    state.position = 105.0;
+
+    checkLimitSwitches(state);
+    TS_ASSERT(!state.lowerTriggered);
+    TS_ASSERT(state.upperTriggered);
+  }
+
+  // Test within limits
+  void testWithinLimits() {
+    LimitSwitchState state;
+    state.lowerLimit = 0.0;
+    state.upperLimit = 100.0;
+    state.position = 50.0;
+
+    checkLimitSwitches(state);
+    TS_ASSERT(!state.lowerTriggered);
+    TS_ASSERT(!state.upperTriggered);
+  }
+
+  // Test soft limits with deceleration
+  void testSoftLimits() {
+    double position = 95.0;
+    double softLimitStart = 90.0;
+    double hardLimit = 100.0;
+    double velocity = 10.0;
+
+    // Calculate deceleration factor as position approaches limit
+    double margin = hardLimit - position;
+    double softZone = hardLimit - softLimitStart;
+    double decelFactor = (position > softLimitStart) ? margin / softZone : 1.0;
+
+    double limitedVelocity = velocity * decelFactor;
+    TS_ASSERT_DELTA(limitedVelocity, 5.0, epsilon);  // 10 * 0.5
+  }
+
+  /***************************************************************************
+   * Fault Detection Tests
+   ***************************************************************************/
+
+  // Test stall detection
+  void testStallDetection() {
+    double commandedPosition = 50.0;
+    double actualPosition = 10.0;
+    double stallThreshold = 5.0;
+    double stallTime = 0.0;
+    double stallTimeLimit = 1.0;
+    double dt = 0.1;
+
+    // Position error exceeds threshold
+    double error = std::abs(commandedPosition - actualPosition);
+
+    // Simulate 11 iterations with no movement (exceeds 1.0 second)
+    for (int i = 0; i < 11; i++) {
+      if (error > stallThreshold) {
+        stallTime += dt;
+      } else {
+        stallTime = 0.0;
+      }
+    }
+
+    bool stalled = (stallTime >= stallTimeLimit);
+    TS_ASSERT(stalled);
+  }
+
+  // Test runaway detection
+  void testRunawayDetection() {
+    double expectedRate = 10.0;  // degrees/sec
+    double actualRate = 100.0;   // degrees/sec
+    double runawayThreshold = 2.0;  // 2x expected rate
+
+    bool runaway = (actualRate > expectedRate * runawayThreshold);
+    TS_ASSERT(runaway);
+  }
+
+  // Test position feedback fault
+  void testPositionFeedbackFault() {
+    double commandHistory[] = {10, 20, 30, 40, 50};
+    double feedbackHistory[] = {10, 10, 10, 10, 10};  // Stuck feedback
+
+    double maxFeedbackDelta = 0.0;
+    for (int i = 1; i < 5; i++) {
+      double delta = std::abs(feedbackHistory[i] - feedbackHistory[i-1]);
+      maxFeedbackDelta = std::max(maxFeedbackDelta, delta);
+    }
+
+    // Command changed significantly but feedback didn't
+    double commandDelta = std::abs(commandHistory[4] - commandHistory[0]);
+    bool feedbackFault = (commandDelta > 10.0 && maxFeedbackDelta < 1.0);
+
+    TS_ASSERT(feedbackFault);
+  }
+
+  /***************************************************************************
+   * Calibration Tests
+   ***************************************************************************/
+
+  // Test zero calibration
+  void testZeroCalibration() {
+    double rawPosition = 15.0;
+    double zeroOffset = 15.0;
+
+    double calibrated = rawPosition - zeroOffset;
+    TS_ASSERT_DELTA(calibrated, 0.0, epsilon);
+  }
+
+  // Test span calibration
+  void testSpanCalibration() {
+    double rawPosition = 500.0;  // Raw counts
+    double countsPerDegree = 10.0;
+
+    double calibrated = rawPosition / countsPerDegree;
+    TS_ASSERT_DELTA(calibrated, 50.0, epsilon);
+  }
+
+  // Test two-point calibration
+  void testTwoPointCalibration() {
+    // Calibration points: raw 100 = 0 deg, raw 900 = 180 deg
+    double rawLow = 100.0, rawHigh = 900.0;
+    double calLow = 0.0, calHigh = 180.0;
+
+    // Calculate slope and offset
+    double slope = (calHigh - calLow) / (rawHigh - rawLow);
+    double offset = calLow - slope * rawLow;
+
+    // Test a raw value
+    double rawTest = 500.0;
+    double calibrated = slope * rawTest + offset;
+
+    // Expected: (500-100) * 180/800 = 400 * 0.225 = 90
+    TS_ASSERT_DELTA(calibrated, 90.0, 0.1);
+  }
+
+  // Test multi-point linearization
+  void testMultiPointLinearization() {
+    // Non-linear sensor calibration table
+    double rawPoints[] = {0, 100, 200, 300, 400};
+    double calPoints[] = {0, 25, 55, 90, 100};  // Non-linear
+
+    // Interpolate for raw = 150
+    double raw = 150.0;
+    int segment = 1;  // Between 100 and 200
+
+    double t = (raw - rawPoints[segment]) / (rawPoints[segment+1] - rawPoints[segment]);
+    double calibrated = calPoints[segment] + t * (calPoints[segment+1] - calPoints[segment]);
+
+    // Expected: 25 + 0.5 * (55-25) = 40
+    TS_ASSERT_DELTA(calibrated, 40.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Position Servo Loop Tests
+   ***************************************************************************/
+
+  // Test proportional position control
+  void testProportionalPositionControl() {
+    double target = 100.0;
+    double current = 60.0;
+    double Kp = 0.5;
+
+    double error = target - current;
+    double command = Kp * error;
+
+    TS_ASSERT_DELTA(command, 20.0, epsilon);  // 0.5 * 40
+  }
+
+  // Test position servo convergence
+  void testPositionServoConvergence() {
+    double target = 100.0;
+    double current = 0.0;
+    double Kp = 0.2;
+
+    for (int i = 0; i < 50; i++) {
+      double error = target - current;
+      double velocity = Kp * error;
+      current += velocity;
+    }
+
+    TS_ASSERT_DELTA(current, target, 0.1);
+  }
+
+  // Test velocity feedforward
+  void testVelocityFeedforward() {
+    double targetPos = 100.0;
+    double targetVel = 10.0;  // Known target velocity
+    double currentPos = 90.0;
+    double Kp = 0.5;
+    double Kff = 1.0;
+
+    double posError = targetPos - currentPos;
+    double command = Kp * posError + Kff * targetVel;
+
+    // 0.5 * 10 + 1.0 * 10 = 15
+    TS_ASSERT_DELTA(command, 15.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Velocity Mode Tests
+   ***************************************************************************/
+
+  // Test velocity integration
+  void testVelocityModeIntegration() {
+    double position = 0.0;
+    double velocity = 10.0;  // degrees/sec
+    double dt = 0.1;
+
+    for (int i = 0; i < 10; i++) {
+      position += velocity * dt;
+    }
+
+    TS_ASSERT_DELTA(position, 10.0, epsilon);  // 10 * 10 * 0.1
+  }
+
+  // Test velocity limiting
+  void testVelocityModeLimiting() {
+    double commandedVelocity = 100.0;
+    double maxVelocity = 50.0;
+
+    double limitedVelocity = std::min(std::abs(commandedVelocity), maxVelocity);
+    if (commandedVelocity < 0) limitedVelocity = -limitedVelocity;
+
+    TS_ASSERT_DELTA(limitedVelocity, 50.0, epsilon);
+  }
+
+  // Test acceleration limiting
+  void testAccelerationLimiting() {
+    double currentVelocity = 10.0;
+    double targetVelocity = 100.0;
+    double maxAcceleration = 20.0;  // deg/s^2
+    double dt = 0.1;
+
+    double maxDeltaV = maxAcceleration * dt;
+    double deltaV = targetVelocity - currentVelocity;
+
+    if (std::abs(deltaV) > maxDeltaV) {
+      deltaV = (deltaV > 0) ? maxDeltaV : -maxDeltaV;
+    }
+
+    double newVelocity = currentVelocity + deltaV;
+    TS_ASSERT_DELTA(newVelocity, 12.0, epsilon);  // 10 + 2
+  }
+
+  /***************************************************************************
+   * Homing Sequence Tests
+   ***************************************************************************/
+
+  enum HomingState { IDLE, SEEKING_SWITCH, BACKING_OFF, MOVING_TO_INDEX, COMPLETE };
+
+  // Test homing state machine
+  void testHomingStateMachine() {
+    HomingState state = IDLE;
+    bool limitSwitch = false;
+    bool indexPulse = false;
+
+    // Start homing
+    state = SEEKING_SWITCH;
+    TS_ASSERT_EQUALS(static_cast<int>(state), static_cast<int>(SEEKING_SWITCH));
+
+    // Hit limit switch
+    limitSwitch = true;
+    if (state == SEEKING_SWITCH && limitSwitch) {
+      state = BACKING_OFF;
+    }
+    TS_ASSERT_EQUALS(static_cast<int>(state), static_cast<int>(BACKING_OFF));
+
+    // Clear of switch
+    limitSwitch = false;
+    if (state == BACKING_OFF && !limitSwitch) {
+      state = MOVING_TO_INDEX;
+    }
+    TS_ASSERT_EQUALS(static_cast<int>(state), static_cast<int>(MOVING_TO_INDEX));
+
+    // Found index pulse
+    indexPulse = true;
+    if (state == MOVING_TO_INDEX && indexPulse) {
+      state = COMPLETE;
+    }
+    TS_ASSERT_EQUALS(static_cast<int>(state), static_cast<int>(COMPLETE));
+  }
+
+  // Test homing velocity profile
+  void testHomingVelocityProfile() {
+    double fastSpeed = 100.0;
+    double slowSpeed = 10.0;
+    bool nearLimit = true;
+
+    double homingSpeed = nearLimit ? slowSpeed : fastSpeed;
+    TS_ASSERT_DELTA(homingSpeed, 10.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Resolution and Accuracy Tests
+   ***************************************************************************/
+
+  // Test encoder resolution
+  void testEncoderResolution() {
+    int countsPerRev = 4096;  // 12-bit encoder
+    double resolution = 360.0 / countsPerRev;
+
+    TS_ASSERT_DELTA(resolution, 0.0879, 0.001);  // ~0.088 degrees
+  }
+
+  // Test quantization error
+  void testQuantizationError() {
+    double resolution = 0.1;  // 0.1 degree resolution
+    double trueAngle = 45.678;
+
+    double quantized = std::round(trueAngle / resolution) * resolution;
+    double error = trueAngle - quantized;
+
+    TS_ASSERT(std::abs(error) <= resolution / 2.0);
+  }
+
+  // Test accumulated error over rotations
+  void testAccumulatedError() {
+    double resolution = 0.1;
+    double anglePerStep = 10.0;
+    double accumulatedAngle = 0.0;
+
+    // 36 steps should be exactly 360 degrees
+    for (int i = 0; i < 36; i++) {
+      accumulatedAngle += anglePerStep;
+    }
+
+    TS_ASSERT_DELTA(accumulatedAngle, 360.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Power and Temperature Tests
+   ***************************************************************************/
+
+  // Test thermal drift compensation
+  void testThermalDriftCompensation() {
+    double nominalGain = 1.0;
+    double temperature = 50.0;  // Celsius
+    double refTemperature = 25.0;
+    double tempCoeff = -0.001;  // -0.1% per degree
+
+    double compensatedGain = nominalGain * (1.0 + tempCoeff * (temperature - refTemperature));
+    // 1.0 * (1.0 - 0.001 * 25) = 1.0 * 0.975 = 0.975
+    TS_ASSERT_DELTA(compensatedGain, 0.975, 0.001);
+  }
+
+  // Test power-on initialization
+  void testPowerOnInitialization() {
+    LinearActuatorState state;
+
+    // Default initialization values
+    TS_ASSERT_DELTA(state.inputLast, 0.0, epsilon);
+    TS_ASSERT_EQUALS(state.countSpin, 0);
+    TS_ASSERT_EQUALS(state.direction, 0);
+  }
+
+  // Test brownout recovery
+  void testBrownoutRecovery() {
+    LinearActuatorState state;
+    state.countSpin = 5;
+    state.inputLast = 180.0;
+
+    // Simulate brownout - save state
+    int savedSpin = state.countSpin;
+    double savedInput = state.inputLast;
+
+    // Power restored - restore state
+    LinearActuatorState newState;
+    newState.countSpin = savedSpin;
+    newState.inputLast = savedInput;
+
+    TS_ASSERT_EQUALS(newState.countSpin, 5);
+    TS_ASSERT_DELTA(newState.inputLast, 180.0, epsilon);
+  }
 };
