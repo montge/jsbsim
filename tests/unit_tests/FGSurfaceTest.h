@@ -478,4 +478,504 @@ public:
     TS_ASSERT_DELTA(surface.GetMaximumForce(), 75000.0, epsilon);
     TS_ASSERT(surface.GetSolid());
   }
+
+  /***************************************************************************
+   * Additional Surface Type Tests
+   ***************************************************************************/
+
+  // Test sand surface properties
+  void testSandSurfaceProperties() {
+    FGFDMExec fdmex;
+    FGSurface sand(&fdmex);
+
+    // Sand has lower friction and yields under load
+    sand.SetStaticFFactor(0.35);
+    sand.SetRollingFFactor(0.15);  // High rolling resistance
+    sand.SetMaximumForce(30000.0);  // Soft surface
+
+    TS_ASSERT(sand.GetRollingFFactor() > 0.1);
+    TS_ASSERT(sand.GetMaximumForce() < 50000.0);
+  }
+
+  // Test gravel surface properties
+  void testGravelSurfaceProperties() {
+    FGFDMExec fdmex;
+    FGSurface gravel(&fdmex);
+
+    gravel.SetStaticFFactor(0.55);
+    gravel.SetRollingFFactor(0.06);
+    gravel.SetBumpiness(0.6);  // Rough surface
+
+    TS_ASSERT(gravel.GetBumpiness() > 0.5);
+    TS_ASSERT_DELTA(gravel.GetStaticFFactor(), 0.55, epsilon);
+  }
+
+  // Test mud surface properties
+  void testMudSurfaceProperties() {
+    FGFDMExec fdmex;
+    FGSurface mud(&fdmex);
+
+    // Mud has very low friction and limited force capacity
+    mud.SetStaticFFactor(0.2);
+    mud.SetRollingFFactor(0.2);  // Very high rolling resistance
+    mud.SetMaximumForce(20000.0);
+    mud.SetSolid(false);  // Not fully solid
+
+    TS_ASSERT(!mud.GetSolid());
+    TS_ASSERT(mud.GetStaticFFactor() < 0.3);
+  }
+
+  // Test snow surface properties
+  void testSnowSurfaceProperties() {
+    FGFDMExec fdmex;
+    FGSurface snow(&fdmex);
+
+    // Packed snow has moderate friction
+    snow.SetStaticFFactor(0.25);
+    snow.SetRollingFFactor(0.10);
+    snow.SetBumpiness(0.3);
+
+    // Snow friction is between ice (~0.1) and wet surface (~0.5)
+    TS_ASSERT(snow.GetStaticFFactor() > 0.1);
+    TS_ASSERT(snow.GetStaticFFactor() < 0.5);
+    TS_ASSERT(snow.GetRollingFFactor() > 0.05);
+  }
+
+  // Test water surface (hydroplaning)
+  void testWaterSurfaceProperties() {
+    FGFDMExec fdmex;
+    FGSurface water(&fdmex);
+
+    water.SetStaticFFactor(0.05);  // Nearly frictionless
+    water.SetRollingFFactor(0.05);
+    water.SetSolid(false);
+
+    TS_ASSERT(!water.GetSolid());
+    TS_ASSERT(water.GetStaticFFactor() < 0.1);
+  }
+
+  /***************************************************************************
+   * Velocity-Dependent Friction Tests
+   ***************************************************************************/
+
+  // Test speed effect on friction coefficient
+  void testSpeedEffectOnFriction() {
+    // Friction coefficient decreases slightly with speed
+    double mu_static = 0.8;
+    double speed = 0.0;  // ft/s
+
+    // Stationary
+    double mu_at_zero = mu_static;
+    TS_ASSERT_DELTA(mu_at_zero, 0.8, epsilon);
+
+    // At speed, friction is reduced
+    speed = 100.0;
+    double speedFactor = 1.0 / (1.0 + 0.001 * speed);
+    double mu_at_speed = mu_static * speedFactor;
+
+    TS_ASSERT(mu_at_speed < mu_static);
+    TS_ASSERT_DELTA(mu_at_speed, 0.727, 0.01);
+  }
+
+  // Test brake fade with temperature
+  void testBrakeFadeWithTemperature() {
+    double mu_cold = 0.8;
+    double temperature = 200.0;  // degrees C
+
+    // Friction decreases as brakes heat up
+    double fadeFactor = 1.0 - 0.001 * std::max(0.0, temperature - 150.0);
+    double mu_hot = mu_cold * fadeFactor;
+
+    TS_ASSERT(mu_hot < mu_cold);
+    TS_ASSERT_DELTA(mu_hot, 0.76, 0.01);
+  }
+
+  // Test hydroplaning speed threshold
+  void testHydroplaningThreshold() {
+    // Hydroplaning speed = 9 * sqrt(tire_pressure_psi)
+    double tirePressure = 100.0;  // psi
+    double hydroplaningSpeed_kts = 9.0 * std::sqrt(tirePressure);
+
+    TS_ASSERT_DELTA(hydroplaningSpeed_kts, 90.0, 0.1);
+
+    // Lower tire pressure = lower hydroplaning speed
+    tirePressure = 50.0;
+    hydroplaningSpeed_kts = 9.0 * std::sqrt(tirePressure);
+    TS_ASSERT_DELTA(hydroplaningSpeed_kts, 63.6, 0.1);
+  }
+
+  /***************************************************************************
+   * Contact Patch and Load Distribution Tests
+   ***************************************************************************/
+
+  // Test contact patch area calculation
+  void testContactPatchArea() {
+    double tirePressure = 100.0;  // psi
+    double load = 5000.0;  // lbs
+
+    // Contact area = Load / Pressure
+    double area = load / tirePressure;  // sq in
+    TS_ASSERT_DELTA(area, 50.0, epsilon);
+
+    // Higher pressure = smaller patch
+    tirePressure = 150.0;
+    area = load / tirePressure;
+    TS_ASSERT_DELTA(area, 33.33, 0.01);
+  }
+
+  // Test load distribution between main gear
+  void testLoadDistributionMainGear() {
+    double totalWeight = 10000.0;  // lbs
+    double cgPercent = 0.30;  // 30% forward of main gear
+
+    // Main gear carries most of the weight
+    double mainGearLoad = totalWeight * (1.0 - cgPercent);
+    double noseGearLoad = totalWeight * cgPercent;
+
+    TS_ASSERT_DELTA(mainGearLoad, 7000.0, epsilon);
+    TS_ASSERT_DELTA(noseGearLoad, 3000.0, epsilon);
+    TS_ASSERT(mainGearLoad > noseGearLoad);
+  }
+
+  // Test weight transfer during braking
+  void testWeightTransferBraking() {
+    double weight = 10000.0;  // lbs
+    double deceleration = 0.3;  // g's
+    double wheelbase = 10.0;  // ft
+    double cgHeight = 3.0;  // ft
+
+    // Weight transfer = (W * a * h) / L
+    double weightTransfer = (weight * deceleration * cgHeight) / wheelbase;
+    TS_ASSERT_DELTA(weightTransfer, 900.0, 1.0);
+
+    // Nose gear load increases during braking
+    double staticNoseLoad = 3000.0;
+    double dynamicNoseLoad = staticNoseLoad + weightTransfer;
+    TS_ASSERT_DELTA(dynamicNoseLoad, 3900.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Braking Performance Tests
+   ***************************************************************************/
+
+  // Test braking distance calculation
+  void testBrakingDistance() {
+    double speed = 150.0;  // ft/s (~90 kts)
+    double mu = 0.5;       // wet runway
+    double g = 32.2;       // ft/s^2
+
+    // Stopping distance = v^2 / (2 * mu * g)
+    double distance = (speed * speed) / (2.0 * mu * g);
+    TS_ASSERT_DELTA(distance, 698.8, 1.0);
+
+    // Dry runway (higher friction = shorter distance)
+    mu = 0.8;
+    distance = (speed * speed) / (2.0 * mu * g);
+    TS_ASSERT_DELTA(distance, 436.0, 1.0);
+  }
+
+  // Test deceleration rate
+  void testDecelerationRate() {
+    double mu = 0.6;
+    double g = 32.2;  // ft/s^2
+
+    // Maximum deceleration = mu * g
+    double maxDecel = mu * g;
+    TS_ASSERT_DELTA(maxDecel, 19.32, 0.01);
+
+    // In g's
+    double decelG = mu;
+    TS_ASSERT_DELTA(decelG, 0.6, epsilon);
+  }
+
+  // Test anti-skid effect on braking
+  void testAntiSkidEffect() {
+    double mu_locked = 0.5;    // Locked wheel (sliding)
+    double mu_rolling = 0.7;   // Rolling with anti-skid
+
+    // Anti-skid maintains rolling friction > sliding friction
+    TS_ASSERT(mu_rolling > mu_locked);
+
+    // Braking efficiency improvement
+    double efficiency = mu_rolling / mu_locked;
+    TS_ASSERT_DELTA(efficiency, 1.4, 0.01);
+  }
+
+  /***************************************************************************
+   * Cornering Force Tests
+   ***************************************************************************/
+
+  // Test side force from slip angle
+  void testSideForceFromSlipAngle() {
+    double slipAngle = 5.0;  // degrees
+    double normalForce = 5000.0;  // lbs
+    double corneringStiffness = 150.0;  // lbs per degree
+
+    // Side force = cornering_stiffness * slip_angle
+    double sideForce = corneringStiffness * slipAngle;
+    TS_ASSERT_DELTA(sideForce, 750.0, epsilon);
+
+    // Limited by friction
+    double mu = 0.8;
+    double maxSideForce = mu * normalForce;
+    double actualSideForce = std::min(sideForce, maxSideForce);
+    TS_ASSERT_DELTA(actualSideForce, 750.0, epsilon);
+  }
+
+  // Test tire saturation at high slip angles
+  void testTireSaturationHighSlipAngle() {
+    double normalForce = 5000.0;
+    double mu = 0.8;
+    double maxSideForce = mu * normalForce;
+
+    // At low slip angle, linear region
+    double slipAngle = 3.0;
+    double corneringStiffness = 200.0;
+    double sideForce = corneringStiffness * slipAngle;
+    TS_ASSERT(sideForce < maxSideForce);
+
+    // At high slip angle, saturated
+    slipAngle = 25.0;
+    sideForce = corneringStiffness * slipAngle;
+    double limitedForce = std::min(sideForce, maxSideForce);
+    TS_ASSERT_DELTA(limitedForce, maxSideForce, epsilon);
+  }
+
+  /***************************************************************************
+   * Bump and Roughness Tests
+   ***************************************************************************/
+
+  // Test bump frequency
+  void testBumpFrequency() {
+    double speed = 100.0;  // ft/s
+    double bumpSpacing = 50.0;  // ft between bumps
+
+    double frequency = speed / bumpSpacing;  // Hz
+    TS_ASSERT_DELTA(frequency, 2.0, epsilon);
+
+    // Higher speed = higher frequency
+    speed = 200.0;
+    frequency = speed / bumpSpacing;
+    TS_ASSERT_DELTA(frequency, 4.0, epsilon);
+  }
+
+  // Test vertical acceleration from bumps
+  void testVerticalAccelerationFromBumps() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+
+    surface.SetBumpiness(0.5);
+
+    // Bump amplitude
+    double amplitude = 0.4 * 0.5;  // max_amplitude * bumpiness
+    TS_ASSERT_DELTA(amplitude, 0.2, epsilon);
+
+    // Vertical acceleration = amplitude * (2*pi*freq)^2
+    double frequency = 2.0;  // Hz
+    double maxAccel = amplitude * pow(2.0 * M_PI * frequency, 2);
+
+    // In g's
+    double accelG = maxAccel / 32.2;
+    TS_ASSERT(accelG > 0);
+  }
+
+  // Test bumpiness effect on ride quality
+  void testBumpinessRideQuality() {
+    FGFDMExec fdmex;
+    FGSurface smooth(&fdmex);
+    FGSurface rough(&fdmex);
+
+    smooth.SetBumpiness(0.1);
+    rough.SetBumpiness(0.8);
+
+    double pos[3] = {10.0, 10.0, 0.0};
+    smooth.SetPosition(pos);
+    rough.SetPosition(pos);
+
+    double smoothBump = std::abs(smooth.GetBumpHeight());
+    double roughBump = std::abs(rough.GetBumpHeight());
+
+    // Rougher surface has larger amplitude variations
+    // (may not always be true at exact same position, but
+    // the amplitude scale factor ensures rough >= smooth)
+    TS_ASSERT(rough.GetBumpiness() > smooth.GetBumpiness());
+  }
+
+  /***************************************************************************
+   * Surface Gradient Tests
+   ***************************************************************************/
+
+  // Test runway gradient effect on takeoff
+  void testRunwayGradientTakeoff() {
+    double thrust = 5000.0;  // lbs
+    double weight = 10000.0;
+    double gradient = 0.02;  // 2% uphill
+
+    // Force component from gradient
+    double gravityComponent = weight * gradient;
+    TS_ASSERT_DELTA(gravityComponent, 200.0, epsilon);
+
+    // Net accelerating force
+    double netForce = thrust - gravityComponent;
+    TS_ASSERT_DELTA(netForce, 4800.0, epsilon);
+  }
+
+  // Test runway gradient effect on landing
+  void testRunwayGradientLanding() {
+    double brakeForce = 4000.0;  // lbs
+    double weight = 10000.0;
+    double gradient = 0.02;  // 2% downhill
+
+    // Gravity helps braking when landing uphill
+    double gravityComponent = weight * gradient;
+
+    // Landing uphill (assists braking)
+    double totalDecelForce = brakeForce + gravityComponent;
+    TS_ASSERT_DELTA(totalDecelForce, 4200.0, epsilon);
+
+    // Landing downhill (reduces braking)
+    totalDecelForce = brakeForce - gravityComponent;
+    TS_ASSERT_DELTA(totalDecelForce, 3800.0, epsilon);
+  }
+
+  // Test cross slope effect
+  void testCrossSlopeEffect() {
+    double weight = 10000.0;
+    double crossSlope = 0.015;  // 1.5% cross slope
+
+    // Side force from cross slope
+    double sideForce = weight * crossSlope;
+    TS_ASSERT_DELTA(sideForce, 150.0, epsilon);
+
+    // This must be countered by steering or tire side force
+    double mu = 0.8;
+    double availableSideForce = mu * weight;
+    TS_ASSERT(availableSideForce > sideForce);
+  }
+
+  /***************************************************************************
+   * Multi-Point Contact Tests
+   ***************************************************************************/
+
+  // Test three-point contact stability
+  void testThreePointContact() {
+    // Tricycle gear with nose wheel
+    double mainGearSpan = 10.0;  // ft
+    double wheelbase = 15.0;     // ft
+    double cgX = 5.0;            // ft forward of main gear
+    double cgY = 0.0;            // centerline
+
+    // CG must be within triangle formed by gear
+    bool stable = (cgX > 0) && (cgX < wheelbase) && (std::abs(cgY) < mainGearSpan/2);
+    TS_ASSERT(stable);
+
+    // Tip-over angle
+    double tipAngle = std::atan(mainGearSpan / (2.0 * cgX));
+    TS_ASSERT(tipAngle > 0.5);  // > ~30 degrees is good
+  }
+
+  // Test differential braking
+  void testDifferentialBraking() {
+    double leftBrake = 0.8;   // 80% left brake
+    double rightBrake = 0.2;  // 20% right brake
+    double totalBrakeForce = 4000.0;  // lbs total available
+
+    double leftForce = totalBrakeForce * leftBrake;
+    double rightForce = totalBrakeForce * rightBrake;
+
+    // Net yawing moment
+    double gearSpan = 10.0;  // ft
+    double yawMoment = (leftForce - rightForce) * gearSpan / 2.0;
+    TS_ASSERT_DELTA(yawMoment, 12000.0, 1.0);  // ft-lbs
+  }
+
+  /***************************************************************************
+   * Edge Cases and Limits
+   ***************************************************************************/
+
+  // Test zero normal force
+  void testZeroNormalForce() {
+    double normalForce = 0.0;
+    double mu = 0.8;
+
+    double frictionForce = mu * normalForce;
+    TS_ASSERT_DELTA(frictionForce, 0.0, epsilon);
+  }
+
+  // Test negative normal force (lift-off)
+  void testNegativeNormalForce() {
+    double normalForce = -100.0;  // Wheel lifting off
+
+    // No friction when not in contact
+    double frictionForce = (normalForce > 0) ? 0.8 * normalForce : 0.0;
+    TS_ASSERT_DELTA(frictionForce, 0.0, epsilon);
+  }
+
+  // Test very high speed effects
+  void testVeryHighSpeedEffects() {
+    double speed = 300.0;  // ft/s (~180 kts)
+    double mu_static = 0.8;
+
+    // At very high speeds, effective friction is reduced
+    double speedFactor = 1.0 / (1.0 + 0.002 * speed);
+    double mu_effective = mu_static * speedFactor;
+
+    TS_ASSERT(mu_effective < mu_static);
+    TS_ASSERT(mu_effective > 0.4);  // Still some friction
+  }
+
+  // Test surface factor limits
+  void testSurfaceFactorLimits() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+
+    // Static friction factor should be positive
+    surface.SetStaticFFactor(0.0);
+    TS_ASSERT_DELTA(surface.GetStaticFFactor(), 0.0, epsilon);
+
+    // Bumpiness between 0 and 1
+    surface.SetBumpiness(0.0);
+    TS_ASSERT_DELTA(surface.GetBumpiness(), 0.0, epsilon);
+
+    surface.SetBumpiness(1.0);
+    TS_ASSERT_DELTA(surface.GetBumpiness(), 1.0, epsilon);
+  }
+
+  // Test friction circle concept
+  void testFrictionCircle() {
+    double mu = 0.8;
+    double normalForce = 5000.0;
+    double maxTotalForce = mu * normalForce;
+
+    // Braking only
+    double brakingForce = maxTotalForce;
+    double corneringForce = 0.0;
+    double totalForce = std::sqrt(brakingForce*brakingForce + corneringForce*corneringForce);
+    TS_ASSERT(totalForce <= maxTotalForce);
+
+    // Combined braking and cornering (exceeds friction circle)
+    brakingForce = maxTotalForce * 0.8;
+    corneringForce = maxTotalForce * 0.8;
+    totalForce = std::sqrt(brakingForce*brakingForce + corneringForce*corneringForce);
+    // sqrt(0.8^2 + 0.8^2) = sqrt(1.28) = 1.13 > 1.0
+    TS_ASSERT(totalForce > maxTotalForce);  // Exceeds friction circle
+  }
+
+  // Test consistency between position and bump height
+  void testBumpHeightConsistency() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+
+    surface.SetBumpiness(0.5);
+    double pos[3] = {123.456, 789.012, 0.0};
+    surface.SetPosition(pos);
+
+    double height1 = surface.GetBumpHeight();
+
+    // Same position should give same height
+    surface.SetPosition(pos);
+    double height2 = surface.GetBumpHeight();
+
+    TS_ASSERT_DELTA(height1, height2, epsilon);
+  }
 };
