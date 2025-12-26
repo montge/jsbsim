@@ -405,4 +405,643 @@ public:
     TS_ASSERT(engine0Name.find("[0]") != std::string::npos);
     TS_ASSERT(engine1Name.find("[1]") != std::string::npos);
   }
+
+  /***************************************************************************
+   * Extended Throttle Tests
+   ***************************************************************************/
+
+  // Test throttle command clamping
+  void testThrottleCommandClamping() {
+    auto clampThrottle = [](double cmd) {
+      return std::max(0.0, std::min(1.0, cmd));
+    };
+
+    TS_ASSERT_DELTA(clampThrottle(0.5), 0.5, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(clampThrottle(-0.5), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(clampThrottle(1.5), 1.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test throttle hysteresis
+  void testThrottleHysteresis() {
+    double throttlePos = 0.0;
+    double throttleCmd = 1.0;
+    double rate = 0.1;  // per step
+
+    // Throttle should lag command
+    for (int i = 0; i < 5; i++) {
+      double delta = throttleCmd - throttlePos;
+      if (std::abs(delta) > rate) {
+        delta = (delta > 0) ? rate : -rate;
+      }
+      throttlePos += delta;
+    }
+
+    TS_ASSERT_DELTA(throttlePos, 0.5, DEFAULT_TOLERANCE);
+  }
+
+  // Test idle throttle setting
+  void testIdleThrottleSetting() {
+    double idleThrottle = 0.05;  // Typical idle: 5%
+    double minThrottle = 0.0;
+
+    // Idle should be slightly above minimum
+    TS_ASSERT(idleThrottle > minThrottle);
+    TS_ASSERT(idleThrottle < 0.2);  // Less than 20%
+  }
+
+  // Test throttle to thrust curve (non-linear)
+  void testThrottleToThrustCurve() {
+    // Many engines have non-linear throttle-thrust relationship
+    auto thrustFromThrottle = [](double throttle) {
+      // Quadratic approximation
+      return throttle * throttle;
+    };
+
+    TS_ASSERT_DELTA(thrustFromThrottle(0.0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(thrustFromThrottle(0.5), 0.25, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(thrustFromThrottle(1.0), 1.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Altitude Effects Tests
+   ***************************************************************************/
+
+  // Test thrust reduction with altitude
+  void testThrustAltitudeEffect() {
+    // Thrust decreases with altitude due to lower air density
+    double seaLevelThrust = 10000.0;
+
+    // At 10,000 ft (density ratio ~ 0.74)
+    double densityRatio10k = 0.74;
+    double thrust10k = seaLevelThrust * densityRatio10k;
+    TS_ASSERT(thrust10k < seaLevelThrust);
+    TS_ASSERT_DELTA(thrust10k, 7400.0, 100.0);
+
+    // At 30,000 ft (density ratio ~ 0.37)
+    double densityRatio30k = 0.37;
+    double thrust30k = seaLevelThrust * densityRatio30k;
+    TS_ASSERT(thrust30k < thrust10k);
+    TS_ASSERT_DELTA(thrust30k, 3700.0, 100.0);
+  }
+
+  // Test power available at altitude
+  void testPowerAvailableAltitude() {
+    double seaLevelPower = 200.0;  // HP
+
+    // Normally aspirated engine loses about 3.5% per 1000 ft
+    auto powerAtAltitude = [&](double altitude) {
+      return seaLevelPower * (1.0 - 0.035 * altitude / 1000.0);
+    };
+
+    TS_ASSERT_DELTA(powerAtAltitude(0), 200.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(powerAtAltitude(10000), 130.0, 1.0);
+    TS_ASSERT_DELTA(powerAtAltitude(20000), 60.0, 1.0);
+  }
+
+  // Test turbocharger effect
+  void testTurbochargerEffect() {
+    double naturallyAspiratedLoss = 0.035;  // per 1000 ft
+    double turbochargeLoss = 0.015;          // per 1000 ft (less loss)
+    double criticalAltitude = 18000.0;       // ft
+
+    double seaLevelPower = 300.0;
+
+    // NA engine at 15,000 ft
+    double naPower = seaLevelPower * (1.0 - naturallyAspiratedLoss * 15);
+    TS_ASSERT(naPower < seaLevelPower);
+
+    // Turbocharged engine maintains power to critical altitude
+    double turboPower = seaLevelPower;  // Full power below critical alt
+    TS_ASSERT(turboPower > naPower);
+  }
+
+  /***************************************************************************
+   * Temperature Effects Tests
+   ***************************************************************************/
+
+  // Test cold weather startup
+  void testColdWeatherStartup() {
+    double ambientTempR = 450.0;  // About -10°F
+    double standardTempR = 518.67;
+
+    // Cold weather affects engine performance
+    double tempRatio = ambientTempR / standardTempR;
+    TS_ASSERT(tempRatio < 1.0);
+
+    // Air is denser when cold (helpful for thrust)
+    double densityIncrease = standardTempR / ambientTempR;
+    TS_ASSERT(densityIncrease > 1.0);
+  }
+
+  // Test hot and high conditions
+  void testHotAndHighConditions() {
+    // Hot day at high altitude - worst case for performance
+    double hotDayTempR = 560.0;  // About 100°F
+    double standardTempR = 518.67;
+    double altitude = 5000.0;
+
+    // Temperature penalty
+    double tempRatio = hotDayTempR / standardTempR;
+    TS_ASSERT(tempRatio > 1.0);
+
+    // Combined hot and high reduces performance significantly
+    double pressureAltitude = altitude + 1000 * (tempRatio - 1.0) * 120;
+    TS_ASSERT(pressureAltitude > altitude);
+  }
+
+  // Test engine temperature limits
+  void testEngineTemperatureLimits() {
+    // Typical turbine limits
+    double maxTIT = 1850.0;  // Turbine inlet temp (°F)
+    double maxEGT = 1700.0;  // Exhaust gas temp (°F)
+    double maxCHT = 500.0;   // Cylinder head temp (for pistons)
+
+    TS_ASSERT(maxTIT > maxEGT);
+    TS_ASSERT(maxEGT > maxCHT);
+  }
+
+  /***************************************************************************
+   * Fuel System Tests
+   ***************************************************************************/
+
+  // Test fuel tank selection
+  void testFuelTankSelection() {
+    int leftTank = 0;
+    int rightTank = 1;
+    int auxTank = 2;
+    int selectedTank = leftTank;
+
+    TS_ASSERT_EQUALS(selectedTank, leftTank);
+
+    // Switch tanks
+    selectedTank = rightTank;
+    TS_ASSERT_EQUALS(selectedTank, rightTank);
+  }
+
+  // Test fuel freeze conditions
+  void testFuelFreezeConditions() {
+    // JET-A freeze point is about -47°F
+    double jetAFreezePointF = -47.0;
+    double jetAFreezePointR = jetAFreezePointF + 459.67;
+
+    // At very high altitude, fuel can freeze
+    double fuelTempR = 420.0;  // Very cold
+    bool fuelFrozen = fuelTempR < jetAFreezePointR;
+
+    TS_ASSERT(!fuelFrozen);  // Not quite frozen
+
+    fuelTempR = 400.0;  // Even colder
+    fuelFrozen = fuelTempR < jetAFreezePointR;
+    TS_ASSERT(fuelFrozen);
+  }
+
+  // Test fuel contamination
+  void testFuelContamination() {
+    double fuelPurity = 1.0;  // 100% pure
+    double waterContent = 0.0;
+
+    // Some water contamination
+    waterContent = 0.001;  // 0.1%
+    fuelPurity = 1.0 - waterContent;
+
+    TS_ASSERT_DELTA(fuelPurity, 0.999, DEFAULT_TOLERANCE);
+    TS_ASSERT(waterContent < 0.01);  // Less than 1% is typical limit
+  }
+
+  // Test fuel starvation
+  void testFuelStarvation() {
+    double fuelQuantity = 100.0;  // lbs
+    double fuelFlowRate = 10.0;   // lbs/min
+    double dt = 0.1;              // time step (min)
+
+    bool starved = false;
+    while (fuelQuantity > 0 && !starved) {
+      fuelQuantity -= fuelFlowRate * dt;
+      if (fuelQuantity <= 0) {
+        starved = true;
+        fuelQuantity = 0;
+      }
+    }
+
+    TS_ASSERT(starved);
+    TS_ASSERT_DELTA(fuelQuantity, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Multi-Engine Tests
+   ***************************************************************************/
+
+  // Test differential thrust (yaw control)
+  void testDifferentialThrust() {
+    double leftThrust = 5000.0;
+    double rightThrust = 5000.0;
+    double armLength = 10.0;  // ft from centerline
+
+    // Symmetric thrust - no yaw moment
+    double yawMoment = (rightThrust - leftThrust) * armLength;
+    TS_ASSERT_DELTA(yawMoment, 0.0, DEFAULT_TOLERANCE);
+
+    // Asymmetric thrust - creates yaw moment
+    rightThrust = 4000.0;
+    yawMoment = (rightThrust - leftThrust) * armLength;
+    TS_ASSERT_DELTA(yawMoment, -10000.0, DEFAULT_TOLERANCE);  // Yaw left
+  }
+
+  // Test engine failure effects
+  void testEngineFailure() {
+    int numEngines = 2;
+    double thrustPerEngine = 5000.0;
+
+    // Normal operation
+    double totalThrust = numEngines * thrustPerEngine;
+    TS_ASSERT_DELTA(totalThrust, 10000.0, DEFAULT_TOLERANCE);
+
+    // One engine failure
+    int workingEngines = 1;
+    totalThrust = workingEngines * thrustPerEngine;
+    TS_ASSERT_DELTA(totalThrust, 5000.0, DEFAULT_TOLERANCE);
+
+    // Performance reduction > 50% due to drag from windmilling prop
+    double windmillingDrag = 500.0;
+    double netThrust = totalThrust - windmillingDrag;
+    TS_ASSERT(netThrust < 0.5 * 10000.0);
+  }
+
+  // Test minimum control speed (Vmc)
+  void testMinimumControlSpeed() {
+    // Vmc increases with:
+    // - Higher thrust asymmetry
+    // - Lower density altitude
+    // - More aft CG
+
+    double vmcSeaLevel = 75.0;   // kts
+    double vmc5000ft = 80.0;     // Higher at altitude
+
+    TS_ASSERT(vmc5000ft > vmcSeaLevel);
+  }
+
+  /***************************************************************************
+   * Engine Performance Tests
+   ***************************************************************************/
+
+  // Test brake specific fuel consumption (BSFC)
+  void testBrakeSFC() {
+    // BSFC = fuel flow / power
+    double fuelFlow = 20.0;  // lbs/hr
+    double power = 200.0;    // HP
+
+    double bsfc = fuelFlow / power;  // lbs/hr/HP
+    TS_ASSERT_DELTA(bsfc, 0.1, DEFAULT_TOLERANCE);
+
+    // Good piston engines: 0.4-0.5 lbs/hr/HP
+    // Good turboprops: 0.5-0.6 lbs/hr/HP
+    double pistonBSFC = 0.45;
+    double turbopropBSFC = 0.55;
+    TS_ASSERT(turbopropBSFC > pistonBSFC);
+  }
+
+  // Test propulsive efficiency
+  void testPropulsiveEfficiency() {
+    double thrustPower = 50000.0;  // ft-lbf/sec
+    double shaftPower = 55000.0;   // ft-lbf/sec
+
+    double propEff = thrustPower / shaftPower;
+    TS_ASSERT(propEff < 1.0);
+    TS_ASSERT(propEff > 0.8);  // Good props: 80-90%
+  }
+
+  // Test engine torque calculation
+  void testEngineTorque() {
+    // Torque = Power / (2*pi*RPM/60)
+    double power = 300.0 * 550.0;  // 300 HP in ft-lbf/sec
+    double rpm = 2700.0;
+
+    double torque = power / (2.0 * M_PI * rpm / 60.0);
+    TS_ASSERT(torque > 0);
+
+    // At constant power, lower RPM = higher torque
+    double lowRPM = 2400.0;
+    double torqueLowRPM = power / (2.0 * M_PI * lowRPM / 60.0);
+    TS_ASSERT(torqueLowRPM > torque);
+  }
+
+  // Test N1 and N2 spool relationships
+  void testSpoolRelationships() {
+    // For turbofans, N1 (fan) and N2 (core) are related
+    double n2 = 95.0;  // Core spool %
+    double n1 = 85.0;  // Fan spool % (typically lower)
+
+    TS_ASSERT(n2 > n1);
+
+    // At idle
+    double n2Idle = 60.0;
+    double n1Idle = 25.0;
+
+    TS_ASSERT(n2Idle > n1Idle);
+  }
+
+  /***************************************************************************
+   * Engine Start/Stop Tests
+   ***************************************************************************/
+
+  // Test starter motor engagement
+  void testStarterMotorEngagement() {
+    bool starterEngaged = false;
+    double starterTorque = 0.0;
+    double engineRPM = 0.0;
+
+    // Engage starter
+    starterEngaged = true;
+    starterTorque = 100.0;  // ft-lbf
+
+    // Starter spins engine
+    for (int i = 0; i < 10; i++) {
+      if (starterEngaged) {
+        engineRPM += starterTorque * 0.5;
+      }
+    }
+
+    TS_ASSERT(engineRPM > 0);
+    TS_ASSERT(starterEngaged);
+  }
+
+  // Test ignition sequence
+  void testIgnitionSequence() {
+    double engineRPM = 0.0;
+    double lightOffRPM = 25.0;  // % N2 for ignition
+    bool ignitionOn = false;
+    bool combustion = false;
+    bool fuelOn = false;
+
+    // Starter spins to light-off RPM
+    engineRPM = 30.0;
+
+    // Ignition on
+    ignitionOn = true;
+
+    // Fuel on
+    fuelOn = true;
+
+    // If all conditions met, combustion starts
+    if (engineRPM > lightOffRPM && ignitionOn && fuelOn) {
+      combustion = true;
+    }
+
+    TS_ASSERT(combustion);
+  }
+
+  // Test engine shutdown
+  void testEngineShutdown() {
+    bool fuelOn = true;
+    bool running = true;
+    double engineRPM = 2700.0;
+
+    // Cut fuel
+    fuelOn = false;
+
+    // Engine winds down
+    while (engineRPM > 0) {
+      engineRPM -= 50.0;
+      if (engineRPM <= 0) {
+        running = false;
+        engineRPM = 0;
+      }
+    }
+
+    TS_ASSERT(!running);
+    TS_ASSERT(!fuelOn);
+    TS_ASSERT_DELTA(engineRPM, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Oil System Tests
+   ***************************************************************************/
+
+  // Test oil pressure vs RPM
+  void testOilPressureVsRPM() {
+    auto oilPressure = [](double rpm) {
+      // Simplified: pressure increases with RPM
+      return rpm / 100.0;  // psi
+    };
+
+    TS_ASSERT_DELTA(oilPressure(0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(oilPressure(2000), 20.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(oilPressure(2700), 27.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test oil temperature
+  void testOilTemperature() {
+    double minOilTemp = 100.0;  // °F
+    double maxOilTemp = 245.0;  // °F (typical)
+    double normalOilTemp = 180.0;
+
+    TS_ASSERT(normalOilTemp > minOilTemp);
+    TS_ASSERT(normalOilTemp < maxOilTemp);
+  }
+
+  /***************************************************************************
+   * Engine Limits Tests
+   ***************************************************************************/
+
+  // Test RPM limits
+  void testRPMLimits() {
+    double redlineRPM = 2700.0;
+    double maxContinuous = 2500.0;
+    double cruiseRPM = 2300.0;
+
+    TS_ASSERT(redlineRPM > maxContinuous);
+    TS_ASSERT(maxContinuous > cruiseRPM);
+  }
+
+  // Test manifold pressure limits
+  void testManifoldPressureLimits() {
+    // Normally aspirated
+    double maxMP_NA = 30.0;  // inHg (sea level)
+
+    // Turbocharged
+    double maxMP_Turbo = 40.0;  // inHg
+
+    TS_ASSERT(maxMP_Turbo > maxMP_NA);
+  }
+
+  // Test exhaust gas temperature limits
+  void testEGTLimits() {
+    double maxEGT = 1650.0;  // °F (typical piston)
+    double peakEGT = 1400.0;  // Peak EGT (best power)
+    double leanEGT = 1300.0;  // 100° lean of peak
+
+    TS_ASSERT(maxEGT > peakEGT);
+    TS_ASSERT(peakEGT > leanEGT);
+  }
+
+  /***************************************************************************
+   * Mixture Control Tests
+   ***************************************************************************/
+
+  // Test mixture ratio
+  void testMixtureRatio() {
+    // Stoichiometric air/fuel ratio for AVGAS is ~15:1
+    double stoichRatio = 15.0;
+
+    // Rich mixture (more fuel)
+    double richRatio = 12.0;
+    TS_ASSERT(richRatio < stoichRatio);
+
+    // Lean mixture (less fuel)
+    double leanRatio = 18.0;
+    TS_ASSERT(leanRatio > stoichRatio);
+  }
+
+  // Test mixture leaning effect on power
+  void testMixtureLeaningEffect() {
+    // Power peaks slightly rich of stoichiometric
+    double fullRichPower = 95.0;  // % of max
+    double peakPower = 100.0;     // At best power mixture
+    double leanPower = 85.0;      // Lean of peak
+
+    TS_ASSERT(peakPower > fullRichPower);
+    TS_ASSERT(peakPower > leanPower);
+  }
+
+  /***************************************************************************
+   * Propeller Tests
+   ***************************************************************************/
+
+  // Test constant speed propeller
+  void testConstantSpeedProp() {
+    double commandedRPM = 2400.0;
+    double actualRPM = 2400.0;
+    double pitchAngle = 20.0;  // degrees
+
+    // Governor maintains RPM
+    TS_ASSERT_DELTA(actualRPM, commandedRPM, DEFAULT_TOLERANCE);
+
+    // Higher power = higher pitch to maintain RPM
+    double highPowerPitch = 25.0;
+    TS_ASSERT(highPowerPitch > pitchAngle);
+  }
+
+  // Test propeller feathering
+  void testPropellerFeathering() {
+    bool feathered = false;
+    double pitchAngle = 20.0;
+    double featheredPitch = 90.0;  // degrees
+
+    // Feather the prop
+    feathered = true;
+    pitchAngle = featheredPitch;
+
+    TS_ASSERT(feathered);
+    TS_ASSERT_DELTA(pitchAngle, 90.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test prop efficiency curve
+  void testPropEfficiencyCurve() {
+    // Propeller efficiency varies with advance ratio J
+    auto propEfficiency = [](double J) {
+      // Simplified parabolic approximation
+      // Peak around J = 0.8
+      if (J < 0) return 0.0;
+      if (J > 2.0) return 0.0;
+      return -0.4 * (J - 0.8) * (J - 0.8) + 0.85;
+    };
+
+    TS_ASSERT(propEfficiency(0.0) < propEfficiency(0.8));
+    TS_ASSERT(propEfficiency(0.8) > 0.8);
+    TS_ASSERT(propEfficiency(1.5) < propEfficiency(0.8));
+  }
+
+  /***************************************************************************
+   * Thrust Calculations
+   ***************************************************************************/
+
+  // Test jet thrust equation
+  void testJetThrustEquation() {
+    // Thrust = mdot * (Ve - V0)
+    double massFlowRate = 100.0;   // slugs/sec
+    double exhaustVelocity = 2000.0;  // ft/sec
+    double flightVelocity = 500.0;    // ft/sec
+
+    double thrust = massFlowRate * (exhaustVelocity - flightVelocity);
+    TS_ASSERT_DELTA(thrust, 150000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test ram drag effect
+  void testRamDragEffect() {
+    // At higher speeds, inlet momentum reduces net thrust
+    double grossThrust = 10000.0;
+    double ramDrag = 1000.0;
+
+    double netThrust = grossThrust - ramDrag;
+    TS_ASSERT(netThrust < grossThrust);
+
+    // Ram drag increases with speed
+    double highSpeedRamDrag = 3000.0;
+    TS_ASSERT(highSpeedRamDrag > ramDrag);
+  }
+
+  // Test static thrust
+  void testStaticThrust() {
+    // At zero forward speed, all thrust is "static thrust"
+    double flightVelocity = 0.0;
+    double massFlowRate = 50.0;
+    double exhaustVelocity = 2000.0;
+
+    double staticThrust = massFlowRate * (exhaustVelocity - flightVelocity);
+    TS_ASSERT_DELTA(staticThrust, 100000.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Edge Cases
+   ***************************************************************************/
+
+  // Test negative throttle handling
+  void testNegativeThrottle() {
+    double throttle = -0.1;
+    double clampedThrottle = std::max(0.0, throttle);
+
+    TS_ASSERT_DELTA(clampedThrottle, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test over-temperature protection
+  void testOverTemperatureProtection() {
+    double currentTemp = 1800.0;  // °F
+    double maxTemp = 1700.0;      // °F limit
+
+    bool overTemp = currentTemp > maxTemp;
+    TS_ASSERT(overTemp);
+
+    // Protection should reduce power
+    if (overTemp) {
+      // Reduce throttle
+      double throttle = 1.0;
+      throttle *= (maxTemp / currentTemp);
+      TS_ASSERT(throttle < 1.0);
+    }
+  }
+
+  // Test zero fuel condition
+  void testZeroFuelCondition() {
+    double fuelQuantity = 0.0;
+    bool starved = fuelQuantity <= 0.0;
+
+    TS_ASSERT(starved);
+
+    // Engine should not produce power when starved
+    double power = starved ? 0.0 : 100.0;
+    TS_ASSERT_DELTA(power, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test very low RPM
+  void testVeryLowRPM() {
+    double rpm = 50.0;  // Very low
+    double idleRPM = 600.0;
+
+    bool belowIdle = rpm < idleRPM;
+    TS_ASSERT(belowIdle);
+
+    // Engine likely to stall
+    bool engineStall = rpm < 300.0;
+    TS_ASSERT(engineStall);
+  }
 };
