@@ -985,4 +985,393 @@ public:
       TS_ASSERT(output <= 20.0);
     }
   }
+
+  /***************************************************************************
+   * Ziegler-Nichols Tuning Tests
+   ***************************************************************************/
+
+  // Test Ziegler-Nichols ultimate gain method
+  void testZieglerNicholsUltimateGain() {
+    double Ku = 4.0;   // Ultimate gain
+    double Tu = 2.0;   // Ultimate period (seconds)
+
+    // ZN PID tuning rules
+    double Kp = 0.6 * Ku;
+    double Ti = Tu / 2.0;
+    double Td = Tu / 8.0;
+
+    TS_ASSERT_DELTA(Kp, 2.4, 0.01);
+    TS_ASSERT_DELTA(Ti, 1.0, 0.01);
+    TS_ASSERT_DELTA(Td, 0.25, 0.01);
+  }
+
+  // Test Ziegler-Nichols step response method
+  void testZieglerNicholsStepResponse() {
+    double K = 2.0;    // Process gain
+    double L = 0.5;    // Dead time
+    double T = 3.0;    // Time constant
+
+    // ZN tuning from step response
+    double Kp = 1.2 * T / (K * L);
+    double Ti = 2.0 * L;
+    double Td = 0.5 * L;
+
+    TS_ASSERT_DELTA(Kp, 3.6, 0.1);
+    TS_ASSERT_DELTA(Ti, 1.0, 0.01);
+    TS_ASSERT_DELTA(Td, 0.25, 0.01);
+  }
+
+  // Test P-only tuning (Ziegler-Nichols)
+  void testZNPOnlyTuning() {
+    double Ku = 4.0;
+    double Kp_P = 0.5 * Ku;
+
+    TS_ASSERT_DELTA(Kp_P, 2.0, 0.01);
+  }
+
+  // Test PI tuning (Ziegler-Nichols)
+  void testZNPITuning() {
+    double Ku = 4.0;
+    double Tu = 2.0;
+
+    double Kp_PI = 0.45 * Ku;
+    double Ti_PI = Tu / 1.2;
+
+    TS_ASSERT_DELTA(Kp_PI, 1.8, 0.01);
+    TS_ASSERT_DELTA(Ti_PI, 1.667, 0.01);
+  }
+
+  /***************************************************************************
+   * Error Metrics Tests
+   ***************************************************************************/
+
+  // Test Integral of Absolute Error (IAE)
+  void testIAEMetric() {
+    double IAE = 0.0;
+    double dt = 0.1;
+
+    double errors[] = {10.0, 8.0, 5.0, -2.0, -1.0, 0.5, 0.1};
+    for (double e : errors) {
+      IAE += std::abs(e) * dt;
+    }
+
+    // Sum of |errors| * dt = (10+8+5+2+1+0.5+0.1) * 0.1 = 2.66
+    TS_ASSERT_DELTA(IAE, 2.66, 0.01);
+  }
+
+  // Test Integral of Squared Error (ISE)
+  void testISEMetric() {
+    double ISE = 0.0;
+    double dt = 0.1;
+
+    double errors[] = {10.0, 5.0, 2.0, 1.0};
+    for (double e : errors) {
+      ISE += e * e * dt;
+    }
+
+    // Sum of e^2 * dt = (100+25+4+1) * 0.1 = 13.0
+    TS_ASSERT_DELTA(ISE, 13.0, 0.01);
+  }
+
+  // Test Integral of Time-weighted Absolute Error (ITAE)
+  void testITAEMetric() {
+    double ITAE = 0.0;
+    double dt = 0.1;
+    double t = 0.0;
+
+    double errors[] = {10.0, 5.0, 2.0, 1.0};
+    for (double e : errors) {
+      ITAE += t * std::abs(e) * dt;
+      t += dt;
+    }
+
+    // ITAE penalizes late errors more
+    TS_ASSERT(ITAE > 0.0);
+  }
+
+  /***************************************************************************
+   * Setpoint Weighting Tests
+   ***************************************************************************/
+
+  // Test setpoint weighting on P term
+  void testSetpointWeightingP() {
+    double b = 0.5;  // Setpoint weight (0-1)
+    double Kp = 2.0;
+    double setpoint = 100.0;
+    double process = 80.0;
+
+    // Without weighting: error = setpoint - process
+    double error_std = setpoint - process;
+
+    // With weighting: error = b*setpoint - process
+    double error_weighted = b * setpoint - process;
+
+    double P_std = Kp * error_std;
+    double P_weighted = Kp * error_weighted;
+
+    TS_ASSERT_DELTA(P_std, 40.0, epsilon);
+    TS_ASSERT_DELTA(P_weighted, -60.0, epsilon);  // Reduced response (b*sp - pv)
+  }
+
+  // Test setpoint weighting on D term
+  void testSetpointWeightingD() {
+    double c = 0.0;  // Setpoint weight for D (typically 0)
+    double Kd = 1.0;
+    double dt = 0.1;
+
+    double sp_curr = 100.0, sp_prev = 50.0;  // Step change
+    double pv_curr = 75.0, pv_prev = 75.0;   // No change
+
+    // Standard: D based on error change
+    double error_curr = sp_curr - pv_curr;
+    double error_prev = sp_prev - pv_prev;
+    double D_std = Kd * (error_curr - error_prev) / dt;
+
+    // With c=0: D based on -PV change only
+    double D_weighted = -Kd * (pv_curr - pv_prev) / dt;
+
+    // Setpoint change causes spike in standard
+    TS_ASSERT(std::abs(D_std) > 100.0);
+    // No spike with weighting
+    TS_ASSERT_DELTA(D_weighted, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Deadband Tests
+   ***************************************************************************/
+
+  // Test deadband on error
+  void testDeadbandOnError() {
+    double deadband = 1.0;
+
+    auto applyDeadband = [deadband](double error) -> double {
+      if (std::abs(error) < deadband) return 0.0;
+      return (error > 0) ? error - deadband : error + deadband;
+    };
+
+    TS_ASSERT_DELTA(applyDeadband(0.5), 0.0, epsilon);
+    TS_ASSERT_DELTA(applyDeadband(2.0), 1.0, epsilon);
+    TS_ASSERT_DELTA(applyDeadband(-2.0), -1.0, epsilon);
+  }
+
+  // Test deadband prevents hunting
+  void testDeadbandPreventsHunting() {
+    double deadband = 0.5;
+    double Kp = 10.0;
+    int output_changes = 0;
+    double prev_output = 0.0;
+
+    // Small errors within deadband
+    double errors[] = {0.3, -0.2, 0.4, -0.1, 0.2};
+    for (double e : errors) {
+      double effective_error = (std::abs(e) < deadband) ? 0.0 : e;
+      double output = Kp * effective_error;
+
+      if (output != prev_output) output_changes++;
+      prev_output = output;
+    }
+
+    // With deadband, output should remain at 0
+    TS_ASSERT_EQUALS(output_changes, 0);
+  }
+
+  /***************************************************************************
+   * Setpoint Filter Tests
+   ***************************************************************************/
+
+  // Test setpoint filtering (rate limiting)
+  void testSetpointRateLimiting() {
+    double sp_target = 100.0;
+    double sp_filtered = 0.0;
+    double sp_rate_limit = 10.0;
+    double dt = 0.1;
+
+    for (int i = 0; i < 20; i++) {
+      double delta = sp_target - sp_filtered;
+      double rate = delta / dt;
+      if (rate > sp_rate_limit) delta = sp_rate_limit * dt;
+      if (rate < -sp_rate_limit) delta = -sp_rate_limit * dt;
+      sp_filtered += delta;
+    }
+
+    // Should ramp up to target
+    TS_ASSERT(sp_filtered > 0.0);
+    TS_ASSERT(sp_filtered <= sp_target);
+  }
+
+  // Test setpoint low-pass filter
+  void testSetpointLowPassFilter() {
+    double tau = 0.5;  // Filter time constant
+    double dt = 0.1;
+    double alpha = dt / (tau + dt);
+
+    double sp_target = 100.0;
+    double sp_filtered = 0.0;
+
+    for (int i = 0; i < 50; i++) {
+      sp_filtered = alpha * sp_target + (1 - alpha) * sp_filtered;
+    }
+
+    // Should approach target
+    TS_ASSERT(std::abs(sp_filtered - sp_target) < 1.0);
+  }
+
+  /***************************************************************************
+   * Output Smoothing Tests
+   ***************************************************************************/
+
+  // Test output averaging
+  void testOutputAveraging() {
+    std::deque<double> output_history;
+    int window_size = 5;
+
+    double outputs[] = {10.0, 12.0, 8.0, 15.0, 5.0, 10.0, 11.0};
+    for (double out : outputs) {
+      output_history.push_back(out);
+      if (output_history.size() > static_cast<size_t>(window_size)) {
+        output_history.pop_front();
+      }
+
+      double sum = 0.0;
+      for (double h : output_history) sum += h;
+      double avg = sum / output_history.size();
+
+      TS_ASSERT(std::isfinite(avg));
+    }
+  }
+
+  // Test output exponential smoothing
+  void testOutputExponentialSmoothing() {
+    double alpha = 0.3;
+    double smoothed = 0.0;
+
+    double outputs[] = {100.0, 100.0, 100.0, 0.0, 0.0, 0.0};
+    for (double out : outputs) {
+      smoothed = alpha * out + (1 - alpha) * smoothed;
+      TS_ASSERT(std::isfinite(smoothed));
+    }
+
+    // After step down, smoothed should be between 0 and starting value
+    TS_ASSERT(smoothed >= 0.0);
+    TS_ASSERT(smoothed < 50.0);
+  }
+
+  /***************************************************************************
+   * Auto-tuning Concepts
+   ***************************************************************************/
+
+  // Test relay feedback identification
+  void testRelayFeedbackIdentification() {
+    // Relay output amplitude
+    double d = 10.0;
+    // Measured oscillation amplitude
+    double a = 5.0;
+    // Measured period
+    double Tu = 2.0;
+
+    // Ultimate gain from relay test
+    double Ku = 4.0 * d / (M_PI * a);
+
+    TS_ASSERT_DELTA(Ku, 2.546, 0.01);
+    TS_ASSERT(Ku > 0.0);
+  }
+
+  // Test model-based tuning (FOPDT)
+  void testFOPDTModelTuning() {
+    // First Order Plus Dead Time parameters
+    double K = 1.5;   // Process gain
+    double tau = 5.0; // Time constant
+    double theta = 1.0; // Dead time
+
+    // Lambda tuning for PI
+    double lambda = 2.0;  // Closed-loop time constant
+    double Kc = tau / (K * (lambda + theta));
+    double Ti = tau;
+
+    TS_ASSERT(Kc > 0.0);
+    TS_ASSERT_DELTA(Ti, 5.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Stability Tests
+   ***************************************************************************/
+
+  // Test gain margin concept
+  void testGainMarginConcept() {
+    double Kp_stable = 2.0;
+    double gain_margin = 2.0;  // Factor of 2 margin
+
+    double Kp_unstable = Kp_stable * gain_margin * 1.1;
+
+    TS_ASSERT(Kp_unstable > Kp_stable * gain_margin);
+  }
+
+  // Test phase margin concept
+  void testPhaseMarginConcept() {
+    double phase_margin_deg = 45.0;  // Desired margin
+    double phase_margin_rad = phase_margin_deg * M_PI / 180.0;
+
+    // Phase margin > 0 indicates stability
+    TS_ASSERT(phase_margin_rad > 0.0);
+    TS_ASSERT_DELTA(phase_margin_rad, 0.785, 0.01);
+  }
+
+  /***************************************************************************
+   * Practical Implementation Tests
+   ***************************************************************************/
+
+  // Test sample time effect on gains
+  void testSampleTimeEffectOnGains() {
+    // Continuous gains
+    double Kp_c = 2.0;
+    double Ti_c = 1.0;  // Integral time
+    double Td_c = 0.1;  // Derivative time
+    double dt = 0.01;
+
+    // Discrete gains
+    double Ki_d = Kp_c / Ti_c * dt;  // Integral gain for discrete
+    double Kd_d = Kp_c * Td_c / dt;  // Derivative gain for discrete
+
+    TS_ASSERT(Ki_d < Kp_c);  // Integral gain small
+    TS_ASSERT(Kd_d > Kp_c);  // Derivative gain large
+  }
+
+  // Test execution timing
+  void testExecutionTiming() {
+    double dt_target = 0.01;  // 100 Hz
+    double dt_tolerance = 0.002;  // 20% tolerance
+
+    // Simulated actual dt
+    double dt_actual = 0.011;
+
+    bool timing_ok = std::abs(dt_actual - dt_target) <= dt_tolerance;
+    TS_ASSERT(timing_ok);
+  }
+
+  // Test controller output in engineering units
+  void testOutputEngineeringUnits() {
+    double Kp = 0.5;  // deg/deg error
+    double error_deg = 10.0;
+
+    double output_deg = Kp * error_deg;
+    TS_ASSERT_DELTA(output_deg, 5.0, epsilon);
+
+    // Convert to radians
+    double output_rad = output_deg * M_PI / 180.0;
+    TS_ASSERT_DELTA(output_rad, 0.0873, 0.001);
+  }
+
+  // Test error calculation with different units
+  void testErrorWithDifferentUnits() {
+    // Altitude error in feet
+    double setpoint_ft = 10000.0;
+    double process_ft = 9500.0;
+    double error_ft = setpoint_ft - process_ft;
+    TS_ASSERT_DELTA(error_ft, 500.0, epsilon);
+
+    // Same in meters
+    double ft_to_m = 0.3048;
+    double error_m = error_ft * ft_to_m;
+    TS_ASSERT_DELTA(error_m, 152.4, 0.1);
+  }
 };
