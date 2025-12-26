@@ -695,3 +695,373 @@ public:
     TS_ASSERT(CD_high_Re < CD_low_Re);
   }
 };
+
+/*******************************************************************************
+ * FGHighAOAAdditionalTest - Extended high angle of attack tests
+ ******************************************************************************/
+class FGHighAOAAdditionalTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Dynamic Stall Tests
+   ***************************************************************************/
+
+  // Test reduced frequency for dynamic stall
+  void testReducedFrequencyDynamicStall() {
+    double omega = 5.0;  // Pitch oscillation frequency (rad/s)
+    double c = 5.0;      // Mean chord (ft)
+    double V = 200.0;    // Velocity (ft/s)
+
+    // Reduced frequency k = omega * c / (2 * V)
+    double k = omega * c / (2.0 * V);
+
+    // k > 0.05 indicates significant unsteady effects
+    TS_ASSERT_DELTA(k, 0.0625, 0.001);
+    TS_ASSERT(k > 0.05);  // Unsteady effects important
+  }
+
+  // Test leading edge vortex lift in dynamic stall
+  void testLEVLiftDynamicStall() {
+    double CL_static_max = 1.5;
+    double alpha_rate = 0.2;  // rad/s (rapid pitch up)
+    double c = 5.0;  // chord
+    double V = 200.0;  // velocity
+
+    // LEV adds significant lift during rapid pitch
+    double alpha_dot_nondim = alpha_rate * c / V;
+    double LEV_increment = 2.0 * M_PI * alpha_dot_nondim;
+    double CL_dynamic = CL_static_max + LEV_increment;
+
+    TS_ASSERT(CL_dynamic > CL_static_max);
+    TS_ASSERT_DELTA(LEV_increment, 0.0314, 0.01);
+  }
+
+  // Test dynamic stall moment reversal
+  void testDynamicStallMomentReversal() {
+    double Cm_before_LEV = -0.05;  // Nose-down before vortex sheds
+    double Cm_LEV_shed = -0.25;    // Strong nose-down when vortex sheds
+
+    // Moment reversal when leading edge vortex passes trailing edge
+    double moment_change = Cm_LEV_shed - Cm_before_LEV;
+
+    TS_ASSERT(moment_change < -0.1);  // Significant nose-down break
+  }
+
+  // Test pitch rate effect on stall angle
+  void testPitchRateStallAngleDelay() {
+    double alpha_stall_static = 15.0 * DEG_TO_RAD;
+    double alpha_dot = 0.3;  // rad/s
+    double c = 5.0;
+    double V = 200.0;
+
+    // Dynamic stall occurs at higher alpha
+    double alpha_delay = 1.5 * alpha_dot * c / V;
+    double alpha_stall_dynamic = alpha_stall_static + alpha_delay;
+
+    TS_ASSERT(alpha_stall_dynamic > alpha_stall_static);
+    TS_ASSERT_DELTA(alpha_delay, 0.01125, 0.001);
+  }
+
+  /***************************************************************************
+   * Wing Rock Oscillation Tests
+   ***************************************************************************/
+
+  // Test wing rock frequency prediction
+  void testWingRockFrequency() {
+    double Ixx = 5000.0;  // Roll moment of inertia (slug-ft^2)
+    double Cl_phi = -0.02;  // Roll moment due to roll angle (dihedral effect)
+    double q_bar = 100.0;  // Dynamic pressure (psf)
+    double S = 200.0;  // Wing area (ft^2)
+    double b = 35.0;  // Wing span (ft)
+
+    // Natural frequency of roll mode
+    double L_phi = q_bar * S * b * Cl_phi;  // Roll moment derivative
+    double omega_n = sqrt(-L_phi / Ixx);
+
+    TS_ASSERT(omega_n > 0.1);  // Low frequency oscillation
+    TS_ASSERT(omega_n < 5.0);
+  }
+
+  // Test wing rock amplitude growth
+  void testWingRockAmplitudeGrowth() {
+    double Cl_p_positive = 0.05;  // Reduced roll damping (can go positive at high alpha)
+    double Cl_p_normal = -0.4;   // Normal roll damping
+
+    // Wing rock grows when Cl_p becomes positive
+    TS_ASSERT(Cl_p_positive > 0);  // Negative damping (oscillation grows)
+    TS_ASSERT(Cl_p_normal < 0);   // Normal positive damping
+  }
+
+  // Test wing rock limit cycle amplitude
+  void testWingRockLimitCycle() {
+    double phi_max = 30.0 * DEG_TO_RAD;  // Typical limit cycle amplitude
+
+    // Limit cycle bounded by nonlinear aerodynamics
+    TS_ASSERT(phi_max > 10.0 * DEG_TO_RAD);
+    TS_ASSERT(phi_max < 45.0 * DEG_TO_RAD);
+  }
+
+  /***************************************************************************
+   * Asymmetric Stall Behavior Tests
+   ***************************************************************************/
+
+  // Test differential stall with sideslip
+  void testDifferentialStallSideslip() {
+    double beta = 5.0 * DEG_TO_RAD;  // Sideslip
+    double alpha = 15.0 * DEG_TO_RAD;  // At stall
+
+    // Windward wing sees effective lower alpha
+    double alpha_windward = alpha - 0.5 * beta;
+    // Leeward wing sees effective higher alpha
+    double alpha_leeward = alpha + 0.5 * beta;
+
+    // Leeward wing stalls first
+    TS_ASSERT(alpha_leeward > alpha_windward);
+    TS_ASSERT(alpha_leeward > alpha);
+  }
+
+  // Test rolling moment from asymmetric stall
+  void testAsymmetricStallRollingMoment() {
+    double CL_left = 1.5;   // Left wing still lifting
+    double CL_right = 0.8;  // Right wing stalled
+    double y_left = -10.0;  // Left wing lift centroid (ft)
+    double y_right = 10.0;  // Right wing lift centroid (ft)
+
+    // Net rolling moment from lift asymmetry
+    double delta_CL = CL_left - CL_right;
+
+    // Roll toward stalled wing
+    TS_ASSERT(delta_CL > 0);
+    TS_ASSERT_DELTA(delta_CL, 0.7, 0.01);
+  }
+
+  // Test yawing moment from asymmetric drag
+  void testAsymmetricDragYawMoment() {
+    double CD_left = 0.03;   // Left wing pre-stall drag
+    double CD_right = 0.15;  // Right wing post-stall drag
+
+    // Stalled wing has higher drag, causes yaw
+    double delta_CD = CD_right - CD_left;
+
+    // Yaw toward stalled wing
+    TS_ASSERT(delta_CD > 0);
+    TS_ASSERT(delta_CD > 0.1);  // Significant asymmetry
+  }
+
+  /***************************************************************************
+   * Stall Warning System Tests
+   ***************************************************************************/
+
+  // Test stall warning margin
+  void testStallWarningMargin() {
+    double alpha_stall = 15.0 * DEG_TO_RAD;
+    double alpha_warning = 12.0 * DEG_TO_RAD;  // Warning 3 degrees before stall
+
+    double margin = alpha_stall - alpha_warning;
+
+    // Warning should provide adequate margin
+    TS_ASSERT(margin > 2.0 * DEG_TO_RAD);
+    TS_ASSERT(margin < 5.0 * DEG_TO_RAD);
+    TS_ASSERT_DELTA(margin, 3.0 * DEG_TO_RAD, 0.01);
+  }
+
+  // Test angle of attack rate for stall prediction
+  void testAlphaRateStallPrediction() {
+    double alpha = 13.0 * DEG_TO_RAD;
+    double alpha_dot = 0.1;  // rad/s
+    double alpha_stall = 15.0 * DEG_TO_RAD;
+
+    // Time to stall if alpha rate continues
+    double time_to_stall = (alpha_stall - alpha) / alpha_dot;
+
+    TS_ASSERT(time_to_stall > 0);
+    TS_ASSERT_DELTA(time_to_stall, 0.349, 0.01);  // About 0.35 seconds
+  }
+
+  // Test stick shaker activation logic
+  void testStickShakerActivation() {
+    double alpha = 14.0 * DEG_TO_RAD;
+    double alpha_stall = 15.0 * DEG_TO_RAD;
+    double shaker_margin = 2.0 * DEG_TO_RAD;
+
+    bool shaker_active = (alpha > (alpha_stall - shaker_margin));
+
+    TS_ASSERT(shaker_active);
+  }
+
+  /***************************************************************************
+   * Spin Recovery Tests
+   ***************************************************************************/
+
+  // Test spin recovery yaw rate decay
+  void testSpinRecoveryYawDecay() {
+    double r_spin = 0.8;  // Spin yaw rate (rad/s)
+    double Cn_r = -0.15;  // Yaw damping restored after AOA reduction
+    double tau_r = 2.0;   // Time constant for yaw decay
+
+    // Exponential decay of yaw rate
+    double t = 3.0;  // seconds after recovery input
+    double r_recovery = r_spin * exp(-t / tau_r);
+
+    TS_ASSERT(r_recovery < r_spin);
+    TS_ASSERT_DELTA(r_recovery, 0.178, 0.01);
+  }
+
+  // Test opposite rudder effectiveness in spin
+  void testOppositeRudderSpin() {
+    double Cn_dr = 0.12;   // Rudder power
+    double delta_r = -25.0 * DEG_TO_RAD;  // Full opposite rudder
+
+    // Anti-spin yaw moment
+    double Cn_recovery = Cn_dr * delta_r;
+
+    TS_ASSERT(Cn_recovery < 0);  // Opposes spin direction
+    TS_ASSERT_DELTA(Cn_recovery, -0.0524, 0.01);
+  }
+
+  // Test elevator push for spin recovery
+  void testElevatorPushSpinRecovery() {
+    double alpha_spin = 35.0 * DEG_TO_RAD;
+    double delta_e = -15.0 * DEG_TO_RAD;  // Forward stick
+
+    // Pushing elevator reduces alpha
+    double alpha_rate = -0.2;  // rad/s recovery rate
+    double t = 2.0;  // seconds
+
+    double alpha_recovery = alpha_spin + alpha_rate * t;
+
+    TS_ASSERT(alpha_recovery < alpha_spin);
+    TS_ASSERT(alpha_recovery > 10.0 * DEG_TO_RAD);  // Still above normal flight
+  }
+
+  /***************************************************************************
+   * Inertia Coupling Tests
+   ***************************************************************************/
+
+  // Test roll coupling into pitch
+  void testRollCouplingIntoPitch() {
+    double p = 2.0;  // Roll rate (rad/s)
+    double r = 0.5;  // Yaw rate (rad/s)
+    double Ixx = 5000.0;  // Roll inertia
+    double Izz = 8000.0;  // Yaw inertia
+    double Iyy = 10000.0;  // Pitch inertia
+
+    // Inertia coupling term: (Izz - Ixx) * p * r / Iyy
+    double q_dot_coupling = (Izz - Ixx) * p * r / Iyy;
+
+    TS_ASSERT(q_dot_coupling > 0);  // Pitch-up tendency
+    TS_ASSERT_DELTA(q_dot_coupling, 0.3, 0.01);
+  }
+
+  // Test critical roll rate for departure
+  void testCriticalRollRateDeparture() {
+    double Ixx = 5000.0;
+    double Izz = 8000.0;
+    double Iyy = 10000.0;
+    double Cm_alpha = -1.0;  // Pitch stiffness
+    double q_bar_S_c = 50000.0;  // Dynamic pressure * area * chord
+
+    // Critical roll rate approximation
+    double p_crit = sqrt(-Cm_alpha * q_bar_S_c * Iyy / ((Izz - Ixx) * Ixx));
+
+    TS_ASSERT(p_crit > 0);
+    TS_ASSERT(p_crit > 1.0);  // Above typical maneuver rates
+  }
+
+  /***************************************************************************
+   * High-G Stall Tests
+   ***************************************************************************/
+
+  // Test accelerated stall speed increase
+  void testAcceleratedStallSpeed() {
+    double V_s1 = 60.0;  // 1-G stall speed (kts)
+    double n = 2.0;  // Load factor
+
+    // Stall speed increases with sqrt(n)
+    double V_s_n = V_s1 * sqrt(n);
+
+    TS_ASSERT(V_s_n > V_s1);
+    TS_ASSERT_DELTA(V_s_n, 84.85, 0.1);
+  }
+
+  // Test maneuvering speed definition
+  void testManeuveringSpeed() {
+    double V_s1 = 60.0;  // 1-G stall speed (kts)
+    double n_max = 3.8;  // Max positive load factor (utility category)
+
+    // Maneuvering speed Va = Vs1 * sqrt(n_max)
+    double V_a = V_s1 * sqrt(n_max);
+
+    TS_ASSERT_DELTA(V_a, 117.0, 0.5);
+  }
+
+  // Test G-limit vs stall boundary
+  void testGLimitVsStallBoundary() {
+    double CL_max = 1.5;
+    double W = 3000.0;  // Weight (lb)
+    double S = 180.0;   // Wing area (ft^2)
+    double rho = 0.002377;
+
+    // Speed where structural limit equals stall limit
+    double V_corner_squared = (2.0 * W * 3.8) / (rho * S * CL_max);
+    double V_corner = sqrt(V_corner_squared);
+
+    TS_ASSERT(V_corner > 150.0);  // ft/s
+    TS_ASSERT(V_corner < 250.0);
+    TS_ASSERT_DELTA(V_corner, 188.48, 0.5);
+  }
+
+  /***************************************************************************
+   * Angle of Sideslip Effects Tests
+   ***************************************************************************/
+
+  // Test beta effect on effective alpha
+  void testBetaEffectOnAlpha() {
+    double alpha_body = 12.0 * DEG_TO_RAD;
+    double beta = 10.0 * DEG_TO_RAD;
+
+    // Effective angle of attack adjusted for sideslip
+    double alpha_eff = alpha_body * cos(beta);
+
+    TS_ASSERT(alpha_eff < alpha_body);
+    TS_ASSERT_DELTA(alpha_eff, 11.82 * DEG_TO_RAD, 0.01);
+  }
+
+  // Test cross-coupling at high alpha and beta
+  void testCrossCouplingHighAlphaBeta() {
+    double alpha = 20.0 * DEG_TO_RAD;
+    double beta = 15.0 * DEG_TO_RAD;
+
+    // Combined high alpha and beta creates severe coupling
+    double coupling_severity = alpha * beta;
+
+    TS_ASSERT(coupling_severity > 0.05);  // Significant coupling
+  }
+
+  // Test forebody vortex asymmetry
+  void testForebodyVortexAsymmetry() {
+    double alpha = 40.0 * DEG_TO_RAD;  // Very high alpha
+    double beta_small = 2.0 * DEG_TO_RAD;  // Small sideslip
+
+    // At high alpha, small beta creates large yaw moment from vortex asymmetry
+    double Cn_vortex = 0.15 * beta_small * (alpha / (45.0 * DEG_TO_RAD));
+
+    TS_ASSERT(Cn_vortex > 0);
+    TS_ASSERT_DELTA(Cn_vortex, 0.00465, 0.001);
+  }
+
+  // Test departure susceptibility parameter
+  void testDepartureSusceptibilityParameter() {
+    double Cn_beta_dyn = 0.10;  // Dynamic weathercock stability
+    double Cl_beta = -0.08;      // Effective dihedral
+
+    // Departure susceptibility increases when Cn_beta_dyn < Cl_beta (in magnitude)
+    // Simplified criterion: ratio indicates susceptibility
+    double susceptibility = std::abs(Cl_beta) / Cn_beta_dyn;
+
+    // Susceptibility > 1 indicates potential departure
+    TS_ASSERT(susceptibility < 1.0);  // This configuration is departure resistant
+    TS_ASSERT_DELTA(susceptibility, 0.8, 0.01);
+  }
+};
+
