@@ -475,4 +475,589 @@ public:
     double compression = 2.5;
     TS_ASSERT(compression >= 0.0);
   }
+
+  /***************************************************************************
+   * Additional Delimiter Tests
+   ***************************************************************************/
+
+  // Test 30: Semicolon delimiter (European locale)
+  void testSemicolonDelimiter() {
+    std::string delimiter = ";";
+    double time = 1.234;
+    double alt = 5000.0;
+
+    std::ostringstream oss;
+    oss << time << delimiter << alt;
+    std::string row = oss.str();
+
+    TS_ASSERT(row.find(";") != std::string::npos);
+    TS_ASSERT_EQUALS(row, "1.234;5000");
+  }
+
+  // Test 31: Space delimiter
+  void testSpaceDelimiter() {
+    std::string delimiter = " ";
+    double time = 1.234;
+    double alt = 5000.0;
+
+    std::ostringstream oss;
+    oss << time << delimiter << alt;
+    std::string row = oss.str();
+
+    TS_ASSERT_EQUALS(row, "1.234 5000");
+  }
+
+  // Test 32: Multiple consecutive values with delimiter
+  void testMultipleValuesDelimited() {
+    std::string delimiter = ",";
+    std::vector<double> values = {1.0, 2.0, 3.0, 4.0, 5.0};
+
+    std::ostringstream oss;
+    for (size_t i = 0; i < values.size(); i++) {
+      if (i > 0) oss << delimiter;
+      oss << values[i];
+    }
+
+    TS_ASSERT_EQUALS(oss.str(), "1,2,3,4,5");
+  }
+
+  /***************************************************************************
+   * Socket Connection Tests
+   ***************************************************************************/
+
+  // Test 33: IP address validation pattern
+  void testIPAddressPattern() {
+    std::string ip = "192.168.1.100";
+
+    // Simple validation: contains 3 dots
+    int dotCount = 0;
+    for (char c : ip) {
+      if (c == '.') dotCount++;
+    }
+    TS_ASSERT_EQUALS(dotCount, 3);
+  }
+
+  // Test 34: Port range validation
+  void testPortRangeValidation() {
+    int port = 5500;
+
+    bool validRange = (port > 0 && port <= 65535);
+    TS_ASSERT(validRange);
+
+    // Reserved port (requires root)
+    port = 80;
+    bool isPrivileged = (port < 1024);
+    TS_ASSERT(isPrivileged);
+
+    // User port
+    port = 5500;
+    isPrivileged = (port < 1024);
+    TS_ASSERT(!isPrivileged);
+  }
+
+  // Test 35: Localhost aliases
+  void testLocalhostAliases() {
+    std::string host1 = "localhost";
+    std::string host2 = "127.0.0.1";
+    std::string host3 = "::1";  // IPv6 localhost
+
+    TS_ASSERT_EQUALS(host1, "localhost");
+    TS_ASSERT_EQUALS(host2, "127.0.0.1");
+    TS_ASSERT_EQUALS(host3, "::1");
+  }
+
+  /***************************************************************************
+   * UDP Packet Formatting Tests
+   ***************************************************************************/
+
+  // Test 36: UDP packet size limits
+  void testUDPPacketSizeLimits() {
+    int maxUDPSize = 65507;  // Max UDP payload (65535 - 8 UDP header - 20 IP header)
+    int typicalMTU = 1472;   // Typical MTU minus headers
+
+    TS_ASSERT(maxUDPSize > typicalMTU);
+    TS_ASSERT_EQUALS(maxUDPSize, 65507);
+    TS_ASSERT_EQUALS(typicalMTU, 1472);
+  }
+
+  // Test 37: FlightGear packet structure
+  void testFlightGearPacketStructure() {
+    // FlightGear native protocol uses network byte order
+    // Generic protocol uses text format
+    int protocolVersion = 1;
+    int headerSize = 8;
+
+    TS_ASSERT_EQUALS(protocolVersion, 1);
+    TS_ASSERT_EQUALS(headerSize, 8);
+  }
+
+  /***************************************************************************
+   * File Path Operation Tests
+   ***************************************************************************/
+
+  // Test 38: Windows-style path conversion
+  void testWindowsPathConversion() {
+    std::string winPath = "C:\\Users\\test\\output\\data.csv";
+
+    // Count backslashes
+    int backslashes = 0;
+    for (char c : winPath) {
+      if (c == '\\') backslashes++;
+    }
+    TS_ASSERT_EQUALS(backslashes, 4);
+  }
+
+  // Test 39: Relative path handling
+  void testRelativePathHandling() {
+    std::string relPath = "../output/data.csv";
+    std::string basePath = "/home/user/jsbsim/scripts";
+
+    // Simple check for relative path
+    bool isRelative = (relPath[0] != '/');
+    TS_ASSERT(isRelative);
+  }
+
+  // Test 40: File extension extraction
+  void testFileExtensionExtraction() {
+    std::string filename = "datalog.2024.01.15.csv";
+
+    // Find last dot for extension
+    size_t lastDot = filename.rfind('.');
+    TS_ASSERT(lastDot != std::string::npos);
+
+    std::string ext = filename.substr(lastDot + 1);
+    TS_ASSERT_EQUALS(ext, "csv");
+  }
+
+  // Test 41: Empty filename handling
+  void testEmptyFilenameHandling() {
+    std::string filename = "";
+
+    bool isEmpty = filename.empty();
+    TS_ASSERT(isEmpty);
+
+    size_t dotPos = filename.rfind('.');
+    TS_ASSERT(dotPos == std::string::npos);
+  }
+
+  /***************************************************************************
+   * Subsystem Combination Tests
+   ***************************************************************************/
+
+  // Test 42: All subsystems enabled
+  void testAllSubsystemsEnabled() {
+    int allSubsystems = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096;
+    TS_ASSERT_EQUALS(allSubsystems, 8191);
+  }
+
+  // Test 43: Toggle specific subsystem
+  void testToggleSubsystem() {
+    int subsystems = 13;  // 1 + 4 + 8 = Simulation, Rates, Velocities
+    int ssRates = 4;
+
+    // Toggle off
+    subsystems &= ~ssRates;
+    TS_ASSERT_EQUALS(subsystems, 9);  // 1 + 8
+
+    // Toggle on
+    subsystems |= ssRates;
+    TS_ASSERT_EQUALS(subsystems, 13);
+  }
+
+  // Test 44: Subsystem count from bitmask
+  void testSubsystemCount() {
+    int subsystems = 13;  // 1 + 4 + 8
+
+    // Count set bits
+    int count = 0;
+    int temp = subsystems;
+    while (temp) {
+      count += temp & 1;
+      temp >>= 1;
+    }
+    TS_ASSERT_EQUALS(count, 3);
+  }
+
+  /***************************************************************************
+   * Rate Conversion Tests
+   ***************************************************************************/
+
+  // Test 45: Very high output rate
+  void testVeryHighOutputRate() {
+    double rateHz = 1000.0;  // 1 kHz
+    double simDt = 0.001;    // 1 kHz simulation
+
+    int outputEveryNFrames = static_cast<int>(std::round(1.0 / (rateHz * simDt)));
+    TS_ASSERT_EQUALS(outputEveryNFrames, 1);  // Every frame
+  }
+
+  // Test 46: Very low output rate
+  void testVeryLowOutputRate() {
+    double rateHz = 0.1;     // Once every 10 seconds
+    double simDt = 0.01;     // 100 Hz simulation
+
+    int outputEveryNFrames = static_cast<int>(std::round(1.0 / (rateHz * simDt)));
+    TS_ASSERT_EQUALS(outputEveryNFrames, 1000);
+  }
+
+  // Test 47: Output rate higher than simulation rate
+  void testOutputRateHigherThanSimRate() {
+    double rateHz = 200.0;   // 200 Hz output desired
+    double simDt = 0.01;     // 100 Hz simulation
+
+    // Can't output faster than simulation runs
+    int outputEveryNFrames = static_cast<int>(std::round(1.0 / (rateHz * simDt)));
+    if (outputEveryNFrames < 1) outputEveryNFrames = 1;
+
+    TS_ASSERT_EQUALS(outputEveryNFrames, 1);  // Clamped to every frame
+  }
+
+  /***************************************************************************
+   * Timestamp Formatting Tests
+   ***************************************************************************/
+
+  // Test 48: Time with milliseconds
+  void testTimeWithMilliseconds() {
+    double simTime = 123.456;
+
+    int seconds = static_cast<int>(simTime);
+    int millis = static_cast<int>((simTime - seconds) * 1000);
+
+    TS_ASSERT_EQUALS(seconds, 123);
+    TS_ASSERT_EQUALS(millis, 456);
+  }
+
+  // Test 49: Time with microseconds precision
+  void testTimeWithMicroseconds() {
+    double simTime = 123.456789;
+
+    int seconds = static_cast<int>(simTime);
+    int micros = static_cast<int>((simTime - seconds) * 1000000);
+
+    TS_ASSERT_EQUALS(seconds, 123);
+    TS_ASSERT_EQUALS(micros, 456789);
+  }
+
+  // Test 50: Frame count to time conversion
+  void testFrameCountToTime() {
+    long frameCount = 100000;
+    double dt = 0.00833333;  // 120 Hz
+
+    double simTime = frameCount * dt;
+    TS_ASSERT_DELTA(simTime, 833.333, 0.01);
+  }
+
+  /***************************************************************************
+   * Property Path Tests
+   ***************************************************************************/
+
+  // Test 51: Property path parsing
+  void testPropertyPathParsing() {
+    std::string propPath = "velocities/u-fps";
+
+    // Parse category
+    size_t slashPos = propPath.find('/');
+    std::string category = propPath.substr(0, slashPos);
+    std::string property = propPath.substr(slashPos + 1);
+
+    TS_ASSERT_EQUALS(category, "velocities");
+    TS_ASSERT_EQUALS(property, "u-fps");
+  }
+
+  // Test 52: Nested property path
+  void testNestedPropertyPath() {
+    std::string propPath = "fcs/elevator/position-norm";
+
+    // Count path depth
+    int depth = 0;
+    for (char c : propPath) {
+      if (c == '/') depth++;
+    }
+    TS_ASSERT_EQUALS(depth, 2);  // 3 levels
+  }
+
+  // Test 53: Array indexed property
+  void testArrayIndexedProperty() {
+    std::string propPath = "propulsion/engine[0]/thrust-lbs";
+
+    // Find array index
+    size_t openBracket = propPath.find('[');
+    size_t closeBracket = propPath.find(']');
+
+    TS_ASSERT(openBracket != std::string::npos);
+    TS_ASSERT(closeBracket != std::string::npos);
+
+    std::string indexStr = propPath.substr(openBracket + 1, closeBracket - openBracket - 1);
+    int index = std::stoi(indexStr);
+    TS_ASSERT_EQUALS(index, 0);
+  }
+
+  /***************************************************************************
+   * Output Filtering Tests
+   ***************************************************************************/
+
+  // Test 54: Value clamping for output
+  void testValueClampingForOutput() {
+    double value = 1e100;
+    double maxOutput = 1e10;
+
+    double clamped = std::min(value, maxOutput);
+    TS_ASSERT_DELTA(clamped, maxOutput, DEFAULT_TOLERANCE);
+
+    // Clamp small values
+    value = 1e-100;
+    double minOutput = 1e-10;
+    clamped = std::max(value, minOutput);
+    TS_ASSERT_DELTA(clamped, minOutput, DEFAULT_TOLERANCE);
+  }
+
+  // Test 55: NaN detection for output
+  void testNaNDetectionForOutput() {
+    double validValue = 123.456;
+    double nanValue = std::nan("");
+
+    bool isValid = !std::isnan(validValue);
+    bool isNaN = std::isnan(nanValue);
+
+    TS_ASSERT(isValid);
+    TS_ASSERT(isNaN);
+  }
+
+  // Test 56: Infinity detection for output
+  void testInfinityDetectionForOutput() {
+    double validValue = 123.456;
+    double infValue = std::numeric_limits<double>::infinity();
+
+    bool isValid = !std::isinf(validValue);
+    bool isInf = std::isinf(infValue);
+
+    TS_ASSERT(isValid);
+    TS_ASSERT(isInf);
+  }
+
+  /***************************************************************************
+   * File Rotation Tests
+   ***************************************************************************/
+
+  // Test 57: Rotation filename generation
+  void testRotationFilenameGeneration() {
+    std::string baseName = "datalog";
+    std::string ext = ".csv";
+    int rotationNumber = 3;
+
+    std::ostringstream oss;
+    oss << baseName << "." << rotationNumber << ext;
+
+    TS_ASSERT_EQUALS(oss.str(), "datalog.3.csv");
+  }
+
+  // Test 58: Date-based filename
+  void testDateBasedFilename() {
+    std::string baseName = "datalog";
+    int year = 2024, month = 12, day = 25;
+
+    std::ostringstream oss;
+    oss << baseName << "_" << year << "-"
+        << (month < 10 ? "0" : "") << month << "-"
+        << (day < 10 ? "0" : "") << day << ".csv";
+
+    TS_ASSERT_EQUALS(oss.str(), "datalog_2024-12-25.csv");
+  }
+
+  /***************************************************************************
+   * Buffer Size Tests
+   ***************************************************************************/
+
+  // Test 59: Output buffer sizing
+  void testOutputBufferSizing() {
+    int numProperties = 50;
+    int bytesPerProperty = 16;  // Average string length per value
+
+    int estimatedBufferSize = numProperties * bytesPerProperty;
+    TS_ASSERT_EQUALS(estimatedBufferSize, 800);
+  }
+
+  // Test 60: Line buffer size
+  void testLineBufferSize() {
+    // Typical CSV line with timestamps and ~20 values
+    int maxLineLength = 1024;
+    int typicalLineLength = 400;
+
+    TS_ASSERT(typicalLineLength < maxLineLength);
+  }
+
+  /***************************************************************************
+   * Coordinate Output Tests
+   ***************************************************************************/
+
+  // Test 61: Latitude/Longitude formatting
+  void testLatLonFormatting() {
+    double latDeg = 37.7749;
+    double lonDeg = -122.4194;
+
+    // Degrees with sign
+    std::ostringstream oss;
+    oss.precision(6);
+    oss << std::fixed << latDeg << "," << lonDeg;
+
+    TS_ASSERT_EQUALS(oss.str(), "37.774900,-122.419400");
+  }
+
+  // Test 62: Degrees-Minutes-Seconds format
+  void testDMSFormat() {
+    double latDeg = 37.7749;
+
+    int degrees = static_cast<int>(latDeg);
+    double fractional = (latDeg - degrees) * 60.0;
+    int minutes = static_cast<int>(fractional);
+    double seconds = (fractional - minutes) * 60.0;
+
+    TS_ASSERT_EQUALS(degrees, 37);
+    TS_ASSERT_EQUALS(minutes, 46);
+    TS_ASSERT_DELTA(seconds, 29.64, 0.01);
+  }
+
+  /***************************************************************************
+   * Attitude Output Tests
+   ***************************************************************************/
+
+  // Test 63: Euler angle normalization for output
+  void testEulerAngleNormalization() {
+    double heading = 400.0;  // Over 360
+
+    // Normalize to 0-360
+    while (heading >= 360.0) heading -= 360.0;
+    while (heading < 0.0) heading += 360.0;
+
+    TS_ASSERT_DELTA(heading, 40.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test 64: Pitch angle range
+  void testPitchAngleRange() {
+    double pitch = 45.0;
+
+    // Valid range is typically -90 to +90
+    bool validRange = (pitch >= -90.0 && pitch <= 90.0);
+    TS_ASSERT(validRange);
+  }
+
+  // Test 65: Roll angle output
+  void testRollAngleOutput() {
+    double roll = -30.0;  // 30 degrees left wing down
+
+    // Valid range is typically -180 to +180
+    bool validRange = (roll >= -180.0 && roll <= 180.0);
+    TS_ASSERT(validRange);
+  }
+
+  /***************************************************************************
+   * Engine Output Tests
+   ***************************************************************************/
+
+  // Test 66: Multi-engine thrust output
+  void testMultiEngineThrustOutput() {
+    double thrust[4] = {5000.0, 5100.0, 4900.0, 5050.0};
+
+    double totalThrust = 0;
+    for (int i = 0; i < 4; i++) {
+      totalThrust += thrust[i];
+    }
+
+    TS_ASSERT_DELTA(totalThrust, 20050.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test 67: Fuel flow summation
+  void testFuelFlowSummation() {
+    double fuelFlow[2] = {0.15, 0.14};  // lbs/sec per engine
+
+    double totalFlow = fuelFlow[0] + fuelFlow[1];
+    double flowPerHour = totalFlow * 3600.0;  // Convert to lbs/hr
+
+    TS_ASSERT_DELTA(totalFlow, 0.29, 0.001);
+    TS_ASSERT_DELTA(flowPerHour, 1044.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Environmental Output Tests
+   ***************************************************************************/
+
+  // Test 68: Wind component output
+  void testWindComponentOutput() {
+    double windNorth = 10.0;   // kts
+    double windEast = 5.0;     // kts
+
+    double windSpeed = std::sqrt(windNorth*windNorth + windEast*windEast);
+    double windDir = std::atan2(windEast, windNorth) * 180.0 / M_PI;
+    if (windDir < 0) windDir += 360.0;
+
+    TS_ASSERT_DELTA(windSpeed, 11.18, 0.01);
+    TS_ASSERT_DELTA(windDir, 26.57, 0.1);
+  }
+
+  // Test 69: Visibility output
+  void testVisibilityOutput() {
+    double visibilityMeters = 10000.0;
+    double visibilityMiles = visibilityMeters / 1609.344;  // Statute miles
+
+    TS_ASSERT_DELTA(visibilityMiles, 6.21, 0.01);
+  }
+
+  /***************************************************************************
+   * Performance Output Tests
+   ***************************************************************************/
+
+  // Test 70: Rate of climb calculation for output
+  void testRateOfClimbOutput() {
+    double verticalSpeed = 1000.0;  // ft/min
+    double verticalSpeedFPS = verticalSpeed / 60.0;  // ft/sec
+
+    TS_ASSERT_DELTA(verticalSpeedFPS, 16.67, 0.01);
+  }
+
+  // Test 71: G-load output
+  void testGLoadOutput() {
+    double normalAccel = 64.4;  // ft/sec^2 (2g)
+    double gLoad = normalAccel / 32.174;  // g units
+
+    TS_ASSERT_DELTA(gLoad, 2.0, 0.01);
+  }
+
+  // Test 72: Mach number output precision
+  void testMachNumberPrecision() {
+    double mach = 0.785;
+
+    std::ostringstream oss;
+    oss.precision(3);
+    oss << std::fixed << mach;
+
+    TS_ASSERT_EQUALS(oss.str(), "0.785");
+  }
+
+  /***************************************************************************
+   * Error Condition Tests
+   ***************************************************************************/
+
+  // Test 73: Zero rate handling
+  void testZeroRateHandling() {
+    double rateHz = 0.0;
+
+    bool invalidRate = (rateHz <= 0.0);
+    TS_ASSERT(invalidRate);
+  }
+
+  // Test 74: Negative port handling
+  void testNegativePortHandling() {
+    int port = -1;
+
+    bool invalidPort = (port < 0 || port > 65535);
+    TS_ASSERT(invalidPort);
+  }
+
+  // Test 75: Empty property list
+  void testEmptyPropertyList() {
+    std::vector<std::string> properties;
+
+    TS_ASSERT(properties.empty());
+    TS_ASSERT_EQUALS(properties.size(), 0u);
+  }
 };
