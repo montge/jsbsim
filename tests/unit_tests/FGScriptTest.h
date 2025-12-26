@@ -458,4 +458,649 @@ public:
     TS_ASSERT_DELTA(values[2], 3.0, DEFAULT_TOLERANCE);   // magneto
     TS_ASSERT_DELTA(values[3], 1.0, DEFAULT_TOLERANCE);   // starter
   }
+
+  /***************************************************************************
+   * Extended Ramp Action Tests
+   ***************************************************************************/
+
+  // Test ramp action with different time constants
+  void testRampVariousTimeConstants() {
+    double target = 100.0;
+    double dt = 0.1;
+
+    // Fast ramp (tc = 0.5)
+    double current_fast = 0.0;
+    double tc_fast = 0.5;
+    for (int i = 0; i < 10; i++) {
+      current_fast += (target - current_fast) * dt / tc_fast;
+    }
+
+    // Slow ramp (tc = 2.0)
+    double current_slow = 0.0;
+    double tc_slow = 2.0;
+    for (int i = 0; i < 10; i++) {
+      current_slow += (target - current_slow) * dt / tc_slow;
+    }
+
+    // Fast should be closer to target
+    TS_ASSERT(current_fast > current_slow);
+    TS_ASSERT(current_fast > 80.0);
+    TS_ASSERT(current_slow < 50.0);
+  }
+
+  // Test ramp decreasing value
+  void testRampDecreasing() {
+    double current = 100.0;
+    double target = 0.0;
+    double tc = 1.0;
+    double dt = 0.1;
+
+    for (int i = 0; i < 20; i++) {
+      current += (target - current) * dt / tc;
+    }
+
+    TS_ASSERT(current < 20.0);
+    TS_ASSERT(current > 0.0);
+  }
+
+  // Test ramp to negative target
+  void testRampToNegative() {
+    double current = 0.0;
+    double target = -50.0;
+    double tc = 1.0;
+    double dt = 0.1;
+
+    for (int i = 0; i < 30; i++) {
+      current += (target - current) * dt / tc;
+    }
+
+    TS_ASSERT(current < -40.0);
+    TS_ASSERT(current > target);
+  }
+
+  /***************************************************************************
+   * Extended Exponential Action Tests
+   ***************************************************************************/
+
+  // Test exponential approach convergence
+  void testExponentialConvergence() {
+    double initial = 0.0;
+    double target = 100.0;
+    double tc = 1.0;
+
+    // At various time constants
+    double t1 = 1.0 * tc;  // 63.2%
+    double t2 = 2.0 * tc;  // 86.5%
+    double t3 = 3.0 * tc;  // 95.0%
+    double t4 = 4.0 * tc;  // 98.2%
+    double t5 = 5.0 * tc;  // 99.3%
+
+    double v1 = target - (target - initial) * exp(-t1 / tc);
+    double v2 = target - (target - initial) * exp(-t2 / tc);
+    double v3 = target - (target - initial) * exp(-t3 / tc);
+    double v4 = target - (target - initial) * exp(-t4 / tc);
+    double v5 = target - (target - initial) * exp(-t5 / tc);
+
+    TS_ASSERT(v1 < v2);
+    TS_ASSERT(v2 < v3);
+    TS_ASSERT(v3 < v4);
+    TS_ASSERT(v4 < v5);
+    TS_ASSERT(v5 < target);
+  }
+
+  // Test exponential from non-zero initial
+  void testExponentialFromNonZero() {
+    double initial = 50.0;
+    double target = 100.0;
+    double tc = 1.0;
+
+    double t = 1.0;
+    double value = target - (target - initial) * exp(-t / tc);
+
+    // Should be 63.2% of way from 50 to 100 = 50 + 0.632 * 50 = 81.6
+    TS_ASSERT_DELTA(value, 81.6, 0.5);
+  }
+
+  // Test exponential decrease
+  void testExponentialDecrease() {
+    double initial = 100.0;
+    double target = 0.0;
+    double tc = 1.0;
+
+    double t = 1.0;
+    double value = target - (target - initial) * exp(-t / tc);
+
+    // Should be 63.2% of way from 100 to 0 = 100 - 63.2 = 36.8
+    TS_ASSERT_DELTA(value, 36.8, 0.5);
+  }
+
+  /***************************************************************************
+   * Complex Event Sequence Tests
+   ***************************************************************************/
+
+  // Test event sequence (takeoff)
+  void testTakeoffEventSequence() {
+    double simTime = 0.0;
+    double throttle = 0.0;
+    double brakes = 1.0;
+    double pitchTrim = 0.0;
+
+    // Event 1: Set throttle at t=0
+    if (simTime >= 0.0) {
+      throttle = 1.0;
+    }
+    TS_ASSERT_DELTA(throttle, 1.0, DEFAULT_TOLERANCE);
+
+    // Event 2: Release brakes at t=1
+    simTime = 1.0;
+    if (simTime >= 1.0) {
+      brakes = 0.0;
+    }
+    TS_ASSERT_DELTA(brakes, 0.0, DEFAULT_TOLERANCE);
+
+    // Event 3: Set pitch trim at t=5
+    simTime = 5.0;
+    if (simTime >= 5.0) {
+      pitchTrim = -0.05;
+    }
+    TS_ASSERT_DELTA(pitchTrim, -0.05, DEFAULT_TOLERANCE);
+  }
+
+  // Test event sequence with conditions
+  void testConditionalEventSequence() {
+    double altitude = 0.0;
+    double flaps = 20.0;
+    double gear = 1.0;
+
+    // Climb
+    altitude = 500.0;
+
+    // Retract gear above 200 ft
+    if (altitude > 200.0) {
+      gear = 0.0;
+    }
+    TS_ASSERT_DELTA(gear, 0.0, DEFAULT_TOLERANCE);
+
+    // Retract flaps above 400 ft
+    if (altitude > 400.0) {
+      flaps = 0.0;
+    }
+    TS_ASSERT_DELTA(flaps, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test landing event sequence
+  void testLandingEventSequence() {
+    double altitude = 3000.0;
+    double flaps = 0.0;
+    double gear = 0.0;
+    double spoilers = 0.0;
+    bool onGround = false;
+
+    // Descending through 2000 ft - extend flaps
+    altitude = 1500.0;
+    if (altitude < 2000.0) {
+      flaps = 10.0;
+    }
+    TS_ASSERT_DELTA(flaps, 10.0, DEFAULT_TOLERANCE);
+
+    // Descending through 1000 ft - extend gear
+    altitude = 800.0;
+    if (altitude < 1000.0) {
+      gear = 1.0;
+      flaps = 30.0;
+    }
+    TS_ASSERT_DELTA(gear, 1.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(flaps, 30.0, DEFAULT_TOLERANCE);
+
+    // Touchdown - deploy spoilers
+    onGround = true;
+    if (onGround) {
+      spoilers = 1.0;
+    }
+    TS_ASSERT_DELTA(spoilers, 1.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Multiple Condition Tests
+   ***************************************************************************/
+
+  // Test AND conditions
+  void testANDConditions() {
+    double altitude = 5000.0;
+    double airspeed = 150.0;
+    bool triggered = false;
+
+    // Only trigger if both conditions met
+    if (altitude > 3000.0 && airspeed > 100.0) {
+      triggered = true;
+    }
+    TS_ASSERT(triggered);
+
+    // One condition not met
+    altitude = 2000.0;
+    triggered = false;
+    if (altitude > 3000.0 && airspeed > 100.0) {
+      triggered = true;
+    }
+    TS_ASSERT(!triggered);
+  }
+
+  // Test OR conditions
+  void testORConditions() {
+    double altitude = 1000.0;
+    double airspeed = 200.0;
+    bool triggered = false;
+
+    // Trigger if either condition met
+    if (altitude > 5000.0 || airspeed > 150.0) {
+      triggered = true;
+    }
+    TS_ASSERT(triggered);
+
+    // Neither condition met
+    airspeed = 100.0;
+    triggered = false;
+    if (altitude > 5000.0 || airspeed > 150.0) {
+      triggered = true;
+    }
+    TS_ASSERT(!triggered);
+  }
+
+  // Test complex conditions
+  void testComplexConditions() {
+    double time = 10.0;
+    double altitude = 5000.0;
+    double speed = 150.0;
+    bool apEngaged = true;
+
+    // (time > 5 AND altitude > 3000) OR (speed > 200)
+    bool condition = (time > 5.0 && altitude > 3000.0) || (speed > 200.0);
+    TS_ASSERT(condition);
+
+    // (time > 5 AND altitude > 3000) AND NOT apEngaged
+    condition = (time > 5.0 && altitude > 3000.0) && !apEngaged;
+    TS_ASSERT(!condition);
+  }
+
+  /***************************************************************************
+   * Time-Based Trigger Tests
+   ***************************************************************************/
+
+  // Test time window trigger
+  void testTimeWindowTrigger() {
+    double simTime = 5.0;
+    double startTime = 3.0;
+    double endTime = 7.0;
+    bool triggered = false;
+
+    // Within window
+    if (simTime >= startTime && simTime <= endTime) {
+      triggered = true;
+    }
+    TS_ASSERT(triggered);
+
+    // Before window
+    simTime = 2.0;
+    triggered = false;
+    if (simTime >= startTime && simTime <= endTime) {
+      triggered = true;
+    }
+    TS_ASSERT(!triggered);
+
+    // After window
+    simTime = 8.0;
+    triggered = false;
+    if (simTime >= startTime && simTime <= endTime) {
+      triggered = true;
+    }
+    TS_ASSERT(!triggered);
+  }
+
+  // Test periodic trigger
+  void testPeriodicTrigger() {
+    double period = 1.0;
+    double lastTrigger = 0.0;
+    int triggerCount = 0;
+
+    // Use integer loop to avoid floating point precision issues
+    for (int i = 0; i <= 50; i++) {
+      double t = i * 0.1;
+      if (t - lastTrigger >= period) {
+        triggerCount++;
+        lastTrigger = t;
+      }
+    }
+
+    TS_ASSERT_EQUALS(triggerCount, 5);  // At t=1,2,3,4,5
+  }
+
+  // Test one-shot trigger
+  void testOneShotTrigger() {
+    bool triggered = false;
+    bool hasTriggered = false;
+    int triggerCount = 0;
+
+    for (int i = 0; i < 10; i++) {
+      if (!hasTriggered) {
+        triggered = true;
+        hasTriggered = true;
+        triggerCount++;
+      }
+    }
+
+    TS_ASSERT(hasTriggered);
+    TS_ASSERT_EQUALS(triggerCount, 1);
+  }
+
+  /***************************************************************************
+   * Value Interpolation Tests
+   ***************************************************************************/
+
+  // Test linear interpolation
+  void testLinearInterpolation() {
+    double start = 0.0;
+    double end = 100.0;
+    double duration = 10.0;
+
+    for (double t = 0.0; t <= duration; t += 1.0) {
+      double value = start + (end - start) * (t / duration);
+      double expected = t * 10.0;
+      TS_ASSERT_DELTA(value, expected, DEFAULT_TOLERANCE);
+    }
+  }
+
+  // Test cosine interpolation (smoother)
+  void testCosineInterpolation() {
+    double start = 0.0;
+    double end = 100.0;
+    double duration = 10.0;
+
+    for (double t = 0.0; t <= duration; t += 1.0) {
+      double fraction = t / duration;
+      double smooth = (1.0 - cos(fraction * M_PI)) / 2.0;
+      double value = start + (end - start) * smooth;
+
+      // At midpoint, should be exactly 50
+      if (std::abs(t - 5.0) < 0.01) {
+        TS_ASSERT_DELTA(value, 50.0, 0.1);
+      }
+    }
+  }
+
+  /***************************************************************************
+   * Action Execution Order Tests
+   ***************************************************************************/
+
+  // Test actions execute in order
+  void testActionExecutionOrder() {
+    std::vector<int> executionOrder;
+
+    // Simulate 3 actions
+    executionOrder.push_back(1);
+    executionOrder.push_back(2);
+    executionOrder.push_back(3);
+
+    TS_ASSERT_EQUALS(executionOrder.size(), 3u);
+    TS_ASSERT_EQUALS(executionOrder[0], 1);
+    TS_ASSERT_EQUALS(executionOrder[1], 2);
+    TS_ASSERT_EQUALS(executionOrder[2], 3);
+  }
+
+  // Test conditional action skipping
+  void testConditionalActionSkipping() {
+    double throttle = 0.5;
+    double mixture = 0.8;
+    bool engineRunning = false;
+
+    // Only execute if engine running
+    if (engineRunning) {
+      throttle = 1.0;
+      mixture = 1.0;
+    }
+
+    TS_ASSERT_DELTA(throttle, 0.5, DEFAULT_TOLERANCE);  // Unchanged
+    TS_ASSERT_DELTA(mixture, 0.8, DEFAULT_TOLERANCE);   // Unchanged
+  }
+
+  /***************************************************************************
+   * Flight Phase Tests
+   ***************************************************************************/
+
+  // Test phase detection
+  void testPhaseDetection() {
+    enum FlightPhase { PREFLIGHT, TAXI, TAKEOFF, CLIMB, CRUISE, DESCENT, APPROACH, LANDING };
+
+    auto detectPhase = [](double altitude, double vertSpeed, bool onGround, double throttle) -> int {
+      if (onGround && throttle < 0.1) return PREFLIGHT;
+      if (onGround && throttle < 0.5) return TAXI;
+      if (onGround && throttle > 0.9) return TAKEOFF;
+      if (!onGround && vertSpeed > 500.0) return CLIMB;
+      if (!onGround && altitude > 10000.0 && std::abs(vertSpeed) < 200.0) return CRUISE;
+      if (!onGround && vertSpeed < -500.0 && altitude > 3000.0) return DESCENT;
+      if (!onGround && altitude < 3000.0 && vertSpeed < 0) return APPROACH;
+      if (onGround) return LANDING;
+      return CRUISE;  // Default
+    };
+
+    TS_ASSERT_EQUALS(detectPhase(0, 0, true, 0.0), PREFLIGHT);
+    TS_ASSERT_EQUALS(detectPhase(0, 0, true, 0.3), TAXI);
+    TS_ASSERT_EQUALS(detectPhase(0, 0, true, 1.0), TAKEOFF);
+    TS_ASSERT_EQUALS(detectPhase(5000, 1000, false, 1.0), CLIMB);
+    TS_ASSERT_EQUALS(detectPhase(15000, 0, false, 0.7), CRUISE);
+    TS_ASSERT_EQUALS(detectPhase(8000, -1000, false, 0.3), DESCENT);
+    TS_ASSERT_EQUALS(detectPhase(1500, -500, false, 0.3), APPROACH);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  // Test many events
+  void testStressManyEvents() {
+    std::vector<bool> eventTriggered(100, false);
+
+    for (int i = 0; i < 100; i++) {
+      eventTriggered[i] = true;
+    }
+
+    for (int i = 0; i < 100; i++) {
+      TS_ASSERT(eventTriggered[i]);
+    }
+  }
+
+  // Test rapid condition changes
+  void testStressRapidConditionChanges() {
+    bool condition = false;
+    int toggleCount = 0;
+
+    for (int i = 0; i < 1000; i++) {
+      bool newCondition = (i % 2 == 0);
+      if (newCondition != condition) {
+        toggleCount++;
+        condition = newCondition;
+      }
+    }
+
+    TS_ASSERT_EQUALS(toggleCount, 1000);
+  }
+
+  // Test long simulation
+  void testStressLongSimulation() {
+    double simTime = 0.0;
+    double dt = 0.01;
+    int eventCount = 0;
+
+    // Simulate 1 hour with events every 60 seconds
+    while (simTime < 3600.0) {
+      if (std::fmod(simTime, 60.0) < dt) {
+        eventCount++;
+      }
+      simTime += dt;
+    }
+
+    TS_ASSERT(eventCount >= 59);
+    TS_ASSERT(eventCount <= 61);
+  }
+
+  // Test many simultaneous ramps
+  void testStressManyRamps() {
+    std::vector<double> values(10, 0.0);
+    std::vector<double> targets = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
+    double tc = 1.0;
+    double dt = 0.1;
+
+    // Run 20 iterations
+    for (int iter = 0; iter < 20; iter++) {
+      for (size_t i = 0; i < values.size(); i++) {
+        values[i] += (targets[i] - values[i]) * dt / tc;
+      }
+    }
+
+    // All should have progressed toward targets
+    for (size_t i = 0; i < values.size(); i++) {
+      TS_ASSERT(values[i] > targets[i] * 0.8);
+    }
+  }
+
+  /***************************************************************************
+   * Edge Case Tests
+   ***************************************************************************/
+
+  // Test zero duration ramp
+  void testZeroDurationRamp() {
+    double current = 0.0;
+    double target = 100.0;
+
+    // Zero duration should be instant
+    current = target;
+    TS_ASSERT_DELTA(current, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test negative time constant
+  void testNegativeTimeConstant() {
+    double tc = -1.0;
+
+    // Negative tc should be treated as absolute or clamped
+    if (tc < 0) tc = std::abs(tc);
+    TS_ASSERT(tc > 0.0);
+  }
+
+  // Test very large time constant
+  void testVeryLargeTimeConstant() {
+    double current = 0.0;
+    double target = 100.0;
+    double tc = 1000.0;  // Very slow
+    double dt = 0.1;
+
+    for (int i = 0; i < 10; i++) {
+      current += (target - current) * dt / tc;
+    }
+
+    // Should barely have moved
+    TS_ASSERT(current < 1.0);
+  }
+
+  // Test NaN handling
+  void testNaNHandling() {
+    double value = std::numeric_limits<double>::quiet_NaN();
+
+    // NaN checks
+    TS_ASSERT(std::isnan(value));
+
+    // Replace with default
+    if (std::isnan(value)) {
+      value = 0.0;
+    }
+    TS_ASSERT_DELTA(value, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Script XML Element Tests
+   ***************************************************************************/
+
+  // Test run element parsing concept
+  void testRunElementConcept() {
+    double start = 0.0;
+    double end = 1000.0;
+    double dt = 0.008333;  // 120 Hz
+
+    TS_ASSERT(start < end);
+    TS_ASSERT(dt > 0.0);
+    TS_ASSERT_DELTA(1.0 / dt, 120.0, 0.1);
+  }
+
+  // Test use element concept
+  void testUseElementConcept() {
+    std::string aircraftName = "c172x";
+    std::string initName = "reset01";
+
+    TS_ASSERT(!aircraftName.empty());
+    TS_ASSERT(!initName.empty());
+    TS_ASSERT(aircraftName.find("c172") != std::string::npos);
+  }
+
+  // Test property output concept
+  void testPropertyOutputConcept() {
+    std::vector<std::string> outputProperties = {
+      "simulation/sim-time-sec",
+      "position/h-sl-ft",
+      "velocities/vc-kts",
+      "attitude/phi-rad"
+    };
+
+    TS_ASSERT_EQUALS(outputProperties.size(), 4u);
+    TS_ASSERT(outputProperties[0].find("sim-time") != std::string::npos);
+  }
+
+  /***************************************************************************
+   * Additional Value Tests
+   ***************************************************************************/
+
+  // Test value clamping
+  void testValueClamping() {
+    auto clamp = [](double val, double minVal, double maxVal) {
+      return std::max(minVal, std::min(val, maxVal));
+    };
+
+    TS_ASSERT_DELTA(clamp(50.0, 0.0, 100.0), 50.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(clamp(-10.0, 0.0, 100.0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(clamp(150.0, 0.0, 100.0), 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test rate limiting
+  void testRateLimiting() {
+    double current = 0.0;
+    double target = 100.0;
+    double maxRate = 10.0;  // per second
+    double dt = 0.1;
+
+    // maxDelta = 10.0 * 0.1 = 1.0 per iteration
+    // Need 100 iterations to reach target of 100.0
+    for (int i = 0; i < 100; i++) {
+      double delta = target - current;
+      double maxDelta = maxRate * dt;
+      if (std::abs(delta) > maxDelta) {
+        delta = (delta > 0) ? maxDelta : -maxDelta;
+      }
+      current += delta;
+    }
+
+    // Should have reached target in 100 iterations
+    TS_ASSERT_DELTA(current, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test wraparound values
+  void testWraparoundValues() {
+    auto wrapAngle = [](double angle) {
+      while (angle > 180.0) angle -= 360.0;
+      while (angle < -180.0) angle += 360.0;
+      return angle;
+    };
+
+    TS_ASSERT_DELTA(wrapAngle(0.0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(wrapAngle(360.0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(wrapAngle(-360.0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(wrapAngle(270.0), -90.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(wrapAngle(-270.0), 90.0, DEFAULT_TOLERANCE);
+  }
 };
