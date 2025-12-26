@@ -1347,4 +1347,426 @@ public:
     y->setDoubleValue(10.0);
     TS_ASSERT(!cond.Evaluate());
   }
+
+  /***************************************************************************
+   * Additional Condition Tests
+   ***************************************************************************/
+
+  void testDeepNesting4Levels() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto a = pm->GetNode("a", true);
+    auto b = pm->GetNode("b", true);
+    auto c = pm->GetNode("c", true);
+    auto d = pm->GetNode("d", true);
+    auto e = pm->GetNode("e", true);
+
+    Element_ptr elm = readFromXML("<dummy logic=\"OR\">"
+                                  "  <dummy logic=\"AND\">"
+                                  "    a GT 0.0"
+                                  "    <dummy logic=\"OR\">"
+                                  "      b LT 5.0"
+                                  "      <dummy logic=\"AND\">"
+                                  "        c EQ 1.0\n"
+                                  "        d NE 0.0"
+                                  "      </dummy>"
+                                  "    </dummy>"
+                                  "  </dummy>"
+                                  "  e GT 100.0"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    // All false
+    a->setDoubleValue(-1.0);
+    b->setDoubleValue(10.0);
+    c->setDoubleValue(0.0);
+    d->setDoubleValue(0.0);
+    e->setDoubleValue(50.0);
+    TS_ASSERT(!cond.Evaluate());
+
+    // e > 100 makes outer OR true
+    e->setDoubleValue(150.0);
+    TS_ASSERT(cond.Evaluate());
+
+    // Test deep path: a>0, b<5
+    e->setDoubleValue(50.0);
+    a->setDoubleValue(1.0);
+    b->setDoubleValue(3.0);
+    TS_ASSERT(cond.Evaluate());
+
+    // Test deepest path: a>0, b>=5, c=1, d!=0
+    b->setDoubleValue(10.0);
+    c->setDoubleValue(1.0);
+    d->setDoubleValue(1.0);
+    TS_ASSERT(cond.Evaluate());
+  }
+
+  void testManyConditionsPerformance() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto a = pm->GetNode("a", true);
+    auto b = pm->GetNode("b", true);
+    auto c = pm->GetNode("c", true);
+    auto d = pm->GetNode("d", true);
+    auto e = pm->GetNode("e", true);
+    auto f = pm->GetNode("f", true);
+
+    Element_ptr elm = readFromXML("<dummy logic=\"AND\">"
+                                  "  a GT 0.0\n"
+                                  "  b GT 0.0\n"
+                                  "  c GT 0.0\n"
+                                  "  d GT 0.0\n"
+                                  "  e GT 0.0\n"
+                                  "  f GT 0.0"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    // All positive
+    a->setDoubleValue(1.0);
+    b->setDoubleValue(1.0);
+    c->setDoubleValue(1.0);
+    d->setDoubleValue(1.0);
+    e->setDoubleValue(1.0);
+    f->setDoubleValue(1.0);
+    TS_ASSERT(cond.Evaluate());
+
+    // One negative should fail
+    c->setDoubleValue(-1.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testVerySmallValues() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond("x GT 0.000001", pm, nullptr);
+
+    x->setDoubleValue(0.0000001);
+    TS_ASSERT(!cond.Evaluate());
+
+    x->setDoubleValue(0.000002);
+    TS_ASSERT(cond.Evaluate());
+
+    x->setDoubleValue(0.000001);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testVeryLargeNegativeValues() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond("x LT -999999.0", pm, nullptr);
+
+    x->setDoubleValue(-1000000.0);
+    TS_ASSERT(cond.Evaluate());
+
+    x->setDoubleValue(-999998.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testPropertyWithIndexedName() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto prop1 = pm->GetNode("gear/unit[0]/compression-ft", true);
+    auto prop2 = pm->GetNode("gear/unit[1]/compression-ft", true);
+
+    FGCondition cond("gear/unit[0]/compression-ft GT gear/unit[1]/compression-ft", pm, nullptr);
+
+    prop1->setDoubleValue(1.5);
+    prop2->setDoubleValue(1.0);
+    TS_ASSERT(cond.Evaluate());
+
+    prop1->setDoubleValue(0.5);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testMultipleLevelsOfPropertyPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto prop = pm->GetNode("systems/electrical/bus/voltage", true);
+
+    FGCondition cond("systems/electrical/bus/voltage GE 24.0", pm, nullptr);
+
+    prop->setDoubleValue(28.0);
+    TS_ASSERT(cond.Evaluate());
+
+    prop->setDoubleValue(12.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testAllOperatorsSameProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    x->setDoubleValue(5.0);
+
+    FGCondition eq("x EQ 5.0", pm, nullptr);
+    TS_ASSERT(eq.Evaluate());
+
+    FGCondition ne("x NE 5.0", pm, nullptr);
+    TS_ASSERT(!ne.Evaluate());
+
+    FGCondition gt("x GT 4.0", pm, nullptr);
+    TS_ASSERT(gt.Evaluate());
+
+    FGCondition ge("x GE 5.0", pm, nullptr);
+    TS_ASSERT(ge.Evaluate());
+
+    FGCondition lt("x LT 6.0", pm, nullptr);
+    TS_ASSERT(lt.Evaluate());
+
+    FGCondition le("x LE 5.0", pm, nullptr);
+    TS_ASSERT(le.Evaluate());
+  }
+
+  void testConditionWithSamePropertyBothSides() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond("x EQ x", pm, nullptr);
+
+    x->setDoubleValue(100.0);
+    TS_ASSERT(cond.Evaluate());
+
+    x->setDoubleValue(-100.0);
+    TS_ASSERT(cond.Evaluate());
+
+    x->setDoubleValue(0.0);
+    TS_ASSERT(cond.Evaluate());
+  }
+
+  void testConditionNEWithSameProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond("x NE x", pm, nullptr);
+
+    x->setDoubleValue(100.0);
+    TS_ASSERT(!cond.Evaluate());
+
+    x->setDoubleValue(0.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testEmptyORCondition() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto a = pm->GetNode("a", true);
+    auto b = pm->GetNode("b", true);
+
+    // OR with two always-false conditions
+    Element_ptr elm = readFromXML("<dummy logic=\"OR\">"
+                                  "  a GT 1000000.0\n"
+                                  "  b LT -1000000.0"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    a->setDoubleValue(0.0);
+    b->setDoubleValue(0.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testAlwaysTrueANDCondition() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto a = pm->GetNode("a", true);
+    auto b = pm->GetNode("b", true);
+
+    // AND with conditions that are true for most values
+    Element_ptr elm = readFromXML("<dummy logic=\"AND\">"
+                                  "  a LT 1000000.0\n"
+                                  "  b GT -1000000.0"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    a->setDoubleValue(0.0);
+    b->setDoubleValue(0.0);
+    TS_ASSERT(cond.Evaluate());
+
+    a->setDoubleValue(999999.0);
+    b->setDoubleValue(-999999.0);
+    TS_ASSERT(cond.Evaluate());
+  }
+
+  void testRapidPropertyChanges() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond("x GT 0.0", pm, nullptr);
+
+    // Rapid toggling
+    for (int i = 0; i < 100; ++i) {
+      x->setDoubleValue(1.0);
+      TS_ASSERT(cond.Evaluate());
+      x->setDoubleValue(-1.0);
+      TS_ASSERT(!cond.Evaluate());
+    }
+  }
+
+  void testMixedANDORwithNegation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto active = pm->GetNode("active", true);
+    auto value = pm->GetNode("value", true);
+    auto limit = pm->GetNode("limit", true);
+
+    // Complex condition: active AND (value > limit OR value < -limit)
+    Element_ptr elm = readFromXML("<dummy logic=\"AND\">"
+                                  "  active EQ 1.0"
+                                  "  <dummy logic=\"OR\">"
+                                  "    value GT limit\n"
+                                  "    value LT -10.0"
+                                  "  </dummy>"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    active->setDoubleValue(0.0);
+    value->setDoubleValue(20.0);
+    limit->setDoubleValue(10.0);
+    TS_ASSERT(!cond.Evaluate());  // Not active
+
+    active->setDoubleValue(1.0);
+    value->setDoubleValue(5.0);
+    TS_ASSERT(!cond.Evaluate());  // Active but value in range
+
+    value->setDoubleValue(15.0);
+    TS_ASSERT(cond.Evaluate());  // Active and value > limit
+
+    value->setDoubleValue(-15.0);
+    TS_ASSERT(cond.Evaluate());  // Active and value < -10
+  }
+
+  void testConditionWithIntegerValues() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond("x EQ 42", pm, nullptr);
+
+    x->setDoubleValue(42.0);
+    TS_ASSERT(cond.Evaluate());
+
+    x->setDoubleValue(42.0001);
+    TS_ASSERT(!cond.Evaluate());
+
+    x->setDoubleValue(41.9999);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testPropertyUpdateBetweenEvaluations() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+    auto y = pm->GetNode("y", true);
+
+    FGCondition cond("x EQ y", pm, nullptr);
+
+    x->setDoubleValue(5.0);
+    y->setDoubleValue(5.0);
+    TS_ASSERT(cond.Evaluate());
+
+    // Update y between evaluations
+    y->setDoubleValue(6.0);
+    TS_ASSERT(!cond.Evaluate());
+
+    // Update x to match
+    x->setDoubleValue(6.0);
+    TS_ASSERT(cond.Evaluate());
+  }
+
+  void testNestedWithMixedOperators() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto alt = pm->GetNode("altitude", true);
+    auto speed = pm->GetNode("speed", true);
+    auto gear = pm->GetNode("gear-down", true);
+
+    // Complex flight condition
+    Element_ptr elm = readFromXML("<dummy logic=\"AND\">"
+                                  "  altitude LT 1000.0\n"
+                                  "  speed LT 150.0\n"
+                                  "  gear-down EQ 1.0"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    alt->setDoubleValue(500.0);
+    speed->setDoubleValue(120.0);
+    gear->setDoubleValue(1.0);
+    TS_ASSERT(cond.Evaluate());  // Landing configuration
+
+    gear->setDoubleValue(0.0);
+    TS_ASSERT(!cond.Evaluate());  // Gear up
+
+    gear->setDoubleValue(1.0);
+    speed->setDoubleValue(200.0);
+    TS_ASSERT(!cond.Evaluate());  // Too fast
+
+    speed->setDoubleValue(120.0);
+    alt->setDoubleValue(2000.0);
+    TS_ASSERT(!cond.Evaluate());  // Too high
+  }
+
+  void testConditionStatePreservation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto x = pm->GetNode("x", true);
+
+    FGCondition cond1("x GT 5.0", pm, nullptr);
+    FGCondition cond2("x LT 10.0", pm, nullptr);
+
+    // Both conditions should work independently
+    x->setDoubleValue(7.0);
+    TS_ASSERT(cond1.Evaluate());
+    TS_ASSERT(cond2.Evaluate());
+
+    x->setDoubleValue(3.0);
+    TS_ASSERT(!cond1.Evaluate());
+    TS_ASSERT(cond2.Evaluate());
+
+    x->setDoubleValue(12.0);
+    TS_ASSERT(cond1.Evaluate());
+    TS_ASSERT(!cond2.Evaluate());
+  }
+
+  void testExtremelyLongPropertyPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto prop = pm->GetNode("systems/hydraulics/main/left/pressure-psi", true);
+
+    FGCondition cond("systems/hydraulics/main/left/pressure-psi GE 2500.0", pm, nullptr);
+
+    prop->setDoubleValue(3000.0);
+    TS_ASSERT(cond.Evaluate());
+
+    prop->setDoubleValue(2000.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testConditionWithUnderscoreProperty() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto prop = pm->GetNode("engine_running", true);
+
+    FGCondition cond("engine_running EQ 1.0", pm, nullptr);
+
+    prop->setDoubleValue(1.0);
+    TS_ASSERT(cond.Evaluate());
+
+    prop->setDoubleValue(0.0);
+    TS_ASSERT(!cond.Evaluate());
+  }
+
+  void testThreePropertiesInChain() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto a = pm->GetNode("a", true);
+    auto b = pm->GetNode("b", true);
+    auto c = pm->GetNode("c", true);
+
+    // Test a > b > c via AND of two conditions
+    Element_ptr elm = readFromXML("<dummy logic=\"AND\">"
+                                  "  a GT b\n"
+                                  "  b GT c"
+                                  "</dummy>");
+    FGCondition cond(elm, pm);
+
+    a->setDoubleValue(10.0);
+    b->setDoubleValue(5.0);
+    c->setDoubleValue(1.0);
+    TS_ASSERT(cond.Evaluate());
+
+    // Break the chain: b < c
+    c->setDoubleValue(7.0);
+    TS_ASSERT(!cond.Evaluate());
+
+    // Fix chain again
+    c->setDoubleValue(3.0);
+    TS_ASSERT(cond.Evaluate());
+  }
 };
