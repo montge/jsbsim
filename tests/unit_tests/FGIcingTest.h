@@ -813,3 +813,546 @@ public:
     TS_ASSERT_DELTA(heat_transfer, 100500.0, 100.0);  // 100.5 kW
   }
 };
+
+/*******************************************************************************
+ * Additional FGIcing Tests (30 new tests)
+ ******************************************************************************/
+
+class FGIcingAdditionalTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Ice Shedding Dynamics Tests
+   ***************************************************************************/
+
+  // Test 46: Ice shedding threshold force
+  void testIceSheddingThresholdForce() {
+    // Ice sheds when aerodynamic/centrifugal force > adhesion force
+    // F_adhesion = sigma_adhesion * contact_area
+    double sigma_adhesion = 200000.0;  // Pa (ice-metal adhesion)
+    double contact_area = 0.01;         // m^2
+
+    double F_adhesion = sigma_adhesion * contact_area;
+    TS_ASSERT_DELTA(F_adhesion, 2000.0, epsilon);
+
+    // Centrifugal force on propeller ice
+    double ice_mass = 0.2;              // kg
+    double radius = 1.0;                // m
+    double omega = 250.0;               // rad/s
+    double F_centrifugal = ice_mass * radius * omega * omega;
+
+    TS_ASSERT_DELTA(F_centrifugal, 12500.0, 1.0);
+    TS_ASSERT(F_centrifugal > F_adhesion);  // Ice will shed
+  }
+
+  // Test 47: Ice shedding trajectory
+  void testIceSheddingTrajectory() {
+    // Ice leaves surface with velocity and follows ballistic path
+    double V_shed = 80.0;               // m/s (airspeed at shedding)
+    double angle = 30.0 * M_PI / 180.0; // radians
+    double g = 9.81;                    // m/s^2
+
+    // Horizontal and vertical components
+    double Vx = V_shed * cos(angle);
+    double Vy = V_shed * sin(angle);
+
+    TS_ASSERT_DELTA(Vx, 69.28, 0.01);
+    TS_ASSERT_DELTA(Vy, 40.0, 0.01);
+
+    // Time to hit fuselage 2m below
+    double h = 2.0;
+    double t = (Vy + sqrt(Vy * Vy + 2 * g * h)) / g;
+    TS_ASSERT_DELTA(t, 8.20, 0.05);
+  }
+
+  // Test 48: De-ice boot shedding efficiency
+  void testDeIceBootSheddingEfficiency() {
+    // Boot efficiency varies with ice thickness and type
+    double ice_thickness = 0.02;        // m
+
+    // Rime ice - easier to shed
+    double efficiency_rime = 0.95;
+    double shed_rime = ice_thickness * efficiency_rime;
+    TS_ASSERT_DELTA(shed_rime, 0.019, 0.001);
+
+    // Clear ice - harder to shed (adheres better)
+    double efficiency_clear = 0.70;
+    double shed_clear = ice_thickness * efficiency_clear;
+    TS_ASSERT_DELTA(shed_clear, 0.014, 0.001);
+
+    // Residual ice after cycling
+    double residual_rime = ice_thickness - shed_rime;
+    double residual_clear = ice_thickness - shed_clear;
+    TS_ASSERT_DELTA(residual_rime, 0.001, 0.001);
+    TS_ASSERT_DELTA(residual_clear, 0.006, 0.001);
+  }
+
+  /***************************************************************************
+   * Ice Protection System Failure Tests
+   ***************************************************************************/
+
+  // Test 49: Single engine bleed failure effect
+  void testSingleEngineBleedFailure() {
+    // With one engine bleed failed, heat capacity reduced by ~50%
+    double heat_available_normal = 150000.0;  // W
+    double heat_available_failed = 75000.0;   // W
+
+    // Required heat for wing anti-ice
+    double heat_required = 100000.0;          // W
+
+    bool sufficient_normal = heat_available_normal >= heat_required;
+    bool sufficient_failed = heat_available_failed >= heat_required;
+
+    TS_ASSERT_EQUALS(sufficient_normal, true);
+    TS_ASSERT_EQUALS(sufficient_failed, false);
+  }
+
+  // Test 50: Ice detector failure logic
+  void testIceDetectorFailureLogic() {
+    // Dual ice detector system
+    bool detector1_fault = true;
+    bool detector2_fault = false;
+
+    // Single fault: system continues with remaining detector
+    bool system_operational = !detector1_fault || !detector2_fault;
+    TS_ASSERT_EQUALS(system_operational, true);
+
+    // Dual fault: pilot must rely on visual detection
+    detector2_fault = true;
+    system_operational = !detector1_fault || !detector2_fault;
+    TS_ASSERT_EQUALS(system_operational, false);
+  }
+
+  // Test 51: Electrical ice protection power loss
+  void testElectricalIceProtectionPowerLoss() {
+    // Generator failure reduces available power
+    double power_total_normal = 50000.0;      // W
+    double power_essential = 20000.0;         // W
+    double power_ice_protection = 25000.0;    // W
+
+    // After generator failure
+    double power_available = power_total_normal * 0.5;
+    bool ice_protection_available = (power_available - power_essential) >= power_ice_protection;
+
+    TS_ASSERT_DELTA(power_available, 25000.0, epsilon);
+    TS_ASSERT_EQUALS(ice_protection_available, false);
+  }
+
+  /***************************************************************************
+   * Wing Leading Edge Ice Shape Tests
+   ***************************************************************************/
+
+  // Test 52: Upper horn ice shape aerodynamic effect
+  void testUpperHornIceShape() {
+    // Upper horn creates flow separation on upper surface
+    // CL loss more severe than lower horn
+    double CL_clean = 1.4;
+    double horn_height = 0.03;          // m
+    double chord = 2.0;                 // m
+
+    // Upper horn penalty factor
+    double k_upper = 15.0;
+    double CL_reduction_upper = k_upper * (horn_height / chord);
+    double CL_upper_horn = CL_clean * (1.0 - CL_reduction_upper);
+
+    TS_ASSERT_DELTA(CL_reduction_upper, 0.225, 0.001);
+    TS_ASSERT_DELTA(CL_upper_horn, 1.085, 0.01);
+  }
+
+  // Test 53: Double horn ice shape effect
+  void testDoubleHornIceShape() {
+    // Double horn (upper and lower) worst case
+    double CD_clean = 0.030;
+    double horn_height = 0.025;         // m
+    double chord = 2.0;                 // m
+
+    // Double horn drag coefficient
+    // delta_CD = k * (h/c)^1.5 = 3.0 * (0.0125)^1.5 = 3.0 * 0.00140 = 0.0042
+    double k_double = 3.0;
+    double delta_CD = k_double * pow(horn_height / chord, 1.5);
+    double CD_double_horn = CD_clean + delta_CD;
+
+    TS_ASSERT_DELTA(delta_CD, 0.0042, 0.0001);
+    TS_ASSERT_DELTA(CD_double_horn, 0.0342, 0.0001);
+  }
+
+  // Test 54: Streamwise ice (minimal performance impact)
+  void testStreamwiseIce() {
+    // Streamwise ice forms in cold conditions, lower drag penalty
+    double CD_clean = 0.025;
+    double ice_thickness = 0.02;        // m
+    double chord = 2.0;                 // m
+
+    // Streamwise ice has lower drag coefficient
+    double k_streamwise = 0.2;
+    double delta_CD = k_streamwise * pow(ice_thickness / chord, 2);
+    double CD_streamwise = CD_clean + delta_CD;
+
+    TS_ASSERT_DELTA(delta_CD, 0.00002, 0.00001);
+    TS_ASSERT_DELTA(CD_streamwise, 0.02502, 0.0001);
+  }
+
+  /***************************************************************************
+   * Runback Ice Tests
+   ***************************************************************************/
+
+  // Test 55: Runback ice from hot anti-ice system
+  void testRunbackIceFormation() {
+    // Water melted at leading edge freezes behind heated zone
+    double water_flow = 0.01;           // kg/s
+    double heated_zone_end = 0.05;      // 5% chord
+    double ambient_temp = -20.0;        // °C
+
+    // Water refreezes when leaving heated zone
+    // Runback distance depends on temperature and skin thermal conductivity
+    double k_runback = 0.02;            // m/°C
+    double runback_distance = k_runback * std::abs(ambient_temp);
+
+    TS_ASSERT_DELTA(runback_distance, 0.4, 0.01);  // 40 cm runback
+  }
+
+  // Test 56: Runback ice ridge height
+  void testRunbackIceRidgeHeight() {
+    // Ridge height depends on water flow and freeze rate
+    double water_flow = 0.005;          // kg/s per meter span
+    double freeze_fraction = 0.3;       // 30% freezes at ridge
+    double rho_ice = 917.0;             // kg/m^3
+    double ridge_width = 0.02;          // m
+    double time = 300.0;                // 5 minutes
+
+    // Ice mass at ridge
+    double ice_mass = water_flow * freeze_fraction * time;
+    // Ridge cross-section area
+    double area = ice_mass / rho_ice;
+    // Approximate ridge height
+    double ridge_height = area / ridge_width;
+
+    TS_ASSERT_DELTA(ice_mass, 0.45, 0.01);
+    TS_ASSERT_DELTA(ridge_height, 0.0245, 0.001);
+  }
+
+  /***************************************************************************
+   * Ice Crystal Icing Tests
+   ***************************************************************************/
+
+  // Test 57: High altitude ice crystal icing
+  void testHighAltitudeIceCrystalIcing() {
+    // Ice crystals ingested by engine at high altitude
+    // Total Water Content (TWC) instead of LWC
+    double TWC = 2.0;                   // g/m^3 (typical value)
+    double velocity = 200.0;            // m/s
+    double inlet_area = 0.5;            // m^2
+
+    // Ice crystal ingestion rate
+    double ingestion_rate = TWC * velocity * inlet_area;
+    TS_ASSERT_DELTA(ingestion_rate, 200.0, 1.0);  // 200 g/s
+  }
+
+  // Test 58: Engine compressor ice buildup
+  void testCompressorIceBuildup() {
+    // Ice crystals melt and refreeze on compressor stages
+    double crystal_rate = 0.1;          // kg/s
+    double melt_fraction = 0.8;         // 80% melts
+    double refreeze_fraction = 0.3;     // 30% refreezes
+
+    double ice_buildup_rate = crystal_rate * melt_fraction * refreeze_fraction;
+    TS_ASSERT_DELTA(ice_buildup_rate, 0.024, 0.001);  // 24 g/s
+  }
+
+  // Test 59: Probe ice crystal blocking
+  void testProbeIceCrystalBlocking() {
+    // Pitot/TAT probes can be blocked by ice crystals
+    double probe_area = 0.0001;         // m^2
+    double TWC = 3.0;                   // g/m^3
+    double velocity = 180.0;            // m/s
+
+    double ice_mass_rate = TWC * velocity * probe_area;
+    // Time to accumulate blocking mass
+    double blocking_mass = 0.01;        // kg
+    double time_to_block = blocking_mass / (ice_mass_rate / 1000.0);
+
+    TS_ASSERT_DELTA(ice_mass_rate, 0.054, 0.001);  // 54 mg/s
+    TS_ASSERT_DELTA(time_to_block, 185.2, 1.0);    // ~3 minutes
+  }
+
+  /***************************************************************************
+   * Ground Icing Tests
+   ***************************************************************************/
+
+  // Test 60: Frost formation on cold-soaked wing
+  void testFrostFormationColdSoakedWing() {
+    // Aircraft descends with cold fuel, lands in warm humid air
+    double T_fuel = -30.0;              // °C
+    double T_ambient = 15.0;            // °C
+    double T_dewpoint = 10.0;           // °C
+
+    // Wing skin temperature approximation
+    double T_skin = T_fuel + 0.5 * (T_ambient - T_fuel);
+    TS_ASSERT_DELTA(T_skin, -7.5, 0.1);
+
+    // Frost forms if skin temp below dewpoint
+    bool frost_forms = T_skin < T_dewpoint;
+    TS_ASSERT_EQUALS(frost_forms, true);
+  }
+
+  // Test 61: De-icing fluid holdover time
+  void testDeIcingFluidHoldoverTime() {
+    // Type I fluid holdover in light snow
+    double temp = -5.0;                 // °C
+    double precipitation_rate = 1.0;    // mm/hr (light snow)
+
+    // Approximate holdover time (simplified model)
+    // Holdover = base_time * temp_factor / precip_factor
+    double base_time = 15.0;            // minutes
+    double temp_factor = 1.0 + 0.02 * temp;  // decreases with cold
+    double precip_factor = 1.0 + 0.5 * precipitation_rate;
+
+    double holdover = base_time * temp_factor / precip_factor;
+    TS_ASSERT_DELTA(holdover, 9.0, 0.5);  // ~9 minutes
+  }
+
+  // Test 62: Anti-icing fluid freeze point
+  void testAntiIcingFluidFreezePoint() {
+    // Propylene glycol concentration vs freeze point
+    double glycol_fraction = 0.50;      // 50% glycol
+
+    // Approximate freeze point (°C)
+    // T_freeze ≈ -52 * glycol_fraction for 0.3 < fraction < 0.6
+    double T_freeze = -52.0 * glycol_fraction;
+    TS_ASSERT_DELTA(T_freeze, -26.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Performance Degradation Summary Tests
+   ***************************************************************************/
+
+  // Test 63: Takeoff distance increase with contaminated wing
+  void testTakeoffDistanceContaminatedWing() {
+    // CLmax reduction increases rotation speed and distance
+    double CLmax_clean = 2.0;
+    double CLmax_frost = 1.7;           // 15% reduction from frost
+
+    // V_rot proportional to sqrt(1/CLmax)
+    double V_rot_ratio = sqrt(CLmax_clean / CLmax_frost);
+    TS_ASSERT_DELTA(V_rot_ratio, 1.085, 0.001);
+
+    // Takeoff distance roughly proportional to V^2
+    double distance_increase = V_rot_ratio * V_rot_ratio - 1.0;
+    TS_ASSERT_DELTA(distance_increase, 0.176, 0.01);  // 17.6% increase
+  }
+
+  // Test 64: Climb gradient reduction
+  void testClimbGradientReductionIce() {
+    // Climb gradient = (T - D) / W
+    double thrust = 50000.0;            // N
+    double drag_clean = 20000.0;        // N
+    double drag_ice = 26000.0;          // N (30% increase)
+    double weight = 100000.0;           // N
+
+    double gradient_clean = (thrust - drag_clean) / weight;
+    double gradient_ice = (thrust - drag_ice) / weight;
+    double gradient_loss = gradient_clean - gradient_ice;
+
+    TS_ASSERT_DELTA(gradient_clean, 0.30, 0.001);
+    TS_ASSERT_DELTA(gradient_ice, 0.24, 0.001);
+    TS_ASSERT_DELTA(gradient_loss, 0.06, 0.001);  // 6% gradient loss
+  }
+
+  // Test 65: Range reduction from icing drag
+  void testRangeReductionIcing() {
+    // Range = (eta * L/D) * ln(W_initial/W_final) * (1/c)
+    // Simplified: Range proportional to L/D
+    double L_D_clean = 15.0;
+    double L_D_ice = 11.0;              // Reduced L/D
+
+    double range_ratio = L_D_ice / L_D_clean;
+    double range_reduction = (1.0 - range_ratio) * 100.0;
+
+    TS_ASSERT_DELTA(range_ratio, 0.733, 0.001);
+    TS_ASSERT_DELTA(range_reduction, 26.7, 0.1);  // 26.7% range reduction
+  }
+
+  /***************************************************************************
+   * Ice Detection Tests
+   ***************************************************************************/
+
+  // Test 66: Vibrating probe ice detection frequency shift
+  void testVibratingProbeIceDetection() {
+    // Ice accumulation changes probe resonant frequency
+    // f = (1/2π) * sqrt(k/m), solving for k at f=4000Hz, m=0.001kg:
+    // k = (2π*f)^2 * m = (25133)^2 * 0.001 = 631655 N/m
+    double f_clean = 4000.0;            // Hz
+    double m_probe = 0.001;             // kg
+    double k_spring = 631655.0;         // N/m (gives ~4kHz)
+
+    // Verify clean frequency: f = (1/2π) * sqrt(k/m)
+    double f_calc = sqrt(k_spring / m_probe) / (2.0 * M_PI);
+    TS_ASSERT_DELTA(f_calc, f_clean, 10.0);
+
+    // With ice mass
+    double m_ice = 0.0001;              // 0.1 g ice
+    double m_total = m_probe + m_ice;
+    double f_ice = sqrt(k_spring / m_total) / (2.0 * M_PI);
+    double frequency_shift = f_clean - f_ice;
+
+    TS_ASSERT_DELTA(f_ice, 3814.0, 10.0);
+    TS_ASSERT(frequency_shift > 100.0);  // Detectable shift
+  }
+
+  // Test 67: Optical ice detector reflectivity
+  void testOpticalIceDetectorReflectivity() {
+    // Clear ice vs rime ice optical properties
+    double reflectivity_clean_surface = 0.05;
+    double reflectivity_clear_ice = 0.10;
+    double reflectivity_rime_ice = 0.60;
+
+    // Detection threshold
+    double threshold = 0.08;
+
+    bool clear_ice_detected = reflectivity_clear_ice > threshold;
+    bool rime_ice_detected = reflectivity_rime_ice > threshold;
+
+    TS_ASSERT_EQUALS(clear_ice_detected, true);
+    TS_ASSERT_EQUALS(rime_ice_detected, true);
+  }
+
+  // Test 68: Total air temperature correction for icing
+  void testTATCorrectionIcing() {
+    // TAT = SAT * (1 + 0.2 * r * M^2) where r is recovery factor
+    double SAT = 253.15;                // K (-20°C)
+    double Mach = 0.5;
+    double r = 0.95;                    // Typical recovery factor
+
+    double TAT = SAT * (1.0 + 0.2 * r * Mach * Mach);
+    double SAT_derived = TAT / (1.0 + 0.2 * r * Mach * Mach);
+
+    TS_ASSERT_DELTA(TAT, 265.15, 0.5);
+    TS_ASSERT_DELTA(SAT_derived, SAT, 0.01);
+
+    // Icing possible if SAT between 0 and -40°C
+    bool icing_possible = (SAT <= 273.15) && (SAT >= 233.15);
+    TS_ASSERT_EQUALS(icing_possible, true);
+  }
+
+  /***************************************************************************
+   * Flight Envelope Restriction Tests
+   ***************************************************************************/
+
+  // Test 69: Minimum speed increase with ice
+  void testMinimumSpeedIncreaseIce() {
+    // 1.3 * V_stall with ice
+    double V_stall_clean = 55.0;        // m/s
+    double V_stall_ice = 65.0;          // m/s (with ice)
+
+    double V_min_clean = 1.3 * V_stall_clean;
+    double V_min_ice = 1.3 * V_stall_ice;
+    double speed_increase = V_min_ice - V_min_clean;
+
+    TS_ASSERT_DELTA(V_min_clean, 71.5, 0.1);
+    TS_ASSERT_DELTA(V_min_ice, 84.5, 0.1);
+    TS_ASSERT_DELTA(speed_increase, 13.0, 0.1);
+  }
+
+  // Test 70: Maximum altitude with ice
+  void testMaximumAltitudeWithIce() {
+    // Service ceiling limited by reduced climb rate
+    double climb_rate_clean = 5.0;      // m/s at altitude
+    double drag_increase = 1.3;         // 30% drag increase
+
+    // Simplified: climb rate inversely proportional to drag
+    double climb_rate_ice = climb_rate_clean / drag_increase;
+    TS_ASSERT_DELTA(climb_rate_ice, 3.85, 0.01);
+
+    // If climb rate < 0.5 m/s, can't maintain altitude
+    double ceiling_climb_rate = 0.5;
+    // Altitude where climb rate = 0.5 is lower with ice
+    bool ceiling_reduced = climb_rate_ice < climb_rate_clean;
+    TS_ASSERT_EQUALS(ceiling_reduced, true);
+  }
+
+  // Test 71: Autopilot disconnect in severe icing
+  void testAutopilotIcingResponse() {
+    // Autopilot may disconnect due to unusual attitudes
+    double pitch_rate_threshold = 5.0;  // deg/s
+    double roll_rate_threshold = 10.0;  // deg/s
+
+    // Ice-induced upset rates
+    double pitch_upset = 8.0;           // deg/s (tail stall)
+    double roll_upset = 15.0;           // deg/s (asymmetric ice)
+
+    bool pitch_disconnect = pitch_upset > pitch_rate_threshold;
+    bool roll_disconnect = roll_upset > roll_rate_threshold;
+    bool autopilot_disconnects = pitch_disconnect || roll_disconnect;
+
+    TS_ASSERT_EQUALS(autopilot_disconnects, true);
+  }
+
+  /***************************************************************************
+   * Weight and Balance Effects Tests
+   ***************************************************************************/
+
+  // Test 72: CG shift from ice accumulation
+  void testCGShiftFromIceAccumulation() {
+    // Ice on horizontal tail shifts CG aft
+    double aircraft_weight = 5000.0;    // kg
+    double tail_moment_arm = 8.0;       // m (aft of CG)
+    double ice_mass_tail = 20.0;        // kg
+
+    // CG shift = (ice_mass * moment_arm) / total_weight
+    double total_weight = aircraft_weight + ice_mass_tail;
+    double cg_shift = (ice_mass_tail * tail_moment_arm) / total_weight;
+
+    TS_ASSERT_DELTA(cg_shift, 0.0319, 0.0001);  // ~3.2 cm aft
+  }
+
+  // Test 73: Moment of inertia change from ice
+  void testMomentOfInertiaChangeIce() {
+    // Ice on wingtips increases roll inertia
+    double I_xx_clean = 5000.0;         // kg·m^2
+    double ice_mass_per_tip = 10.0;     // kg
+    double tip_distance = 10.0;         // m from CL
+
+    // Additional inertia from ice masses
+    double delta_I = 2.0 * ice_mass_per_tip * tip_distance * tip_distance;
+    double I_xx_ice = I_xx_clean + delta_I;
+    double inertia_increase = (I_xx_ice / I_xx_clean - 1.0) * 100.0;
+
+    TS_ASSERT_DELTA(delta_I, 2000.0, epsilon);
+    TS_ASSERT_DELTA(I_xx_ice, 7000.0, epsilon);
+    TS_ASSERT_DELTA(inertia_increase, 40.0, 0.1);  // 40% increase
+  }
+
+  // Test 74: Roll rate reduction from increased inertia
+  void testRollRateReductionFromInertia() {
+    // Roll rate for given aileron input: p = L_a / I_xx
+    double L_a = 10000.0;               // N·m (roll moment)
+    double I_xx_clean = 5000.0;         // kg·m^2
+    double I_xx_ice = 7000.0;           // kg·m^2
+
+    double p_clean = L_a / I_xx_clean;
+    double p_ice = L_a / I_xx_ice;
+    double roll_reduction = (1.0 - p_ice / p_clean) * 100.0;
+
+    TS_ASSERT_DELTA(p_clean, 2.0, epsilon);   // rad/s^2
+    TS_ASSERT_DELTA(p_ice, 1.43, 0.01);
+    TS_ASSERT_DELTA(roll_reduction, 28.6, 0.1);  // 28.6% reduction
+  }
+
+  // Test 75: Total aircraft weight increase from icing
+  void testTotalWeightIncreaseFromIcing() {
+    // Estimate total ice accumulation on aircraft
+    double wing_ice = 50.0;             // kg
+    double tail_ice = 20.0;             // kg
+    double fuselage_ice = 10.0;         // kg
+    double engine_inlet_ice = 5.0;      // kg
+    double misc_ice = 5.0;              // kg
+
+    double total_ice_mass = wing_ice + tail_ice + fuselage_ice +
+                            engine_inlet_ice + misc_ice;
+    double aircraft_weight = 4000.0;    // kg
+    double weight_increase_percent = (total_ice_mass / aircraft_weight) * 100.0;
+
+    TS_ASSERT_DELTA(total_ice_mass, 90.0, epsilon);
+    TS_ASSERT_DELTA(weight_increase_percent, 2.25, 0.01);  // 2.25% weight increase
+  }
+};
