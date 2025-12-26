@@ -528,4 +528,380 @@ public:
     TS_ASSERT(!printable.empty());
     TS_ASSERT(!withSign.empty());
   }
+
+  /***************************************************************************
+   * Value Sign Tests
+   ***************************************************************************/
+
+  void testRealValueSignPositive() {
+    FGRealValue rv(100.0);
+    TS_ASSERT(rv.GetValue() > 0);
+  }
+
+  void testRealValueSignNegative() {
+    FGRealValue rv(-100.0);
+    TS_ASSERT(rv.GetValue() < 0);
+  }
+
+  void testRealValueSignZero() {
+    FGRealValue rv(0.0);
+    TS_ASSERT_EQUALS(rv.GetValue(), 0.0);
+  }
+
+  void testPropertyValueSignChange() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/sign/change", true);
+    FGPropertyValue pv(node);
+
+    node->setDoubleValue(50.0);
+    TS_ASSERT(pv.GetValue() > 0);
+
+    node->setDoubleValue(-50.0);
+    TS_ASSERT(pv.GetValue() < 0);
+
+    node->setDoubleValue(0.0);
+    TS_ASSERT_DELTA(pv.GetValue(), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Precision Tests
+   ***************************************************************************/
+
+  void testRealValueDoublePrecision() {
+    // Test that double precision is maintained
+    double precise = 1.23456789012345678;
+    FGRealValue rv(precise);
+    TS_ASSERT_DELTA(rv.GetValue(), precise, 1e-15);
+  }
+
+  void testPropertyValueDoublePrecision() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    double precise = 9.87654321098765432;
+    auto node = pm->GetNode("test/precision", true);
+    node->setDoubleValue(precise);
+
+    FGPropertyValue pv(node);
+    TS_ASSERT_DELTA(pv.GetValue(), precise, 1e-10);
+  }
+
+  void testRealValueVerySmallDifference() {
+    FGRealValue rv1(1.0);
+    FGRealValue rv2(1.0 + 1e-15);
+
+    double diff = std::abs(rv1.GetValue() - rv2.GetValue());
+    TS_ASSERT(diff < 1e-14);
+    TS_ASSERT(diff > 0);
+  }
+
+  /***************************************************************************
+   * Property Tree Hierarchy Tests
+   ***************************************************************************/
+
+  void testPropertyValueDeepHierarchy() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("a/b/c/d/e/f/deep", true);
+    node->setDoubleValue(12345.0);
+
+    FGPropertyValue pv(node);
+    TS_ASSERT_DELTA(pv.GetValue(), 12345.0, epsilon);
+  }
+
+  void testPropertyValueSiblingNodes() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node1 = pm->GetNode("parent/child1", true);
+    auto node2 = pm->GetNode("parent/child2", true);
+    auto node3 = pm->GetNode("parent/child3", true);
+
+    node1->setDoubleValue(1.0);
+    node2->setDoubleValue(2.0);
+    node3->setDoubleValue(3.0);
+
+    FGPropertyValue pv1(node1), pv2(node2), pv3(node3);
+
+    TS_ASSERT_DELTA(pv1.GetValue(), 1.0, epsilon);
+    TS_ASSERT_DELTA(pv2.GetValue(), 2.0, epsilon);
+    TS_ASSERT_DELTA(pv3.GetValue(), 3.0, epsilon);
+  }
+
+  void testPropertyValueIndexedNodes() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    // Create indexed nodes (array-like)
+    std::vector<FGPropertyValue*> pvs;
+    for (int i = 0; i < 5; i++) {
+      std::string path = "array/element[" + std::to_string(i) + "]";
+      auto node = pm->GetNode(path, true);
+      node->setDoubleValue(i * 100.0);
+      pvs.push_back(new FGPropertyValue(node));
+    }
+
+    for (int i = 0; i < 5; i++) {
+      TS_ASSERT_DELTA(pvs[i]->GetValue(), i * 100.0, epsilon);
+      delete pvs[i];
+    }
+  }
+
+  /***************************************************************************
+   * Boundary Value Tests
+   ***************************************************************************/
+
+  void testRealValueSlightlyPositive() {
+    FGRealValue rv(1e-300);
+    TS_ASSERT(rv.GetValue() > 0);
+    TS_ASSERT_DELTA(rv.GetValue(), 1e-300, 1e-310);
+  }
+
+  void testRealValueSlightlyNegative() {
+    FGRealValue rv(-1e-300);
+    TS_ASSERT(rv.GetValue() < 0);
+  }
+
+  void testRealValueNearOverflow() {
+    double nearMax = std::numeric_limits<double>::max() * 0.99;
+    FGRealValue rv(nearMax);
+    TS_ASSERT(std::isfinite(rv.GetValue()));
+  }
+
+  void testRealValueNearUnderflow() {
+    double nearMin = std::numeric_limits<double>::min() * 1.01;
+    FGRealValue rv(nearMin);
+    TS_ASSERT(rv.GetValue() > 0);
+    TS_ASSERT(std::isfinite(rv.GetValue()));
+  }
+
+  /***************************************************************************
+   * Value Immutability Tests (for FGRealValue)
+   ***************************************************************************/
+
+  void testRealValueImmutability() {
+    double original = 42.0;
+    FGRealValue rv(original);
+
+    // Read many times - should always be the same
+    for (int i = 0; i < 100; i++) {
+      TS_ASSERT_EQUALS(rv.GetValue(), original);
+    }
+  }
+
+  void testRealValueIndependence() {
+    FGRealValue rv1(10.0);
+    FGRealValue rv2(20.0);
+
+    // Verify they maintain their values independently
+    TS_ASSERT_DELTA(rv1.GetValue(), 10.0, epsilon);
+    TS_ASSERT_DELTA(rv2.GetValue(), 20.0, epsilon);
+
+    // Read them interleaved
+    for (int i = 0; i < 10; i++) {
+      TS_ASSERT_DELTA(rv1.GetValue(), 10.0, epsilon);
+      TS_ASSERT_DELTA(rv2.GetValue(), 20.0, epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Property Value Mutability Tests
+   ***************************************************************************/
+
+  void testPropertyValueMutabilityThroughNode() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/mutable", true);
+    FGPropertyValue pv(node);
+
+    double values[] = {0.0, 1.0, -1.0, 100.0, -100.0, 0.001, -0.001};
+
+    for (double val : values) {
+      node->setDoubleValue(val);
+      TS_ASSERT_DELTA(pv.GetValue(), val, epsilon);
+    }
+  }
+
+  void testPropertyValueMutabilityThroughSetValue() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/setvalue", true);
+    FGPropertyValue pv(node);
+
+    double values[] = {0.0, 1.0, -1.0, M_PI, M_E, 1e10, 1e-10};
+
+    for (double val : values) {
+      pv.SetValue(val);
+      TS_ASSERT_DELTA(pv.GetValue(), val, std::abs(val) * 1e-10 + epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Special Numeric Values Tests
+   ***************************************************************************/
+
+  void testPropertyValueInfinity() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/infinity", true);
+    node->setDoubleValue(std::numeric_limits<double>::infinity());
+
+    FGPropertyValue pv(node);
+    TS_ASSERT(std::isinf(pv.GetValue()));
+  }
+
+  void testPropertyValueNaN() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/nan", true);
+    node->setDoubleValue(std::numeric_limits<double>::quiet_NaN());
+
+    FGPropertyValue pv(node);
+    TS_ASSERT(std::isnan(pv.GetValue()));
+  }
+
+  /***************************************************************************
+   * String Representation Tests
+   ***************************************************************************/
+
+  void testRealValueGetNameForZero() {
+    FGRealValue rv(0.0);
+    std::string name = rv.GetName();
+    TS_ASSERT(!name.empty());
+  }
+
+  void testRealValueGetNameForNegative() {
+    FGRealValue rv(-42.5);
+    std::string name = rv.GetName();
+    TS_ASSERT(!name.empty());
+    // Name should contain the minus or the value
+  }
+
+  void testRealValueGetNameForScientific() {
+    FGRealValue rv(1.23e45);
+    std::string name = rv.GetName();
+    TS_ASSERT(!name.empty());
+  }
+
+  void testPropertyValuePathName() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("simulation/gravity/world-fps", true);
+    FGPropertyValue pv(node);
+
+    std::string fqn = pv.GetFullyQualifiedName();
+    // Should contain path components
+    TS_ASSERT(fqn.find("gravity") != std::string::npos ||
+              fqn.find("world-fps") != std::string::npos);
+  }
+
+  /***************************************************************************
+   * Copy and Assignment Tests
+   ***************************************************************************/
+
+  void testRealValueCopy() {
+    FGRealValue rv1(42.0);
+    FGRealValue rv2(rv1);
+
+    TS_ASSERT_DELTA(rv1.GetValue(), rv2.GetValue(), epsilon);
+    TS_ASSERT_EQUALS(rv1.IsConstant(), rv2.IsConstant());
+  }
+
+  void testPropertyValueCopy() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/copy", true);
+    node->setDoubleValue(123.0);
+
+    FGPropertyValue pv1(node);
+    FGPropertyValue pv2(pv1);
+
+    TS_ASSERT_DELTA(pv1.GetValue(), pv2.GetValue(), epsilon);
+  }
+
+  /***************************************************************************
+   * Integration Tests
+   ***************************************************************************/
+
+  void testMixedValuesIntegration() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    // Create a mix of real and property values
+    FGRealValue constant1(100.0);
+    FGRealValue constant2(-50.0);
+
+    auto node = pm->GetNode("test/variable", true);
+    node->setDoubleValue(25.0);
+    FGPropertyValue variable(node);
+
+    // Use them in a calculation-like scenario
+    double result = constant1.GetValue() + constant2.GetValue() + variable.GetValue();
+    TS_ASSERT_DELTA(result, 75.0, epsilon);
+
+    // Update variable
+    node->setDoubleValue(50.0);
+    result = constant1.GetValue() + constant2.GetValue() + variable.GetValue();
+    TS_ASSERT_DELTA(result, 100.0, epsilon);
+
+    // Constants unchanged
+    TS_ASSERT_DELTA(constant1.GetValue(), 100.0, epsilon);
+    TS_ASSERT_DELTA(constant2.GetValue(), -50.0, epsilon);
+  }
+
+  void testPropertyUpdatePropagation() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("test/propagate", true);
+    node->setDoubleValue(0.0);
+
+    // Create multiple property values pointing to same node
+    FGPropertyValue pv1(node);
+    FGPropertyValue pv2(node);
+    FGPropertyValue pv3(node);
+
+    // Update through node
+    node->setDoubleValue(99.0);
+
+    // All should see the update
+    TS_ASSERT_DELTA(pv1.GetValue(), 99.0, epsilon);
+    TS_ASSERT_DELTA(pv2.GetValue(), 99.0, epsilon);
+    TS_ASSERT_DELTA(pv3.GetValue(), 99.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Performance/Stress Tests
+   ***************************************************************************/
+
+  void testRapidValueCreation() {
+    for (int i = 0; i < 1000; i++) {
+      FGRealValue rv(static_cast<double>(i));
+      TS_ASSERT_DELTA(rv.GetValue(), static_cast<double>(i), epsilon);
+    }
+  }
+
+  void testAlternatingReads() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    FGRealValue rv(42.0);
+    auto node = pm->GetNode("test/alternate", true);
+    node->setDoubleValue(84.0);
+    FGPropertyValue pv(node);
+
+    for (int i = 0; i < 100; i++) {
+      TS_ASSERT_DELTA(rv.GetValue(), 42.0, epsilon);
+      TS_ASSERT_DELTA(pv.GetValue(), 84.0, epsilon);
+    }
+  }
 };
