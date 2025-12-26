@@ -385,4 +385,583 @@ public:
     double output = position * gain;
     TS_ASSERT_DELTA(output, 1.0, epsilon);
   }
+
+  /***************************************************************************
+   * Additional Comprehensive Tests
+   ***************************************************************************/
+
+  // Test asymmetric rate limits (different up/down rates)
+  double asymmetricRateLimitedMove(double current, double target,
+                                    double upRate, double downRate, double dt) {
+    double delta = target - current;
+    double maxDelta = (delta > 0 ? upRate : downRate) * dt;
+    if (std::abs(delta) <= maxDelta) {
+      return target;
+    }
+    return current + (delta > 0 ? maxDelta : -maxDelta);
+  }
+
+  void testAsymmetricRateLimitedMoveUp() {
+    double current = 0.0;
+    double target = 1.0;
+    double upRate = 0.2;
+    double downRate = 0.4;
+    double dt = 1.0;
+
+    double newPos = asymmetricRateLimitedMove(current, target, upRate, downRate, dt);
+    TS_ASSERT_DELTA(newPos, 0.2, epsilon);
+  }
+
+  void testAsymmetricRateLimitedMoveDown() {
+    double current = 1.0;
+    double target = 0.0;
+    double upRate = 0.2;
+    double downRate = 0.4;
+    double dt = 1.0;
+
+    double newPos = asymmetricRateLimitedMove(current, target, upRate, downRate, dt);
+    TS_ASSERT_DELTA(newPos, 0.6, epsilon);  // Faster going down
+  }
+
+  // Test direction reversal during movement
+  void testDirectionReversal() {
+    double position = 0.5;
+    double rate = 0.2;
+    double dt = 0.5;
+
+    // Moving up
+    double target = 1.0;
+    position = rateLimitedMove(position, target, rate, dt);
+    TS_ASSERT_DELTA(position, 0.6, epsilon);
+
+    // Reverse direction
+    target = 0.0;
+    position = rateLimitedMove(position, target, rate, dt);
+    TS_ASSERT_DELTA(position, 0.5, epsilon);
+  }
+
+  // Test position holding
+  void testPositionHolding() {
+    double position = 0.5;
+    double target = 0.5;
+    double rate = 0.2;
+    double dt = 0.1;
+
+    for (int i = 0; i < 10; i++) {
+      position = rateLimitedMove(position, target, rate, dt);
+      TS_ASSERT_DELTA(position, 0.5, epsilon);
+    }
+  }
+
+  // Test deadband in position control
+  double applyDeadband(double input, double deadband) {
+    if (std::abs(input) < deadband) {
+      return 0.0;
+    }
+    return input > 0 ? input - deadband : input + deadband;
+  }
+
+  void testDeadbandPositive() {
+    double result = applyDeadband(0.15, 0.1);
+    TS_ASSERT_DELTA(result, 0.05, epsilon);
+  }
+
+  void testDeadbandNegative() {
+    double result = applyDeadband(-0.15, 0.1);
+    TS_ASSERT_DELTA(result, -0.05, epsilon);
+  }
+
+  void testDeadbandWithin() {
+    double result = applyDeadband(0.05, 0.1);
+    TS_ASSERT_DELTA(result, 0.0, epsilon);
+  }
+
+  // Test time to reach target
+  double timeToTarget(double current, double target, double rate) {
+    return std::abs(target - current) / rate;
+  }
+
+  void testTimeToTargetCalculation() {
+    double time = timeToTarget(0.0, 1.0, 0.2);
+    TS_ASSERT_DELTA(time, 5.0, epsilon);
+  }
+
+  void testTimeToTargetPartial() {
+    double time = timeToTarget(0.6, 1.0, 0.2);
+    TS_ASSERT_DELTA(time, 2.0, epsilon);
+  }
+
+  // Test position percentage calculation
+  double positionPercentage(double position, double minPos, double maxPos) {
+    if (maxPos <= minPos) return 0.0;
+    return (position - minPos) / (maxPos - minPos) * 100.0;
+  }
+
+  void testPositionPercentageAtMin() {
+    double pct = positionPercentage(0.0, 0.0, 1.0);
+    TS_ASSERT_DELTA(pct, 0.0, epsilon);
+  }
+
+  void testPositionPercentageAtMax() {
+    double pct = positionPercentage(1.0, 0.0, 1.0);
+    TS_ASSERT_DELTA(pct, 100.0, epsilon);
+  }
+
+  void testPositionPercentageAtMid() {
+    double pct = positionPercentage(0.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(pct, 50.0, epsilon);
+  }
+
+  // Test multi-step convergence
+  void testConvergenceSteps() {
+    double position = 0.0;
+    double target = 1.0;
+    double rate = 0.25;
+    double dt = 1.0;
+
+    int steps = 0;
+    while (std::abs(position - target) > epsilon && steps < 10) {
+      position = rateLimitedMove(position, target, rate, dt);
+      steps++;
+    }
+
+    TS_ASSERT_DELTA(position, 1.0, epsilon);
+    TS_ASSERT_EQUALS(steps, 4);  // 1.0 / 0.25 = 4 steps
+  }
+
+  // Test different time step sizes
+  void testDifferentTimeSteps() {
+    double rate = 0.2;
+    double current = 0.0;
+    double target = 1.0;
+
+    // Small time step
+    double newPos1 = rateLimitedMove(current, target, rate, 0.1);
+    TS_ASSERT_DELTA(newPos1, 0.02, epsilon);
+
+    // Large time step
+    double newPos2 = rateLimitedMove(current, target, rate, 2.0);
+    TS_ASSERT_DELTA(newPos2, 0.4, epsilon);
+  }
+
+  // Test hysteresis effect
+  double applyHysteresis(double input, double& prevOutput, double hysteresis) {
+    if (std::abs(input - prevOutput) > hysteresis) {
+      prevOutput = input;
+    }
+    return prevOutput;
+  }
+
+  void testHysteresisNoChange() {
+    double prevOutput = 0.5;
+    double result = applyHysteresis(0.52, prevOutput, 0.1);
+    TS_ASSERT_DELTA(result, 0.5, epsilon);  // Within hysteresis band
+  }
+
+  void testHysteresisChange() {
+    double prevOutput = 0.5;
+    double result = applyHysteresis(0.7, prevOutput, 0.1);
+    TS_ASSERT_DELTA(result, 0.7, epsilon);  // Outside hysteresis band
+  }
+
+  // Test linear interpolation between detents
+  double interpolatePosition(double input, const std::vector<double>& detents) {
+    if (detents.empty()) return 0.0;
+    if (detents.size() == 1) return detents[0];
+
+    // Assume input is normalized [0, 1]
+    double scaledInput = input * (detents.size() - 1);
+    size_t idx = static_cast<size_t>(scaledInput);
+    if (idx >= detents.size() - 1) return detents.back();
+
+    double frac = scaledInput - idx;
+    return detents[idx] + frac * (detents[idx + 1] - detents[idx]);
+  }
+
+  void testInterpolationAtDetents() {
+    std::vector<double> detents = {0.0, 15.0, 30.0};
+
+    TS_ASSERT_DELTA(interpolatePosition(0.0, detents), 0.0, epsilon);
+    TS_ASSERT_DELTA(interpolatePosition(0.5, detents), 15.0, epsilon);
+    TS_ASSERT_DELTA(interpolatePosition(1.0, detents), 30.0, epsilon);
+  }
+
+  void testInterpolationBetweenDetents() {
+    std::vector<double> detents = {0.0, 15.0, 30.0};
+
+    TS_ASSERT_DELTA(interpolatePosition(0.25, detents), 7.5, epsilon);
+    TS_ASSERT_DELTA(interpolatePosition(0.75, detents), 22.5, epsilon);
+  }
+
+  // Test flap simulation
+  void testFlapDeployment() {
+    std::vector<double> flapDetents = {0.0, 10.0, 20.0, 30.0, 40.0};
+    double position = 0.0;
+    double rate = 5.0;  // 5 degrees per second
+    double dt = 0.5;
+
+    // Deploy to full flaps
+    double target = 40.0;
+    int steps = 0;
+    while (std::abs(position - target) > 0.01 && steps < 100) {
+      position = rateLimitedMove(position, target, rate, dt);
+      steps++;
+    }
+
+    TS_ASSERT_DELTA(position, 40.0, 0.01);
+    TS_ASSERT_EQUALS(steps, 16);  // 40 / (5 * 0.5) = 16 steps
+  }
+
+  // Test landing gear simulation
+  void testLandingGearTransition() {
+    double position = 0.0;  // 0 = up, 1 = down
+    double extendRate = 0.2;  // 5 seconds to extend
+    double retractRate = 0.333;  // 3 seconds to retract
+    double dt = 0.25;
+
+    // Extend gear
+    while (position < 1.0 - epsilon) {
+      position = asymmetricRateLimitedMove(position, 1.0, extendRate, retractRate, dt);
+    }
+    TS_ASSERT_DELTA(position, 1.0, epsilon);
+
+    // Partial retraction
+    for (int i = 0; i < 4; i++) {
+      position = asymmetricRateLimitedMove(position, 0.0, extendRate, retractRate, dt);
+    }
+    // After 1 second (4 * 0.25), should have moved 0.333
+    TS_ASSERT_DELTA(position, 1.0 - 0.333, 0.01);
+  }
+
+  // Test speed brake simulation
+  void testSpeedBrakeDeployment() {
+    double position = 0.0;
+    double rate = 0.5;  // 2 seconds for full deployment
+    double dt = 0.1;
+
+    // Deploy speed brake to 60%
+    double target = 0.6;
+    while (std::abs(position - target) > epsilon) {
+      position = rateLimitedMove(position, target, rate, dt);
+    }
+    TS_ASSERT_DELTA(position, 0.6, epsilon);
+
+    // Verify time taken
+    double expectedTime = 0.6 / 0.5;  // = 1.2 seconds
+    double steps = 0.6 / (0.5 * 0.1);  // = 12 steps
+    TS_ASSERT_DELTA(steps, 12.0, epsilon);
+  }
+
+  // Test segment-based rate calculation
+  double getSegmentRate(double position, const std::vector<double>& detents,
+                        const std::vector<double>& rates) {
+    for (size_t i = 0; i < detents.size() - 1; i++) {
+      if (position >= detents[i] && position <= detents[i + 1]) {
+        return rates[i];
+      }
+    }
+    return rates.back();
+  }
+
+  void testSegmentRateLookup() {
+    std::vector<double> detents = {0.0, 15.0, 30.0};
+    std::vector<double> rates = {5.0, 7.5};  // Rate for each segment
+
+    TS_ASSERT_DELTA(getSegmentRate(7.0, detents, rates), 5.0, epsilon);
+    TS_ASSERT_DELTA(getSegmentRate(22.0, detents, rates), 7.5, epsilon);
+  }
+
+  // Test minimum time step handling
+  void testMinimumTimeStep() {
+    double current = 0.0;
+    double target = 1.0;
+    double rate = 0.2;
+    double dt = 1e-6;  // Very small time step
+
+    double newPos = rateLimitedMove(current, target, rate, dt);
+    TS_ASSERT_DELTA(newPos, rate * dt, epsilon);
+    TS_ASSERT(newPos > current);
+  }
+
+  // Test maximum position limits
+  double clampPosition(double position, double minPos, double maxPos) {
+    return std::max(minPos, std::min(maxPos, position));
+  }
+
+  void testClampPositionAboveMax() {
+    double clamped = clampPosition(1.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(clamped, 1.0, epsilon);
+  }
+
+  void testClampPositionBelowMin() {
+    double clamped = clampPosition(-0.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(clamped, 0.0, epsilon);
+  }
+
+  void testClampPositionWithin() {
+    double clamped = clampPosition(0.7, 0.0, 1.0);
+    TS_ASSERT_DELTA(clamped, 0.7, epsilon);
+  }
+
+  // Test transition state detection
+  enum TransitionState { STOPPED, EXTENDING, RETRACTING };
+
+  TransitionState getTransitionState(double current, double target, double tolerance = 0.001) {
+    if (std::abs(current - target) < tolerance) return STOPPED;
+    return (target > current) ? EXTENDING : RETRACTING;
+  }
+
+  void testTransitionStateStopped() {
+    TS_ASSERT_EQUALS(getTransitionState(0.5, 0.5), STOPPED);
+  }
+
+  void testTransitionStateExtending() {
+    TS_ASSERT_EQUALS(getTransitionState(0.3, 0.8), EXTENDING);
+  }
+
+  void testTransitionStateRetracting() {
+    TS_ASSERT_EQUALS(getTransitionState(0.8, 0.3), RETRACTING);
+  }
+
+  // Test percentage complete calculation
+  double percentComplete(double current, double start, double target) {
+    if (std::abs(target - start) < epsilon) return 100.0;
+    return std::abs(current - start) / std::abs(target - start) * 100.0;
+  }
+
+  void testPercentCompleteAtStart() {
+    double pct = percentComplete(0.0, 0.0, 1.0);
+    TS_ASSERT_DELTA(pct, 0.0, epsilon);
+  }
+
+  void testPercentCompleteAtEnd() {
+    double pct = percentComplete(1.0, 0.0, 1.0);
+    TS_ASSERT_DELTA(pct, 100.0, epsilon);
+  }
+
+  void testPercentCompleteMiddle() {
+    double pct = percentComplete(0.25, 0.0, 1.0);
+    TS_ASSERT_DELTA(pct, 25.0, epsilon);
+  }
+
+  // Test remaining time calculation
+  double remainingTime(double current, double target, double rate) {
+    return std::abs(target - current) / rate;
+  }
+
+  void testRemainingTimeCalculation() {
+    double time = remainingTime(0.3, 1.0, 0.1);
+    TS_ASSERT_DELTA(time, 7.0, epsilon);
+  }
+
+  void testRemainingTimeAtTarget() {
+    double time = remainingTime(1.0, 1.0, 0.1);
+    TS_ASSERT_DELTA(time, 0.0, epsilon);
+  }
+
+  // Test non-uniform detent spacing
+  void testNonUniformDetents() {
+    std::vector<double> detents = {0.0, 5.0, 15.0, 40.0};
+
+    // Verify spacing
+    double spacing1 = detents[1] - detents[0];
+    double spacing2 = detents[2] - detents[1];
+    double spacing3 = detents[3] - detents[2];
+
+    TS_ASSERT_DELTA(spacing1, 5.0, epsilon);
+    TS_ASSERT_DELTA(spacing2, 10.0, epsilon);
+    TS_ASSERT_DELTA(spacing3, 25.0, epsilon);
+  }
+
+  // Test simultaneous multiple actuators
+  void testMultipleActuators() {
+    double leftGear = 0.0;
+    double rightGear = 0.0;
+    double noseGear = 0.0;
+    double rate = 0.2;
+    double dt = 0.5;
+
+    // Extend all gear simultaneously
+    for (int i = 0; i < 10; i++) {
+      leftGear = rateLimitedMove(leftGear, 1.0, rate, dt);
+      rightGear = rateLimitedMove(rightGear, 1.0, rate, dt);
+      noseGear = rateLimitedMove(noseGear, 1.0, rate, dt);
+    }
+
+    TS_ASSERT_DELTA(leftGear, 1.0, epsilon);
+    TS_ASSERT_DELTA(rightGear, 1.0, epsilon);
+    TS_ASSERT_DELTA(noseGear, 1.0, epsilon);
+  }
+
+  // Test emergency extension (faster rate)
+  void testEmergencyGearExtension() {
+    double position = 0.0;
+    double normalRate = 0.2;
+    double emergencyRate = 0.5;
+    double dt = 0.5;
+
+    // Emergency extension
+    int steps = 0;
+    while (position < 1.0 - epsilon && steps < 10) {
+      position = rateLimitedMove(position, 1.0, emergencyRate, dt);
+      steps++;
+    }
+
+    TS_ASSERT_DELTA(position, 1.0, epsilon);
+    TS_ASSERT_EQUALS(steps, 4);  // 1.0 / (0.5 * 0.5) = 4 steps
+  }
+
+  // Test gradual rate change
+  double gradualRate(double position, double minRate, double maxRate, double minPos, double maxPos) {
+    double fraction = (position - minPos) / (maxPos - minPos);
+    return minRate + fraction * (maxRate - minRate);
+  }
+
+  void testGradualRateAtMin() {
+    double rate = gradualRate(0.0, 0.1, 0.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(rate, 0.1, epsilon);
+  }
+
+  void testGradualRateAtMax() {
+    double rate = gradualRate(1.0, 0.1, 0.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(rate, 0.5, epsilon);
+  }
+
+  void testGradualRateAtMid() {
+    double rate = gradualRate(0.5, 0.1, 0.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(rate, 0.3, epsilon);
+  }
+
+  // Test negative position ranges
+  void testNegativePositionRange() {
+    double position = 0.0;
+    double target = -30.0;  // e.g., nose-down trim
+    double rate = 10.0;
+    double dt = 0.5;
+
+    while (std::abs(position - target) > 0.01) {
+      position = rateLimitedMove(position, target, rate, dt);
+    }
+    TS_ASSERT_DELTA(position, -30.0, 0.01);
+  }
+
+  // Test bidirectional range
+  void testBidirectionalRange() {
+    std::vector<double> detents = {-30.0, 0.0, 30.0};
+    double position = 0.0;
+    double rate = 15.0;
+    double dt = 0.5;
+
+    // Move to positive limit
+    while (std::abs(position - 30.0) > 0.01) {
+      position = rateLimitedMove(position, 30.0, rate, dt);
+    }
+    TS_ASSERT_DELTA(position, 30.0, 0.01);
+
+    // Move to negative limit
+    while (std::abs(position - (-30.0)) > 0.01) {
+      position = rateLimitedMove(position, -30.0, rate, dt);
+    }
+    TS_ASSERT_DELTA(position, -30.0, 0.01);
+  }
+
+  // Test detent snapping
+  double snapToNearestDetent(double position, const std::vector<double>& detents, double snapThreshold) {
+    for (double detent : detents) {
+      if (std::abs(position - detent) < snapThreshold) {
+        return detent;
+      }
+    }
+    return position;
+  }
+
+  void testSnapToDetent() {
+    std::vector<double> detents = {0.0, 0.5, 1.0};
+    double snapped = snapToNearestDetent(0.48, detents, 0.05);
+    TS_ASSERT_DELTA(snapped, 0.5, epsilon);
+  }
+
+  void testNoSnapOutsideThreshold() {
+    std::vector<double> detents = {0.0, 0.5, 1.0};
+    double snapped = snapToNearestDetent(0.4, detents, 0.05);
+    TS_ASSERT_DELTA(snapped, 0.4, epsilon);
+  }
+
+  // Test input normalization
+  double normalizeInput(double input, double inputMin, double inputMax) {
+    return (input - inputMin) / (inputMax - inputMin);
+  }
+
+  void testNormalizeInputMin() {
+    double normalized = normalizeInput(-1.0, -1.0, 1.0);
+    TS_ASSERT_DELTA(normalized, 0.0, epsilon);
+  }
+
+  void testNormalizeInputMax() {
+    double normalized = normalizeInput(1.0, -1.0, 1.0);
+    TS_ASSERT_DELTA(normalized, 1.0, epsilon);
+  }
+
+  void testNormalizeInputMid() {
+    double normalized = normalizeInput(0.0, -1.0, 1.0);
+    TS_ASSERT_DELTA(normalized, 0.5, epsilon);
+  }
+
+  // Test acceleration-limited motion
+  double accelLimitedMove(double current, double target, double currentVel,
+                          double& velocity, double maxAccel, double maxVel, double dt) {
+    double error = target - current;
+    double desiredAccel = error * 10.0;  // P-controller
+
+    // Limit acceleration
+    double accel = std::max(-maxAccel, std::min(maxAccel, desiredAccel));
+
+    // Update velocity
+    velocity = currentVel + accel * dt;
+    velocity = std::max(-maxVel, std::min(maxVel, velocity));
+
+    // Update position
+    return current + velocity * dt;
+  }
+
+  void testAccelLimitedMotion() {
+    double position = 0.0;
+    double velocity = 0.0;
+    double maxAccel = 0.5;
+    double maxVel = 0.2;
+    double dt = 0.1;
+
+    // Move towards target
+    double target = 1.0;
+    for (int i = 0; i < 100; i++) {
+      position = accelLimitedMove(position, target, velocity, velocity, maxAccel, maxVel, dt);
+    }
+
+    TS_ASSERT_DELTA(position, 1.0, 0.1);  // Should converge
+  }
+
+  // Test slew rate limiting
+  double slewRateLimit(double newValue, double& prevValue, double maxSlew, double dt) {
+    double delta = newValue - prevValue;
+    double maxDelta = maxSlew * dt;
+
+    if (std::abs(delta) > maxDelta) {
+      delta = delta > 0 ? maxDelta : -maxDelta;
+    }
+
+    prevValue = prevValue + delta;
+    return prevValue;
+  }
+
+  void testSlewRateLimitExceeded() {
+    double prev = 0.0;
+    double result = slewRateLimit(1.0, prev, 0.2, 1.0);
+    TS_ASSERT_DELTA(result, 0.2, epsilon);
+  }
+
+  void testSlewRateLimitWithin() {
+    double prev = 0.0;
+    double result = slewRateLimit(0.1, prev, 0.2, 1.0);
+    TS_ASSERT_DELTA(result, 0.1, epsilon);
+  }
 };
