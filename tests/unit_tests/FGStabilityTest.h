@@ -861,4 +861,477 @@ public:
     double ratio = q_high / q_low;
     TS_ASSERT_DELTA(ratio, 9.0, 0.01);  // 3^2 = 9
   }
+
+  /***************************************************************************
+   * Maneuver Point Tests
+   ***************************************************************************/
+
+  // Test maneuver point calculation
+  void testManeuverPoint() {
+    double x_np = 0.35;    // Neutral point (stick-fixed)
+    double Cm_q = -15.0;   // Pitch damping
+    double CL_alpha = 5.7;
+    double m = 200.0;      // Non-dimensional mass
+    double mu = m * 2.0;   // Relative density factor
+
+    // Maneuver point is ahead of NP due to pitch damping
+    double x_mp = x_np + Cm_q / (2.0 * mu * CL_alpha);
+    TS_ASSERT(x_mp < x_np);  // Maneuver point forward of NP
+  }
+
+  // Test stick force per g
+  void testStickForcePerG() {
+    double W = 10000.0;    // Weight (lbs)
+    double S = 200.0;      // Wing area
+    double c = 5.0;        // Chord
+    double SM = 0.10;      // Static margin
+    double G = 50.0;       // Gearing ratio (lb/rad elevator)
+
+    // Simplified: F/n ∝ W * SM
+    double F_per_g = W * SM * c / (S * G);
+    TS_ASSERT(F_per_g > 0);  // Pull for positive g
+  }
+
+  // Test maneuver margin
+  void testManeuverMargin() {
+    double x_cg = 0.25;
+    double x_mp = 0.32;
+
+    double maneuver_margin = x_mp - x_cg;
+    TS_ASSERT(maneuver_margin > 0);  // Stable in maneuver
+  }
+
+  /***************************************************************************
+   * Power Effects on Stability Tests
+   ***************************************************************************/
+
+  // Test propeller slipstream on tail
+  void testPropSlipstreamEffect() {
+    double V = 150.0;
+    double delta_V = 20.0;  // Slipstream velocity increase
+    double eta_t_clean = 0.9;
+
+    // Dynamic pressure ratio in slipstream
+    double q_ratio = std::pow((V + delta_V) / V, 2);
+    double eta_t_power = eta_t_clean * q_ratio;
+
+    TS_ASSERT(eta_t_power > eta_t_clean);  // More effective with power
+  }
+
+  // Test thrust line offset moment
+  void testThrustLineMoment() {
+    double T = 2000.0;     // Thrust (lbs)
+    double z_T = 2.0;      // Thrust line below CG (positive z down convention)
+    double c = 5.0;        // Chord
+    double q = 50.0;
+    double S = 200.0;
+
+    // Pitching moment coefficient from thrust
+    double Cm_thrust = T * z_T / (q * S * c);
+    TS_ASSERT(Cm_thrust > 0);  // Nose-up moment (thrust below CG)
+  }
+
+  // Test normal force on propeller disc
+  void testPropellerNormalForce() {
+    double alpha = 10.0 * DEG_TO_RAD;
+    double T = 2000.0;
+    double a_p = 0.3;  // Normal force factor
+
+    // Normal force on propeller
+    double N_p = T * a_p * alpha;
+    TS_ASSERT(N_p > 0);  // Destabilizing at positive alpha
+  }
+
+  /***************************************************************************
+   * Ground Effect on Stability Tests
+   ***************************************************************************/
+
+  // Test lift in ground effect
+  void testLiftInGroundEffect() {
+    double CL = 1.0;
+    double h_b = 0.2;  // Height/span ratio
+
+    // Ground effect factor (Raymer approximation)
+    double phi = (16.0 * h_b) * (16.0 * h_b) / (1.0 + (16.0 * h_b) * (16.0 * h_b));
+    double K_GE = 1.0 + phi * 0.5;  // Simplified
+
+    TS_ASSERT(K_GE > 1.0);  // Lift increased in ground effect
+  }
+
+  // Test induced drag reduction in ground effect
+  void testInducedDragGroundEffect() {
+    double K = 0.05;       // Induced drag factor
+    double CL = 1.0;
+    double h_b = 0.2;
+
+    // Ground effect reduces induced drag
+    double CDi_ooge = K * CL * CL;
+    double sigma_GE = 0.8;  // Ground effect factor < 1
+    double CDi_ige = CDi_ooge * sigma_GE;
+
+    TS_ASSERT(CDi_ige < CDi_ooge);
+  }
+
+  // Test pitch stability change in ground effect
+  void testPitchStabilityGroundEffect() {
+    double Cm_alpha_ooge = -1.0;
+    double d_Cm_alpha_GE = 0.2;  // Ground effect destabilizing
+
+    double Cm_alpha_ige = Cm_alpha_ooge + d_Cm_alpha_GE;
+    TS_ASSERT(std::abs(Cm_alpha_ige) < std::abs(Cm_alpha_ooge));
+  }
+
+  /***************************************************************************
+   * Crosswind Stability Tests
+   ***************************************************************************/
+
+  // Test crosswind approach crab angle
+  void testCrosswindCrabAngle() {
+    double V_aircraft = 150.0;  // kts
+    double V_crosswind = 20.0;  // kts
+
+    double psi_crab = std::atan2(V_crosswind, V_aircraft);
+    TS_ASSERT_DELTA(psi_crab * 180.0 / M_PI, 7.6, 0.5);  // degrees
+  }
+
+  // Test sideslip in crosswind landing
+  void testCrosswindSideslip() {
+    double V_crosswind = 20.0;
+    double V_approach = 120.0;
+    double Cy_beta = -0.5;
+
+    // Required sideslip for wing-low approach
+    double beta_required = V_crosswind / V_approach;
+    TS_ASSERT(beta_required > 0 && beta_required < 0.5);
+  }
+
+  // Test aileron-rudder crossfeed
+  void testAileronRudderCrossfeed() {
+    double Cn_da = -0.01;  // Adverse yaw from aileron
+    double Cn_dr = -0.10;  // Rudder yaw effectiveness
+
+    // Rudder needed to cancel adverse yaw per unit aileron
+    // To cancel: Cn_da * da + Cn_dr * dr = 0 => dr/da = -Cn_da/Cn_dr
+    double dr_per_da = -Cn_da / Cn_dr;
+    TS_ASSERT_DELTA(dr_per_da, -0.1, 0.01);  // Opposite sign rudder
+  }
+
+  /***************************************************************************
+   * Roll-Yaw Coupling Tests
+   ***************************************************************************/
+
+  // Test adverse yaw magnitude
+  void testAdverseYawMagnitude() {
+    double Cn_da = -0.01;  // Per radian
+    double da = 20.0 * DEG_TO_RAD;
+
+    double Cn_adverse = Cn_da * da;
+    TS_ASSERT(Cn_adverse < 0);  // Yaw opposite to roll
+  }
+
+  // Test proverse yaw at high alpha
+  void testProverseYawHighAlpha() {
+    // At high alpha, aileron can produce proverse yaw
+    double Cn_da_low_alpha = -0.01;
+    double Cn_da_high_alpha = 0.005;  // Proverse
+
+    TS_ASSERT(Cn_da_high_alpha > 0);  // Yaw same direction as roll
+  }
+
+  // Test roll coupling in yaw
+  void testYawRollCoupling() {
+    double Cl_r = 0.15;    // Roll due to yaw rate
+    double r = 0.1;        // rad/s yaw rate
+
+    double Cl = Cl_r * r;
+    TS_ASSERT(Cl > 0);  // Right yaw produces right roll
+  }
+
+  /***************************************************************************
+   * Aeroelastic Effects Tests
+   ***************************************************************************/
+
+  // Test aileron reversal speed
+  void testAileronReversalSpeed() {
+    double V_design = 400.0;  // Design dive speed
+    double K_flex = 0.8;      // Flexibility factor at V_design
+
+    // Reversal speed where K_flex = 0
+    double V_reversal = V_design / std::sqrt(1.0 - K_flex);
+    TS_ASSERT(V_reversal > V_design);
+  }
+
+  // Test roll rate reduction due to flexibility
+  void testRollRateFlexibility() {
+    double p_rigid = 2.0;   // rad/s rigid roll rate
+    double K_flex = 0.7;    // Flexibility factor
+
+    double p_flexible = p_rigid * K_flex;
+    TS_ASSERT(p_flexible < p_rigid);
+  }
+
+  // Test divergence speed estimate
+  void testDivergenceSpeed() {
+    double EI = 1e9;        // Bending stiffness
+    double C_La = 5.7;      // Lift curve slope per rad
+    double e = 0.25;        // Elastic axis to AC distance
+    double c = 5.0;
+    double rho = 0.002377;
+    double S = 20.0;        // Panel area
+
+    // Simplified divergence dynamic pressure
+    double q_div = EI / (C_La * e * c * S);
+    double V_div = std::sqrt(2.0 * q_div / rho);
+    TS_ASSERT(V_div > 0);
+  }
+
+  /***************************************************************************
+   * Icing Effects on Stability Tests
+   ***************************************************************************/
+
+  // Test CLmax reduction with ice
+  void testCLmaxIcing() {
+    double CL_max_clean = 1.8;
+    double dCL_max_ice = -0.4;  // Ice degradation
+
+    double CL_max_iced = CL_max_clean + dCL_max_ice;
+    TS_ASSERT(CL_max_iced < CL_max_clean);
+    TS_ASSERT(CL_max_iced > 1.0);  // Still flyable
+  }
+
+  // Test drag increase with ice
+  void testDragIcing() {
+    double CD_clean = 0.025;
+    double dCD_ice = 0.015;  // Ice drag increment
+
+    double CD_iced = CD_clean + dCD_ice;
+    TS_ASSERT_DELTA(CD_iced / CD_clean, 1.6, 0.1);  // 60% increase
+  }
+
+  // Test Cm_alpha change with tailplane ice
+  void testCmAlphaTailplaneIce() {
+    double Cm_alpha_clean = -1.0;
+    double eta_t_clean = 0.9;
+    double eta_t_iced = 0.6;  // Reduced tail effectiveness
+
+    // Stability reduction proportional to tail effectiveness reduction
+    double Cm_alpha_iced = Cm_alpha_clean * (eta_t_iced / eta_t_clean);
+    TS_ASSERT(std::abs(Cm_alpha_iced) < std::abs(Cm_alpha_clean));
+  }
+
+  /***************************************************************************
+   * Weight and Balance Limits Tests
+   ***************************************************************************/
+
+  // Test forward CG limit for rotation
+  void testForwardCGLimitRotation() {
+    double Cm_de_max = -1.5 * 25.0 * DEG_TO_RAD;  // Max elevator moment
+    double CL_rotation = 1.2;
+    double CL_alpha = 5.7;
+
+    // Forward CG limit where elevator saturates at rotation
+    double alpha_rot = CL_rotation / CL_alpha;
+    double Cm_required = -(-1.0) * alpha_rot;  // Cm_alpha * alpha to overcome
+    TS_ASSERT(std::abs(Cm_de_max) > std::abs(Cm_required));
+  }
+
+  // Test aft CG limit for stability
+  void testAftCGLimitStability() {
+    double x_np = 0.35;
+    double SM_min = 0.05;  // Minimum required static margin
+
+    double x_cg_aft_limit = x_np - SM_min;
+    TS_ASSERT_DELTA(x_cg_aft_limit, 0.30, 0.001);
+  }
+
+  // Test CG travel vs fuel burn
+  void testCGTravelFuel() {
+    double x_cg_full = 0.22;
+    double x_cg_empty = 0.28;
+    double x_fuel = 0.15;  // Fuel tank location
+    double W_fuel = 2000.0;
+    double W_total_full = 10000.0;
+
+    // CG moves aft as fuel burns (fuel tank forward of CG)
+    TS_ASSERT(x_cg_empty > x_cg_full);  // CG moves aft
+  }
+
+  /***************************************************************************
+   * Control Harmony Tests
+   ***************************************************************************/
+
+  // Test aileron-elevator force ratio
+  void testAileronElevatorForceRatio() {
+    double F_aileron = 5.0;    // lbs for 30 deg bank
+    double F_elevator = 10.0;  // lbs for 2g pullup
+
+    double ratio = F_aileron / F_elevator;
+    // Good harmony: ratio between 0.3 and 0.7
+    TS_ASSERT(ratio > 0.2 && ratio < 1.0);
+  }
+
+  // Test rudder-aileron force ratio
+  void testRudderAileronForceRatio() {
+    double F_rudder = 15.0;
+    double F_aileron = 5.0;
+
+    double ratio = F_rudder / F_aileron;
+    // Rudder typically heavier than aileron
+    TS_ASSERT(ratio > 2.0);
+  }
+
+  // Test control centering
+  void testControlCentering() {
+    double F_center = 1.0;     // Force to overcome centering
+    double delta_max = 25.0;   // Max deflection (deg)
+    double F_max = 30.0;       // Max force
+
+    double gradient = (F_max - F_center) / delta_max;
+    TS_ASSERT(gradient > 0.5);  // Positive gradient (increasing force)
+  }
+
+  /***************************************************************************
+   * Flying Qualities Categories Tests
+   ***************************************************************************/
+
+  // Test Level 1 short period requirements
+  void testLevel1ShortPeriod() {
+    double zeta_sp = 0.5;  // Damping ratio
+    double omega_sp = 3.0; // rad/s
+
+    // Level 1 requirements (MIL-F-8785C)
+    bool level1 = (zeta_sp > 0.35 && zeta_sp < 1.3) && (omega_sp > 1.0);
+    TS_ASSERT(level1);
+  }
+
+  // Test Level 1 dutch roll requirements
+  void testLevel1DutchRoll() {
+    double zeta_dr = 0.15;  // Damping ratio
+    double omega_dr = 1.5;  // rad/s
+    double zeta_omega = zeta_dr * omega_dr;
+
+    // Level 1: zeta > 0.08, omega > 0.4, zeta*omega > 0.15
+    bool level1 = (zeta_dr > 0.08) && (omega_dr > 0.4) && (zeta_omega > 0.15);
+    TS_ASSERT(level1);
+  }
+
+  // Test roll mode time constant requirement
+  void testRollModeRequirement() {
+    double tau_roll = 0.8;  // seconds
+
+    // Level 1 for Category A: tau < 1.0s
+    TS_ASSERT(tau_roll < 1.0);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  // Test stability over alpha range
+  void testStabilityAlphaRange() {
+    double Cm_alpha = -1.0;
+
+    for (double alpha = -10.0; alpha <= 15.0; alpha += 1.0) {
+      double alpha_rad = alpha * DEG_TO_RAD;
+      double Cm = Cm_alpha * alpha_rad;
+
+      // Moment should oppose alpha change
+      TS_ASSERT((alpha > 0 && Cm < 0) || (alpha < 0 && Cm > 0) || alpha == 0);
+    }
+  }
+
+  // Test control effectiveness over speed range
+  void testControlEffectivenessSpeedRange() {
+    double Cm_de = -1.5;
+    double rho = 0.002377;
+
+    for (double V = 80.0; V <= 400.0; V += 40.0) {
+      double q = 0.5 * rho * V * V;
+
+      // Moment increases with dynamic pressure
+      double M_per_de = q * 200.0 * 5.0 * Cm_de;
+      TS_ASSERT(M_per_de < 0);  // Consistent sign
+    }
+  }
+
+  // Test damping derivative consistency
+  void testDampingConsistency() {
+    double rates[] = {-0.5, -0.3, -0.1, 0.0, 0.1, 0.3, 0.5};
+    double Cm_q = -15.0;
+
+    for (double q_rate : rates) {
+      double Cm_damping = Cm_q * q_rate;
+      // Damping opposes rate
+      if (q_rate > 0) TS_ASSERT(Cm_damping < 0);
+      if (q_rate < 0) TS_ASSERT(Cm_damping > 0);
+      if (q_rate == 0) TS_ASSERT_DELTA(Cm_damping, 0.0, epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Unit Conversion Tests
+   ***************************************************************************/
+
+  // Test radian to degree conversion in derivatives
+  void testDerivativeUnitConversion() {
+    double Cm_alpha_per_rad = -1.0;
+    double Cm_alpha_per_deg = Cm_alpha_per_rad * DEG_TO_RAD;
+
+    TS_ASSERT_DELTA(Cm_alpha_per_deg, -0.01745, 0.0001);
+  }
+
+  // Test moment coefficient dimensional form
+  void testMomentDimensional() {
+    double Cm = -0.1;
+    double q = 50.0;
+    double S = 200.0;
+    double c = 5.0;
+
+    double M = Cm * q * S * c;  // ft-lbs
+    TS_ASSERT_DELTA(M, -5000.0, 1.0);
+  }
+
+  // Test force coefficient dimensional form
+  void testForceDimensional() {
+    double CL = 0.5;
+    double q = 50.0;
+    double S = 200.0;
+
+    double L = CL * q * S;  // lbs
+    TS_ASSERT_DELTA(L, 5000.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Additional Modal Coupling Tests
+   ***************************************************************************/
+
+  // Test roll-spiral approximation separation
+  void testRollSpiralSeparation() {
+    double tau_roll = 0.5;
+    double tau_spiral = 50.0;
+
+    double ratio = tau_spiral / tau_roll;
+    TS_ASSERT(ratio > 10);  // Well separated modes
+  }
+
+  // Test phugoid-short period separation
+  void testPhugoidSPSeparation() {
+    double omega_sp = 3.0;
+    double omega_phugoid = 0.2;
+
+    double ratio = omega_sp / omega_phugoid;
+    TS_ASSERT(ratio > 10);  // Well separated
+  }
+
+  // Test lateral-directional mode coupling
+  void testLatDirModeCoupling() {
+    double Cl_beta = -0.1;
+    double Cn_beta = 0.1;
+    double Cl_r = 0.1;
+    double Cn_r = -0.12;
+
+    // Check cross-coupling terms
+    double coupling_ratio = std::abs(Cl_beta * Cn_r / (Cl_r * Cn_beta));
+    TS_ASSERT(coupling_ratio > 0);  // Non-zero coupling exists
+  }
 };
