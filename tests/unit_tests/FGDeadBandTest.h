@@ -731,4 +731,422 @@ public:
     TS_ASSERT_DELTA(symmetricDeadband(0.2, deadzone), 0.15, epsilon);
     TS_ASSERT_DELTA(symmetricDeadband(-0.2, deadzone), -0.15, epsilon);
   }
+
+  /***************************************************************************
+   * Hysteresis Deadband Tests
+   ***************************************************************************/
+
+  // Hysteresis: different thresholds for rising vs falling
+  double hysteresisDeadband(double input, double prevOutput, double enterWidth, double exitWidth) {
+    // If previous output was zero (in deadband)
+    if (prevOutput == 0.0) {
+      // Need to exceed enterWidth to leave deadband
+      if (std::abs(input) > enterWidth) {
+        return input > 0 ? input - enterWidth : input + enterWidth;
+      }
+      return 0.0;
+    } else {
+      // Already active, use exitWidth (smaller threshold to stay active)
+      if (std::abs(input) < exitWidth) {
+        return 0.0;
+      }
+      return input > 0 ? input - exitWidth : input + exitWidth;
+    }
+  }
+
+  void testHysteresisEntering() {
+    double enterWidth = 0.2;
+    double exitWidth = 0.1;
+    double prevOutput = 0.0;
+
+    // Just below enter threshold - stays in deadband
+    TS_ASSERT_DELTA(hysteresisDeadband(0.15, prevOutput, enterWidth, exitWidth), 0.0, epsilon);
+
+    // Above enter threshold - exits deadband
+    double output = hysteresisDeadband(0.3, prevOutput, enterWidth, exitWidth);
+    TS_ASSERT_DELTA(output, 0.1, epsilon);
+  }
+
+  void testHysteresisExiting() {
+    double enterWidth = 0.2;
+    double exitWidth = 0.1;
+    double prevOutput = 0.5;  // Was active
+
+    // Above exit threshold - stays active with exitWidth offset
+    double output = hysteresisDeadband(0.15, prevOutput, enterWidth, exitWidth);
+    TS_ASSERT_DELTA(output, 0.05, epsilon);
+
+    // Below exit threshold - returns to deadband
+    output = hysteresisDeadband(0.05, prevOutput, enterWidth, exitWidth);
+    TS_ASSERT_DELTA(output, 0.0, epsilon);
+  }
+
+  void testHysteresisPreventsBouncing() {
+    double enterWidth = 0.2;
+    double exitWidth = 0.1;
+
+    // Simulate input hovering between thresholds
+    double inputs[] = {0.15, 0.22, 0.18, 0.12, 0.08, 0.15};
+    double prevOutput = 0.0;
+
+    // First input: in deadband
+    prevOutput = hysteresisDeadband(inputs[0], prevOutput, enterWidth, exitWidth);
+    TS_ASSERT_DELTA(prevOutput, 0.0, epsilon);
+
+    // Second input: exits deadband
+    prevOutput = hysteresisDeadband(inputs[1], prevOutput, enterWidth, exitWidth);
+    TS_ASSERT(prevOutput > 0);
+
+    // Third input: still active (above exitWidth)
+    prevOutput = hysteresisDeadband(inputs[2], prevOutput, enterWidth, exitWidth);
+    TS_ASSERT(prevOutput > 0);
+
+    // Fourth input: still active (above exitWidth)
+    prevOutput = hysteresisDeadband(inputs[3], prevOutput, enterWidth, exitWidth);
+    TS_ASSERT(prevOutput > 0);
+
+    // Fifth input: returns to deadband (below exitWidth)
+    prevOutput = hysteresisDeadband(inputs[4], prevOutput, enterWidth, exitWidth);
+    TS_ASSERT_DELTA(prevOutput, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Scaled Deadband Tests (output rescaled to full range)
+   ***************************************************************************/
+
+  double scaledDeadband(double input, double width) {
+    if (std::abs(input) < width) return 0.0;
+    // Rescale so output goes from 0 to 1 as input goes from width to 1
+    double sign = input > 0 ? 1.0 : -1.0;
+    return sign * (std::abs(input) - width) / (1.0 - width);
+  }
+
+  void testScaledDeadbandZeroRegion() {
+    double width = 0.1;
+
+    TS_ASSERT_DELTA(scaledDeadband(0.0, width), 0.0, epsilon);
+    TS_ASSERT_DELTA(scaledDeadband(0.05, width), 0.0, epsilon);
+    TS_ASSERT_DELTA(scaledDeadband(-0.09, width), 0.0, epsilon);
+  }
+
+  void testScaledDeadbandFullRange() {
+    double width = 0.1;
+
+    // At boundary: output should be 0
+    TS_ASSERT_DELTA(scaledDeadband(0.1, width), 0.0, epsilon);
+
+    // At full deflection: output should be 1
+    TS_ASSERT_DELTA(scaledDeadband(1.0, width), 1.0, epsilon);
+    TS_ASSERT_DELTA(scaledDeadband(-1.0, width), -1.0, epsilon);
+
+    // At halfway (0.55): output should be 0.5
+    TS_ASSERT_DELTA(scaledDeadband(0.55, width), 0.5, epsilon);
+  }
+
+  void testScaledDeadbandLargeWidth() {
+    double width = 0.5;
+
+    // At boundary: output should be 0
+    TS_ASSERT_DELTA(scaledDeadband(0.5, width), 0.0, epsilon);
+
+    // At full deflection: output should be 1
+    TS_ASSERT_DELTA(scaledDeadband(1.0, width), 1.0, epsilon);
+
+    // At 0.75: output should be 0.5
+    TS_ASSERT_DELTA(scaledDeadband(0.75, width), 0.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Exponential Deadband Tests (smooth transition)
+   ***************************************************************************/
+
+  double smoothDeadband(double input, double width, double smoothness = 10.0) {
+    // Smooth transition using tanh
+    double absin = std::abs(input);
+    if (absin < width * 0.5) return 0.0;
+    double sign = input > 0 ? 1.0 : -1.0;
+    double transition = std::tanh(smoothness * (absin - width));
+    double linear = absin - width;
+    return sign * std::max(0.0, linear) * (0.5 + 0.5 * transition);
+  }
+
+  void testSmoothDeadbandCenter() {
+    double width = 0.1;
+
+    // Center should be zero
+    TS_ASSERT_DELTA(smoothDeadband(0.0, width), 0.0, epsilon);
+    TS_ASSERT_DELTA(smoothDeadband(0.02, width), 0.0, epsilon);
+  }
+
+  void testSmoothDeadbandTransition() {
+    double width = 0.1;
+
+    // Outside deadband, should have non-zero output
+    double output = smoothDeadband(0.2, width);
+    TS_ASSERT(output > 0);
+
+    // Far outside, should approach linear behavior
+    double farOutput = smoothDeadband(0.5, width);
+    TS_ASSERT(farOutput > output);
+  }
+
+  /***************************************************************************
+   * Percentage-Based Deadband Tests
+   ***************************************************************************/
+
+  double percentDeadband(double input, double percentWidth) {
+    // Deadband as percentage of full range [-1, 1]
+    double width = percentWidth / 100.0;
+    return symmetricDeadband(input, width);
+  }
+
+  void testPercentDeadband5Percent() {
+    // 5% deadband (common for joysticks)
+    TS_ASSERT_DELTA(percentDeadband(0.03, 5.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(percentDeadband(0.05, 5.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(percentDeadband(0.1, 5.0), 0.05, epsilon);
+  }
+
+  void testPercentDeadband10Percent() {
+    // 10% deadband
+    TS_ASSERT_DELTA(percentDeadband(0.08, 10.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(percentDeadband(0.15, 10.0), 0.05, epsilon);
+    TS_ASSERT_DELTA(percentDeadband(1.0, 10.0), 0.9, epsilon);
+  }
+
+  void testPercentDeadband25Percent() {
+    // Large 25% deadband
+    TS_ASSERT_DELTA(percentDeadband(0.2, 25.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(percentDeadband(0.5, 25.0), 0.25, epsilon);
+    TS_ASSERT_DELTA(percentDeadband(1.0, 25.0), 0.75, epsilon);
+  }
+
+  /***************************************************************************
+   * Multi-Axis Deadband Tests
+   ***************************************************************************/
+
+  void testTwoAxisIndependent() {
+    double widthX = 0.1;
+    double widthY = 0.15;
+
+    // Each axis independent
+    double x = 0.05, y = 0.5;
+    double outX = symmetricDeadband(x, widthX);
+    double outY = symmetricDeadband(y, widthY);
+
+    TS_ASSERT_DELTA(outX, 0.0, epsilon);
+    TS_ASSERT_DELTA(outY, 0.35, epsilon);
+  }
+
+  void testTwoAxisRadial() {
+    // Radial deadband: based on magnitude
+    double width = 0.1;
+    double x = 0.06, y = 0.08;  // magnitude = 0.1
+
+    double mag = std::sqrt(x*x + y*y);
+    double scale = mag > width ? (mag - width) / mag : 0.0;
+
+    double outX = x * scale;
+    double outY = y * scale;
+
+    TS_ASSERT_DELTA(outX, 0.0, epsilon);
+    TS_ASSERT_DELTA(outY, 0.0, epsilon);
+
+    // Outside radial deadband
+    x = 0.3; y = 0.4;  // magnitude = 0.5
+    mag = std::sqrt(x*x + y*y);
+    scale = (mag - width) / mag;
+
+    outX = x * scale;
+    outY = y * scale;
+
+    TS_ASSERT(outX > 0);
+    TS_ASSERT(outY > 0);
+  }
+
+  /***************************************************************************
+   * Rate of Change Tests
+   ***************************************************************************/
+
+  void testDeadbandRateOfChange() {
+    double width = 0.1;
+
+    // Rate of change of output vs input outside deadband should be 1
+    double x1 = 0.3, x2 = 0.4;
+    double y1 = symmetricDeadband(x1, width);
+    double y2 = symmetricDeadband(x2, width);
+
+    double rate = (y2 - y1) / (x2 - x1);
+    TS_ASSERT_DELTA(rate, 1.0, epsilon);
+  }
+
+  void testDeadbandRateInsideZero() {
+    double width = 0.1;
+
+    // Rate inside deadband should be 0
+    double x1 = 0.02, x2 = 0.08;
+    double y1 = symmetricDeadband(x1, width);
+    double y2 = symmetricDeadband(x2, width);
+
+    TS_ASSERT_DELTA(y1, 0.0, epsilon);
+    TS_ASSERT_DELTA(y2, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Energy/Power Tests
+   ***************************************************************************/
+
+  void testDeadbandReducesEnergy() {
+    double width = 0.1;
+
+    // Sum of squared outputs should be less than sum of squared inputs
+    double inputEnergy = 0.0;
+    double outputEnergy = 0.0;
+
+    for (double x = -1.0; x <= 1.0; x += 0.01) {
+      inputEnergy += x * x;
+      double y = symmetricDeadband(x, width);
+      outputEnergy += y * y;
+    }
+
+    TS_ASSERT(outputEnergy < inputEnergy);
+  }
+
+  void testDeadbandEnergyRatio() {
+    double width = 0.1;
+
+    // Calculate expected energy ratio
+    double totalSamples = 0;
+    double activeRatio = 0;
+
+    for (double x = -1.0; x <= 1.0; x += 0.01) {
+      totalSamples++;
+      if (std::abs(x) > width) activeRatio++;
+    }
+
+    // About 80% of range is active (outside deadband)
+    double ratio = activeRatio / totalSamples;
+    TS_ASSERT(ratio > 0.75);
+    TS_ASSERT(ratio < 0.95);  // Allow more tolerance for endpoint counting
+  }
+
+  /***************************************************************************
+   * Inverse Deadband Tests
+   ***************************************************************************/
+
+  // Inverse: add offset to non-zero inputs
+  double inverseDeadband(double input, double width) {
+    if (input == 0.0) return 0.0;
+    return input > 0 ? input + width : input - width;
+  }
+
+  void testInverseDeadbandZero() {
+    TS_ASSERT_DELTA(inverseDeadband(0.0, 0.1), 0.0, epsilon);
+  }
+
+  void testInverseDeadbandPositive() {
+    // Adds offset to positive inputs
+    TS_ASSERT_DELTA(inverseDeadband(0.1, 0.1), 0.2, epsilon);
+    TS_ASSERT_DELTA(inverseDeadband(0.5, 0.1), 0.6, epsilon);
+  }
+
+  void testInverseDeadbandNegative() {
+    // Subtracts offset from negative inputs
+    TS_ASSERT_DELTA(inverseDeadband(-0.1, 0.1), -0.2, epsilon);
+    TS_ASSERT_DELTA(inverseDeadband(-0.5, 0.1), -0.6, epsilon);
+  }
+
+  void testDeadbandInverseRoundTrip() {
+    double width = 0.1;
+
+    // Applying deadband then inverse should recover original (outside deadband)
+    double input = 0.5;
+    double db_out = symmetricDeadband(input, width);  // 0.4
+    double inv_out = inverseDeadband(db_out, width);  // 0.5
+
+    TS_ASSERT_DELTA(inv_out, input, epsilon);
+  }
+
+  /***************************************************************************
+   * Quantized Deadband Tests
+   ***************************************************************************/
+
+  double quantizedDeadband(double input, double width, double quanta) {
+    double db_out = symmetricDeadband(input, width);
+    // Round to nearest quantum
+    return std::round(db_out / quanta) * quanta;
+  }
+
+  void testQuantizedDeadbandCoarse() {
+    double width = 0.1;
+    double quanta = 0.1;
+
+    // Note: Due to floating point precision, test values that clearly fall
+    // within a quantum bucket (avoid halfway points like x.x5)
+    TS_ASSERT_DELTA(quantizedDeadband(0.22, width, quanta), 0.1, epsilon);  // db_out=0.12, rounds to 0.1
+    TS_ASSERT_DELTA(quantizedDeadband(0.28, width, quanta), 0.2, epsilon);  // db_out=0.18, rounds to 0.2
+    TS_ASSERT_DELTA(quantizedDeadband(0.42, width, quanta), 0.3, epsilon);  // db_out=0.32, rounds to 0.3
+  }
+
+  void testQuantizedDeadbandFine() {
+    double width = 0.1;
+    double quanta = 0.01;
+
+    TS_ASSERT_DELTA(quantizedDeadband(0.25, width, quanta), 0.15, epsilon);
+    TS_ASSERT_DELTA(quantizedDeadband(0.254, width, quanta), 0.15, epsilon);
+    TS_ASSERT_DELTA(quantizedDeadband(0.256, width, quanta), 0.16, epsilon);
+  }
+
+  /***************************************************************************
+   * Saturation with Deadband Tests
+   ***************************************************************************/
+
+  void testDeadbandWithSaturation() {
+    double width = 0.1;
+    double saturation = 0.8;
+
+    double inputs[] = {0.5, 0.9, 1.0, 1.5};
+    double expected[] = {0.4, 0.8, 0.8, 0.8};
+
+    for (int i = 0; i < 4; i++) {
+      double db_out = symmetricDeadband(inputs[i], width);
+      double sat_out = std::min(db_out, saturation);
+      TS_ASSERT_DELTA(sat_out, expected[i], epsilon);
+    }
+  }
+
+  void testDeadbandWithSymmetricSaturation() {
+    double width = 0.1;
+    double saturation = 0.5;
+
+    // Test both positive and negative saturation
+    TS_ASSERT_DELTA(std::clamp(symmetricDeadband(1.0, width), -saturation, saturation), 0.5, epsilon);
+    TS_ASSERT_DELTA(std::clamp(symmetricDeadband(-1.0, width), -saturation, saturation), -0.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Normalized Output Tests
+   ***************************************************************************/
+
+  void testDeadbandPreservesNormalization() {
+    double width = 0.1;
+
+    // For inputs in [-1, 1], outputs should be in [-(1-width), (1-width)]
+    for (double x = -1.0; x <= 1.0; x += 0.1) {
+      double y = symmetricDeadband(x, width);
+      TS_ASSERT(y >= -(1.0 - width) - epsilon);
+      TS_ASSERT(y <= (1.0 - width) + epsilon);
+    }
+  }
+
+  void testDeadbandOutputRange() {
+    double width = 0.2;
+
+    // Maximum output should be 1 - width
+    double maxOutput = symmetricDeadband(1.0, width);
+    double minOutput = symmetricDeadband(-1.0, width);
+
+    TS_ASSERT_DELTA(maxOutput, 0.8, epsilon);
+    TS_ASSERT_DELTA(minOutput, -0.8, epsilon);
+  }
 };
