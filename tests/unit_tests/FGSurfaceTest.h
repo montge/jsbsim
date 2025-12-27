@@ -978,4 +978,416 @@ public:
 
     TS_ASSERT_DELTA(height1, height2, epsilon);
   }
+
+  /***************************************************************************
+   * Temperature Effects on Surface Properties
+   ***************************************************************************/
+
+  void testTemperatureEffectOnRubber() {
+    // Hot asphalt reduces tire grip
+    double mu_cold = 0.85;
+    double temperature = 140.0;  // °F (hot summer day)
+    double referenceTemp = 70.0;
+
+    // Friction decreases at extreme temperatures
+    double tempFactor = 1.0 - 0.002 * std::abs(temperature - referenceTemp);
+    double mu_hot = mu_cold * tempFactor;
+
+    TS_ASSERT(mu_hot < mu_cold);
+    TS_ASSERT(mu_hot > 0.7);
+  }
+
+  void testColdSurfaceCondensation() {
+    // Cold surface may have moisture condensation
+    double mu_dry = 0.8;
+    double mu_damp = 0.6;
+
+    double surfaceTemp = 35.0;  // °F
+    double dewPoint = 40.0;     // °F
+
+    // If surface temp < dew point, condensation occurs
+    double mu_effective = (surfaceTemp < dewPoint) ? mu_damp : mu_dry;
+    TS_ASSERT_DELTA(mu_effective, mu_damp, epsilon);
+  }
+
+  void testFrostOnSurface() {
+    // Light frost reduces friction significantly
+    double mu_dry = 0.8;
+    double mu_frost = 0.3;
+
+    double surfaceTemp = 28.0;  // °F (below freezing)
+    bool frostPresent = surfaceTemp < 32.0;
+
+    double mu_effective = frostPresent ? mu_frost : mu_dry;
+    TS_ASSERT_DELTA(mu_effective, mu_frost, epsilon);
+    TS_ASSERT(mu_frost < mu_dry);
+  }
+
+  /***************************************************************************
+   * Tire-Surface Interface Tests
+   ***************************************************************************/
+
+  void testTirePressureEffectOnFriction() {
+    double pressure_low = 30.0;   // psi
+    double pressure_normal = 50.0;
+    double pressure_high = 80.0;
+
+    // Optimal friction at normal pressure
+    double mu_base = 0.8;
+
+    // Low pressure increases contact area but sidewall flex
+    double mu_low = mu_base * 0.95;
+
+    // High pressure decreases contact area
+    double mu_high = mu_base * 0.90;
+
+    TS_ASSERT(mu_low > mu_high);
+    TS_ASSERT_DELTA(mu_low, 0.76, 0.01);
+    TS_ASSERT_DELTA(mu_high, 0.72, 0.01);
+  }
+
+  void testTireWearEffectOnFriction() {
+    // New tire vs worn tire
+    double treadDepth_new = 8.0;   // mm
+    double treadDepth_worn = 2.0;  // mm
+
+    double mu_new = 0.85;
+    double mu_worn = 0.70;
+
+    // Worn tires have less grip, especially in wet
+    TS_ASSERT(mu_new > mu_worn);
+  }
+
+  void testTireCompoundType() {
+    // Different tire compounds
+    double mu_standard = 0.80;
+    double mu_soft = 0.90;     // Racing soft compound
+    double mu_hard = 0.75;     // Long-life hard compound
+
+    TS_ASSERT(mu_soft > mu_standard);
+    TS_ASSERT(mu_standard > mu_hard);
+  }
+
+  /***************************************************************************
+   * Dynamic Loading Tests
+   ***************************************************************************/
+
+  void testImpactLoadOnLanding() {
+    double normalWeight = 10000.0;  // lbs
+    double sinkRate = 5.0;          // ft/s
+    double springConstant = 20000.0; // lbs/ft
+
+    // Impact force = F = k * x, where x is compression
+    // Energy absorbed = 0.5 * k * x^2 = 0.5 * m * v^2
+    double mass = normalWeight / 32.2;  // slugs
+    double kineticEnergy = 0.5 * mass * sinkRate * sinkRate;
+
+    // Max compression = sqrt(2 * E / k)
+    double maxCompression = std::sqrt(2.0 * kineticEnergy / springConstant);
+
+    TS_ASSERT(maxCompression > 0.0);
+    TS_ASSERT(maxCompression < 2.0);  // ft
+  }
+
+  void testOscillatingLoad() {
+    // Wheel bouncing after touchdown
+    double naturalFrequency = 2.0;  // Hz
+    double dampingRatio = 0.3;
+
+    // Time to settle (approximately 4 time constants)
+    double period = 1.0 / naturalFrequency;
+    double timeConstant = 1.0 / (dampingRatio * 2.0 * M_PI * naturalFrequency);
+    double settlingTime = 4.0 * timeConstant;
+
+    TS_ASSERT(settlingTime > 0.0);
+    TS_ASSERT(settlingTime < 5.0);  // seconds
+  }
+
+  void testDynamicLoadFactor() {
+    // During maneuvers, load factor changes
+    double staticLoad = 5000.0;  // lbs per gear
+    double loadFactor = 1.5;     // 1.5g turn
+
+    double dynamicLoad = staticLoad * loadFactor;
+    TS_ASSERT_DELTA(dynamicLoad, 7500.0, epsilon);
+
+    // Available friction force increases
+    double mu = 0.8;
+    double frictionAvailable = mu * dynamicLoad;
+    TS_ASSERT_DELTA(frictionAvailable, 6000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Runway Contamination Tests
+   ***************************************************************************/
+
+  void testWetRunwayFriction() {
+    // Water depth affects friction
+    double mu_dry = 0.8;
+    double waterDepth = 0.1;  // inches
+
+    // Thin water film reduces friction
+    double reductionFactor = 1.0 - 0.3 * waterDepth;
+    double mu_wet = mu_dry * reductionFactor;
+
+    TS_ASSERT_DELTA(mu_wet, 0.776, 0.001);
+  }
+
+  void testStandingWaterDepth() {
+    // Deep standing water
+    double mu_dry = 0.8;
+    double waterDepth = 0.5;  // inches
+
+    // Severe reduction
+    double reductionFactor = 1.0 - 0.5 * waterDepth;
+    double mu_flooded = mu_dry * reductionFactor;
+
+    TS_ASSERT_DELTA(mu_flooded, 0.6, 0.01);
+    TS_ASSERT(mu_flooded < mu_dry);
+  }
+
+  void testSlushContamination() {
+    // Slush (water + ice mix)
+    double mu_dry = 0.8;
+    double mu_slush = 0.2;
+
+    // Slush severely reduces braking
+    TS_ASSERT(mu_slush < mu_dry * 0.5);
+  }
+
+  void testRubberDeposits() {
+    // Rubber buildup on touchdown zone
+    double mu_clean = 0.8;
+    double rubberCoverage = 0.3;  // 30% coverage
+
+    // Rubber deposits reduce friction, especially when wet
+    double mu_rubber = mu_clean * (1.0 - 0.2 * rubberCoverage);
+    TS_ASSERT_DELTA(mu_rubber, 0.752, 0.001);
+  }
+
+  void testOilContamination() {
+    // Oil spill on runway
+    double mu_clean = 0.8;
+    double mu_oily = 0.1;  // Very slippery
+
+    TS_ASSERT(mu_oily < mu_clean * 0.2);
+  }
+
+  /***************************************************************************
+   * Crosswind Effect on Tire Forces
+   ***************************************************************************/
+
+  void testCrosswindTireLoad() {
+    double weight = 10000.0;
+    double crosswindForce = 500.0;  // lbs (from 15 kt crosswind)
+    double wheelTrack = 10.0;       // ft
+
+    // Crosswind creates rolling moment
+    double cgHeight = 5.0;  // ft
+    double rollingMoment = crosswindForce * cgHeight;
+
+    // Upwind wheel unloaded, downwind wheel overloaded
+    double loadTransfer = rollingMoment / wheelTrack;
+    TS_ASSERT_DELTA(loadTransfer, 250.0, epsilon);
+  }
+
+  void testCrosswindSideFriction() {
+    double weight = 10000.0;
+    double crosswindForce = 500.0;
+    double mu_side = 0.7;
+
+    // Available side friction
+    double maxSideFriction = mu_side * weight;
+    TS_ASSERT(maxSideFriction > crosswindForce);
+
+    // Safety margin
+    double margin = maxSideFriction / crosswindForce;
+    TS_ASSERT(margin > 10.0);  // Large safety margin
+  }
+
+  /***************************************************************************
+   * Runway Surface Aging Tests
+   ***************************************************************************/
+
+  void testNewVsOldAsphalt() {
+    FGFDMExec fdmex;
+
+    FGSurface newAsphalt(&fdmex);
+    newAsphalt.SetStaticFFactor(0.85);
+    newAsphalt.SetBumpiness(0.1);
+
+    FGSurface oldAsphalt(&fdmex);
+    oldAsphalt.SetStaticFFactor(0.70);  // Worn
+    oldAsphalt.SetBumpiness(0.4);       // Rougher
+
+    TS_ASSERT(newAsphalt.GetStaticFFactor() > oldAsphalt.GetStaticFFactor());
+    TS_ASSERT(newAsphalt.GetBumpiness() < oldAsphalt.GetBumpiness());
+  }
+
+  void testCrackedSurface() {
+    FGFDMExec fdmex;
+    FGSurface cracked(&fdmex);
+
+    // Cracked surface has variable friction and roughness
+    cracked.SetStaticFFactor(0.65);
+    cracked.SetBumpiness(0.6);
+    cracked.SetMaximumForce(80000.0);  // May break under heavy load
+
+    TS_ASSERT(cracked.GetBumpiness() > 0.5);
+    TS_ASSERT(cracked.GetMaximumForce() < std::numeric_limits<double>::max());
+  }
+
+  void testRepaintedRunway() {
+    FGFDMExec fdmex;
+    FGSurface painted(&fdmex);
+
+    // Fresh paint is slippery when wet
+    painted.SetStaticFFactor(0.55);  // Reduced grip
+    painted.SetBumpiness(0.05);      // Very smooth
+
+    TS_ASSERT(painted.GetStaticFFactor() < 0.6);
+    TS_ASSERT(painted.GetBumpiness() < 0.1);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  void testStressManySurfaces() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 50; i++) {
+      FGSurface surface(&fdmex);
+      surface.SetStaticFFactor(0.3 + (i % 10) * 0.05);
+      surface.SetRollingFFactor(0.01 + (i % 10) * 0.01);
+      surface.SetBumpiness((i % 10) * 0.1);
+
+      TS_ASSERT(surface.GetStaticFFactor() >= 0.3);
+      TS_ASSERT(surface.GetStaticFFactor() <= 0.85);
+    }
+  }
+
+  void testStressManyPositionUpdates() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+    surface.SetBumpiness(0.5);
+
+    for (int i = 0; i < 100; i++) {
+      double pos[3] = {i * 10.0, i * 5.0, 0.0};
+      surface.SetPosition(pos);
+      double height = surface.GetBumpHeight();
+      TS_ASSERT(!std::isnan(height));
+      TS_ASSERT(!std::isinf(height));
+    }
+  }
+
+  void testStressRapidPropertyChanges() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+
+    for (int i = 0; i < 100; i++) {
+      surface.SetStaticFFactor((i % 10) * 0.1);
+      surface.SetRollingFFactor((i % 10) * 0.01);
+      surface.SetBumpiness((i % 10) * 0.1);
+      surface.SetMaximumForce(10000.0 + i * 1000.0);
+      surface.SetSolid(i % 2 == 0);
+
+      TS_ASSERT(surface.GetStaticFFactor() >= 0.0);
+      TS_ASSERT(surface.GetRollingFFactor() >= 0.0);
+    }
+  }
+
+  void testStressResetCycle() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+
+    for (int i = 0; i < 50; i++) {
+      surface.SetStaticFFactor(0.5);
+      surface.SetRollingFFactor(0.03);
+      surface.SetBumpiness(0.4);
+      surface.SetMaximumForce(60000.0);
+      surface.SetSolid(false);
+
+      surface.resetValues();
+
+      TS_ASSERT_DELTA(surface.GetStaticFFactor(), 1.0, epsilon);
+      TS_ASSERT_DELTA(surface.GetRollingFFactor(), 1.0, epsilon);
+      TS_ASSERT_DELTA(surface.GetBumpiness(), 0.0, epsilon);
+      TS_ASSERT(surface.GetSolid());
+    }
+  }
+
+  /***************************************************************************
+   * Combined Effects Tests
+   ***************************************************************************/
+
+  void testCombinedWetAndSloped() {
+    double mu_dry = 0.8;
+    double mu_wet = 0.5;
+    double slope = 0.02;  // 2% grade
+    double weight = 10000.0;
+
+    // Wet reduces available friction
+    double frictionForce = mu_wet * weight * std::cos(std::atan(slope));
+    TS_ASSERT(frictionForce < mu_dry * weight);
+
+    // Slope adds gravity component
+    double gravityForce = weight * std::sin(std::atan(slope));
+    TS_ASSERT(frictionForce > gravityForce);  // Still enough to hold
+  }
+
+  void testCombinedBumpyAndIcy() {
+    FGFDMExec fdmex;
+    FGSurface surface(&fdmex);
+
+    surface.SetStaticFFactor(0.1);  // Ice
+    surface.SetBumpiness(0.8);      // Very bumpy ice
+
+    double pos[3] = {50.0, 50.0, 0.0};
+    surface.SetPosition(pos);
+
+    TS_ASSERT(surface.GetStaticFFactor() < 0.2);
+    TS_ASSERT(surface.GetBumpiness() > 0.5);
+  }
+
+  void testCombinedHeavyAndSoft() {
+    FGFDMExec fdmex;
+    FGSurface soft(&fdmex);
+
+    soft.SetStaticFFactor(0.35);
+    soft.SetRollingFFactor(0.15);
+    soft.SetMaximumForce(40000.0);
+
+    double normalForce = 50000.0;  // Exceeds max
+
+    double effectiveForce = std::min(normalForce, soft.GetMaximumForce());
+    TS_ASSERT_DELTA(effectiveForce, 40000.0, epsilon);
+
+    double friction = soft.GetStaticFFactor() * effectiveForce;
+    TS_ASSERT_DELTA(friction, 14000.0, epsilon);
+  }
+
+  void testMultipleSurfaceComparison() {
+    FGFDMExec fdmex;
+
+    FGSurface concrete(&fdmex);
+    concrete.SetStaticFFactor(0.8);
+    concrete.SetRollingFFactor(0.02);
+
+    FGSurface grass(&fdmex);
+    grass.SetStaticFFactor(0.4);
+    grass.SetRollingFFactor(0.08);
+
+    FGSurface gravel(&fdmex);
+    gravel.SetStaticFFactor(0.55);
+    gravel.SetRollingFFactor(0.06);
+
+    // Concrete has highest static friction
+    TS_ASSERT(concrete.GetStaticFFactor() > gravel.GetStaticFFactor());
+    TS_ASSERT(gravel.GetStaticFFactor() > grass.GetStaticFFactor());
+
+    // Grass has highest rolling resistance
+    TS_ASSERT(grass.GetRollingFFactor() > gravel.GetRollingFFactor());
+    TS_ASSERT(gravel.GetRollingFFactor() > concrete.GetRollingFFactor());
+  }
 };
