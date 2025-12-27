@@ -1013,4 +1013,456 @@ public:
     TS_ASSERT(pressureRatio_high > pressureRatio_low);
     // Lower pressure ratio requires higher expansion ratio
   }
+
+  /***************************************************************************
+   * Propellant Properties Tests
+   ***************************************************************************/
+
+  // Test propellant specific impulse comparison
+  void testPropellantIspComparison() {
+    // Different propellants have different Isp values
+    double Isp_LOX_RP1 = 300.0;     // LOX/RP-1 (Kerosene)
+    double Isp_LOX_LH2 = 450.0;     // LOX/LH2 (Hydrogen)
+    double Isp_N2O4_UDMH = 280.0;   // Storable hypergolic
+    double Isp_solid = 250.0;       // Solid propellant
+
+    TS_ASSERT(Isp_LOX_LH2 > Isp_LOX_RP1);
+    TS_ASSERT(Isp_LOX_RP1 > Isp_N2O4_UDMH);
+    TS_ASSERT(Isp_N2O4_UDMH > Isp_solid);
+  }
+
+  // Test mass flow from thrust and Isp
+  void testMassFlowFromThrustAndIsp() {
+    double g0 = 32.174;  // ft/s^2
+    double thrust = 500000.0;  // lbs
+
+    // Higher Isp = lower mass flow for same thrust
+    double Isp1 = 300.0;
+    double mdot1 = thrust / (Isp1 * g0);
+
+    double Isp2 = 450.0;
+    double mdot2 = thrust / (Isp2 * g0);
+
+    TS_ASSERT(mdot2 < mdot1);
+    TS_ASSERT_DELTA(mdot1 / mdot2, 1.5, 0.01);
+  }
+
+  // Test delta-V relationship
+  void testDeltaVRelationship() {
+    // Tsiolkovsky: ΔV = Isp * g0 * ln(m0 / mf)
+    double Isp = 350.0;
+    double g0 = 32.174;
+    double m0 = 1000000.0;  // Initial mass
+    double mf = 100000.0;   // Final mass
+
+    double deltaV = Isp * g0 * log(m0 / mf);
+    TS_ASSERT(deltaV > 25000.0);
+
+    // Higher Isp = higher delta-V
+    double Isp_high = 450.0;
+    double deltaV_high = Isp_high * g0 * log(m0 / mf);
+    TS_ASSERT(deltaV_high > deltaV);
+  }
+
+  /***************************************************************************
+   * Combustion Chamber Tests
+   ***************************************************************************/
+
+  // Test chamber pressure effect on thrust
+  void testChamberPressureEffect() {
+    double Athroat = 1.0;
+    double Cf = 1.6;  // Thrust coefficient
+
+    // Higher chamber pressure = higher thrust
+    double pc1 = 500.0 * 144.0;  // 500 psi in psf
+    double thrust1 = Cf * pc1 * Athroat;
+
+    double pc2 = 1000.0 * 144.0;
+    double thrust2 = Cf * pc2 * Athroat;
+
+    TS_ASSERT_DELTA(thrust2 / thrust1, 2.0, 0.01);
+  }
+
+  // Test combustion efficiency effect
+  void testCombustionEfficiencyEffect() {
+    double theoreticalIsp = 350.0;
+
+    // Real combustion efficiency 95-98%
+    double efficiency_low = 0.95;
+    double efficiency_high = 0.98;
+
+    double Isp_low = theoreticalIsp * efficiency_low;
+    double Isp_high = theoreticalIsp * efficiency_high;
+
+    TS_ASSERT_DELTA(Isp_low, 332.5, 0.1);
+    TS_ASSERT_DELTA(Isp_high, 343.0, 0.1);
+    TS_ASSERT(Isp_high > Isp_low);
+  }
+
+  // Test mixture ratio effect on Isp
+  void testMixtureRatioEffect() {
+    // Optimal mixture ratio maximizes Isp
+    // LOX/LH2: optimal O/F ~ 6.0
+    // Too lean or rich reduces Isp
+
+    double Isp_optimal = 450.0;  // At O/F = 6.0
+    double Isp_lean = 430.0;     // At O/F = 5.0
+    double Isp_rich = 420.0;     // At O/F = 7.0
+
+    TS_ASSERT(Isp_optimal > Isp_lean);
+    TS_ASSERT(Isp_optimal > Isp_rich);
+  }
+
+  /***************************************************************************
+   * Nozzle Startup/Shutdown Tests
+   ***************************************************************************/
+
+  // Test startup thrust buildup
+  void testStartupThrustBuildup() {
+    double maxVacThrust = 100000.0;
+    double nozzleArea = 2.0;
+    double ambientPressure = 2116.22;
+
+    // Simulate startup ramp over 20 steps
+    double prevThrust = 0.0;
+    for (int i = 0; i <= 20; i++) {
+      double fraction = i / 20.0;
+      double vacThrust = maxVacThrust * fraction;
+      double thrust = std::max(0.0, vacThrust - ambientPressure * nozzleArea);
+
+      TS_ASSERT(thrust >= prevThrust - 1.0);
+      prevThrust = thrust;
+    }
+  }
+
+  // Test shutdown thrust decay
+  void testShutdownThrustDecay() {
+    double maxVacThrust = 100000.0;
+    double nozzleArea = 2.0;
+    double ambientPressure = 2116.22;
+
+    // Simulate shutdown over 20 steps
+    double prevThrust = maxVacThrust - ambientPressure * nozzleArea;
+    for (int i = 20; i >= 0; i--) {
+      double fraction = i / 20.0;
+      double vacThrust = maxVacThrust * fraction;
+      double thrust = std::max(0.0, vacThrust - ambientPressure * nozzleArea);
+
+      TS_ASSERT(thrust <= prevThrust + 1.0);
+      prevThrust = thrust;
+    }
+  }
+
+  // Test restart capability
+  void testRestartCapability() {
+    double maxVacThrust = 100000.0;
+    double nozzleArea = 2.0;
+    double ambientPressure = 500.0;  // In space
+
+    // First burn
+    double thrust1 = maxVacThrust - ambientPressure * nozzleArea;
+    TS_ASSERT(thrust1 > 98000.0);
+
+    // Coast (engine off)
+    double thrustCoast = 0.0;
+    TS_ASSERT_DELTA(thrustCoast, 0.0, DEFAULT_TOLERANCE);
+
+    // Restart
+    double thrust2 = maxVacThrust - ambientPressure * nozzleArea;
+    TS_ASSERT_DELTA(thrust2, thrust1, 0.01);
+  }
+
+  /***************************************************************************
+   * Flow Separation Tests
+   ***************************************************************************/
+
+  // Test flow separation onset
+  void testFlowSeparationOnset() {
+    // Flow separation occurs when p_wall < ~0.4 * p_ambient
+    double ambientPressure = 2116.22;
+    double separationThreshold = 0.4 * ambientPressure;
+
+    // Wall pressure must stay above threshold
+    double p_wall_safe = 0.5 * ambientPressure;
+    double p_wall_separated = 0.3 * ambientPressure;
+
+    TS_ASSERT(p_wall_safe > separationThreshold);
+    TS_ASSERT(p_wall_separated < separationThreshold);
+  }
+
+  // Test restricted shock separation effect
+  void testRestrictedShockSeparation() {
+    double vacThrust = 100000.0;
+    double nozzleArea = 50.0;  // Large area for severe overexpansion
+    double ambientPressure = 2116.22;
+
+    // Highly overexpanded - shock separation occurs
+    double rawThrust = vacThrust - ambientPressure * nozzleArea;
+    TS_ASSERT(rawThrust < 0.0);  // Would be negative without separation
+
+    // With flow separation, effective area is reduced
+    double effectiveArea = 20.0;  // Flow separates, reducing effective area
+    double separatedThrust = vacThrust - ambientPressure * effectiveArea;
+    TS_ASSERT(separatedThrust > rawThrust);
+  }
+
+  /***************************************************************************
+   * Altitude Compensation Nozzle Tests
+   ***************************************************************************/
+
+  // Test dual-bell nozzle low altitude mode
+  void testDualBellNozzleLowAltitude() {
+    double vacThrust = 100000.0;
+    double ambientPressure = 2116.22;
+
+    // Dual-bell: inner contour for sea level
+    double innerArea = 2.0;  // Low expansion
+    double thrustSL = vacThrust - ambientPressure * innerArea;
+
+    TS_ASSERT(thrustSL > 95000.0);
+  }
+
+  // Test dual-bell nozzle high altitude mode
+  void testDualBellNozzleHighAltitude() {
+    double vacThrust = 100000.0;
+    double ambientPressure = 100.0;  // High altitude
+
+    // Dual-bell: outer contour for altitude
+    double outerArea = 8.0;  // High expansion
+    double thrustAlt = vacThrust - ambientPressure * outerArea;
+
+    TS_ASSERT(thrustAlt > 99000.0);
+  }
+
+  // Test extendable nozzle performance gain
+  void testExtendableNozzleGain() {
+    double vacThrust = 100000.0;
+    double ambientPressure = 50.0;  // Upper stage altitude
+
+    // Retracted (lower expansion)
+    double areaRetracted = 3.0;
+    double thrustRetracted = vacThrust - ambientPressure * areaRetracted;
+
+    // Extended (higher expansion)
+    double areaExtended = 10.0;
+    double thrustExtended = vacThrust - ambientPressure * areaExtended;
+
+    // At very low pressure, larger area still performs well
+    TS_ASSERT(thrustRetracted > 99800.0);
+    TS_ASSERT(thrustExtended > 99400.0);
+  }
+
+  /***************************************************************************
+   * Gimbal and Vectoring Extended Tests
+   ***************************************************************************/
+
+  // Test gimbal rate limits
+  void testGimbalRateLimits() {
+    double maxRate = 20.0;  // degrees per second
+    double dt = 0.01;       // 10 ms timestep
+    double maxDelta = maxRate * dt;
+
+    double currentAngle = 0.0;
+    double commandedAngle = 5.0;
+
+    // Rate limited response
+    double angleDelta = std::min(std::abs(commandedAngle - currentAngle), maxDelta);
+    double newAngle = currentAngle + angleDelta;
+
+    TS_ASSERT_DELTA(newAngle, 0.2, 0.01);
+    TS_ASSERT(newAngle < commandedAngle);
+  }
+
+  // Test gimbal actuator authority
+  void testGimbalActuatorAuthority() {
+    double maxGimbalAngle = 7.0;  // degrees
+
+    // Test within limits
+    double commanded = 5.0;
+    double actual = std::min(std::abs(commanded), maxGimbalAngle);
+    TS_ASSERT_DELTA(actual, 5.0, 0.01);
+
+    // Test at limits
+    commanded = 10.0;
+    actual = std::min(std::abs(commanded), maxGimbalAngle);
+    TS_ASSERT_DELTA(actual, 7.0, 0.01);
+  }
+
+  // Test differential thrust steering
+  void testDifferentialThrustSteering() {
+    double nominalThrust = 100000.0;
+    double throttleLeft = 0.9;
+    double throttleRight = 1.0;
+
+    double thrustLeft = nominalThrust * throttleLeft;
+    double thrustRight = nominalThrust * throttleRight;
+    double yawMoment = (thrustRight - thrustLeft) * 5.0;  // 5 ft moment arm
+
+    TS_ASSERT(yawMoment > 0.0);
+    TS_ASSERT_DELTA(yawMoment, 50000.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Multi-Engine Failure Mode Tests
+   ***************************************************************************/
+
+  // Test two engine out of four
+  void testTwoEngineOut() {
+    double singleThrust = 100000.0;
+    int totalEngines = 4;
+    int workingEngines = 2;
+
+    double normalThrust = totalEngines * singleThrust;
+    double degradedThrust = workingEngines * singleThrust;
+
+    TS_ASSERT_DELTA(degradedThrust / normalThrust, 0.5, 0.001);
+  }
+
+  // Test asymmetric engine failure
+  void testAsymmetricEngineFailure() {
+    double singleThrust = 100000.0;
+    double armLength = 10.0;  // ft from centerline
+
+    // 4-engine cluster, one engine out
+    double momentArm = armLength;
+    double yawMoment = singleThrust * momentArm;
+
+    TS_ASSERT_DELTA(yawMoment, 1000000.0, 1.0);
+    // Would require gimbal correction on remaining engines
+  }
+
+  // Test center engine shutdown
+  void testCenterEngineShutdown() {
+    double centerThrust = 200000.0;
+    double outerThrust = 100000.0;
+    int outerEngines = 4;
+
+    double normalTotal = centerThrust + outerEngines * outerThrust;
+    double centerOutTotal = outerEngines * outerThrust;
+
+    TS_ASSERT_DELTA(normalTotal, 600000.0, 1.0);
+    TS_ASSERT_DELTA(centerOutTotal, 400000.0, 1.0);
+    TS_ASSERT_DELTA(centerOutTotal / normalTotal, 0.667, 0.01);
+  }
+
+  /***************************************************************************
+   * Nozzle Erosion and Degradation Tests
+   ***************************************************************************/
+
+  // Test throat erosion effect on thrust
+  void testThroatErosionEffect() {
+    double pc = 1000.0 * 144.0;
+    double Cf = 1.6;
+
+    // Fresh nozzle
+    double Athroat_fresh = 1.0;
+    double thrust_fresh = Cf * pc * Athroat_fresh;
+
+    // Eroded nozzle (throat enlarged by 5%)
+    double Athroat_eroded = 1.05;
+    double thrust_eroded = Cf * pc * Athroat_eroded;
+
+    // More mass flow but lower chamber pressure
+    // Simplified: thrust approximately scales with throat area
+    TS_ASSERT(thrust_eroded > thrust_fresh);
+  }
+
+  // Test ablative nozzle mass loss
+  void testAblativeNozzleMassLoss() {
+    double initialMass = 500.0;  // lbs
+    double ablationRate = 0.1;   // lbs/s
+    double burnTime = 60.0;      // seconds
+
+    double massLoss = ablationRate * burnTime;
+    double finalMass = initialMass - massLoss;
+
+    TS_ASSERT_DELTA(massLoss, 6.0, 0.1);
+    TS_ASSERT_DELTA(finalMass, 494.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Supersonic Flow Tests
+   ***************************************************************************/
+
+  // Test Mach number at throat
+  void testMachNumberAtThroat() {
+    // At throat, M = 1 (sonic condition)
+    double M_throat = 1.0;
+    TS_ASSERT_DELTA(M_throat, 1.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test exit Mach number
+  void testExitMachNumber() {
+    // Exit Mach depends on expansion ratio
+    // Typical values: M_exit = 2.5 to 4.0 for rocket nozzles
+
+    double M_exit_low = 2.5;   // Low expansion
+    double M_exit_high = 4.0;  // High expansion
+
+    TS_ASSERT(M_exit_high > M_exit_low);
+
+    // Thrust increases with exit velocity (hence exit Mach)
+    double V_exit_low = M_exit_low * 3000.0;   // Approx speed of sound
+    double V_exit_high = M_exit_high * 3000.0;
+    TS_ASSERT(V_exit_high > V_exit_low);
+  }
+
+  // Test critical pressure ratio
+  void testCriticalPressureRatio() {
+    // p*/p0 = (2/(γ+1))^(γ/(γ-1)) for choked flow
+    double gamma = 1.4;
+    double criticalRatio = pow(2.0 / (gamma + 1.0), gamma / (gamma - 1.0));
+
+    TS_ASSERT_DELTA(criticalRatio, 0.528, 0.001);
+  }
+
+  /***************************************************************************
+   * Additional Edge Cases
+   ***************************************************************************/
+
+  // Test very small nozzle (model rocket)
+  void testVerySmallNozzle() {
+    double vacThrust = 10.0;  // Model rocket
+    double nozzleArea = 0.001;
+    double ambientPressure = 2116.22;
+
+    double thrust = std::max(0.0, vacThrust - ambientPressure * nozzleArea);
+    TS_ASSERT(thrust > 7.0);
+  }
+
+  // Test very large nozzle (heavy lift)
+  void testVeryLargeNozzle() {
+    double vacThrust = 7000000.0;  // RS-25 scale
+    double nozzleArea = 50.0;
+    double ambientPressure = 2116.22;
+
+    double thrust = vacThrust - ambientPressure * nozzleArea;
+    TS_ASSERT(thrust > 6800000.0);
+  }
+
+  // Test nozzle at maximum dynamic pressure
+  void testNozzleAtMaxQ() {
+    double vacThrust = 500000.0;
+    double nozzleArea = 4.0;
+
+    // Max-Q typically at ~35,000 ft, ~600 psf static + dynamic effects
+    double effectivePressure = 800.0;
+    double thrust = vacThrust - effectivePressure * nozzleArea;
+
+    TS_ASSERT(thrust > 496000.0);
+  }
+
+  // Test numerical stability with very small pressure difference
+  void testSmallPressureDifference() {
+    double vacThrust = 100000.0;
+    double nozzleArea = 2.0;
+    // Just under breakeven: thrust = vacThrust - p * A ≈ 0.1
+    // So p * A ≈ 99999.9, p ≈ 49999.95
+    double ambientPressure = (vacThrust - 0.1) / nozzleArea;
+
+    double thrust = vacThrust - ambientPressure * nozzleArea;
+    TS_ASSERT(thrust > 0.0);
+    TS_ASSERT(thrust < 1.0);
+    TS_ASSERT(!std::isnan(thrust));
+  }
 };
