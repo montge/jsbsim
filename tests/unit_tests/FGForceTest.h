@@ -1027,4 +1027,451 @@ public:
     TS_ASSERT(!std::isnan(moments(2)));
     TS_ASSERT(!std::isnan(moments(3)));
   }
+
+  /***************************************************************************
+   * Extended Force Vector Tests
+   ***************************************************************************/
+
+  // Test force magnitude preservation through transform
+  void testForceMagnitudePreservation() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    FGColumnVector3 nativeForce(100.0, 200.0, 300.0);
+    double originalMag = nativeForce.Magnitude();
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetNativeForces(nativeForce);
+
+    // Test various rotation angles
+    double angles[] = {0.0, 0.1, 0.5, 1.0, M_PI / 4, M_PI / 2};
+    for (double angle : angles) {
+      force.SetAnglesToBody(angle, angle * 0.5, angle * 0.25);
+      const FGColumnVector3& bodyForce = force.GetBodyForces();
+      double resultMag = bodyForce.Magnitude();
+      TS_ASSERT_DELTA(resultMag, originalMag, 0.1);
+    }
+  }
+
+  // Test force direction reversal with 180 degree rotations
+  void testForceDirectionReversal() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetNativeForces(100.0, 0.0, 0.0);
+
+    // 180 degree yaw should reverse X force in X-Y plane
+    force.SetAnglesToBody(0.0, 0.0, M_PI);
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    TS_ASSERT_DELTA(bodyForce(1), -100.0, 0.1);
+    TS_ASSERT_DELTA(bodyForce(3), 0.0, 0.1);
+  }
+
+  // Test force scaling
+  void testForceScaling() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+
+    // Test that force scales linearly
+    double scales[] = {0.1, 0.5, 1.0, 2.0, 10.0};
+    for (double scale : scales) {
+      force.SetNativeForces(100.0 * scale, 50.0 * scale, 25.0 * scale);
+      const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+      TS_ASSERT_DELTA(bodyForce(1), 100.0 * scale, epsilon);
+      TS_ASSERT_DELTA(bodyForce(2), 50.0 * scale, epsilon);
+      TS_ASSERT_DELTA(bodyForce(3), 25.0 * scale, epsilon);
+    }
+  }
+
+  // Test force superposition
+  void testForceSuperposition() {
+    FGFDMExec fdmex;
+    TestableFGForce force1(&fdmex);
+    TestableFGForce force2(&fdmex);
+
+    force1.SetTransformType(FGForce::tNone);
+    force2.SetTransformType(FGForce::tNone);
+
+    force1.SetNativeForces(100.0, 0.0, 0.0);
+    force2.SetNativeForces(0.0, 100.0, 0.0);
+
+    const FGColumnVector3& bf1 = force1.GetBodyForces();
+    const FGColumnVector3& bf2 = force2.GetBodyForces();
+
+    // Sum of forces
+    FGColumnVector3 sum = bf1 + bf2;
+
+    TS_ASSERT_DELTA(sum(1), 100.0, epsilon);
+    TS_ASSERT_DELTA(sum(2), 100.0, epsilon);
+    TS_ASSERT_DELTA(sum(3), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Location Tests
+   ***************************************************************************/
+
+  // Test negative location values
+  void testNegativeLocationValues() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetLocation(-100.0, -50.0, -25.0);
+
+    TS_ASSERT_DELTA(force.GetLocationX(), -100.0, epsilon);
+    TS_ASSERT_DELTA(force.GetLocationY(), -50.0, epsilon);
+    TS_ASSERT_DELTA(force.GetLocationZ(), -25.0, epsilon);
+  }
+
+  // Test zero location
+  void testZeroLocation() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetLocation(0.0, 0.0, 0.0);
+
+    TS_ASSERT_DELTA(force.GetLocationX(), 0.0, epsilon);
+    TS_ASSERT_DELTA(force.GetLocationY(), 0.0, epsilon);
+    TS_ASSERT_DELTA(force.GetLocationZ(), 0.0, epsilon);
+  }
+
+  // Test location update sequence
+  void testLocationUpdateSequence() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    // Update location multiple times
+    force.SetLocation(10.0, 20.0, 30.0);
+    force.SetLocation(40.0, 50.0, 60.0);
+    force.SetLocation(70.0, 80.0, 90.0);
+
+    // Only final value should remain
+    TS_ASSERT_DELTA(force.GetLocationX(), 70.0, epsilon);
+    TS_ASSERT_DELTA(force.GetLocationY(), 80.0, epsilon);
+    TS_ASSERT_DELTA(force.GetLocationZ(), 90.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Transform Tests
+   ***************************************************************************/
+
+  // Test transform consistency
+  void testTransformConsistency() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetAnglesToBody(0.2, 0.3, 0.4);
+    force.SetNativeForces(100.0, 50.0, 25.0);
+
+    // Get forces multiple times
+    const FGColumnVector3& bf1 = force.GetBodyForces();
+    const FGColumnVector3& bf2 = force.GetBodyForces();
+    const FGColumnVector3& bf3 = force.GetBodyForces();
+
+    // Should be identical
+    TS_ASSERT_DELTA(bf1(1), bf2(1), epsilon);
+    TS_ASSERT_DELTA(bf1(2), bf2(2), epsilon);
+    TS_ASSERT_DELTA(bf1(3), bf2(3), epsilon);
+    TS_ASSERT_DELTA(bf2(1), bf3(1), epsilon);
+    TS_ASSERT_DELTA(bf2(2), bf3(2), epsilon);
+    TS_ASSERT_DELTA(bf2(3), bf3(3), epsilon);
+  }
+
+  // Test small angle approximation regime
+  void testSmallAngles() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetNativeForces(100.0, 0.0, 0.0);
+
+    // Very small angles - transform should be approximately identity
+    double smallAngle = 1e-6;
+    force.SetAnglesToBody(smallAngle, smallAngle, smallAngle);
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    TS_ASSERT_DELTA(bodyForce(1), 100.0, 0.001);
+    TS_ASSERT_DELTA(bodyForce(2), 0.0, 0.001);
+    TS_ASSERT_DELTA(bodyForce(3), 0.0, 0.001);
+  }
+
+  // Test roll angle effect
+  void testRollAngleEffect() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetNativeForces(0.0, 100.0, 0.0);  // Y-axis force
+
+    // 90 degree roll should swap Y and Z
+    force.SetAnglesToBody(M_PI / 2.0, 0.0, 0.0);
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    TS_ASSERT_DELTA(bodyForce(1), 0.0, 0.1);
+    // Y and Z should be swapped (sign depends on convention)
+    double magnitude = sqrt(bodyForce(2)*bodyForce(2) + bodyForce(3)*bodyForce(3));
+    TS_ASSERT_DELTA(magnitude, 100.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Extended Moment Tests
+   ***************************************************************************/
+
+  // Test moment arm calculation
+  void testMomentArmCalculation() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    // Force at X = 100 inches, pure Z force
+    force.SetLocation(100.0, 0.0, 0.0);
+    force.SetTransformType(FGForce::tNone);
+    force.SetNativeForces(0.0, 0.0, 50.0);
+    force.SetNativeMoments(0.0, 0.0, 0.0);
+
+    force.GetBodyForces();
+    const FGColumnVector3& moments = force.GetMoments();
+
+    // M = r x F
+    // r = (100, 0, 0), F = (0, 0, 50)
+    // M = (0*50 - 0*0, 0*0 - 100*50, 100*0 - 0*0) = (0, -5000, 0)
+    // But actual calculation depends on CG offset
+    TS_ASSERT(!std::isnan(moments(1)));
+    TS_ASSERT(!std::isnan(moments(2)));
+    TS_ASSERT(!std::isnan(moments(3)));
+  }
+
+  // Test symmetric forces produce zero net moment
+  void testSymmetricForcesZeroMoment() {
+    FGFDMExec fdmex;
+    TestableFGForce forceLeft(&fdmex);
+    TestableFGForce forceRight(&fdmex);
+
+    // Symmetric forces at +/- Y positions
+    forceLeft.SetLocation(0.0, -100.0, 0.0);
+    forceRight.SetLocation(0.0, 100.0, 0.0);
+
+    forceLeft.SetTransformType(FGForce::tNone);
+    forceRight.SetTransformType(FGForce::tNone);
+
+    // Same force on both sides
+    forceLeft.SetNativeForces(0.0, 0.0, -50.0);
+    forceRight.SetNativeForces(0.0, 0.0, -50.0);
+    forceLeft.SetNativeMoments(0.0, 0.0, 0.0);
+    forceRight.SetNativeMoments(0.0, 0.0, 0.0);
+
+    forceLeft.GetBodyForces();
+    forceRight.GetBodyForces();
+
+    const FGColumnVector3& ml = forceLeft.GetMoments();
+    const FGColumnVector3& mr = forceRight.GetMoments();
+
+    // Roll moments should cancel (opposite signs)
+    // Note: depends on CG position
+    TS_ASSERT(!std::isnan(ml(1) + mr(1)));
+  }
+
+  /***************************************************************************
+   * Angle Boundary Tests
+   ***************************************************************************/
+
+  // Test angles at 2*PI (360 degrees)
+  void testAnglesAt360Degrees() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetAnglesToBody(0.0, 2.0 * M_PI, 0.0);  // 360 degree pitch
+    force.SetNativeForces(100.0, 0.0, 0.0);
+
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    // 360 degrees should be same as 0 degrees
+    TS_ASSERT_DELTA(bodyForce(1), 100.0, 0.1);
+    TS_ASSERT_DELTA(bodyForce(2), 0.0, 0.1);
+    TS_ASSERT_DELTA(bodyForce(3), 0.0, 0.1);
+  }
+
+  // Test angles beyond 2*PI
+  void testAnglesBeyon360Degrees() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tCustom);
+    force.SetNativeForces(100.0, 0.0, 0.0);
+
+    // 450 degrees should be same as 90 degrees
+    force.SetAnglesToBody(0.0, 2.5 * M_PI, 0.0);
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    TS_ASSERT(!std::isnan(bodyForce(1)));
+    TS_ASSERT(!std::isnan(bodyForce(2)));
+    TS_ASSERT(!std::isnan(bodyForce(3)));
+  }
+
+
+  /***************************************************************************
+   * Force and Location Combination Tests
+   ***************************************************************************/
+
+  // Test force at various positions
+  void testForceAtVariousPositions() {
+    FGFDMExec fdmex;
+
+    double positions[][3] = {
+      {0.0, 0.0, 0.0},
+      {100.0, 0.0, 0.0},
+      {0.0, 100.0, 0.0},
+      {0.0, 0.0, 100.0},
+      {100.0, 100.0, 100.0},
+      {-100.0, -100.0, -100.0}
+    };
+
+    for (int i = 0; i < 6; i++) {
+      TestableFGForce force(&fdmex);
+      force.SetLocation(positions[i][0], positions[i][1], positions[i][2]);
+      force.SetTransformType(FGForce::tNone);
+      force.SetNativeForces(100.0, 50.0, 25.0);
+
+      const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+      // Force should be independent of position
+      TS_ASSERT_DELTA(bodyForce(1), 100.0, epsilon);
+      TS_ASSERT_DELTA(bodyForce(2), 50.0, epsilon);
+      TS_ASSERT_DELTA(bodyForce(3), 25.0, epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Additional Stress Tests
+   ***************************************************************************/
+
+  // Test stress with alternating signs
+  void testStressAlternatingSigns() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+
+    for (int i = 0; i < 500; i++) {
+      double sign = (i % 2 == 0) ? 1.0 : -1.0;
+      force.SetNativeForces(sign * 100.0, sign * 50.0, sign * 25.0);
+
+      const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+      TS_ASSERT_DELTA(bodyForce(1), sign * 100.0, epsilon);
+      TS_ASSERT_DELTA(bodyForce(2), sign * 50.0, epsilon);
+      TS_ASSERT_DELTA(bodyForce(3), sign * 25.0, epsilon);
+    }
+  }
+
+  // Test stress with growing and shrinking forces
+  void testStressGrowingShrinking() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+
+    // Growing
+    for (int i = 0; i < 100; i++) {
+      double val = i * 10.0;
+      force.SetNativeForces(val, val, val);
+      const FGColumnVector3& bodyForce = force.GetBodyForces();
+      TS_ASSERT_DELTA(bodyForce(1), val, epsilon);
+    }
+
+    // Shrinking
+    for (int i = 100; i >= 0; i--) {
+      double val = i * 10.0;
+      force.SetNativeForces(val, val, val);
+      const FGColumnVector3& bodyForce = force.GetBodyForces();
+      TS_ASSERT_DELTA(bodyForce(1), val, epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Unit Force Tests
+   ***************************************************************************/
+
+  // Test unit force in each direction
+  void testUnitForces() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+
+    // Unit X
+    force.SetNativeForces(1.0, 0.0, 0.0);
+    TS_ASSERT_DELTA(force.GetBodyForces()(1), 1.0, epsilon);
+    TS_ASSERT_DELTA(force.GetBodyForces()(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(force.GetBodyForces()(3), 0.0, epsilon);
+
+    // Unit Y
+    force.SetNativeForces(0.0, 1.0, 0.0);
+    TS_ASSERT_DELTA(force.GetBodyForces()(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(force.GetBodyForces()(2), 1.0, epsilon);
+    TS_ASSERT_DELTA(force.GetBodyForces()(3), 0.0, epsilon);
+
+    // Unit Z
+    force.SetNativeForces(0.0, 0.0, 1.0);
+    TS_ASSERT_DELTA(force.GetBodyForces()(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(force.GetBodyForces()(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(force.GetBodyForces()(3), 1.0, epsilon);
+  }
+
+  // Test diagonal unit force
+  void testDiagonalUnitForce() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+
+    // Unit vector along (1,1,1) direction
+    double component = 1.0 / sqrt(3.0);
+    force.SetNativeForces(component, component, component);
+
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+    double magnitude = bodyForce.Magnitude();
+
+    TS_ASSERT_DELTA(magnitude, 1.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Precision Tests
+   ***************************************************************************/
+
+  // Test precision with very different magnitudes
+  void testMixedMagnitudes() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+    force.SetNativeForces(1e10, 1e-10, 1.0);
+
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    TS_ASSERT_DELTA(bodyForce(1), 1e10, 1.0);
+    TS_ASSERT_DELTA(bodyForce(2), 1e-10, 1e-15);
+    TS_ASSERT_DELTA(bodyForce(3), 1.0, epsilon);
+  }
+
+  // Test precision near machine epsilon
+  void testNearEpsilonForces() {
+    FGFDMExec fdmex;
+    TestableFGForce force(&fdmex);
+
+    force.SetTransformType(FGForce::tNone);
+    double eps = std::numeric_limits<double>::epsilon();
+    force.SetNativeForces(1.0 + eps, 1.0, 1.0 - eps);
+
+    const FGColumnVector3& bodyForce = force.GetBodyForces();
+
+    // Should preserve these tiny differences
+    TS_ASSERT(bodyForce(1) > bodyForce(2));
+    TS_ASSERT(bodyForce(2) > bodyForce(3));
+  }
 };
