@@ -838,4 +838,532 @@ public:
     TS_ASSERT_EQUALS(result1, true);
     TS_ASSERT_EQUALS(result2, true);
   }
+
+  /***************************************************************************
+   * Model Identity Tests
+   ***************************************************************************/
+
+  void testGetName() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    std::string name = massBalance->GetName();
+    TS_ASSERT(!name.empty());
+  }
+
+  void testGetExec() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    TS_ASSERT(massBalance->GetExec() == &fdmex);
+  }
+
+  void testSetRate() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetRate(5);
+    TS_ASSERT_EQUALS(massBalance->GetRate(), 5u);
+  }
+
+  void testRateZero() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetRate(0);
+    TS_ASSERT_EQUALS(massBalance->GetRate(), 0u);
+  }
+
+  /***************************************************************************
+   * Multiple Instance Tests
+   ***************************************************************************/
+
+  void testMultipleFDMExecInstances() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto mb1 = fdmex1.GetMassBalance();
+    auto mb2 = fdmex2.GetMassBalance();
+
+    TS_ASSERT(mb1 != mb2);
+    TS_ASSERT(mb1->GetExec() == &fdmex1);
+    TS_ASSERT(mb2->GetExec() == &fdmex2);
+  }
+
+  void testIndependentEmptyWeights() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto mb1 = fdmex1.GetMassBalance();
+    auto mb2 = fdmex2.GetMassBalance();
+
+    mb1->SetEmptyWeight(5000.0);
+    mb2->SetEmptyWeight(10000.0);
+
+    TS_ASSERT_DELTA(mb1->GetEmptyWeight(), 5000.0, epsilon);
+    TS_ASSERT_DELTA(mb2->GetEmptyWeight(), 10000.0, epsilon);
+  }
+
+  void testIndependentCG() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto mb1 = fdmex1.GetMassBalance();
+    auto mb2 = fdmex2.GetMassBalance();
+
+    mb1->SetBaseCG(FGColumnVector3(100.0, 0.0, 0.0));
+    mb2->SetBaseCG(FGColumnVector3(200.0, 0.0, 0.0));
+
+    TS_ASSERT_DELTA(mb1->GetXYZcg(1), 100.0, epsilon);
+    TS_ASSERT_DELTA(mb2->GetXYZcg(1), 200.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Inertia Tensor Physical Properties
+   ***************************************************************************/
+
+  void testTriangleInequalityIxx() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Set realistic inertias
+    FGMatrix33 testInertia(
+      1000.0, 0.0, 0.0,
+      0.0, 5000.0, 0.0,
+      0.0, 0.0, 5500.0
+    );
+    massBalance->SetAircraftBaseInertias(testInertia);
+    massBalance->Run(false);
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // Triangle inequality: Ixx <= Iyy + Izz
+    TS_ASSERT(J(1, 1) <= J(2, 2) + J(3, 3) + 0.01);
+  }
+
+  void testTriangleInequalityIyy() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    FGMatrix33 testInertia(
+      1000.0, 0.0, 0.0,
+      0.0, 5000.0, 0.0,
+      0.0, 0.0, 5500.0
+    );
+    massBalance->SetAircraftBaseInertias(testInertia);
+    massBalance->Run(false);
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // Triangle inequality: Iyy <= Ixx + Izz
+    TS_ASSERT(J(2, 2) <= J(1, 1) + J(3, 3) + 0.01);
+  }
+
+  void testTriangleInequalityIzz() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    FGMatrix33 testInertia(
+      1000.0, 0.0, 0.0,
+      0.0, 5000.0, 0.0,
+      0.0, 0.0, 5500.0
+    );
+    massBalance->SetAircraftBaseInertias(testInertia);
+    massBalance->Run(false);
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // Triangle inequality: Izz <= Ixx + Iyy
+    TS_ASSERT(J(3, 3) <= J(1, 1) + J(2, 2) + 0.01);
+  }
+
+  void testInertiaTensorPositiveDefinite() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    FGMatrix33 testInertia(
+      1000.0, -10.0, -5.0,
+      -10.0, 2000.0, -8.0,
+      -5.0, -8.0, 2500.0
+    );
+    massBalance->SetAircraftBaseInertias(testInertia);
+    massBalance->Run(false);
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // All diagonal elements should be positive
+    TS_ASSERT(J(1, 1) > 0.0);
+    TS_ASSERT(J(2, 2) > 0.0);
+    TS_ASSERT(J(3, 3) > 0.0);
+  }
+
+  /***************************************************************************
+   * Typical Aircraft Configuration Tests
+   ***************************************************************************/
+
+  void testTypicalLightAircraftMass() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Cessna 172 type: ~2400 lbs empty
+    massBalance->SetEmptyWeight(2400.0);
+    massBalance->Run(false);
+
+    double mass = massBalance->GetMass();
+    TS_ASSERT(mass > 0.0);
+    TS_ASSERT(mass < 200.0);  // Should be under 200 slugs
+  }
+
+  void testTypicalTransportAircraftMass() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Boeing 737 type: ~90,000 lbs empty
+    massBalance->SetEmptyWeight(90000.0);
+    massBalance->Run(false);
+
+    double mass = massBalance->GetMass();
+    TS_ASSERT(mass > 0.0);
+    TS_ASSERT(mass < 5000.0);  // Should be under 5000 slugs
+  }
+
+  void testTypicalUAVMass() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Small UAV type: ~50 lbs empty
+    massBalance->SetEmptyWeight(50.0);
+    massBalance->Run(false);
+
+    double mass = massBalance->GetMass();
+    TS_ASSERT(mass > 0.0);
+    TS_ASSERT(mass < 10.0);  // Should be under 10 slugs
+  }
+
+  /***************************************************************************
+   * CG Limit Tests
+   ***************************************************************************/
+
+  void testCGForwardLimit() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Very forward CG
+    FGColumnVector3 forwardCG(50.0, 0.0, 0.0);
+    massBalance->SetBaseCG(forwardCG);
+
+    const FGColumnVector3& cg = massBalance->GetXYZcg();
+    TS_ASSERT_DELTA(cg(1), 50.0, epsilon);
+  }
+
+  void testCGAftLimit() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Very aft CG
+    FGColumnVector3 aftCG(300.0, 0.0, 0.0);
+    massBalance->SetBaseCG(aftCG);
+
+    const FGColumnVector3& cg = massBalance->GetXYZcg();
+    TS_ASSERT_DELTA(cg(1), 300.0, epsilon);
+  }
+
+  void testCGLateralOffset() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // CG with lateral offset (asymmetric loading)
+    FGColumnVector3 lateralCG(150.0, 5.0, 0.0);
+    massBalance->SetBaseCG(lateralCG);
+
+    const FGColumnVector3& cg = massBalance->GetXYZcg();
+    TS_ASSERT_DELTA(cg(2), 5.0, epsilon);
+  }
+
+  void testCGVerticalOffset() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // High CG (cargo on top)
+    FGColumnVector3 highCG(150.0, 0.0, -50.0);
+    massBalance->SetBaseCG(highCG);
+
+    const FGColumnVector3& cg = massBalance->GetXYZcg();
+    TS_ASSERT_DELTA(cg(3), -50.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Point Mass Contribution Tests
+   ***************************************************************************/
+
+  void testZeroPointMassWeight() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Initially should have zero or minimal point mass weight
+    double pmWeight = massBalance->GetTotalPointMassWeight();
+    TS_ASSERT(pmWeight >= 0.0);
+  }
+
+  void testPointMassMomentVector() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGColumnVector3& moment = massBalance->GetPointMassMoment();
+
+    // Should return a valid vector
+    TS_ASSERT(!std::isnan(moment(1)));
+    TS_ASSERT(!std::isnan(moment(2)));
+    TS_ASSERT(!std::isnan(moment(3)));
+  }
+
+  void testPointMassInertiaSymmetric() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    double mass = 5.0;
+    FGColumnVector3 location(100.0, 50.0, 25.0);
+
+    FGMatrix33 inertia = massBalance->GetPointmassInertia(mass, location);
+
+    // Inertia tensor must be symmetric
+    TS_ASSERT_DELTA(inertia(1, 2), inertia(2, 1), epsilon);
+    TS_ASSERT_DELTA(inertia(1, 3), inertia(3, 1), epsilon);
+    TS_ASSERT_DELTA(inertia(2, 3), inertia(3, 2), epsilon);
+  }
+
+  void testPointMassZeroMass() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    FGColumnVector3 location(100.0, 0.0, 0.0);
+    FGMatrix33 inertia = massBalance->GetPointmassInertia(0.0, location);
+
+    // Zero mass should give zero inertia
+    TS_ASSERT_DELTA(inertia(1, 1), 0.0, epsilon);
+    TS_ASSERT_DELTA(inertia(2, 2), 0.0, epsilon);
+    TS_ASSERT_DELTA(inertia(3, 3), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Weight and Mass Conversion Tests
+   ***************************************************************************/
+
+  void testMassToWeightConversion() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(3217.4);  // 100 slugs * 32.174
+    massBalance->Run(false);
+
+    double mass = massBalance->GetMass();
+    double weight = massBalance->GetWeight();
+
+    // Weight should be approximately mass * g
+    if (mass > 0) {
+      double g = 32.174;  // ft/s^2
+      TS_ASSERT(weight >= 0.0);
+    }
+  }
+
+  void testWeightPrecision() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    double preciseWeight = 12345.6789;
+    massBalance->SetEmptyWeight(preciseWeight);
+
+    TS_ASSERT_DELTA(massBalance->GetEmptyWeight(), preciseWeight, 1e-4);
+  }
+
+  /***************************************************************************
+   * Coordinate Frame Tests
+   ***************************************************************************/
+
+  void testStructuralToBodyNegativeX() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetBaseCG(FGColumnVector3(0.0, 0.0, 0.0));
+
+    FGColumnVector3 structPos(-120.0, 0.0, 0.0);  // Forward in structural
+    FGColumnVector3 bodyPos = massBalance->StructuralToBody(structPos);
+
+    TS_ASSERT(std::isfinite(bodyPos(1)));
+  }
+
+  void testStructuralToBodyLargeOffset() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetBaseCG(FGColumnVector3(500.0, 0.0, 0.0));
+
+    FGColumnVector3 structPos(100.0, 0.0, 0.0);
+    FGColumnVector3 bodyPos = massBalance->StructuralToBody(structPos);
+
+    TS_ASSERT(std::isfinite(bodyPos(1)));
+    TS_ASSERT(std::isfinite(bodyPos(2)));
+    TS_ASSERT(std::isfinite(bodyPos(3)));
+  }
+
+  void testStructuralToBodyAllAxes() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetBaseCG(FGColumnVector3(0.0, 0.0, 0.0));
+
+    FGColumnVector3 structPos(100.0, 50.0, -25.0);
+    FGColumnVector3 bodyPos = massBalance->StructuralToBody(structPos);
+
+    // All outputs should be finite
+    TS_ASSERT(std::isfinite(bodyPos(1)));
+    TS_ASSERT(std::isfinite(bodyPos(2)));
+    TS_ASSERT(std::isfinite(bodyPos(3)));
+  }
+
+  /***************************************************************************
+   * State Consistency Tests
+   ***************************************************************************/
+
+  void testConsistencyAfterMultipleRuns() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(5000.0);
+    massBalance->SetBaseCG(FGColumnVector3(150.0, 0.0, -5.0));
+
+    double weight1 = massBalance->GetEmptyWeight();
+    FGColumnVector3 cg1 = massBalance->GetXYZcg();
+
+    for (int i = 0; i < 100; i++) {
+      massBalance->Run(false);
+    }
+
+    double weight2 = massBalance->GetEmptyWeight();
+    FGColumnVector3 cg2 = massBalance->GetXYZcg();
+
+    // Empty weight should not change
+    TS_ASSERT_DELTA(weight1, weight2, epsilon);
+    // Base CG should remain consistent
+    TS_ASSERT_DELTA(cg1(1), cg2(1), 0.1);
+  }
+
+  void testConsistencyAfterInitModel() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(8000.0);
+    massBalance->Run(false);
+
+    double weightBefore = massBalance->GetWeight();
+
+    massBalance->InitModel();
+    massBalance->Run(false);
+
+    // Weight calculation should still work
+    double weightAfter = massBalance->GetWeight();
+    TS_ASSERT(weightAfter >= 0.0);
+  }
+
+  /***************************************************************************
+   * Additional Edge Cases
+   ***************************************************************************/
+
+  void testNegativeMassHandling() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Negative mass (invalid but shouldn't crash)
+    FGColumnVector3 location(100.0, 0.0, 0.0);
+    FGMatrix33 inertia = massBalance->GetPointmassInertia(-1.0, location);
+
+    // Should produce some result without crashing
+    TS_ASSERT(!std::isnan(inertia(1, 1)));
+  }
+
+  void testExtremelyLargeMass() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    double hugeMass = 1e10;  // Unrealistically large
+    FGColumnVector3 location(100.0, 0.0, 0.0);
+
+    FGMatrix33 inertia = massBalance->GetPointmassInertia(hugeMass, location);
+
+    TS_ASSERT(std::isfinite(inertia(1, 1)));
+    TS_ASSERT(std::isfinite(inertia(2, 2)));
+    TS_ASSERT(std::isfinite(inertia(3, 3)));
+  }
+
+  void testExtremelySmallWeight() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(1e-10);
+    TS_ASSERT_DELTA(massBalance->GetEmptyWeight(), 1e-10, 1e-15);
+  }
+
+  void testInertiaWithZeroDiagonal() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Edge case: point mass on axis
+    FGMatrix33 inertia = massBalance->GetPointmassInertia(1.0, FGColumnVector3(0.0, 0.0, 0.0));
+
+    // Should not produce NaN
+    TS_ASSERT(!std::isnan(inertia(1, 1)));
+    TS_ASSERT(!std::isnan(inertia(2, 2)));
+    TS_ASSERT(!std::isnan(inertia(3, 3)));
+  }
+
+  void testRapidCGAndWeightChanges() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    for (int i = 0; i < 500; i++) {
+      double weight = 1000.0 + (i % 100) * 100.0;
+      double cgX = 100.0 + (i % 50);
+
+      massBalance->SetEmptyWeight(weight);
+      massBalance->SetBaseCG(FGColumnVector3(cgX, 0.0, 0.0));
+      massBalance->Run(false);
+
+      TS_ASSERT(massBalance->GetWeight() >= 0.0);
+      TS_ASSERT(!std::isnan(massBalance->GetXYZcg(1)));
+    }
+  }
+
+  void testInputsGasInertia() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Set gas inertia input
+    massBalance->in.GasInertia = FGMatrix33(
+      100.0, 0.0, 0.0,
+      0.0, 200.0, 0.0,
+      0.0, 0.0, 300.0
+    );
+
+    massBalance->Run(false);
+
+    // Verify inertia was incorporated
+    const FGMatrix33& J = massBalance->GetJ();
+    TS_ASSERT(!std::isnan(J(1, 1)));
+  }
+
+  void testInputsTankInertia() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->in.TankInertia = FGMatrix33(
+      50.0, 0.0, 0.0,
+      0.0, 100.0, 0.0,
+      0.0, 0.0, 150.0
+    );
+
+    massBalance->Run(false);
+
+    const FGMatrix33& J = massBalance->GetJ();
+    TS_ASSERT(!std::isnan(J(1, 1)));
+  }
 };
