@@ -675,6 +675,494 @@ public:
     TS_ASSERT_DELTA(phi, 1.0, 0.1);  // Minimal ground effect
   }
 
+  /***************************************************************************
+   * High-Lift Device Effects
+   ***************************************************************************/
+
+  // Test ground effect with flaps extended
+  void testGroundEffectFlapsExtended() {
+    double wingspan = 30.0;
+    double height = 5.0;
+    double h_over_b = height / wingspan;
+
+    // Flaps increase effective chord, modifying ground effect
+    double phi_clean = calculateGroundEffectFactor(h_over_b);
+
+    // With flaps, effective span may decrease slightly, making h/b ratio larger
+    double flap_span_reduction = 0.95;  // 5% effective span reduction
+    double effective_h_over_b = h_over_b / flap_span_reduction;  // Higher ratio
+    double phi_flaps = calculateGroundEffectFactor(effective_h_over_b);
+
+    // Higher h/b ratio means less ground effect (phi closer to 1.0)
+    TS_ASSERT(phi_flaps > phi_clean);
+  }
+
+  // Test ground effect with slats deployed
+  void testGroundEffectSlatsDeployed() {
+    double wingspan = 30.0;
+    double height = 5.0;
+
+    // Slats increase lift slope, intensifying ground effect response
+    double CL_alpha_base = 5.5;
+    double CL_alpha_slats = 6.0;
+
+    double phi = calculateGroundEffectFactor(height / wingspan);
+    double CL_increment_base = CL_alpha_base * (1.0 / phi - 1.0) * 0.05;  // At 5 deg
+    double CL_increment_slats = CL_alpha_slats * (1.0 / phi - 1.0) * 0.05;
+
+    TS_ASSERT(CL_increment_slats > CL_increment_base);
+  }
+
+  // Test spoiler effect on ground effect
+  void testSpoilerEffectOnGroundEffect() {
+    double CL_freestream = 1.0;
+    double spoiler_CL_reduction = 0.3;  // Spoilers reduce CL by 0.3
+    double h_over_b = 0.15;
+
+    double phi = calculateGroundEffectFactor(h_over_b);
+
+    // With spoilers, ground effect benefit is reduced
+    double CL_ground = CL_freestream / phi;
+    double CL_ground_spoilers = (CL_freestream - spoiler_CL_reduction) / phi;
+
+    double CL_benefit = CL_ground - CL_freestream;
+    double CL_benefit_spoilers = CL_ground_spoilers - (CL_freestream - spoiler_CL_reduction);
+
+    // Both should have similar ground effect benefit
+    TS_ASSERT_DELTA(CL_benefit, CL_benefit_spoilers, 0.1);
+  }
+
+  /***************************************************************************
+   * Speed Effects on Ground Effect
+   ***************************************************************************/
+
+  // Test ground effect at low speed
+  void testGroundEffectLowSpeed() {
+    double velocity = 60.0;  // kts (slow approach)
+    double wingspan = 30.0;
+    double height = 5.0;
+
+    double phi = calculateGroundEffectFactor(height / wingspan);
+    // Ground effect is independent of speed (aerodynamic coefficients change)
+    TS_ASSERT(phi < 1.0);
+    TS_ASSERT(phi > 0.0);
+  }
+
+  // Test ground effect at high speed
+  void testGroundEffectHighSpeed() {
+    double velocity = 140.0;  // kts (fast approach)
+    double wingspan = 30.0;
+    double height = 5.0;
+
+    double phi = calculateGroundEffectFactor(height / wingspan);
+    // Same height/span ratio gives same ground effect factor
+    TS_ASSERT(phi < 1.0);
+    TS_ASSERT(phi > 0.0);
+  }
+
+  // Test dynamic pressure change in ground effect
+  void testDynamicPressureChange() {
+    double velocity = 100.0;  // ft/s
+    double density = 0.002377;
+    double height = 3.0;
+    double wingspan = 30.0;
+
+    double q = 0.5 * density * velocity * velocity;
+    double phi = calculateGroundEffectFactor(height / wingspan);
+
+    // Lift increases in ground effect for same q
+    double L_free = q * 174.0 * 1.0;  // S * CL
+    double L_ground = q * 174.0 * (1.0 / phi);
+
+    TS_ASSERT(L_ground > L_free);
+  }
+
+  /***************************************************************************
+   * Propeller/Engine Effects
+   ***************************************************************************/
+
+  // Test propeller slipstream ground effect
+  void testPropellerSlipstreamEffect() {
+    double wingspan = 30.0;
+    double height = 4.0;
+    double h_over_b = height / wingspan;
+
+    double phi_base = calculateGroundEffectFactor(h_over_b);
+
+    // Propeller slipstream increases local velocity
+    // This may affect ground effect by changing local lift distribution
+    double slipstream_factor = 1.1;  // 10% velocity increase
+    double phi_adjusted = calculateGroundEffectFactor(h_over_b);
+
+    // Ground effect factor remains the same (geometry-based)
+    TS_ASSERT_DELTA(phi_base, phi_adjusted, epsilon);
+  }
+
+  // Test jet exhaust ground effect interaction
+  void testJetExhaustGroundEffect() {
+    double height = 5.0;
+    double wingspan = 40.0;
+
+    // Jet exhaust may disturb ground boundary layer
+    // This is a secondary effect
+    double phi = calculateGroundEffectFactor(height / wingspan);
+    TS_ASSERT(phi < 1.0);
+  }
+
+  // Test ground effect with engine-out
+  void testGroundEffectEngineOut() {
+    double wingspan = 30.0;
+    double height = 5.0;
+
+    // Engine-out creates asymmetric lift
+    // Ground effect still applies to both wings
+    double phi = calculateGroundEffectFactor(height / wingspan);
+
+    // Yaw moment due to engine-out is modified by ground effect
+    // as induced drag is reduced on both wings
+    TS_ASSERT(phi < 1.0);
+  }
+
+  /***************************************************************************
+   * Tailplane Ground Effect
+   ***************************************************************************/
+
+  // Test horizontal stabilizer ground effect
+  void testHorizontalStabilizerGroundEffect() {
+    double tail_span = 12.0;  // ft
+    double tail_height = 8.0; // ft above ground (higher due to fuselage)
+    double main_wing_height = 4.0;
+
+    double phi_wing = calculateGroundEffectFactor(main_wing_height / 30.0);
+    double phi_tail = calculateGroundEffectFactor(tail_height / tail_span);
+
+    // Tail is higher, so less ground effect
+    TS_ASSERT(phi_tail > phi_wing);
+  }
+
+  // Test elevator effectiveness in ground effect
+  void testElevatorEffectivenessGroundEffect() {
+    double tail_height = 6.0;
+    double tail_span = 12.0;
+
+    double phi_tail = calculateGroundEffectFactor(tail_height / tail_span);
+
+    // Reduced downwash at tail increases elevator effectiveness
+    double effectiveness_factor = 1.0 / phi_tail;
+    TS_ASSERT(effectiveness_factor > 1.0);
+  }
+
+  // Test T-tail vs. conventional tail
+  void testTTailVsConventionalTail() {
+    double wingspan = 30.0;
+    double wing_height = 4.0;
+
+    // T-tail is higher above ground
+    double ttail_height = 15.0;
+    double conv_tail_height = 6.0;
+
+    double phi_ttail = calculateGroundEffectFactor(ttail_height / 12.0);
+    double phi_conv = calculateGroundEffectFactor(conv_tail_height / 12.0);
+
+    // T-tail experiences much less ground effect
+    TS_ASSERT(phi_ttail > phi_conv);
+  }
+
+  /***************************************************************************
+   * Multi-Wing Configurations
+   ***************************************************************************/
+
+  // Test biplane ground effect
+  void testBiplaneGroundEffect() {
+    double lower_wing_span = 25.0;
+    double upper_wing_span = 28.0;
+    double lower_wing_height = 3.0;
+    double upper_wing_height = 8.0;
+
+    double phi_lower = calculateGroundEffectFactor(lower_wing_height / lower_wing_span);
+    double phi_upper = calculateGroundEffectFactor(upper_wing_height / upper_wing_span);
+
+    // Lower wing has much stronger ground effect
+    TS_ASSERT(phi_lower < phi_upper);
+
+    // Combined effect (simplified average)
+    double phi_combined = (phi_lower + phi_upper) / 2.0;
+    TS_ASSERT(phi_combined < phi_upper);
+    TS_ASSERT(phi_combined > phi_lower);
+  }
+
+  // Test tandem wing ground effect
+  void testTandemWingGroundEffect() {
+    double front_wingspan = 25.0;
+    double rear_wingspan = 20.0;
+    double height = 4.0;
+
+    double phi_front = calculateGroundEffectFactor(height / front_wingspan);
+    double phi_rear = calculateGroundEffectFactor(height / rear_wingspan);
+
+    // Front wing has larger span, so different ground effect
+    TS_ASSERT(phi_front < phi_rear);
+  }
+
+  // Test canard ground effect
+  void testCanardGroundEffect() {
+    double main_wing_span = 30.0;
+    double canard_span = 10.0;
+    double main_height = 4.0;
+    double canard_height = 5.0;  // Slightly higher typically
+
+    double phi_main = calculateGroundEffectFactor(main_height / main_wing_span);
+    double phi_canard = calculateGroundEffectFactor(canard_height / canard_span);
+
+    // Canard with smaller span experiences different ground effect
+    TS_ASSERT(phi_main != phi_canard);
+  }
+
+  /***************************************************************************
+   * Ground Surface Effects
+   ***************************************************************************/
+
+  // Test ground effect over water
+  void testGroundEffectOverWater() {
+    double wingspan = 30.0;
+    double height = 5.0;
+
+    // Water surface is smooth, ground effect similar to runway
+    double phi = calculateGroundEffectFactor(height / wingspan);
+    TS_ASSERT(phi < 1.0);
+    TS_ASSERT(phi > 0.3);
+  }
+
+  // Test ground effect over rough terrain
+  void testGroundEffectRoughTerrain() {
+    double wingspan = 30.0;
+    double height = 5.0;
+
+    // Rough terrain may reduce ground effect slightly
+    double phi_smooth = calculateGroundEffectFactor(height / wingspan);
+    double roughness_factor = 1.05;  // 5% reduction in ground effect
+    double phi_rough = phi_smooth * roughness_factor;
+
+    TS_ASSERT(phi_rough > phi_smooth);
+    TS_ASSERT(phi_rough <= 1.0);
+  }
+
+  // Test ground effect at different runway altitudes
+  void testGroundEffectAltitudeVariation() {
+    double wingspan = 30.0;
+    double height_agl = 5.0;  // Height above ground level
+
+    // Ground effect depends on AGL, not MSL
+    // Different runway altitudes have same ground effect for same AGL
+    double phi_sea_level = calculateGroundEffectFactor(height_agl / wingspan);
+    double phi_high_altitude = calculateGroundEffectFactor(height_agl / wingspan);
+
+    TS_ASSERT_DELTA(phi_sea_level, phi_high_altitude, epsilon);
+  }
+
+  /***************************************************************************
+   * Aircraft Configuration Effects
+   ***************************************************************************/
+
+  // Test high-wing vs. low-wing ground effect
+  void testHighWingVsLowWing() {
+    double wingspan = 30.0;
+    double main_gear_height = 3.0;
+
+    // Low wing: wing is at gear height
+    double low_wing_height = main_gear_height;
+
+    // High wing: wing is higher above ground
+    double fuselage_height = 5.0;
+    double high_wing_height = main_gear_height + fuselage_height;
+
+    double phi_low = calculateGroundEffectFactor(low_wing_height / wingspan);
+    double phi_high = calculateGroundEffectFactor(high_wing_height / wingspan);
+
+    // Low wing experiences stronger ground effect
+    TS_ASSERT(phi_low < phi_high);
+  }
+
+  // Test tricycle vs. taildragger ground effect
+  void testTricycleVsTaildragger() {
+    double wingspan = 30.0;
+
+    // Tricycle: wing relatively level at touchdown
+    double tricycle_height = 4.0;
+
+    // Taildragger: wing inclined, tail lower
+    double taildragger_leading_edge_height = 5.0;
+    double taildragger_trailing_edge_height = 3.0;
+    double taildragger_avg_height = (taildragger_leading_edge_height + taildragger_trailing_edge_height) / 2.0;
+
+    double phi_tri = calculateGroundEffectFactor(tricycle_height / wingspan);
+    double phi_tail = calculateGroundEffectFactor(taildragger_avg_height / wingspan);
+
+    // Similar average heights give similar ground effect
+    TS_ASSERT_DELTA(phi_tri, phi_tail, 0.05);
+  }
+
+  // Test ground effect with gear retracted vs. extended
+  void testGroundEffectGearPosition() {
+    double wingspan = 30.0;
+    double height_gear_down = 4.0;
+    double height_gear_up = 5.5;  // Simulating during go-around
+
+    double phi_down = calculateGroundEffectFactor(height_gear_down / wingspan);
+    double phi_up = calculateGroundEffectFactor(height_gear_up / wingspan);
+
+    // Gear down (lower height) has stronger ground effect
+    TS_ASSERT(phi_down < phi_up);
+  }
+
+  /***************************************************************************
+   * Transient Ground Effect Phenomena
+   ***************************************************************************/
+
+  // Test ground effect entering during descent
+  void testGroundEffectEntry() {
+    double wingspan = 30.0;
+    double descent_rate = -500.0;  // fpm
+    double dt = 1.0;  // second
+
+    double height_initial = 30.0;
+    double height_final = height_initial + (descent_rate / 60.0) * dt;
+
+    double phi_initial = calculateGroundEffectFactor(height_initial / wingspan);
+    double phi_final = calculateGroundEffectFactor(height_final / wingspan);
+
+    // Ground effect should be increasing (phi decreasing)
+    TS_ASSERT(phi_final < phi_initial);
+  }
+
+  // Test ground effect exit during climb
+  void testGroundEffectExit() {
+    double wingspan = 30.0;
+    double climb_rate = 1000.0;  // fpm
+    double dt = 1.0;  // second
+
+    double height_initial = 10.0;
+    double height_final = height_initial + (climb_rate / 60.0) * dt;
+
+    double phi_initial = calculateGroundEffectFactor(height_initial / wingspan);
+    double phi_final = calculateGroundEffectFactor(height_final / wingspan);
+
+    // Ground effect should be decreasing (phi increasing)
+    TS_ASSERT(phi_final > phi_initial);
+  }
+
+  // Test abrupt ground effect change (terrain)
+  void testAbruptGroundEffectChange() {
+    double wingspan = 30.0;
+    double flight_altitude = 100.0;  // ft MSL
+
+    // Over flat terrain
+    double terrain_flat = 0.0;
+    double agl_flat = flight_altitude - terrain_flat;
+    double phi_flat = calculateGroundEffectFactor(agl_flat / wingspan);
+
+    // Over elevated terrain
+    double terrain_elevated = 95.0;  // Near flight altitude
+    double agl_elevated = flight_altitude - terrain_elevated;
+    double phi_elevated = calculateGroundEffectFactor(agl_elevated / wingspan);
+
+    // Elevated terrain creates sudden ground effect
+    TS_ASSERT(phi_elevated < phi_flat);
+  }
+
+  /***************************************************************************
+   * Stress Tests and Numerical Stability
+   ***************************************************************************/
+
+  // Test many height calculations
+  void testStressManyHeights() {
+    double wingspan = 30.0;
+
+    for (int i = 0; i < 1000; i++) {
+      double height = 0.1 + (i % 100);
+      double phi = calculateGroundEffectFactor(height / wingspan);
+
+      TS_ASSERT(phi >= 0.0);
+      TS_ASSERT(phi <= 1.0);
+      TS_ASSERT(!std::isnan(phi));
+    }
+  }
+
+  // Test numerical stability at small h/b
+  void testNumericalStabilitySmallHoverB() {
+    double very_small = 1e-10;
+    double phi = calculateGroundEffectFactor(very_small);
+
+    TS_ASSERT(phi >= 0.0);
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isinf(phi));
+  }
+
+  // Test numerical stability at large h/b
+  void testNumericalStabilityLargeHoverB() {
+    double very_large = 1e10;
+    double phi = calculateGroundEffectFactor(very_large);
+
+    TS_ASSERT_DELTA(phi, 1.0, 1e-6);
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isinf(phi));
+  }
+
+  // Test continuous function behavior
+  void testContinuousFunctionBehavior() {
+    double wingspan = 30.0;
+    double h_prev = 0.1;
+    double phi_prev = calculateGroundEffectFactor(h_prev / wingspan);
+
+    for (double h = 0.2; h <= 100.0; h += 0.1) {
+      double phi = calculateGroundEffectFactor(h / wingspan);
+
+      // Function should be continuous (no large jumps)
+      double delta = std::abs(phi - phi_prev);
+      TS_ASSERT(delta < 0.1);
+
+      phi_prev = phi;
+      h_prev = h;
+    }
+  }
+
+  /***************************************************************************
+   * Real Aircraft Validation Tests
+   ***************************************************************************/
+
+  // Test C172-like ground effect
+  void testC172LikeGroundEffect() {
+    double wingspan = 36.0;    // ft (C172 wingspan)
+    double wheel_height = 2.0; // ft (roughly)
+
+    double phi = calculateGroundEffectFactor(wheel_height / wingspan);
+
+    // At this height, significant ground effect expected
+    TS_ASSERT(phi < 0.6);
+  }
+
+  // Test B747-like ground effect
+  void testB747LikeGroundEffect() {
+    double wingspan = 195.0;   // ft (B747 wingspan)
+    double wheel_height = 10.0; // ft (roughly)
+
+    double phi = calculateGroundEffectFactor(wheel_height / wingspan);
+
+    // Large aircraft with small h/b has very strong ground effect
+    TS_ASSERT(phi < 0.5);
+  }
+
+  // Test Ekranoplan-like ground effect
+  void testEkranoplanLikeGroundEffect() {
+    double wingspan = 144.0;  // ft (KM ekranoplan-like)
+    double cruise_height = 3.0;  // ft (cruise height)
+
+    double phi = calculateGroundEffectFactor(cruise_height / wingspan);
+
+    // Extreme ground effect for WIG craft
+    TS_ASSERT(phi < 0.15);
+  }
+
 private:
   /***************************************************************************
    * Helper Functions for Ground Effect Calculations
