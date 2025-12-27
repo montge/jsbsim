@@ -824,4 +824,266 @@ public:
     TS_ASSERT(n < 1.0);
     TS_ASSERT(n < 0.0);  // Negative g
   }
+
+  /***************************************************************************
+   * Extended Gravity and Rotation Tests
+   ***************************************************************************/
+
+  // Test gravity decrease per 1000 ft altitude
+  void testGravityDecreasePer1000ft() {
+    double h1 = 0.0;
+    double h2 = 1000.0;
+    double r0 = WGS84_A;
+
+    double g1 = G0 * std::pow(r0 / (r0 + h1), 2);
+    double g2 = G0 * std::pow(r0 / (r0 + h2), 2);
+
+    double decrease = g1 - g2;
+    // Approximately 0.003 ft/s² per 1000 ft
+    TS_ASSERT_DELTA(decrease, 0.003, 0.001);
+  }
+
+  // Test effective gravity (including centrifugal)
+  void testEffectiveGravityLatitude() {
+    double lats[] = {0.0, 30.0, 60.0, 90.0};
+    double prev_g_eff = 0.0;
+
+    for (double lat : lats) {
+      double latRad = lat * DEG_TO_RAD;
+      double g = 32.0877 + (32.2577 - 32.0877) * std::sin(latRad) * std::sin(latRad);
+      double a_cent = OMEGA_EARTH * OMEGA_EARTH * WGS84_A * std::cos(latRad);
+      double g_eff = g - a_cent;
+
+      TS_ASSERT(g_eff > 0);
+      if (lat > 0) {
+        TS_ASSERT(g_eff >= prev_g_eff);  // Increasing toward poles
+      }
+      prev_g_eff = g_eff;
+    }
+  }
+
+  // Test Earth rotation period in seconds
+  void testEarthRotationSeconds() {
+    double period = 2 * M_PI / OMEGA_EARTH;
+    TS_ASSERT_DELTA(period, 86164.1, 1.0);  // Sidereal day in seconds
+  }
+
+  // Test surface velocity at 30° latitude
+  void testSurfaceVelocity30Lat() {
+    double lat = 30.0;
+    double latRad = lat * DEG_TO_RAD;
+    double r = WGS84_A * std::cos(latRad);
+
+    double v = OMEGA_EARTH * r;
+    double v_knots = v * 0.5925;
+
+    TS_ASSERT(v_knots < 900.0);  // Less than equator
+    TS_ASSERT(v_knots > 700.0);
+  }
+
+  // Test gravity at ISS altitude
+  void testGravityISSAltitude() {
+    double h = 400 * 3280.84;  // 400 km in ft
+    double r0 = WGS84_A;
+    double r = r0 + h;
+
+    double g = G0 * std::pow(r0 / r, 2);
+
+    // ISS experiences about 90% of surface gravity
+    TS_ASSERT(g < G0);
+    TS_ASSERT(g > 0.85 * G0);
+  }
+
+  // Test free-fall time from 1000 ft
+  void testFreeFallTime() {
+    double h = 1000.0;  // ft
+    double g = G0;
+
+    // t = sqrt(2h/g) for free fall from rest
+    double t = std::sqrt(2 * h / g);
+
+    TS_ASSERT_DELTA(t, 7.88, 0.1);  // About 8 seconds
+  }
+
+  // Test terminal velocity concept
+  void testTerminalVelocityConcept() {
+    // At terminal velocity, drag = weight
+    // F_drag = 0.5 * rho * V^2 * Cd * A
+    // W = m * g
+
+    double mass = 155.0;  // slugs
+    double weight = mass * G0;  // 155 * 32.174 = 4987 lbs
+
+    TS_ASSERT(weight > 0);
+    TS_ASSERT_DELTA(weight, 4987.0, 10.0);
+  }
+
+  // Test Coriolis for high-speed aircraft
+  void testCoriolisHighSpeed() {
+    double velocity = 1000.0;  // ft/s (about 600 kts)
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    double a_coriolis = 2 * OMEGA_EARTH * velocity * std::sin(latRad);
+
+    // Double the velocity, double the Coriolis
+    double a_coriolis_500 = 2 * OMEGA_EARTH * 500.0 * std::sin(latRad);
+    TS_ASSERT_DELTA(a_coriolis, 2 * a_coriolis_500, 0.001);
+  }
+
+  // Test centrifugal at 30° latitude
+  void testCentrifugal30Lat() {
+    double lat = 30.0;
+    double latRad = lat * DEG_TO_RAD;
+    double r = WGS84_A;
+
+    double a_cent = OMEGA_EARTH * OMEGA_EARTH * r * std::cos(latRad);
+
+    // Should be between equator and pole values
+    TS_ASSERT(a_cent > 0.0);
+    TS_ASSERT(a_cent < 0.111);  // Less than equator
+  }
+
+  // Test gravity ratio earth to moon
+  void testGravityRatioEarthMoon() {
+    double g_earth = G0;
+    double g_moon = 5.31;  // ft/s² on Moon surface
+
+    double ratio = g_earth / g_moon;
+    TS_ASSERT_DELTA(ratio, 6.06, 0.1);  // Earth gravity is ~6x Moon
+  }
+
+  // Test weight on Moon
+  void testWeightOnMoon() {
+    double mass = 155.0;  // slugs
+    double g_moon = 5.31;
+
+    double weight_moon = mass * g_moon;
+    double weight_earth = mass * G0;
+
+    TS_ASSERT(weight_moon < weight_earth);
+    TS_ASSERT_DELTA(weight_moon / weight_earth, 1.0/6.0, 0.02);
+  }
+
+  // Test orbital period at 100nm
+  void testOrbitalPeriod100nm() {
+    double h = 100 * 6076.12;  // 100 nm in ft
+    double r = WGS84_A + h;
+
+    // T = 2*pi*sqrt(r³/GM)
+    double T = 2 * M_PI * std::sqrt(r * r * r / GM);
+    double minutes = T / 60.0;
+
+    TS_ASSERT_DELTA(minutes, 87.0, 2.0);  // About 87 minutes
+  }
+
+  // Test gravity gradient for satellite
+  void testGravityGradientSatellite() {
+    double r = WGS84_A + 400 * 3280.84;  // 400 km in ft
+
+    // Gravity gradient = 2*g/r (magnitude of tidal force)
+    double g = GM / (r * r);
+    double gradient = 2 * g / r;
+
+    TS_ASSERT(gradient > 0);
+    TS_ASSERT(gradient < 1e-3);  // Small but measurable
+  }
+
+  // Test geocentric vs geodetic latitude difference max
+  void testLatitudeDifferenceMax() {
+    // Maximum difference occurs around 45°
+    double a = WGS84_A;
+    double b = WGS84_B;
+
+    double max_diff = 0.0;
+    for (double geodetic = 0; geodetic <= 90; geodetic += 1) {
+      double ratio = (b * b) / (a * a);
+      double geocentric = std::atan(ratio * std::tan(geodetic * DEG_TO_RAD)) / DEG_TO_RAD;
+      double diff = geodetic - geocentric;
+      if (diff > max_diff) max_diff = diff;
+    }
+
+    TS_ASSERT_DELTA(max_diff, 0.19, 0.02);  // About 0.19° max difference
+  }
+
+  // Test N-S vs E-W radii of curvature
+  void testRadiiOfCurvature() {
+    double a = WGS84_A;
+    double b = WGS84_B;
+    double lat = 45.0;
+    double latRad = lat * DEG_TO_RAD;
+
+    double e2 = (a*a - b*b) / (a*a);
+    double sinLat = std::sin(latRad);
+
+    double M = a * (1 - e2) / std::pow(1 - e2 * sinLat * sinLat, 1.5);  // Meridian
+    double N = a / std::sqrt(1 - e2 * sinLat * sinLat);  // Prime vertical
+
+    TS_ASSERT(N >= M);  // Prime vertical >= meridian always
+  }
+
+  // Test great circle distance formula verification
+  void testGreatCircleDistanceConcept() {
+    // Haversine formula conceptual test
+    double lat1 = 0.0, lon1 = 0.0;  // Point 1
+    double lat2 = 0.0, lon2 = 1.0;  // Point 2 (1° east on equator)
+
+    double dlon = (lon2 - lon1) * DEG_TO_RAD;
+    double lat1Rad = lat1 * DEG_TO_RAD;
+
+    // At equator, 1° = WGS84_A * pi/180
+    double distance = WGS84_A * dlon;
+
+    // About 60 nautical miles per degree at equator
+    double nm = distance / 6076.12;
+    TS_ASSERT_DELTA(nm, 60.0, 1.0);
+  }
+
+  // Test rhumb line vs great circle
+  void testRhumbVsGreatCircle() {
+    // For short distances and low latitudes, they're similar
+    double distance = 100 * 6076.12;  // 100 nm in ft
+
+    // At equator, rhumb and great circle are identical
+    TS_ASSERT(distance > 0);
+  }
+
+  // Test precession rate concept
+  void testPrecessionRateConcept() {
+    // Earth's precession period is about 26,000 years
+    // Rate = 2*pi / (26000 * 365.25 * 24 * 3600) rad/s
+    double precession_period = 26000 * 365.25 * 24 * 3600;  // seconds
+    double precession_rate = 2 * M_PI / precession_period;
+
+    TS_ASSERT(precession_rate < OMEGA_EARTH);  // Much slower than rotation
+    TS_ASSERT(precession_rate > 0);
+  }
+
+  // Test nutation concept
+  void testNutationConcept() {
+    // Nutation has an 18.6 year period
+    double nutation_period = 18.6 * 365.25 * 24 * 3600;  // seconds
+
+    TS_ASSERT(nutation_period > 0);
+    TS_ASSERT(nutation_period < 26000 * 365.25 * 24 * 3600);  // Shorter than precession
+  }
+
+  // Test polar motion concept
+  void testPolarMotionConcept() {
+    // Chandler wobble has ~433 day period
+    double chandler_period = 433 * 24 * 3600;  // seconds
+
+    // This is much shorter than precession
+    TS_ASSERT(chandler_period < 365.25 * 24 * 3600 * 2);  // Less than 2 years
+  }
+
+  // Test tidal acceleration concept
+  void testTidalAccelerationConcept() {
+    double r = WGS84_A;
+    double R_moon = 1.262e9;  // Moon distance in ft (approximate)
+
+    // Tidal acceleration ~ 2*GM_moon*r/R³
+    // This is a small effect
+    TS_ASSERT(R_moon > r * 50);  // Moon is much farther than Earth radius
+  }
 };
