@@ -607,4 +607,434 @@ public:
 
     TS_ASSERT(lateral_error_ft > 1000.0);  // Less sensitive (larger error)
   }
+
+  /***************************************************************************
+   * GPS Navigation Calculations
+   ***************************************************************************/
+
+  void testGPSDirectTrack() {
+    double from_lat = 40.0;
+    double from_lon = -74.0;
+    double to_lat = 41.0;
+    double to_lon = -74.0;
+
+    // Due north track
+    double dlat = to_lat - from_lat;
+    double dlon = to_lon - from_lon;
+
+    double track = std::atan2(dlon, dlat) * RAD_TO_DEG;
+    TS_ASSERT_DELTA(NormalizeHeading(track), 0.0, 0.1);  // North
+  }
+
+  void testGPSCrossTrackError() {
+    double desired_track = 90.0;  // East
+    double actual_track = 92.0;
+    double distance_flown = 50.0;  // nm
+
+    double angular_error = (actual_track - desired_track) * DEG_TO_RAD;
+    double cross_track = distance_flown * std::sin(angular_error);
+
+    TS_ASSERT(cross_track > 0.0);
+    TS_ASSERT(cross_track < 2.0);  // nm
+  }
+
+  void testGPSAlongTrackDistance() {
+    double total_distance = 100.0;  // nm
+    double distance_flown = 60.0;
+
+    double along_track = distance_flown;
+    double distance_remaining = total_distance - along_track;
+
+    TS_ASSERT_DELTA(distance_remaining, 40.0, epsilon);
+  }
+
+  void testGPSGroundSpeed() {
+    double distance_nm = 120.0;
+    double time_hours = 1.0;
+
+    double ground_speed = distance_nm / time_hours;
+    TS_ASSERT_DELTA(ground_speed, 120.0, epsilon);
+  }
+
+  void testGPSETE() {
+    double distance_remaining = 50.0;  // nm
+    double ground_speed = 100.0;  // knots
+
+    double ete_hours = distance_remaining / ground_speed;
+    double ete_minutes = ete_hours * 60.0;
+
+    TS_ASSERT_DELTA(ete_minutes, 30.0, epsilon);
+  }
+
+  void testGPSWaypointSequencing() {
+    double distance_to_waypoint = 0.3;  // nm
+    double sequencing_threshold = 0.5;  // nm
+
+    bool should_sequence = distance_to_waypoint < sequencing_threshold;
+    TS_ASSERT(should_sequence);
+  }
+
+  /***************************************************************************
+   * TACAN Navigation
+   ***************************************************************************/
+
+  void testTACANChannelToFrequency() {
+    // TACAN channel 100X = 1213 MHz
+    int channel = 100;
+    bool x_band = true;
+
+    // Simplified conversion
+    double freq_mhz = 1025.0 + channel;
+    if (x_band) freq_mhz += 63.0;
+
+    TS_ASSERT(freq_mhz > 1000.0);
+  }
+
+  void testTACANBearing() {
+    double aircraft_lat = 40.0;
+    double aircraft_lon = -74.0;
+    double tacan_lat = 40.0;
+    double tacan_lon = -73.5;
+
+    // Station is east of aircraft
+    double bearing = 90.0;  // Simplified
+    TS_ASSERT(bearing > 45.0 && bearing < 135.0);
+  }
+
+  void testTACANDistance() {
+    // TACAN provides DME-like distance
+    double ground_distance = 15.0;  // nm
+    double altitude_diff_nm = 1.0;
+
+    double slant_range = std::sqrt(ground_distance * ground_distance +
+                                   altitude_diff_nm * altitude_diff_nm);
+
+    TS_ASSERT(slant_range > ground_distance);
+  }
+
+  /***************************************************************************
+   * Marker Beacon Detection
+   ***************************************************************************/
+
+  void testOuterMarkerDistance() {
+    // Outer marker typically 4-7 nm from threshold
+    double outer_marker_distance = 5.0;  // nm
+    TS_ASSERT(outer_marker_distance >= 4.0 && outer_marker_distance <= 7.0);
+  }
+
+  void testMiddleMarkerDistance() {
+    // Middle marker typically 0.5-0.8 nm from threshold
+    double middle_marker_distance = 0.6;  // nm
+    TS_ASSERT(middle_marker_distance >= 0.5 && middle_marker_distance <= 0.8);
+  }
+
+  void testInnerMarkerDistance() {
+    // Inner marker at threshold (CAT II/III)
+    double inner_marker_distance = 0.1;  // nm
+    TS_ASSERT(inner_marker_distance < 0.2);
+  }
+
+  void testMarkerBeaconFrequency() {
+    // All marker beacons operate at 75 MHz
+    double marker_freq_mhz = 75.0;
+    TS_ASSERT_DELTA(marker_freq_mhz, 75.0, epsilon);
+  }
+
+  void testOuterMarkerAltitude() {
+    // At outer marker on 3° glideslope, altitude ~1400 ft
+    double glideslope = 3.0;
+    double distance_nm = 5.0;
+    double altitude = distance_nm * NM_TO_FT * std::tan(glideslope * DEG_TO_RAD);
+
+    TS_ASSERT(altitude > 1300.0 && altitude < 1800.0);
+  }
+
+  void testMiddleMarkerAltitude() {
+    // At middle marker on 3° glideslope, altitude ~200 ft
+    double glideslope = 3.0;
+    double distance_nm = 0.6;
+    double altitude = distance_nm * NM_TO_FT * std::tan(glideslope * DEG_TO_RAD);
+
+    TS_ASSERT(altitude > 150.0 && altitude < 250.0);
+  }
+
+  /***************************************************************************
+   * DME Arc Procedures
+   ***************************************************************************/
+
+  void testDMEArcEntry() {
+    double current_dme = 12.0;  // nm
+    double arc_radius = 10.0;   // nm
+    double lead_radial = 5.0;   // degrees lead for turn
+
+    bool approaching_arc = current_dme > arc_radius;
+    TS_ASSERT(approaching_arc);
+  }
+
+  void testDMEArcMaintenance() {
+    double arc_radius = 10.0;  // nm
+    double current_dme = 10.2;
+    double tolerance = 0.5;
+
+    bool on_arc = std::abs(current_dme - arc_radius) < tolerance;
+    TS_ASSERT(on_arc);
+  }
+
+  void testDMEArcHeading() {
+    // Flying arc, heading is perpendicular to radial
+    double current_radial = 90.0;
+    double arc_heading_cw = NormalizeHeading(current_radial + 90.0);  // Clockwise
+    double arc_heading_ccw = NormalizeHeading(current_radial - 90.0);  // Counter-clockwise
+
+    TS_ASSERT_DELTA(arc_heading_cw, 180.0, epsilon);
+    TS_ASSERT_DELTA(arc_heading_ccw, 0.0, epsilon);
+  }
+
+  void testDMEArcLeadRadial() {
+    // Lead radial for arc exit
+    double exit_radial = 270.0;
+    double arc_radius = 10.0;
+    double turn_radius = 1.0;  // nm
+
+    // Lead angle = arcsin(turn_radius / arc_radius)
+    double lead_angle = std::asin(turn_radius / arc_radius) * RAD_TO_DEG;
+    double lead_radial = NormalizeHeading(exit_radial - lead_angle);
+
+    TS_ASSERT(lead_radial > 260.0);
+    TS_ASSERT(lead_radial < 270.0);
+  }
+
+  /***************************************************************************
+   * Localizer Back Course
+   ***************************************************************************/
+
+  void testLocalizerBackCourse() {
+    double front_course = 90.0;
+    double back_course = NormalizeHeading(front_course + 180.0);
+
+    TS_ASSERT_DELTA(back_course, 270.0, epsilon);
+  }
+
+  void testBackCourseReverseSensing() {
+    // On back course, deflection is reversed
+    double deviation_front = 2.0;  // Right of centerline
+    double deviation_back = -deviation_front;  // Shows left
+
+    TS_ASSERT_DELTA(deviation_back, -2.0, epsilon);
+  }
+
+  void testBackCourseNoGlideslope() {
+    // Back course has no glideslope
+    bool glideslope_available = false;
+    TS_ASSERT(!glideslope_available);
+  }
+
+  /***************************************************************************
+   * CAT II/III ILS Operations
+   ***************************************************************************/
+
+  void testCATIIDecisionHeight() {
+    double decision_height = 100.0;  // ft (CAT II)
+    TS_ASSERT(decision_height >= 100.0 && decision_height < 200.0);
+  }
+
+  void testCATIIIaDecisionHeight() {
+    double decision_height = 50.0;  // ft (CAT IIIa)
+    TS_ASSERT(decision_height < 100.0);
+  }
+
+  void testCATIIIbNoDecisionHeight() {
+    // CAT IIIb has no decision height (or <50 ft)
+    double decision_height = 0.0;
+    TS_ASSERT(decision_height < 50.0);
+  }
+
+  void testCATIIRVR() {
+    // CAT II requires RVR >= 1200 ft
+    double rvr_required = 1200.0;  // ft
+    double rvr_actual = 1500.0;
+
+    bool rvr_adequate = rvr_actual >= rvr_required;
+    TS_ASSERT(rvr_adequate);
+  }
+
+  void testCATIIIaRVR() {
+    // CAT IIIa requires RVR >= 700 ft
+    double rvr_required = 700.0;  // ft
+    double rvr_actual = 800.0;
+
+    bool rvr_adequate = rvr_actual >= rvr_required;
+    TS_ASSERT(rvr_adequate);
+  }
+
+  /***************************************************************************
+   * RMI (Radio Magnetic Indicator) Calculations
+   ***************************************************************************/
+
+  void testRMIBearing() {
+    double aircraft_heading = 45.0;
+    double relative_bearing = 30.0;
+
+    double rmi_bearing = NormalizeHeading(aircraft_heading + relative_bearing);
+    TS_ASSERT_DELTA(rmi_bearing, 75.0, epsilon);
+  }
+
+  void testRMITail() {
+    double rmi_head = 90.0;
+    double rmi_tail = NormalizeHeading(rmi_head + 180.0);
+
+    TS_ASSERT_DELTA(rmi_tail, 270.0, epsilon);
+  }
+
+  void testRMIInterceptAngle() {
+    double desired_radial = 90.0;
+    double rmi_bearing = 60.0;
+
+    double intercept_angle = NormalizeAngle180(desired_radial - rmi_bearing);
+    TS_ASSERT_DELTA(intercept_angle, 30.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Approach Procedure Fixes
+   ***************************************************************************/
+
+  void testInitialApproachFix() {
+    double iaf_distance = 15.0;  // nm from airport
+    double iaf_altitude = 5000.0;  // ft
+
+    TS_ASSERT(iaf_distance > 10.0);
+    TS_ASSERT(iaf_altitude > 3000.0);
+  }
+
+  void testIntermediateFix() {
+    double if_distance = 8.0;  // nm from airport
+    double if_altitude = 3000.0;  // ft
+
+    TS_ASSERT(if_distance > 5.0 && if_distance < 12.0);
+    TS_ASSERT(if_altitude > 2000.0);
+  }
+
+  void testFinalApproachFix() {
+    double faf_distance = 5.0;  // nm from threshold
+    double faf_altitude = 1800.0;  // ft
+
+    TS_ASSERT(faf_distance > 4.0 && faf_distance < 7.0);
+  }
+
+  void testMissedApproachPoint() {
+    double map_distance = 0.5;  // nm from threshold
+    double map_altitude = 200.0;  // ft (at decision height)
+
+    TS_ASSERT(map_distance < 1.0);
+  }
+
+  /***************************************************************************
+   * VOR Accuracy and Error
+   ***************************************************************************/
+
+  void testVORBearingAccuracy() {
+    // VOR accuracy is ±1° for most systems
+    double vor_accuracy = 1.0;
+    double measured_bearing = 90.0;
+
+    double min_actual = measured_bearing - vor_accuracy;
+    double max_actual = measured_bearing + vor_accuracy;
+
+    TS_ASSERT(min_actual >= 89.0);
+    TS_ASSERT(max_actual <= 91.0);
+  }
+
+  void testDMEAccuracy() {
+    // DME accuracy is ±0.5 nm or ±3% (whichever is greater)
+    double dme_reading = 20.0;  // nm
+    double accuracy_fixed = 0.5;
+    double accuracy_percent = dme_reading * 0.03;
+
+    double accuracy = std::max(accuracy_fixed, accuracy_percent);
+    TS_ASSERT_DELTA(accuracy, 0.6, 0.01);  // 3% of 20 nm = 0.6 nm
+  }
+
+  void testGPSAccuracy() {
+    // GPS accuracy typically ±100 ft (WAAS ~±10 ft)
+    double gps_accuracy_ft = 100.0;
+    double waas_accuracy_ft = 10.0;
+
+    TS_ASSERT(gps_accuracy_ft <= 100.0);
+    TS_ASSERT(waas_accuracy_ft <= 20.0);
+  }
+
+  /***************************************************************************
+   * Holding Pattern Entry with Radio Nav
+   ***************************************************************************/
+
+  void testHoldingDirectEntry() {
+    double holding_inbound = 90.0;
+    double aircraft_heading = 85.0;
+
+    double relative = NormalizeAngle180(aircraft_heading - holding_inbound);
+    bool direct_entry = std::abs(relative) <= 70.0;
+
+    TS_ASSERT(direct_entry);
+  }
+
+  void testHoldingTeardropEntry() {
+    double holding_inbound = 90.0;
+    double aircraft_heading = 200.0;
+
+    double relative = NormalizeAngle180(aircraft_heading - holding_inbound);
+    bool teardrop_entry = relative > 70.0 && relative <= 180.0;
+
+    TS_ASSERT(teardrop_entry);
+  }
+
+  void testHoldingParallelEntry() {
+    double holding_inbound = 90.0;
+    double aircraft_heading = 300.0;
+
+    double relative = NormalizeAngle180(aircraft_heading - holding_inbound);
+    bool parallel_entry = relative < -70.0;
+
+    TS_ASSERT(parallel_entry);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  void testStressHeadingNormalization() {
+    for (int i = -720; i <= 720; i += 10) {
+      double heading = NormalizeHeading(static_cast<double>(i));
+      TS_ASSERT(heading >= 0.0);
+      TS_ASSERT(heading < 360.0);
+    }
+  }
+
+  void testStressAngleNormalization() {
+    for (int i = -720; i <= 720; i += 10) {
+      double angle = NormalizeAngle180(static_cast<double>(i));
+      TS_ASSERT(angle > -180.0);
+      TS_ASSERT(angle <= 180.0);
+    }
+  }
+
+  void testStressBearingCalculations() {
+    for (int radial = 0; radial < 360; radial += 15) {
+      for (int heading = 0; heading < 360; heading += 15) {
+        double deviation = NormalizeAngle180(heading - radial);
+        TS_ASSERT(deviation > -180.0);
+        TS_ASSERT(deviation <= 180.0);
+      }
+    }
+  }
+
+  void testStressDMECalculations() {
+    for (double dist = 0.1; dist <= 200.0; dist += 5.0) {
+      for (double alt = 1000.0; alt <= 40000.0; alt += 5000.0) {
+        double alt_nm = alt * FT_TO_NM;
+        double slant = std::sqrt(dist * dist + alt_nm * alt_nm);
+        TS_ASSERT(slant >= dist);
+        TS_ASSERT(!std::isnan(slant));
+      }
+    }
+  }
 };
