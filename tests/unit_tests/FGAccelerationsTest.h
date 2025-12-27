@@ -1850,4 +1850,113 @@ public:
     TS_ASSERT_DELTA(totalMoments(2), appliedMoment(2), epsilon);
     TS_ASSERT_DELTA(totalMoments(3), appliedMoment(3), epsilon);
   }
+
+  /***************************************************************************
+   * Model Identity Tests
+   ***************************************************************************/
+
+  void testGetName() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+    TS_ASSERT(!accel->GetName().empty());
+  }
+
+  void testGetExec() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+    TS_ASSERT(accel->GetExec() == &fdmex);
+  }
+
+  void testSetRate() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+    accel->SetRate(3);
+    TS_ASSERT_EQUALS(accel->GetRate(), 3u);
+  }
+
+  void testRateZero() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+    accel->SetRate(0);
+    TS_ASSERT_EQUALS(accel->GetRate(), 0u);
+  }
+
+  /***************************************************************************
+   * Multiple Instance Tests
+   ***************************************************************************/
+
+  void testMultipleFDMExecInstances() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto a1 = fdmex1.GetAccelerations();
+    auto a2 = fdmex2.GetAccelerations();
+
+    TS_ASSERT(a1 != a2);
+    TS_ASSERT(a1->GetExec() == &fdmex1);
+    TS_ASSERT(a2->GetExec() == &fdmex2);
+  }
+
+  void testIndependentRates() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto a1 = fdmex1.GetAccelerations();
+    auto a2 = fdmex2.GetAccelerations();
+
+    a1->SetRate(2);
+    a2->SetRate(5);
+
+    TS_ASSERT_EQUALS(a1->GetRate(), 2u);
+    TS_ASSERT_EQUALS(a2->GetRate(), 5u);
+  }
+
+  /***************************************************************************
+   * Stress and Consistency Tests
+   ***************************************************************************/
+
+  void testStressRapidRateChanges() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    for (unsigned int i = 0; i < 100; i++) {
+      accel->SetRate(i % 10);
+      TS_ASSERT_EQUALS(accel->GetRate(), i % 10);
+    }
+  }
+
+  void testInitModelConsistency() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    TS_ASSERT(accel->InitModel());
+    TS_ASSERT(accel->InitModel());
+    TS_ASSERT(accel->InitModel());
+  }
+
+  void testForcesVectorConsistency() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 testForce(100.0, 200.0, 300.0);
+    accel->in.Force = testForce;
+
+    const FGColumnVector3& forces = accel->GetForces();
+    TS_ASSERT_DELTA(forces(1), testForce(1), epsilon);
+    TS_ASSERT_DELTA(forces(2), testForce(2), epsilon);
+    TS_ASSERT_DELTA(forces(3), testForce(3), epsilon);
+  }
+
+  void testMomentsVectorConsistency() {
+    FGFDMExec fdmex;
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 testMoment(50.0, 100.0, 150.0);
+    accel->in.Moment = testMoment;
+
+    const FGColumnVector3& moments = accel->GetMoments();
+    TS_ASSERT_DELTA(moments(1), testMoment(1), epsilon);
+    TS_ASSERT_DELTA(moments(2), testMoment(2), epsilon);
+    TS_ASSERT_DELTA(moments(3), testMoment(3), epsilon);
+  }
 };
