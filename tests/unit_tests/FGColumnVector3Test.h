@@ -814,4 +814,416 @@ public:
     TS_ASSERT_DELTA(v.Magnitude(2, 3), sqrt(16.0 + 144.0), 1e-9);  // sqrt(4^2 + 12^2)
     TS_ASSERT_EQUALS(v.Magnitude(), 13.0);  // Full magnitude = 13
   }
+
+  /***************************************************************************
+   * Unary Negation Tests
+   ***************************************************************************/
+
+  void testUnaryNegation(void) {
+    JSBSim::FGColumnVector3 v(1.0, -2.0, 3.0);
+    JSBSim::FGColumnVector3 neg = -1.0 * v;
+
+    TS_ASSERT_EQUALS(neg(1), -1.0);
+    TS_ASSERT_EQUALS(neg(2), 2.0);
+    TS_ASSERT_EQUALS(neg(3), -3.0);
+  }
+
+  void testDoubleNegation(void) {
+    JSBSim::FGColumnVector3 v(1.0, -2.0, 3.0);
+    JSBSim::FGColumnVector3 doubleNeg = -1.0 * (-1.0 * v);
+
+    TS_ASSERT_EQUALS(doubleNeg(1), v(1));
+    TS_ASSERT_EQUALS(doubleNeg(2), v(2));
+    TS_ASSERT_EQUALS(doubleNeg(3), v(3));
+  }
+
+  void testNegationZeroVector(void) {
+    JSBSim::FGColumnVector3 v(0.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 neg = -1.0 * v;
+
+    TS_ASSERT_EQUALS(neg(1), 0.0);
+    TS_ASSERT_EQUALS(neg(2), 0.0);
+    TS_ASSERT_EQUALS(neg(3), 0.0);
+  }
+
+  /***************************************************************************
+   * Algebraic Property Tests
+   ***************************************************************************/
+
+  void testVectorAdditionCommutative(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    JSBSim::FGColumnVector3 sum1 = v1 + v2;
+    JSBSim::FGColumnVector3 sum2 = v2 + v1;
+
+    TS_ASSERT_EQUALS(sum1, sum2);
+  }
+
+  void testVectorAdditionAssociative(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+    JSBSim::FGColumnVector3 v3(7.0, 8.0, 9.0);
+
+    JSBSim::FGColumnVector3 left = (v1 + v2) + v3;
+    JSBSim::FGColumnVector3 right = v1 + (v2 + v3);
+
+    TS_ASSERT_DELTA(left(1), right(1), 1e-12);
+    TS_ASSERT_DELTA(left(2), right(2), 1e-12);
+    TS_ASSERT_DELTA(left(3), right(3), 1e-12);
+  }
+
+  void testDotProductCommutative(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    TS_ASSERT_EQUALS(DotProduct(v1, v2), DotProduct(v2, v1));
+  }
+
+  void testDotProductDistributive(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+    JSBSim::FGColumnVector3 v3(7.0, 8.0, 9.0);
+
+    double left = DotProduct(v1, v2 + v3);
+    double right = DotProduct(v1, v2) + DotProduct(v1, v3);
+
+    TS_ASSERT_DELTA(left, right, 1e-12);
+  }
+
+  void testCrossProductAnticommutative(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    JSBSim::FGColumnVector3 cross1 = v1 * v2;
+    JSBSim::FGColumnVector3 cross2 = v2 * v1;
+
+    TS_ASSERT_DELTA(cross1(1), -cross2(1), 1e-12);
+    TS_ASSERT_DELTA(cross1(2), -cross2(2), 1e-12);
+    TS_ASSERT_DELTA(cross1(3), -cross2(3), 1e-12);
+  }
+
+  void testCrossProductDistributive(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+    JSBSim::FGColumnVector3 v3(7.0, 8.0, 9.0);
+
+    JSBSim::FGColumnVector3 left = v1 * (v2 + v3);
+    JSBSim::FGColumnVector3 right = (v1 * v2) + (v1 * v3);
+
+    TS_ASSERT_DELTA(left(1), right(1), 1e-12);
+    TS_ASSERT_DELTA(left(2), right(2), 1e-12);
+    TS_ASSERT_DELTA(left(3), right(3), 1e-12);
+  }
+
+  /***************************************************************************
+   * Cross Product Magnitude and Properties
+   ***************************************************************************/
+
+  void testCrossProductMagnitude(void) {
+    // |a × b| = |a||b|sin(θ) - for perpendicular vectors, sin(90°) = 1
+    JSBSim::FGColumnVector3 v1(3.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 v2(0.0, 4.0, 0.0);
+
+    JSBSim::FGColumnVector3 cross = v1 * v2;
+
+    // For perpendicular vectors: |a × b| = |a| * |b|
+    double expectedMag = v1.Magnitude() * v2.Magnitude();
+    TS_ASSERT_DELTA(cross.Magnitude(), expectedMag, 1e-9);
+  }
+
+  void testCrossProductPerpendicularity(void) {
+    // Cross product is perpendicular to both input vectors
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    JSBSim::FGColumnVector3 cross = v1 * v2;
+
+    // Dot product with each input should be zero
+    TS_ASSERT_DELTA(DotProduct(cross, v1), 0.0, 1e-9);
+    TS_ASSERT_DELTA(DotProduct(cross, v2), 0.0, 1e-9);
+  }
+
+  void testCrossProductWithZeroVector(void) {
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 zero(0.0, 0.0, 0.0);
+
+    JSBSim::FGColumnVector3 cross = v * zero;
+
+    TS_ASSERT_EQUALS(cross(1), 0.0);
+    TS_ASSERT_EQUALS(cross(2), 0.0);
+    TS_ASSERT_EQUALS(cross(3), 0.0);
+  }
+
+  /***************************************************************************
+   * Scalar Triple Product Tests
+   ***************************************************************************/
+
+  void testScalarTripleProduct(void) {
+    // a · (b × c) = volume of parallelepiped
+    JSBSim::FGColumnVector3 a(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 b(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 c(0.0, 0.0, 1.0);
+
+    double volume = DotProduct(a, b * c);
+
+    // For unit cube, volume = 1
+    TS_ASSERT_DELTA(volume, 1.0, 1e-9);
+  }
+
+  void testScalarTripleProductCyclicProperty(void) {
+    // a · (b × c) = b · (c × a) = c · (a × b)
+    JSBSim::FGColumnVector3 a(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 b(4.0, 5.0, 6.0);
+    JSBSim::FGColumnVector3 c(7.0, 8.0, 10.0);  // Not coplanar
+
+    double v1 = DotProduct(a, b * c);
+    double v2 = DotProduct(b, c * a);
+    double v3 = DotProduct(c, a * b);
+
+    TS_ASSERT_DELTA(v1, v2, 1e-9);
+    TS_ASSERT_DELTA(v2, v3, 1e-9);
+  }
+
+  void testScalarTripleProductCoplanarVectors(void) {
+    // Coplanar vectors have zero scalar triple product
+    JSBSim::FGColumnVector3 a(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 b(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 c(1.0, 1.0, 0.0);  // In xy-plane
+
+    double volume = DotProduct(a, b * c);
+
+    TS_ASSERT_DELTA(volume, 0.0, 1e-9);
+  }
+
+  /***************************************************************************
+   * Linear Combination Tests
+   ***************************************************************************/
+
+  void testLinearCombinationBasisVectors(void) {
+    JSBSim::FGColumnVector3 X(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 Y(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 Z(0.0, 0.0, 1.0);
+
+    // Any vector can be expressed as linear combination of basis
+    JSBSim::FGColumnVector3 v = 3.0 * X + 4.0 * Y + 5.0 * Z;
+
+    TS_ASSERT_EQUALS(v(1), 3.0);
+    TS_ASSERT_EQUALS(v(2), 4.0);
+    TS_ASSERT_EQUALS(v(3), 5.0);
+  }
+
+  void testLinearCombinationIdentity(void) {
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 3.0);
+
+    // v = 1*v + 0*v
+    JSBSim::FGColumnVector3 result = 1.0 * v + 0.0 * v;
+
+    TS_ASSERT_EQUALS(result, v);
+  }
+
+  void testLinearCombinationZero(void) {
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 3.0);
+
+    // 0 = v + (-1)*v
+    JSBSim::FGColumnVector3 result = v + (-1.0) * v;
+
+    TS_ASSERT_EQUALS(result(1), 0.0);
+    TS_ASSERT_EQUALS(result(2), 0.0);
+    TS_ASSERT_EQUALS(result(3), 0.0);
+  }
+
+  /***************************************************************************
+   * Magnitude Squared (via dot product) Tests
+   ***************************************************************************/
+
+  void testMagnitudeSquaredFromDotProduct(void) {
+    JSBSim::FGColumnVector3 v(3.0, 4.0, 0.0);
+
+    // |v|² = v · v
+    double magSquared = DotProduct(v, v);
+    double mag = v.Magnitude();
+
+    TS_ASSERT_DELTA(magSquared, mag * mag, 1e-12);
+    TS_ASSERT_EQUALS(magSquared, 25.0);
+  }
+
+  void testMagnitudeFromDotProduct(void) {
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 2.0);
+
+    // |v| = sqrt(v · v)
+    double mag = sqrt(DotProduct(v, v));
+
+    TS_ASSERT_DELTA(mag, v.Magnitude(), 1e-12);
+    TS_ASSERT_DELTA(mag, 3.0, 1e-12);
+  }
+
+  /***************************************************************************
+   * Flight Simulation Specific Tests
+   ***************************************************************************/
+
+  void testVelocityMagnitude(void) {
+    // Typical aircraft velocity components (ft/s)
+    JSBSim::FGColumnVector3 velocity(500.0, 10.0, 5.0);
+
+    double speed = velocity.Magnitude();
+
+    // Speed should be approximately 500 ft/s (slightly more due to side/vertical)
+    TS_ASSERT(speed > 500.0);
+    TS_ASSERT(speed < 510.0);
+  }
+
+  void testAccelerationDecomposition(void) {
+    // Given total acceleration
+    JSBSim::FGColumnVector3 accel(32.2, 0.0, -5.0);  // ft/s²
+
+    // Decompose into forward and down components
+    double forward = accel(1);
+    double down = -accel(3);  // Positive down
+
+    TS_ASSERT_EQUALS(forward, 32.2);
+    TS_ASSERT_EQUALS(down, 5.0);
+  }
+
+  void testMomentArmCrossProduct(void) {
+    // Force application point relative to CG
+    JSBSim::FGColumnVector3 arm(10.0, 0.0, 0.0);  // 10 ft forward
+    // Applied force
+    JSBSim::FGColumnVector3 force(0.0, 0.0, -1000.0);  // 1000 lbs down
+
+    // Moment = arm × force
+    // (10,0,0) × (0,0,-1000) = (0*(-1000)-0*0, 0*0-10*(-1000), 10*0-0*0) = (0, 10000, 0)
+    JSBSim::FGColumnVector3 moment = arm * force;
+
+    // Should produce pitching moment about Y-axis
+    TS_ASSERT_DELTA(moment(1), 0.0, 1e-9);       // No roll
+    TS_ASSERT_DELTA(moment(2), 10000.0, 1e-9);  // Pitch (nose up from forward force application)
+    TS_ASSERT_DELTA(moment(3), 0.0, 1e-9);       // No yaw
+  }
+
+  void testWindVectorAddition(void) {
+    // Aircraft velocity relative to air
+    JSBSim::FGColumnVector3 tas(400.0, 0.0, 0.0);  // True airspeed
+    // Wind velocity
+    JSBSim::FGColumnVector3 wind(-50.0, 20.0, 0.0);  // Headwind with crosswind
+
+    // Ground speed = TAS + wind
+    JSBSim::FGColumnVector3 groundSpeed = tas + wind;
+
+    TS_ASSERT_EQUALS(groundSpeed(1), 350.0);  // Reduced forward
+    TS_ASSERT_EQUALS(groundSpeed(2), 20.0);   // Drift
+    TS_ASSERT_EQUALS(groundSpeed(3), 0.0);
+  }
+
+  /***************************************************************************
+   * Edge Cases and Numerical Precision
+   ***************************************************************************/
+
+  void testVeryLargeComponents(void) {
+    JSBSim::FGColumnVector3 v(1e15, 1e15, 1e15);
+
+    double mag = v.Magnitude();
+
+    TS_ASSERT(std::isfinite(mag));
+    TS_ASSERT_DELTA(mag, sqrt(3.0) * 1e15, 1e6);
+  }
+
+  void testMixedMagnitudeComponents(void) {
+    // Very different scales
+    JSBSim::FGColumnVector3 v(1e10, 1.0, 1e-10);
+
+    double mag = v.Magnitude();
+
+    // Should be dominated by largest component
+    TS_ASSERT_DELTA(mag, 1e10, 1.0);
+  }
+
+  void testMultiplicationChain(void) {
+    JSBSim::FGColumnVector3 v(1.0, 2.0, 3.0);
+
+    // (2 * 3 * 4) * v = 24 * v
+    JSBSim::FGColumnVector3 result = 2.0 * (3.0 * (4.0 * v));
+
+    TS_ASSERT_DELTA(result(1), 24.0, 1e-12);
+    TS_ASSERT_DELTA(result(2), 48.0, 1e-12);
+    TS_ASSERT_DELTA(result(3), 72.0, 1e-12);
+  }
+
+  void testAdditionSubtractionChain(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+    JSBSim::FGColumnVector3 v3(7.0, 8.0, 9.0);
+
+    // (v1 + v2) - v3 + v1
+    JSBSim::FGColumnVector3 result = (v1 + v2) - v3 + v1;
+
+    TS_ASSERT_EQUALS(result(1), 1.0 + 4.0 - 7.0 + 1.0);  // -1
+    TS_ASSERT_EQUALS(result(2), 2.0 + 5.0 - 8.0 + 2.0);  // 1
+    TS_ASSERT_EQUALS(result(3), 3.0 + 6.0 - 9.0 + 3.0);  // 3
+  }
+
+  void testUnitVectorAfterNormalize(void) {
+    JSBSim::FGColumnVector3 v(100.0, -200.0, 300.0);
+    v.Normalize();
+
+    // Magnitude should be exactly 1
+    TS_ASSERT_DELTA(v.Magnitude(), 1.0, 1e-12);
+
+    // Components should be consistent
+    double sumSquared = v(1)*v(1) + v(2)*v(2) + v(3)*v(3);
+    TS_ASSERT_DELTA(sumSquared, 1.0, 1e-12);
+  }
+
+  void testNormalizePreservesDirection(void) {
+    JSBSim::FGColumnVector3 v(3.0, 4.0, 0.0);
+    double ratio12 = v(1) / v(2);
+
+    v.Normalize();
+
+    // Ratio between components should be preserved
+    TS_ASSERT_DELTA(v(1) / v(2), ratio12, 1e-12);
+  }
+
+  /***************************************************************************
+   * Vector Identity Tests
+   ***************************************************************************/
+
+  void testTriangleInequality(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    double sum_mag = (v1 + v2).Magnitude();
+    double mag_sum = v1.Magnitude() + v2.Magnitude();
+
+    // |v1 + v2| <= |v1| + |v2|
+    TS_ASSERT(sum_mag <= mag_sum + 1e-9);
+  }
+
+  void testCauchySchwarzInequality(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    double dot = fabs(DotProduct(v1, v2));
+    double product = v1.Magnitude() * v2.Magnitude();
+
+    // |v1 · v2| <= |v1| * |v2|
+    TS_ASSERT(dot <= product + 1e-9);
+  }
+
+  void testLagrangeIdentity(void) {
+    // |a × b|² = |a|²|b|² - (a·b)²
+    JSBSim::FGColumnVector3 a(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 b(4.0, 5.0, 6.0);
+
+    JSBSim::FGColumnVector3 cross = a * b;
+    double crossMagSq = DotProduct(cross, cross);
+
+    double aMagSq = DotProduct(a, a);
+    double bMagSq = DotProduct(b, b);
+    double dotAB = DotProduct(a, b);
+
+    double expected = aMagSq * bMagSq - dotAB * dotAB;
+
+    TS_ASSERT_DELTA(crossMagSq, expected, 1e-9);
+  }
 };
