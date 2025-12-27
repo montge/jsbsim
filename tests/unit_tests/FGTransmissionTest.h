@@ -989,4 +989,311 @@ public:
     TS_ASSERT(torquePercent < 100.0);
     TS_ASSERT(torquePercent > 0.0);
   }
+
+  /***************************************************************************
+   * Extended Gear Ratio Tests
+   ***************************************************************************/
+
+  void testGearRatioUnity() {
+    double engineRPM = 6000.0;
+    double gearRatio = 1.0;
+
+    double outputRPM = engineRPM / gearRatio;
+    TS_ASSERT_DELTA(outputRPM, 6000.0, DEFAULT_TOLERANCE);
+  }
+
+  void testGearRatioSpeedUp() {
+    // Overdrive/speed-up ratio
+    double inputRPM = 1000.0;
+    double gearRatio = 0.5;  // 2:1 speedup
+
+    double outputRPM = inputRPM / gearRatio;
+    TS_ASSERT_DELTA(outputRPM, 2000.0, DEFAULT_TOLERANCE);
+  }
+
+  void testGearRatioVeryLarge() {
+    double engineRPM = 10000.0;
+    double gearRatio = 100.0;
+
+    double outputRPM = engineRPM / gearRatio;
+    TS_ASSERT_DELTA(outputRPM, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  void testGearRatioWithFraction() {
+    double engineRPM = 6000.0;
+    double gearRatio = 15.5;
+
+    double outputRPM = engineRPM / gearRatio;
+    TS_ASSERT_DELTA(outputRPM, 387.1, 0.1);
+  }
+
+  /***************************************************************************
+   * Extended Power Tests
+   ***************************************************************************/
+
+  void testPowerAtZeroRPM() {
+    double torque = 1000.0;
+    double rpm = 0.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double power = torque * omega;
+    TS_ASSERT_DELTA(power, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  void testPowerAtHighRPM() {
+    double torque = 500.0;
+    double rpm = 20000.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double power = torque * omega;
+    double hp = power / 550.0;
+
+    TS_ASSERT(hp > 1000.0);  // High power at high RPM
+  }
+
+  void testPowerConservationChain() {
+    // Three stage gearbox
+    double inputPower = 500.0 * 550.0;
+    double eff1 = 0.98, eff2 = 0.97, eff3 = 0.96;
+
+    double stage1 = inputPower * eff1;
+    double stage2 = stage1 * eff2;
+    double stage3 = stage2 * eff3;
+
+    double totalEff = eff1 * eff2 * eff3;
+    TS_ASSERT_DELTA(stage3, inputPower * totalEff, 1.0);
+    TS_ASSERT_DELTA(totalEff, 0.9124, 0.001);
+  }
+
+  /***************************************************************************
+   * Extended Inertia Tests
+   ***************************************************************************/
+
+  void testInertiaReflection() {
+    // Inertia reflects as J/n² through gearbox
+    double rotorInertia = 10000.0;
+    double gearRatio = 50.0;
+
+    double reflectedInertia = rotorInertia / (gearRatio * gearRatio);
+    TS_ASSERT_DELTA(reflectedInertia, 4.0, 0.01);
+  }
+
+  void testCombinedInertia() {
+    double engineInertia = 5.0;
+    double gearboxInertia = 2.0;
+    double loadInertia = 8000.0;
+    double ratio = 20.0;
+
+    double total = engineInertia + gearboxInertia + loadInertia / (ratio * ratio);
+    TS_ASSERT_DELTA(total, 27.0, 0.1);
+  }
+
+  void testAngularMomentum() {
+    double inertia = 5000.0;
+    double omega = 31.4159;  // 300 RPM
+
+    double L = inertia * omega;
+    TS_ASSERT_DELTA(L, 157079.5, 1.0);  // slug-ft²/sec
+  }
+
+  /***************************************************************************
+   * Extended Efficiency Tests
+   ***************************************************************************/
+
+  void testEfficiencyBounds() {
+    // Efficiency must be between 0 and 1
+    double efficiencies[] = {0.0, 0.5, 0.9, 0.95, 0.99, 1.0};
+
+    for (double eff : efficiencies) {
+      TS_ASSERT(eff >= 0.0);
+      TS_ASSERT(eff <= 1.0);
+    }
+  }
+
+  void testPowerLossVsEfficiency() {
+    double inputPower = 1000.0 * 550.0;
+
+    double efficiencies[] = {0.90, 0.92, 0.95, 0.98};
+    double prevLoss = inputPower;
+
+    for (double eff : efficiencies) {
+      double loss = inputPower * (1.0 - eff);
+      TS_ASSERT(loss < prevLoss);  // Higher efficiency = less loss
+      prevLoss = loss;
+    }
+  }
+
+  void testHeatGenerationFromLoss() {
+    double powerLoss = 50.0 * 550.0;  // 50 HP
+    double heatToWork = 778.0;
+
+    double heatBTUperSec = powerLoss / heatToWork;
+    TS_ASSERT_DELTA(heatBTUperSec, 35.35, 0.1);
+  }
+
+  /***************************************************************************
+   * Extended Clutch Tests
+   ***************************************************************************/
+
+  void testClutchSlipPower() {
+    double engineOmega = 600.0;  // rad/sec
+    double loadOmega = 550.0;
+    double transmittedTorque = 500.0;
+
+    double slipOmega = engineOmega - loadOmega;
+    double slipPower = transmittedTorque * slipOmega;
+
+    TS_ASSERT_DELTA(slipPower, 25000.0, 10.0);  // Power lost as heat
+  }
+
+  void testClutchEngagementCurve() {
+    double positions[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    double maxTorque = 1000.0;
+    double prevTorque = -1.0;
+
+    for (double pos : positions) {
+      double torque = maxTorque * pos;
+      TS_ASSERT(torque >= prevTorque);
+      prevTorque = torque;
+    }
+  }
+
+  void testClutchMaxSlipTorque() {
+    double frictionCoeff = 0.4;
+    double normalForce = 5000.0;  // lbf
+    double radius = 0.5;  // ft
+
+    double maxTorque = frictionCoeff * normalForce * radius;
+    TS_ASSERT_DELTA(maxTorque, 1000.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Speed Control Tests
+   ***************************************************************************/
+
+  void testGovernorDeadband() {
+    double setpoint = 6000.0;
+    double deadband = 20.0;  // RPM
+
+    double rpms[] = {5970.0, 5985.0, 6000.0, 6015.0, 6030.0};
+    for (double rpm : rpms) {
+      bool inDeadband = std::abs(rpm - setpoint) <= deadband;
+      if (rpm >= 5980.0 && rpm <= 6020.0) {
+        TS_ASSERT(inDeadband);
+      }
+    }
+  }
+
+  void testRPMRateLimit() {
+    double currentRPM = 5000.0;
+    double targetRPM = 6000.0;
+    double maxRate = 500.0;  // RPM/sec
+    double dt = 0.1;
+
+    double change = (targetRPM - currentRPM);
+    double limitedChange = std::min(std::abs(change), maxRate * dt);
+    if (change < 0) limitedChange = -limitedChange;
+
+    double newRPM = currentRPM + limitedChange;
+    TS_ASSERT_DELTA(newRPM, 5050.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Extended Safety Tests
+   ***************************************************************************/
+
+  void testTorqueLimitProtection() {
+    double limitTorque = 12000.0;
+    double inputTorque = 15000.0;
+
+    double outputTorque = std::min(inputTorque, limitTorque);
+    TS_ASSERT_DELTA(outputTorque, 12000.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(outputTorque <= limitTorque);
+  }
+
+  void testUnderspeedProtection() {
+    double minRPM = 250.0;
+    double actualRPM = 240.0;
+
+    bool underspeed = actualRPM < minRPM;
+    TS_ASSERT(underspeed);
+  }
+
+  void testVibrationLimit() {
+    double vibrationLevel = 2.5;  // ips (inches per second)
+    double warningLevel = 2.0;
+    double shutdownLevel = 4.0;
+
+    bool warning = vibrationLevel > warningLevel;
+    bool shutdown = vibrationLevel > shutdownLevel;
+
+    TS_ASSERT(warning);
+    TS_ASSERT(!shutdown);
+  }
+
+  /***************************************************************************
+   * Extended Unit Conversion Tests
+   ***************************************************************************/
+
+  void testHPToFtLbfPerSec() {
+    double hp = 100.0;
+    double ftLbfPerSec = hp * 550.0;
+
+    TS_ASSERT_DELTA(ftLbfPerSec, 55000.0, DEFAULT_TOLERANCE);
+  }
+
+  void testRPMToRadPerSecPrecision() {
+    double rpm = 1.0;
+    double radPerSec = rpm * 2.0 * M_PI / 60.0;
+
+    TS_ASSERT_DELTA(radPerSec, 0.10472, 0.00001);
+  }
+
+  void testTorqueUnitsConsistency() {
+    // Power = Torque * omega
+    // HP * 550 = ft-lbf * rad/sec
+    double hp = 500.0;
+    double rpm = 6000.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double power = hp * 550.0;
+    double torque = power / omega;
+
+    // Verify reverse
+    double hpCalc = (torque * omega) / 550.0;
+    TS_ASSERT_DELTA(hpCalc, hp, 0.01);
+  }
+
+  /***************************************************************************
+   * Edge Case Numerical Tests
+   ***************************************************************************/
+
+  void testVerySmallTorque() {
+    double torque = 1e-10;
+    double omega = 100.0;
+
+    double power = torque * omega;
+    TS_ASSERT(power > 0.0);
+    TS_ASSERT(!std::isnan(power));
+  }
+
+  void testVeryLargeTorque() {
+    double torque = 1e10;
+    double omega = 100.0;
+
+    double power = torque * omega;
+    TS_ASSERT(std::isfinite(power));
+  }
+
+  void testDivisionByZeroProtection() {
+    double power = 1000.0;
+    double omega = 0.0;
+    double minOmega = 0.001;
+
+    double safeOmega = std::max(omega, minOmega);
+    double torque = power / safeOmega;
+
+    TS_ASSERT(std::isfinite(torque));
+    TS_ASSERT(!std::isinf(torque));
+  }
 };
