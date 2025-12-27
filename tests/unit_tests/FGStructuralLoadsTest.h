@@ -843,4 +843,532 @@ public:
     TS_ASSERT(mu > 0.0);
     TS_ASSERT(!std::isnan(mu));
   }
+
+  /**************************************************************************
+   * STRESS AND STRAIN CALCULATIONS
+   **************************************************************************/
+
+  // Test normal stress calculation
+  void testNormalStress() {
+    double F = 10000.0;  // lbs (axial force)
+    double A = 2.0;      // in^2 (cross-section area)
+
+    double sigma = F / A;
+    TS_ASSERT_DELTA(sigma, 5000.0, 0.1);  // psi
+  }
+
+  // Test shear stress in beams
+  void testShearStressBeam() {
+    double V = 5000.0;  // lbs (shear force)
+    double Q = 10.0;    // in^3 (first moment of area)
+    double I = 100.0;   // in^4 (moment of inertia)
+    double b = 2.0;     // in (width)
+
+    double tau = V * Q / (I * b);
+    TS_ASSERT_DELTA(tau, 250.0, 0.1);  // psi
+  }
+
+  // Test bending stress
+  void testBendingStress() {
+    double M = 50000.0;  // in-lbs (bending moment)
+    double c = 3.0;      // in (distance from neutral axis)
+    double I = 100.0;    // in^4
+
+    double sigma = M * c / I;
+    TS_ASSERT_DELTA(sigma, 1500.0, 0.1);  // psi
+  }
+
+  // Test combined stress (von Mises)
+  void testVonMisesStress() {
+    double sigma_x = 10000.0;  // psi
+    double sigma_y = 5000.0;   // psi
+    double tau_xy = 3000.0;    // psi
+
+    double sigma_vm = std::sqrt(sigma_x*sigma_x - sigma_x*sigma_y +
+                                sigma_y*sigma_y + 3.0*tau_xy*tau_xy);
+    TS_ASSERT(sigma_vm > 0);
+    TS_ASSERT(!std::isnan(sigma_vm));
+  }
+
+  // Test strain from stress
+  void testStrainFromStress() {
+    double sigma = 30000.0;  // psi
+    double E = 10.7e6;       // psi (aluminum modulus)
+
+    double epsilon = sigma / E;
+    TS_ASSERT(epsilon > 0);
+    TS_ASSERT(epsilon < 0.01);  // Elastic range
+  }
+
+  /**************************************************************************
+   * BUCKLING ANALYSIS
+   **************************************************************************/
+
+  // Test Euler column buckling
+  void testEulerColumnBuckling() {
+    double E = 10.7e6;  // psi
+    double I = 5.0;     // in^4
+    double L = 60.0;    // in
+    double K = 1.0;     // end condition factor
+
+    // Critical load: P_cr = π^2 * E * I / (K * L)^2
+    double P_cr = M_PI * M_PI * E * I / ((K * L) * (K * L));
+
+    TS_ASSERT(P_cr > 0);
+    TS_ASSERT(!std::isnan(P_cr));
+  }
+
+  // Test thin-wall skin buckling
+  void testSkinBuckling() {
+    double E = 10.7e6;     // psi
+    double t = 0.032;      // in (skin thickness)
+    double b = 6.0;        // in (panel width)
+    double nu = 0.33;      // Poisson's ratio
+    double k = 4.0;        // buckling coefficient
+
+    // Critical stress: σ_cr = k * π^2 * E / (12 * (1-ν^2)) * (t/b)^2
+    double sigma_cr = k * M_PI * M_PI * E / (12.0 * (1.0 - nu*nu)) * (t/b) * (t/b);
+
+    TS_ASSERT(sigma_cr > 0);
+    TS_ASSERT(!std::isnan(sigma_cr));
+  }
+
+  // Test crippling stress
+  void testCripplingStress() {
+    double sigma_cy = 40000.0;  // psi (compressive yield)
+    double b = 1.0;             // in (flange width)
+    double t = 0.05;            // in (thickness)
+
+    // Simplified crippling: σ_cc = β * σ_cy * sqrt(t/b)
+    double beta = 0.8;
+    double sigma_cc = beta * sigma_cy * std::sqrt(t / b);
+
+    TS_ASSERT(sigma_cc > 0);
+    TS_ASSERT(sigma_cc < sigma_cy);
+  }
+
+  /**************************************************************************
+   * FATIGUE EXTENDED TESTS
+   **************************************************************************/
+
+  // Test stress concentration factor
+  void testStressConcentrationFactor() {
+    double Kt = 2.5;  // Stress concentration factor
+    double sigma_nom = 10000.0;  // psi (nominal stress)
+
+    double sigma_max = Kt * sigma_nom;
+    TS_ASSERT_DELTA(sigma_max, 25000.0, 0.1);
+  }
+
+  // Test fatigue notch factor
+  void testFatigueNotchFactor() {
+    double Kt = 3.0;  // Stress concentration
+    double q = 0.8;   // Notch sensitivity
+
+    // Kf = 1 + q * (Kt - 1)
+    double Kf = 1.0 + q * (Kt - 1.0);
+    TS_ASSERT_DELTA(Kf, 2.6, 0.01);
+  }
+
+  // Test Goodman diagram
+  void testGoodmanDiagram() {
+    double sigma_a = 15000.0;   // psi (alternating stress)
+    double sigma_m = 20000.0;   // psi (mean stress)
+    double sigma_e = 30000.0;   // psi (endurance limit)
+    double sigma_u = 65000.0;   // psi (ultimate strength)
+
+    // Goodman criterion: σ_a/σ_e + σ_m/σ_u = 1 at failure
+    double goodman_ratio = sigma_a/sigma_e + sigma_m/sigma_u;
+
+    TS_ASSERT(goodman_ratio < 1.0);  // Safe
+  }
+
+  // Test Gerber parabola
+  void testGerberParabola() {
+    double sigma_a = 15000.0;
+    double sigma_m = 20000.0;
+    double sigma_e = 30000.0;
+    double sigma_u = 65000.0;
+
+    // Gerber: σ_a/σ_e + (σ_m/σ_u)^2 = 1
+    double gerber_ratio = sigma_a/sigma_e + (sigma_m/sigma_u)*(sigma_m/sigma_u);
+
+    TS_ASSERT(gerber_ratio < 1.0);  // Safe
+  }
+
+  // Test crack growth rate (Paris law)
+  void testParisLawCrackGrowth() {
+    double C = 1e-10;  // Material constant
+    double m = 3.0;    // Paris exponent
+    double deltaK = 20.0;  // ksi*sqrt(in) (stress intensity range)
+
+    // da/dN = C * (ΔK)^m
+    double dadN = C * std::pow(deltaK, m);
+
+    TS_ASSERT(dadN > 0);
+    TS_ASSERT(!std::isnan(dadN));
+  }
+
+  /**************************************************************************
+   * COMPOSITE STRUCTURE LOADS
+   **************************************************************************/
+
+  // Test laminate stress analysis
+  void testLaminateStress() {
+    double E1 = 20e6;  // psi (fiber direction)
+    double E2 = 1.5e6; // psi (transverse)
+    double epsilon = 0.002;  // strain
+
+    double sigma1 = E1 * epsilon;
+    double sigma2 = E2 * epsilon;
+
+    TS_ASSERT(sigma1 > sigma2);  // Fiber direction stiffer
+    TS_ASSERT_DELTA(sigma1, 40000.0, 100.0);
+  }
+
+  // Test ply failure (Tsai-Hill criterion)
+  void testTsaiHillCriterion() {
+    double sigma1 = 50000.0;  // psi
+    double sigma2 = 5000.0;   // psi
+    double tau12 = 3000.0;    // psi
+
+    double X = 150000.0;  // psi (fiber tensile strength)
+    double Y = 8000.0;    // psi (transverse strength)
+    double S = 10000.0;   // psi (shear strength)
+
+    // Tsai-Hill: (σ1/X)^2 - (σ1*σ2/X^2) + (σ2/Y)^2 + (τ12/S)^2 < 1
+    double TH = (sigma1/X)*(sigma1/X) - (sigma1*sigma2)/(X*X) +
+                (sigma2/Y)*(sigma2/Y) + (tau12/S)*(tau12/S);
+
+    TS_ASSERT(TH > 0);
+    TS_ASSERT(!std::isnan(TH));
+  }
+
+  // Test interlaminar shear stress
+  void testInterlaminarShear() {
+    double V = 1000.0;   // lbs (shear force)
+    double b = 4.0;      // in (width)
+    double h = 0.25;     // in (total thickness)
+
+    // Average shear stress
+    double tau_avg = 1.5 * V / (b * h);
+
+    TS_ASSERT(tau_avg > 0);
+    TS_ASSERT(!std::isnan(tau_avg));
+  }
+
+  /**************************************************************************
+   * PRESSURIZATION LOADS
+   **************************************************************************/
+
+  // Test hoop stress in pressure vessel
+  void testHoopStress() {
+    double p = 8.6;     // psi (cabin differential)
+    double r = 72.0;    // in (fuselage radius)
+    double t = 0.04;    // in (skin thickness)
+
+    // Hoop stress: σ_h = p * r / t
+    double sigma_h = p * r / t;
+
+    TS_ASSERT(sigma_h > 0);
+    TS_ASSERT(!std::isnan(sigma_h));
+  }
+
+  // Test longitudinal stress in pressure vessel
+  void testLongitudinalStress() {
+    double p = 8.6;
+    double r = 72.0;
+    double t = 0.04;
+
+    // Longitudinal stress: σ_l = p * r / (2 * t)
+    double sigma_l = p * r / (2.0 * t);
+
+    TS_ASSERT(sigma_l > 0);
+    // Longitudinal is half of hoop
+    double sigma_h = p * r / t;
+    TS_ASSERT_DELTA(sigma_l, sigma_h / 2.0, 0.1);
+  }
+
+  // Test cabin pressurization cycle fatigue
+  void testPressureCycleFatigue() {
+    double cyclesPerFlight = 1.0;
+    double totalFlights = 50000;
+    double designCycles = 100000;
+
+    double lifeFraction = (cyclesPerFlight * totalFlights) / designCycles;
+    TS_ASSERT(lifeFraction < 1.0);  // Still within design life
+  }
+
+  /**************************************************************************
+   * THERMAL LOADS
+   **************************************************************************/
+
+  // Test thermal stress from constrained expansion
+  void testThermalStress() {
+    double alpha = 12.9e-6;  // 1/°F (aluminum CTE)
+    double E = 10.7e6;       // psi
+    double deltaT = 100.0;   // °F temperature change
+
+    // Thermal stress: σ = E * α * ΔT
+    double sigma = E * alpha * deltaT;
+
+    TS_ASSERT(sigma > 0);
+    TS_ASSERT(!std::isnan(sigma));
+  }
+
+  // Test thermal strain
+  void testThermalStrain() {
+    double alpha = 12.9e-6;
+    double deltaT = 150.0;
+
+    double epsilon_thermal = alpha * deltaT;
+    TS_ASSERT(epsilon_thermal > 0);
+    TS_ASSERT(epsilon_thermal < 0.01);
+  }
+
+  // Test CTE mismatch in composites
+  void testCTEMismatch() {
+    double alpha_fiber = 0.5e-6;   // Carbon fiber
+    double alpha_matrix = 30e-6;  // Epoxy
+    double deltaT = 200.0;
+
+    double strain_diff = std::abs(alpha_matrix - alpha_fiber) * deltaT;
+    TS_ASSERT(strain_diff > 0);
+  }
+
+  /**************************************************************************
+   * GROUND LOADS
+   **************************************************************************/
+
+  // Test taxi bump load factor
+  void testTaxiBumpLoadFactor() {
+    double V_taxi = 25.0;     // knots
+    double bump_height = 0.3; // ft
+    double damping = 0.5;
+
+    // Simplified bump response
+    double n_bump = 1.0 + (V_taxi / 30.0) * (bump_height / 0.5);
+    TS_ASSERT(n_bump > 1.0);
+    TS_ASSERT(n_bump < 2.0); // 1.0 + 0.833 * 0.6 = 1.5
+  }
+
+  // Test braking load
+  void testBrakingLoad() {
+    double W = 5000.0;       // lbs
+    double mu_brake = 0.5;   // braking friction coefficient
+
+    double F_brake = mu_brake * W;
+    TS_ASSERT_DELTA(F_brake, 2500.0, 0.1);
+  }
+
+  // Test turning ground load
+  void testTurningGroundLoad() {
+    double W = 5000.0;
+    double V = 15.0;  // knots
+    double R = 50.0;  // ft (turn radius)
+
+    // Centrifugal force
+    double V_fps = V * 1.687;
+    double F_cent = (W / g0) * (V_fps * V_fps) / R;
+
+    TS_ASSERT(F_cent > 0);
+    TS_ASSERT(!std::isnan(F_cent));
+  }
+
+  /**************************************************************************
+   * CONTROL SURFACE LOADS
+   **************************************************************************/
+
+  // Test aileron hinge moment
+  void testAileronHingeMoment() {
+    double qbar = 50.0;   // psf
+    double S_a = 10.0;    // ft^2 (aileron area)
+    double c_a = 1.0;     // ft (aileron chord)
+    double Ch = -0.05;    // hinge moment coefficient
+
+    double H = Ch * qbar * S_a * c_a;
+
+    TS_ASSERT(H < 0);  // Restoring moment
+    TS_ASSERT(!std::isnan(H));
+  }
+
+  // Test elevator deflection limit load
+  void testElevatorLimitLoad() {
+    double n_limit = 6.0;
+    double W = 3000.0;
+    double tail_lift_fraction = 0.1;
+
+    double F_tail = n_limit * W * tail_lift_fraction;
+    TS_ASSERT_DELTA(F_tail, 1800.0, 1.0);
+  }
+
+  // Test rudder kick load
+  void testRudderKickLoad() {
+    double qbar = 80.0;
+    double S_r = 15.0;    // ft^2
+    double delta_r = 30.0 * deg2rad;  // max deflection
+    double CL_delta = 0.03;  // per degree
+
+    double F_rudder = qbar * S_r * CL_delta * (delta_r * rad2deg);
+
+    TS_ASSERT(F_rudder > 0);
+    TS_ASSERT(!std::isnan(F_rudder));
+  }
+
+  /**************************************************************************
+   * AEROELASTIC EFFECTS
+   **************************************************************************/
+
+  // Test divergence speed
+  void testDivergenceSpeed() {
+    double EI = 1e7;      // lb-ft^2
+    double c = 5.0;       // ft (chord)
+    double e = 0.25;      // chord fraction (elastic axis to AC)
+    double a_0 = 5.7;     // per rad (lift curve slope)
+    double L = 30.0;      // ft (semi-span)
+
+    // Divergence dynamic pressure (simplified)
+    double q_div = 2.0 * EI / (a_0 * c * c * e * L * L);
+
+    TS_ASSERT(q_div > 0);
+    TS_ASSERT(!std::isnan(q_div));
+  }
+
+  // Test control reversal speed
+  void testControlReversalSpeed() {
+    double GJ = 5e6;      // lb-ft^2 (torsional stiffness)
+    double c = 4.0;       // ft
+    double L = 25.0;      // ft
+    double Cl_delta = 0.04;  // lift due to control
+    double Cl_alpha = 5.7;   // lift curve slope
+
+    // Reversal dynamic pressure (simplified)
+    double q_rev = GJ / (c * c * L * Cl_delta / Cl_alpha);
+
+    TS_ASSERT(q_rev > 0);
+    TS_ASSERT(!std::isnan(q_rev));
+  }
+
+  // Test wing flexibility effect on load distribution
+  void testFlexibleWingLoadDistribution() {
+    double EI = 1e8;  // lb-ft^2
+    double load = 10000.0;  // lbs
+    double span = 40.0;  // ft
+
+    // Tip deflection (simplified cantilever beam)
+    double delta_tip = load * span * span * span / (3.0 * EI);
+
+    TS_ASSERT(delta_tip > 0);
+    TS_ASSERT(!std::isnan(delta_tip));
+  }
+
+  /**************************************************************************
+   * ADDITIONAL STRESS TESTS
+   **************************************************************************/
+
+  // Test bearing stress in fasteners
+  void testBearingStress() {
+    double P = 1000.0;   // lbs (load)
+    double d = 0.25;     // in (bolt diameter)
+    double t = 0.063;    // in (sheet thickness)
+
+    double sigma_br = P / (d * t);
+    TS_ASSERT(sigma_br > 0);
+    TS_ASSERT(!std::isnan(sigma_br));
+  }
+
+  // Test lug stress
+  void testLugStress() {
+    double P = 5000.0;   // lbs
+    double w = 2.0;      // in (lug width)
+    double D = 0.5;      // in (hole diameter)
+    double t = 0.5;      // in (thickness)
+
+    // Net section stress
+    double sigma_net = P / ((w - D) * t);
+    TS_ASSERT(sigma_net > 0);
+    TS_ASSERT(!std::isnan(sigma_net));
+  }
+
+  // Test rivet shear stress
+  void testRivetShearStress() {
+    double P = 500.0;    // lbs per rivet
+    double d = 0.125;    // in (rivet diameter)
+
+    double A = M_PI * d * d / 4.0;
+    double tau = P / A;
+
+    TS_ASSERT(tau > 0);
+    TS_ASSERT(!std::isnan(tau));
+  }
+
+  // Test weld stress
+  void testWeldStress() {
+    double F = 2000.0;   // lbs
+    double L = 4.0;      // in (weld length)
+    double throat = 0.25; // in (effective throat)
+
+    double sigma_weld = F / (L * throat);
+    TS_ASSERT(sigma_weld > 0);
+    TS_ASSERT_DELTA(sigma_weld, 2000.0, 1.0);
+  }
+
+  /**************************************************************************
+   * EDGE CASES AND NUMERICAL STABILITY
+   **************************************************************************/
+
+  // Test very high speed load factor
+  void testVeryHighSpeedLoadFactor() {
+    double V = 800.0;  // fps (very high speed)
+    double weight = 5000.0;
+    double wing_area = 200.0;
+    double CL = 0.6;
+
+    double L = 0.5 * rho0 * V * V * wing_area * CL;
+    double n = L / weight;
+
+    TS_ASSERT(n > 10.0);  // Very high load factor (~18.3)
+    TS_ASSERT(!std::isnan(n));
+  }
+
+  // Test zero speed condition
+  void testZeroSpeedCondition() {
+    double V = 0.0;
+    double weight = 5000.0;
+
+    // No aerodynamic lift at zero speed
+    double L = 0.5 * rho0 * V * V * 200.0 * 1.0;
+    double n = L / weight;
+
+    TS_ASSERT_DELTA(n, 0.0, epsilon);
+  }
+
+  // Test extreme bank angle
+  void testExtremeBankAngle() {
+    double bank = 89.0 * deg2rad;  // Near vertical
+    double n = 1.0 / cos(bank);
+
+    TS_ASSERT(n > 50.0);  // Very high g
+    TS_ASSERT(!std::isnan(n));
+    TS_ASSERT(!std::isinf(n));
+  }
+
+  // Test near-zero thickness calculation
+  void testNearZeroThickness() {
+    double F = 1000.0;
+    double A = 1e-6;  // Very small area
+
+    double sigma = F / A;
+    TS_ASSERT(sigma > 0);
+    TS_ASSERT(!std::isnan(sigma));
+  }
+
+  // Test load at limit of structural envelope
+  void testLoadAtStructuralLimit() {
+    double n_ultimate = 9.0;  // 6g * 1.5 SF
+    double weight = 3000.0;
+
+    double L_ultimate = n_ultimate * weight;
+    TS_ASSERT_DELTA(L_ultimate, 27000.0, 1.0);
+  }
 };

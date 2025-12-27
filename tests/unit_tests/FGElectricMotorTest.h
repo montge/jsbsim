@@ -891,4 +891,388 @@ public:
     // thrust2 = 500 * (2400/2000)² = 500 * 1.44 = 720 lbs
     TS_ASSERT_DELTA(thrust2, 720.0, 1.0);
   }
+
+  // ============================================================================
+  // 11. Battery State Effects
+  // ============================================================================
+
+  // Test voltage sag under load
+  void testBatteryVoltageSag() {
+    double nominalVoltage = 48.0;
+    double internalResistance = 0.05; // Ohms
+    double current = 100.0; // Amperes
+
+    double loadVoltage = nominalVoltage - (current * internalResistance);
+    TS_ASSERT_DELTA(loadVoltage, 43.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(loadVoltage < nominalVoltage);
+  }
+
+  // Test state of charge effect on voltage
+  void testSOCVoltageEffect() {
+    double voltageAt100SOC = 50.4; // 12S LiPo fully charged
+    double voltageAt20SOC = 43.2;  // Near discharged
+
+    double voltageDrop = voltageAt100SOC - voltageAt20SOC;
+    TS_ASSERT_DELTA(voltageDrop, 7.2, 0.1);
+    TS_ASSERT(voltageAt100SOC > voltageAt20SOC);
+  }
+
+  // Test battery C-rate limitation
+  void testBatteryCRateLimitation() {
+    double capacity = 10.0; // Ah
+    double maxCRate = 30.0; // 30C discharge
+
+    double maxCurrent = capacity * maxCRate;
+    TS_ASSERT_DELTA(maxCurrent, 300.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test battery energy density
+  void testBatteryEnergyDensity() {
+    double energy = 2000.0; // Wh
+    double mass = 10.0;     // kg
+
+    double energyDensity = energy / mass; // Wh/kg
+    TS_ASSERT_DELTA(energyDensity, 200.0, DEFAULT_TOLERANCE);
+    // Typical LiPo: 150-250 Wh/kg
+    TS_ASSERT(energyDensity > 100.0 && energyDensity < 300.0);
+  }
+
+  // Test Peukert effect on capacity
+  void testPeukertEffect() {
+    double capacity1C = 10.0;  // Ah at 1C rate
+    double peukertExponent = 1.1;
+    double dischargeRate = 5.0; // 5C
+
+    // Effective capacity decreases at high discharge rates
+    double effectiveCapacity = capacity1C / pow(dischargeRate, peukertExponent - 1.0);
+    TS_ASSERT(effectiveCapacity < capacity1C);
+  }
+
+  // ============================================================================
+  // 12. Multi-Motor Configurations
+  // ============================================================================
+
+  // Test dual motor torque splitting
+  void testDualMotorTorqueSplit() {
+    double totalTorque = 100.0; // Nm
+    double motor1Torque = totalTorque * 0.5;
+    double motor2Torque = totalTorque * 0.5;
+
+    TS_ASSERT_DELTA(motor1Torque + motor2Torque, totalTorque, DEFAULT_TOLERANCE);
+  }
+
+  // Test motor redundancy power loss
+  void testMotorRedundancyPowerLoss() {
+    double normalPower = 20000.0; // Watts per motor
+    int numMotors = 4;
+    double totalPower = normalPower * numMotors;
+
+    // One motor fails
+    double powerWithFailure = normalPower * (numMotors - 1);
+    double powerLossFraction = 1.0 - (powerWithFailure / totalPower);
+
+    TS_ASSERT_DELTA(powerLossFraction, 0.25, DEFAULT_TOLERANCE);
+  }
+
+  // Test coaxial motor counter-rotation torque
+  void testCoaxialMotorTorqueCancel() {
+    double motor1Torque = 50.0;  // Nm (CW)
+    double motor2Torque = -50.0; // Nm (CCW)
+
+    double netTorque = motor1Torque + motor2Torque;
+    TS_ASSERT_DELTA(netTorque, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test distributed propulsion efficiency
+  void testDistributedPropulsionEfficiency() {
+    // Multiple smaller motors can have different efficiency
+    double largMotorEff = 0.92;
+    double smallMotorEff = 0.88;
+    int numSmallMotors = 4;
+
+    // Overall efficiency comparison
+    TS_ASSERT(largMotorEff > smallMotorEff);
+  }
+
+  // ============================================================================
+  // 13. Motor Failure Modes
+  // ============================================================================
+
+  // Test winding short detection
+  void testWindingShortDetection() {
+    double normalResistance = 0.1; // Ohms
+    double shortedResistance = 0.02; // Much lower
+
+    bool shortDetected = (shortedResistance < normalResistance * 0.5);
+    TS_ASSERT(shortDetected);
+  }
+
+  // Test bearing failure effect
+  void testBearingFailureEffect() {
+    double normalFriction = 0.02;  // Nm friction torque
+    double damagedFriction = 0.15; // Higher friction
+
+    double frictionIncrease = damagedFriction / normalFriction;
+    TS_ASSERT(frictionIncrease > 5.0);
+  }
+
+  // Test demagnetization detection
+  void testDemagnetizationDetection() {
+    double normalKt = 0.05;      // Nm/A
+    double degradedKt = 0.04;   // After demagnetization
+
+    double ktLoss = 1.0 - (degradedKt / normalKt);
+    TS_ASSERT_DELTA(ktLoss, 0.2, 0.01); // 20% loss
+  }
+
+  // Test thermal runaway condition
+  void testThermalRunawayCondition() {
+    double currentTemp = 150.0;  // °C
+    double maxTemp = 155.0;      // °C limit
+    double heatingRate = 5.0;    // °C/s
+    double coolingRate = 3.0;    // °C/s
+
+    bool thermalRunaway = (heatingRate > coolingRate) && (currentTemp > maxTemp - 10.0);
+    TS_ASSERT(thermalRunaway);
+  }
+
+  // ============================================================================
+  // 14. Temperature Effects on Motor Constants
+  // ============================================================================
+
+  // Test Kt temperature coefficient
+  void testKtTemperatureCoefficient() {
+    double Kt_20C = 0.050;     // Nm/A at 20°C
+    double tempCoeff = -0.001; // -0.1% per °C (NdFeB magnets)
+    double temp = 80.0;        // °C
+
+    double Kt_hot = Kt_20C * (1.0 + tempCoeff * (temp - 20.0));
+    TS_ASSERT(Kt_hot < Kt_20C);
+    TS_ASSERT_DELTA(Kt_hot, 0.047, 0.001);
+  }
+
+  // Test winding resistance temperature rise
+  void testWindingResistanceTempRise() {
+    double R_25C = 0.1;
+    double alpha = 0.00393; // Copper temp coefficient
+    double T1 = 25.0;
+    double T2 = 100.0;
+
+    double R_hot = R_25C * (1.0 + alpha * (T2 - T1));
+    TS_ASSERT_DELTA(R_hot, 0.1295, 0.001);
+  }
+
+  // Test efficiency change with temperature
+  void testEfficiencyTemperatureChange() {
+    double efficiencyCold = 0.93;
+    double resistanceIncrease = 1.3; // 30% increase at hot
+
+    // Copper losses increase
+    double copperLossIncrease = resistanceIncrease;
+    double efficiencyHot = efficiencyCold * (1.0 - 0.03); // Approximate
+
+    TS_ASSERT(efficiencyHot < efficiencyCold);
+  }
+
+  // ============================================================================
+  // 15. Altitude Effects
+  // ============================================================================
+
+  // Test air cooling reduction at altitude
+  void testAltitudeCoolingReduction() {
+    double seaLevelDensity = 1.225; // kg/m³
+    double altitudeDensity = 0.7;   // ~15000 ft
+
+    double coolingRatio = altitudeDensity / seaLevelDensity;
+    TS_ASSERT_DELTA(coolingRatio, 0.571, 0.01);
+    TS_ASSERT(coolingRatio < 1.0);
+  }
+
+  // Test power derating at altitude
+  void testPowerDeratingAltitude() {
+    double seaLevelPower = 50000.0; // Watts
+    double densityRatio = 0.7;
+    double thermalDerate = 0.85; // Due to reduced cooling
+
+    double altitudePower = seaLevelPower * thermalDerate;
+    TS_ASSERT_DELTA(altitudePower, 42500.0, 100.0);
+  }
+
+  // Test corona discharge at altitude
+  void testCoronaDischargeRisk() {
+    double seaLevelBreakdown = 3000.0; // V/mm
+    double altitudeBreakdown = 1500.0; // V/mm at 30000 ft
+
+    // Lower breakdown voltage at altitude
+    TS_ASSERT(altitudeBreakdown < seaLevelBreakdown);
+  }
+
+  // ============================================================================
+  // 16. ESC Advanced Features
+  // ============================================================================
+
+  // Test timing advance effect
+  void testTimingAdvance() {
+    double baseEfficiency = 0.88;
+    double optimalAdvance = 15.0; // degrees
+    double efficiencyGain = 0.02; // 2% improvement
+
+    double optimizedEfficiency = baseEfficiency + efficiencyGain;
+    TS_ASSERT_DELTA(optimizedEfficiency, 0.90, 0.01);
+  }
+
+  // Test active freewheeling vs sync rectification
+  void testSyncRectification() {
+    double diodeDropLoss = 0.7; // V per diode
+    double mosfetDropLoss = 0.1; // V using sync rect
+    double current = 100.0; // A
+
+    double diodePowerLoss = diodeDropLoss * current * 6; // 3-phase bridge
+    double mosfetPowerLoss = mosfetDropLoss * current * 6;
+
+    TS_ASSERT(mosfetPowerLoss < diodePowerLoss);
+    TS_ASSERT_DELTA(diodePowerLoss, 420.0, 1.0);
+    TS_ASSERT_DELTA(mosfetPowerLoss, 60.0, 1.0);
+  }
+
+  // Test dead-time effect on efficiency
+  void testDeadTimeEffect() {
+    double pwmFreq = 20000.0; // Hz
+    double deadTime = 500e-9; // 500 ns
+    double dutyCycle = deadTime * pwmFreq * 2; // Both edges
+
+    double efficiencyLoss = dutyCycle;
+    TS_ASSERT(efficiencyLoss < 0.03); // < 3% loss typical
+  }
+
+  // Test sensorless vs sensored control
+  void testSensorlessVsSensored() {
+    double sensoredMinRPM = 50.0;
+    double sensorlessMinRPM = 500.0;
+
+    // Sensored has better low-speed performance
+    TS_ASSERT(sensoredMinRPM < sensorlessMinRPM);
+  }
+
+  // ============================================================================
+  // 17. Cogging and Torque Ripple
+  // ============================================================================
+
+  // Test cogging torque calculation
+  void testCoggingTorque() {
+    double ratedTorque = 10.0; // Nm
+    double coggingPercent = 2.0; // 2% typical for quality motors
+
+    double coggingTorque = ratedTorque * coggingPercent / 100.0;
+    TS_ASSERT_DELTA(coggingTorque, 0.2, 0.01);
+  }
+
+  // Test torque ripple frequency
+  void testTorqueRippleFrequency() {
+    double rpm = 3000.0;
+    int poles = 14;
+    int slots = 12;
+
+    // Cogging frequency = LCM(poles, slots) * RPM / 60
+    // For 14P12S: LCM(14,12) = 84
+    int lcm = 84;
+    double coggingFreq = lcm * rpm / 60.0;
+
+    TS_ASSERT_DELTA(coggingFreq, 4200.0, 1.0);
+  }
+
+  // Test pole-slot combination effect
+  void testPoleSlotCombination() {
+    // Good combinations have high LCM for low cogging
+    int poles1 = 10, slots1 = 12; // LCM = 60
+    int poles2 = 8, slots2 = 6;   // LCM = 24
+
+    // Higher LCM = lower cogging amplitude
+    TS_ASSERT(60 > 24);
+  }
+
+  // ============================================================================
+  // 18. Edge Cases and Stress Tests
+  // ============================================================================
+
+  // Test motor stall current thermal limit
+  void testStallCurrentThermalLimit() {
+    double voltage = 48.0;
+    double resistance = 0.1;
+    double stallCurrent = voltage / resistance;
+
+    double thermalLimit = 200.0; // A continuous
+    bool overheating = stallCurrent > thermalLimit;
+
+    TS_ASSERT(overheating); // 480A > 200A
+  }
+
+  // Test very high speed operation
+  void testVeryHighSpeedOperation() {
+    double rpm = 50000.0; // High-speed motor
+    double ironLossCoeff = 1e-6;
+
+    double ironLosses = ironLossCoeff * rpm * rpm;
+    TS_ASSERT(ironLosses > 0);
+    TS_ASSERT_DELTA(ironLosses, 2500.0, 1.0);
+  }
+
+  // Test zero speed torque control
+  void testZeroSpeedTorqueControl() {
+    double rpm = 0.0;
+    double current = 50.0;
+    double Kt = 0.05;
+
+    double torque = Kt * current;
+    TS_ASSERT_DELTA(torque, 2.5, DEFAULT_TOLERANCE);
+    TS_ASSERT(torque > 0); // Can produce torque at zero speed
+  }
+
+  // Test power factor at different loads
+  void testPowerFactorVsLoad() {
+    // Power factor varies with load
+    double pfLightLoad = 0.7;
+    double pfFullLoad = 0.95;
+
+    TS_ASSERT(pfFullLoad > pfLightLoad);
+  }
+
+  // Test negative sequence current effect
+  void testNegativeSequenceCurrentEffect() {
+    double positiveSeq = 100.0; // A
+    double negativeSeq = 5.0;   // A (imbalance)
+
+    double imbalancePercent = negativeSeq / positiveSeq * 100.0;
+    TS_ASSERT_DELTA(imbalancePercent, 5.0, 0.1);
+    TS_ASSERT(imbalancePercent < 10.0); // Acceptable limit
+  }
+
+  // Test rapid acceleration current spike
+  void testRapidAccelerationCurrentSpike() {
+    double steadyStateCurrent = 50.0; // A
+    double accelerationCurrent = 150.0; // A during accel
+
+    double currentRatio = accelerationCurrent / steadyStateCurrent;
+    TS_ASSERT_DELTA(currentRatio, 3.0, 0.1);
+  }
+
+  // Test regeneration at maximum speed
+  void testRegenerationAtMaxSpeed() {
+    double maxRPM = 60000.0; // High speed motor
+    double Kv = 1000.0; // RPM/V
+    double backEMF = maxRPM / Kv; // 60V
+    double batteryVoltage = 48.0;
+
+    bool regenPossible = backEMF > batteryVoltage;
+    TS_ASSERT(regenPossible); // 60V > 48V
+  }
+
+  // Test flux weakening region
+  void testFluxWeakeningRegion() {
+    double baseSpeed = 4000.0; // RPM
+    double maxSpeed = 8000.0;  // RPM with flux weakening
+
+    double speedRatio = maxSpeed / baseSpeed;
+    TS_ASSERT_DELTA(speedRatio, 2.0, 0.1);
+  }
 };

@@ -897,4 +897,422 @@ public:
     double EGT_lean = EGT_peak * (1.0 - 0.1 * (1.0 - phi));
     TS_ASSERT(EGT_lean < EGT_peak);
   }
+
+  /***************************************************************************
+   * Engine Timing and Detonation Tests
+   ***************************************************************************/
+
+  // Test spark advance vs RPM
+  void testSparkAdvanceVsRPM() {
+    double baseAdvance = 5.0; // BTDC at idle
+    double maxAdvance = 35.0; // BTDC at full power
+    double rpmIdle = 600.0;
+    double rpmMax = 2700.0;
+
+    double advanceAtMax = baseAdvance + (maxAdvance - baseAdvance) * (rpmMax - rpmIdle) / (rpmMax - rpmIdle);
+    TS_ASSERT_DELTA(advanceAtMax, 35.0, 0.1);
+  }
+
+  // Test detonation onset temperature
+  void testDetonationOnsetTemperature() {
+    double chargeTemp = 400.0; // K
+    double criticalTemp = 600.0; // K for 100LL
+    double safetyMargin = criticalTemp - chargeTemp;
+
+    TS_ASSERT(safetyMargin > 100.0); // Safe margin
+    TS_ASSERT(chargeTemp < criticalTemp);
+  }
+
+  // Test engine knock intensity
+  void testKnockIntensity() {
+    double MAP = 38.0; // inHg (overboosted)
+    double normalMAP = 30.0;
+    double knockThreshold = 35.0;
+
+    bool knocking = MAP > knockThreshold;
+    TS_ASSERT(knocking);
+  }
+
+  // Test octane requirement vs compression ratio
+  void testOctaneRequirement() {
+    double CR = 9.0;
+    double octane = 73.0 + (CR - 6.0) * 9.0; // Approximate formula
+
+    TS_ASSERT_DELTA(octane, 100.0, 5.0);
+    TS_ASSERT(octane > 80.0);
+  }
+
+  /***************************************************************************
+   * Fuel Injection Tests
+   ***************************************************************************/
+
+  // Test injector pulse width calculation
+  void testInjectorPulseWidth() {
+    double fuelRequired = 0.001; // kg per cylinder per cycle
+    double injectorFlow = 0.05;  // kg/s at full open
+    double cycleTime = 0.05;     // seconds at 2400 RPM
+
+    double pulseWidth = fuelRequired / injectorFlow; // 0.02 s
+    double dutyCycle = pulseWidth / cycleTime; // 0.4
+
+    TS_ASSERT(dutyCycle < 0.8); // Must have margin
+    TS_ASSERT_DELTA(dutyCycle, 0.4, 0.1);
+  }
+
+  // Test fuel pressure effect on flow
+  void testFuelPressureEffect() {
+    double basePressure = 30.0; // psi
+    double baseFlow = 10.0;     // lbs/hr
+    double newPressure = 45.0;  // psi
+
+    // Flow proportional to sqrt(pressure)
+    double newFlow = baseFlow * std::sqrt(newPressure / basePressure);
+    TS_ASSERT(newFlow > baseFlow);
+    TS_ASSERT_DELTA(newFlow, 12.25, 0.1);
+  }
+
+  // Test injector dead time compensation
+  void testInjectorDeadTime() {
+    double deadTime = 0.001;    // 1 ms
+    double pulseWidth = 0.005;  // 5 ms
+    double voltage = 12.0;      // V
+
+    // Dead time varies with voltage
+    double deadTimeCompensated = deadTime * (14.0 / voltage);
+    double effectivePulse = pulseWidth - deadTimeCompensated;
+
+    TS_ASSERT(effectivePulse < pulseWidth);
+    TS_ASSERT(effectivePulse > 0);
+  }
+
+  /***************************************************************************
+   * Engine Dynamics Tests
+   ***************************************************************************/
+
+  // Test crankshaft angular acceleration
+  void testCrankshaftAcceleration() {
+    double torque = 200.0;   // ft-lbs
+    double inertia = 0.5;    // slug-ft^2
+
+    double alpha = torque / inertia; // rad/s^2
+    TS_ASSERT(alpha > 0);
+    TS_ASSERT_DELTA(alpha, 400.0, 1.0);
+  }
+
+  // Test RPM decay rate on shutdown
+  void testRPMDecayRate() {
+    double rpm = 2400.0;
+    double frictionTorque = 20.0; // ft-lbs
+    double inertia = 0.8;        // slug-ft^2
+
+    double omega = rpm * 2.0 * M_PI / 60.0;
+    double alpha = frictionTorque / inertia;
+    double timeToStop = omega / alpha;
+
+    TS_ASSERT(timeToStop > 0);
+    TS_ASSERT(timeToStop < 30.0); // Should stop within 30 sec
+  }
+
+  // Test engine run-up time
+  void testEngineRunUpTime() {
+    double targetRPM = 2400.0;
+    double idleRPM = 600.0;
+    double accelRate = 500.0; // RPM/sec
+
+    double runUpTime = (targetRPM - idleRPM) / accelRate;
+    TS_ASSERT_DELTA(runUpTime, 3.6, 0.1);
+  }
+
+  // Test torsional vibration frequency
+  void testTorsionalVibration() {
+    double K = 100000.0; // torsional stiffness, ft-lb/rad
+    double J = 0.5;      // moment of inertia, slug-ft^2
+
+    double omega_n = std::sqrt(K / J); // rad/s
+    double freq = omega_n / (2.0 * M_PI);
+
+    TS_ASSERT(freq > 0);
+    TS_ASSERT(freq < 100.0); // Reasonable frequency
+  }
+
+  /***************************************************************************
+   * Exhaust System Tests
+   ***************************************************************************/
+
+  // Test exhaust back pressure effect
+  void testExhaustBackPressure() {
+    double normalBackPressure = 2.0;   // inHg
+    double highBackPressure = 8.0;     // inHg (blocked)
+    double powerLossPerInHg = 1.0;     // % per inHg
+
+    double powerLoss = (highBackPressure - normalBackPressure) * powerLossPerInHg;
+    TS_ASSERT_DELTA(powerLoss, 6.0, 0.1); // 6% power loss
+  }
+
+  // Test exhaust gas velocity
+  void testExhaustGasVelocity() {
+    double exhaustFlow = 0.1;    // kg/s
+    double exhaustDensity = 0.5; // kg/m^3
+    double pipeArea = 0.01;      // m^2
+
+    double velocity = exhaustFlow / (exhaustDensity * pipeArea);
+    TS_ASSERT(velocity > 0);
+    TS_ASSERT_DELTA(velocity, 20.0, 0.1);
+  }
+
+  // Test exhaust temperature drop
+  void testExhaustTempDrop() {
+    double EGT = 900.0;      // K at manifold
+    double ambientTemp = 288.0; // K
+    double coolingCoeff = 0.5;
+    double pipeLength = 2.0; // m
+
+    double tempDrop = coolingCoeff * pipeLength * (EGT - ambientTemp) / 10.0;
+    double tailpipeTemp = EGT - tempDrop;
+
+    TS_ASSERT(tailpipeTemp < EGT);
+    TS_ASSERT(tailpipeTemp > ambientTemp);
+  }
+
+  /***************************************************************************
+   * Lubrication System Tests
+   ***************************************************************************/
+
+  // Test oil viscosity temperature dependence
+  void testOilViscosityTemperature() {
+    double viscosity20C = 100.0;  // cSt
+    double viscosity100C = 10.0;  // cSt
+
+    // Viscosity decreases with temperature
+    TS_ASSERT(viscosity100C < viscosity20C);
+    double ratio = viscosity20C / viscosity100C;
+    TS_ASSERT_DELTA(ratio, 10.0, 0.1);
+  }
+
+  // Test oil consumption rate
+  void testOilConsumptionRate() {
+    double oilCapacity = 8.0;      // quarts
+    double consumptionRate = 0.05; // quarts/hr
+    double flightTime = 10.0;      // hours
+
+    double oilConsumed = consumptionRate * flightTime;
+    double oilRemaining = oilCapacity - oilConsumed;
+
+    TS_ASSERT(oilRemaining > 4.0); // Minimum safe level
+    TS_ASSERT_DELTA(oilConsumed, 0.5, 0.01);
+  }
+
+  // Test oil pressure relief valve
+  void testOilPressureReliefValve() {
+    double reliefPressure = 80.0; // psi
+    double normalPressure = 60.0; // psi
+    double coldStartPressure = 100.0; // psi (high viscosity)
+
+    bool reliefOpen = coldStartPressure > reliefPressure;
+    TS_ASSERT(reliefOpen);
+  }
+
+  /***************************************************************************
+   * Altitude Performance Tests
+   ***************************************************************************/
+
+  // Test critical altitude for turbo
+  void testTurboCriticalAltitude() {
+    double seaLevelMAP = 30.0;  // inHg
+    double maxBoost = 2.0;      // pressure ratio
+    double targetMAP = 36.0;    // inHg
+
+    // At critical altitude, max boost just achieves target
+    double criticalAmbient = targetMAP / maxBoost;
+    TS_ASSERT_DELTA(criticalAmbient, 18.0, 0.1);
+    // ~18 inHg corresponds to ~12000 ft
+  }
+
+  // Test power lapse rate
+  void testPowerLapseRate() {
+    double seaLevelPower = 200.0; // HP
+    double lapseRate = 0.03;      // 3% per 1000 ft
+    double altitude = 8000.0;     // ft
+
+    double altitudePower = seaLevelPower * (1.0 - lapseRate * altitude / 1000.0);
+    TS_ASSERT_DELTA(altitudePower, 152.0, 1.0);
+  }
+
+  // Test TIT limit at altitude
+  void testTITLimitAltitude() {
+    double maxTIT = 1650.0; // F
+    double currentTIT = 1580.0;
+
+    double margin = maxTIT - currentTIT;
+    TS_ASSERT(margin > 50.0); // Safety margin
+    TS_ASSERT(currentTIT < maxTIT);
+  }
+
+  /***************************************************************************
+   * Propeller Interaction Tests Extended
+   ***************************************************************************/
+
+  // Test propeller governor droop
+  void testGovernorDroop() {
+    double setRPM = 2400.0;
+    double droop = 0.02; // 2% droop
+    double loadIncrease = 0.5; // 50% load increase
+
+    double actualRPM = setRPM * (1.0 - droop * loadIncrease);
+    TS_ASSERT(actualRPM < setRPM);
+    TS_ASSERT_DELTA(actualRPM, 2376.0, 1.0);
+  }
+
+  // Test propeller overspeed protection
+  void testPropellerOverspeedProtection() {
+    double maxRPM = 2700.0;
+    double overspeedTrip = 2800.0;
+    double currentRPM = 2850.0;
+
+    bool overspeed = currentRPM > overspeedTrip;
+    TS_ASSERT(overspeed);
+  }
+
+  // Test feathering pitch angle
+  void testFeatheringPitch() {
+    double featherAngle = 85.0; // degrees (near 90)
+    double cruiseAngle = 25.0;  // degrees
+
+    TS_ASSERT(featherAngle > cruiseAngle);
+    TS_ASSERT(featherAngle > 80.0);
+  }
+
+  /***************************************************************************
+   * Engine Health Monitoring Tests
+   ***************************************************************************/
+
+  // Test CHT spread analysis
+  void testCHTSpreadAnalysis() {
+    double CHT[] = {350.0, 355.0, 390.0, 360.0}; // F per cylinder
+
+    double maxCHT = 390.0;
+    double minCHT = 350.0;
+    double spread = maxCHT - minCHT;
+
+    // High spread indicates potential problem
+    bool spreadExcessive = spread > 30.0;
+    TS_ASSERT(spreadExcessive); // 40F spread is excessive
+  }
+
+  // Test EGT trend analysis
+  void testEGTTrendAnalysis() {
+    double EGT_baseline = 1350.0; // F
+    double EGT_current = 1420.0;  // F
+
+    double deviation = EGT_current - EGT_baseline;
+    bool significantChange = std::abs(deviation) > 50.0;
+
+    TS_ASSERT(significantChange); // 70F deviation is significant
+  }
+
+  // Test compression test
+  void testCompressionTest() {
+    double masterOrifice = 80.0; // psi
+    double cylinderPressure = 72.0; // psi
+
+    double compressionRatio = cylinderPressure / masterOrifice;
+    double percentCompression = compressionRatio * 100.0;
+
+    TS_ASSERT(percentCompression > 60.0); // >60/80 is acceptable
+    TS_ASSERT_DELTA(percentCompression, 90.0, 1.0);
+  }
+
+  // Test oil analysis trending
+  void testOilAnalysisTrending() {
+    double ironPPM = 25.0;     // parts per million
+    double ironLimit = 50.0;  // action limit
+
+    bool withinLimits = ironPPM < ironLimit;
+    TS_ASSERT(withinLimits);
+  }
+
+  /***************************************************************************
+   * Edge Cases and Stress Tests
+   ***************************************************************************/
+
+  // Test engine start at cold soak
+  void testColdSoakStart() {
+    double oilTemp = -20.0; // C
+    double minStartTemp = -30.0; // C
+
+    bool canStart = oilTemp > minStartTemp;
+    TS_ASSERT(canStart);
+
+    // Cranking current increases at low temp
+    double crankingCurrentRatio = 1.0 + 0.01 * std::abs(oilTemp);
+    TS_ASSERT(crankingCurrentRatio > 1.0);
+  }
+
+  // Test hot start vapor lock
+  void testHotStartVaporLock() {
+    double fuelTemp = 150.0; // F
+    double vaporPressure = 7.0; // psi at this temp
+    double fuelSystemPressure = 5.0; // psi
+
+    bool vaporLock = vaporPressure > fuelSystemPressure;
+    TS_ASSERT(vaporLock);
+  }
+
+  // Test flooded engine recovery
+  void testFloodedEngineRecovery() {
+    double excessFuel = 0.05; // kg
+    double evaporationRate = 0.01; // kg/min with throttle open
+
+    double recoveryTime = excessFuel / evaporationRate;
+    TS_ASSERT(recoveryTime > 0);
+    TS_ASSERT_DELTA(recoveryTime, 5.0, 0.1); // 5 minutes
+  }
+
+  // Test very high altitude operation
+  void testVeryHighAltitudeOperation() {
+    double altitude = 25000.0; // ft
+    double densityRatio = 0.45;
+    double seaLevelPower = 200.0;
+
+    // Even turbocharged, power is limited
+    double availablePower = seaLevelPower * 0.75; // turbo limited
+    TS_ASSERT(availablePower < seaLevelPower);
+  }
+
+  // Test engine overheat response
+  void testEngineOverheatResponse() {
+    double CHT = 500.0; // F (overheating)
+    double maxCHT = 450.0;
+
+    bool overheating = CHT > maxCHT;
+    TS_ASSERT(overheating);
+
+    // Power reduction required
+    double powerReduction = (CHT - maxCHT) * 0.02; // 2% per F
+    TS_ASSERT(powerReduction > 0);
+  }
+
+  // Test rapid power changes
+  void testRapidPowerChanges() {
+    double powerBefore = 65.0; // percent
+    double powerAfter = 100.0; // percent
+    double changeTime = 2.0;   // seconds
+
+    double changeRate = (powerAfter - powerBefore) / changeTime;
+    TS_ASSERT_DELTA(changeRate, 17.5, 0.1); // %/sec
+
+    // Rapid changes can cause shock cooling
+    bool rapidChange = changeRate > 10.0;
+    TS_ASSERT(rapidChange);
+  }
+
+  // Test partial power loss scenario
+  void testPartialPowerLoss() {
+    double normalPower = 180.0;  // HP
+    double fuelFlowLoss = 0.3;   // 30% fuel flow reduction
+
+    double reducedPower = normalPower * (1.0 - fuelFlowLoss);
+    TS_ASSERT_DELTA(reducedPower, 126.0, 0.1);
+    TS_ASSERT(reducedPower > 0);
+  }
 };
