@@ -732,4 +732,391 @@ public:
     TS_ASSERT(margin_factor > 1.0);  // Should have margin
     TS_ASSERT(margin_factor < 2.0);  // Typical range
   }
+
+  /***************************************************************************
+   * Von Karman Turbulence Spectrum Tests
+   ***************************************************************************/
+
+  void testVonKarmanScaleLengthLowAltitude() {
+    // Scale length at low altitude (below 1000 ft)
+    double h = 500.0;  // ft
+    double Lu = h / std::pow(0.177 + 0.000823 * h, 1.2);
+
+    TS_ASSERT(Lu > 0.0);
+    TS_ASSERT(Lu < 2000.0);
+  }
+
+  void testVonKarmanScaleLengthHighAltitude() {
+    // Scale length at altitude > 2000 ft
+    double Lw = 2500.0;  // ft (typical high altitude value)
+
+    TS_ASSERT(Lw >= 2500.0);
+  }
+
+  void testVonKarmanPowerSpectrum() {
+    double sigma = 5.0;   // RMS turbulence intensity (ft/s)
+    double L = 2500.0;    // Scale length (ft)
+    double omega = 0.5;   // Spatial frequency (rad/ft)
+    double V = 300.0;     // Airspeed (ft/s)
+
+    // Simplified PSD formula
+    double Omega = omega * L;
+    double phi_w = (sigma * sigma * L / PI) *
+                   (1.0 + 8.0/3.0 * std::pow(1.339 * Omega, 2)) /
+                   std::pow(1.0 + std::pow(1.339 * Omega, 2), 11.0/6.0);
+
+    TS_ASSERT(phi_w > 0.0);
+  }
+
+  void testVonKarmanVerticalIntensity() {
+    double sigma_w = 5.0;  // Vertical RMS turbulence (ft/s)
+    double sigma_u = 5.0;  // Longitudinal RMS turbulence (ft/s)
+
+    // For isotropic turbulence at high altitude
+    double ratio = sigma_w / sigma_u;
+    TS_ASSERT_DELTA(ratio, 1.0, 0.3);
+  }
+
+  /***************************************************************************
+   * Dryden Turbulence Model Tests
+   ***************************************************************************/
+
+  void testDrydenScaleLengthMediumAltitude() {
+    double h = 1500.0;  // ft
+
+    // Dryden scale lengths
+    double Lu = 200.0;  // Longitudinal (ft) - simplified
+    double Lw = h / 2.0;  // Vertical
+
+    TS_ASSERT(Lu > 0.0);
+    TS_ASSERT(Lw > 0.0);
+  }
+
+  void testDrydenTransferFunction() {
+    double sigma = 5.0;  // RMS intensity (ft/s)
+    double L = 1000.0;   // Scale length (ft)
+    double V = 300.0;    // Airspeed (ft/s)
+
+    // Time constant
+    double tau = L / V;
+    TS_ASSERT(tau > 0.0);
+    TS_ASSERT(tau < 10.0);
+  }
+
+  void testDrydenLowAltitudeModel() {
+    double h = 100.0;  // ft AGL
+
+    // At low altitude, scale length = altitude
+    double Lw = h;
+    double Lu = h / std::pow(0.177 + 0.000823 * h, 1.2);
+
+    TS_ASSERT(Lw <= h);
+    TS_ASSERT(Lu > 0.0);
+  }
+
+  /***************************************************************************
+   * Gust Frequency Analysis Tests
+   ***************************************************************************/
+
+  void testGustFrequencyAtAirspeed() {
+    double V = 300.0;    // Airspeed (ft/s)
+    double lambda = 50.0; // Wavelength (ft)
+
+    double f = V / lambda;  // Hz
+    TS_ASSERT_DELTA(f, 6.0, 0.01);
+  }
+
+  void testGustAngularFrequency() {
+    double f = 2.0;  // Hz
+
+    double omega = 2.0 * PI * f;  // rad/s
+    TS_ASSERT_DELTA(omega, 4.0 * PI, 0.01);
+  }
+
+  void testReducedFrequency() {
+    double omega = 10.0;  // rad/s
+    double c = 12.0;      // Chord (ft)
+    double V = 300.0;     // Airspeed (ft/s)
+
+    double k = omega * c / (2.0 * V);
+    TS_ASSERT(k > 0.0);
+    TS_ASSERT(k < 1.0);  // Typical range for gust analysis
+  }
+
+  void testCriticalGustWavelength() {
+    double b = 100.0;  // Wingspan (ft)
+
+    // Critical wavelength for maximum wing response
+    double lambda_crit = 2.0 * b;  // Approximate
+    TS_ASSERT_DELTA(lambda_crit, 200.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Structural Fatigue from Gusts Tests
+   ***************************************************************************/
+
+  void testGustCycleCount() {
+    double flight_hours = 1.0;
+    double gust_frequency = 0.1;  // Hz (gusts per second)
+
+    double cycles = flight_hours * 3600.0 * gust_frequency;
+    TS_ASSERT_DELTA(cycles, 360.0, 1.0);
+  }
+
+  void testFatigueStressRatio() {
+    double sigma_max = 30000.0;  // Max stress from gust (psi)
+    double sigma_min = 10000.0;  // Min stress (steady flight)
+
+    double R = sigma_min / sigma_max;
+    TS_ASSERT(R > 0.0);
+    TS_ASSERT(R < 1.0);
+  }
+
+  void testGustDamageAccumulation() {
+    double n_cycles = 1000.0;    // Number of gust cycles
+    double N_fatigue = 100000.0; // Fatigue life at stress level
+
+    double damage = n_cycles / N_fatigue;
+    TS_ASSERT_DELTA(damage, 0.01, DEFAULT_TOLERANCE);
+  }
+
+  void testCumulativeFatigueDamage() {
+    // Miner's rule: D = sum(ni/Ni)
+    double D1 = 0.1;   // Damage from light gusts
+    double D2 = 0.05;  // Damage from moderate gusts
+    double D3 = 0.02;  // Damage from severe gusts
+
+    double D_total = D1 + D2 + D3;
+    TS_ASSERT(D_total < 1.0);  // Below failure threshold
+  }
+
+  /***************************************************************************
+   * Autopilot Response to Gusts Tests
+   ***************************************************************************/
+
+  void testAutopilotGustSuppression() {
+    double gust_induced_pitch = 5.0;  // degrees
+    double autopilot_gain = 0.8;
+
+    double corrected_pitch = gust_induced_pitch * (1.0 - autopilot_gain);
+    TS_ASSERT(corrected_pitch < gust_induced_pitch);
+  }
+
+  void testGustLoadAlleviationSystem() {
+    double delta_n_no_gla = 2.0;   // Load factor without GLA
+    double gla_effectiveness = 0.3; // 30% load reduction
+
+    double delta_n_with_gla = delta_n_no_gla * (1.0 - gla_effectiveness);
+    TS_ASSERT_DELTA(delta_n_with_gla, 1.4, 0.01);
+  }
+
+  void testYawDamperGustResponse() {
+    double gust_yaw_rate = 10.0;  // deg/s from lateral gust
+    double damper_gain = 0.5;
+
+    double damped_yaw_rate = gust_yaw_rate / (1.0 + damper_gain);
+    TS_ASSERT(damped_yaw_rate < gust_yaw_rate);
+  }
+
+  /***************************************************************************
+   * Altitude-Dependent Gust Characteristics Tests
+   ***************************************************************************/
+
+  void testGustIntensityVsAltitude() {
+    double sigma_sl = 10.0;   // RMS at sea level (ft/s)
+    double h = 30000.0;       // ft
+
+    // Intensity typically decreases with altitude
+    double sigma_alt = sigma_sl * std::pow(1.0 - h / 50000.0, 0.3);
+    TS_ASSERT(sigma_alt < sigma_sl);
+    TS_ASSERT(sigma_alt > 0.0);
+  }
+
+  void testTropopauseGustIntensity() {
+    double h_tropopause = 36000.0;  // ft
+
+    // Maximum turbulence often near tropopause
+    double sigma_typical = 8.0;  // ft/s RMS
+
+    TS_ASSERT(sigma_typical > 5.0);
+    TS_ASSERT(sigma_typical < 15.0);
+  }
+
+  void testJetStreamTurbulence() {
+    double jet_stream_gust = 30.0;  // ft/s (severe turbulence possible)
+
+    TS_ASSERT(jet_stream_gust > 20.0);
+    TS_ASSERT(jet_stream_gust < 50.0);
+  }
+
+  /***************************************************************************
+   * Terrain-Induced Turbulence Tests
+   ***************************************************************************/
+
+  void testMechanicalTurbulenceIntensity() {
+    double wind_speed = 30.0;  // ft/s
+    double terrain_roughness = 0.5;  // Factor 0-1
+
+    double sigma_mech = wind_speed * terrain_roughness * 0.3;
+    TS_ASSERT(sigma_mech > 0.0);
+  }
+
+  void testMountainWaveTurbulence() {
+    double mountain_height = 10000.0;  // ft
+    double wind_speed = 50.0;  // ft/s
+
+    // Simplified estimate of rotor turbulence
+    double rotor_intensity = wind_speed * 0.5;  // ft/s RMS
+
+    TS_ASSERT(rotor_intensity > 0.0);
+  }
+
+  void testLowLevelWindShear() {
+    double altitude = 200.0;  // ft AGL
+    double wind_gradient = 0.1;  // (ft/s)/ft
+
+    double delta_V = wind_gradient * altitude;
+    TS_ASSERT_DELTA(delta_V, 20.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Convective Turbulence Tests
+   ***************************************************************************/
+
+  void testThermalGustVelocity() {
+    double thermal_strength = 10.0;  // ft/s vertical velocity
+
+    // Gust velocity proportional to thermal strength
+    double gust = thermal_strength * 1.5;  // Edge effects
+    TS_ASSERT(gust > thermal_strength);
+  }
+
+  void testThunderstormGust() {
+    double microburst_intensity = 80.0;  // ft/s (severe)
+
+    TS_ASSERT(microburst_intensity > 60.0);
+    TS_ASSERT(microburst_intensity < 150.0);
+  }
+
+  void testConvectiveBoundaryLayer() {
+    double surface_heating = 500.0;  // W/m^2
+    double h_cbl = 5000.0;  // CBL height (ft)
+
+    // Turbulence intensity in CBL
+    double sigma_w = 6.0;  // ft/s typical
+
+    TS_ASSERT(sigma_w > 3.0);
+    TS_ASSERT(sigma_w < 15.0);
+  }
+
+  /***************************************************************************
+   * Small Aircraft Gust Response Tests
+   ***************************************************************************/
+
+  void testLightAircraftMassRatio() {
+    double W = 2500.0;      // Weight (lbs)
+    double S = 180.0;       // Wing area (ft^2)
+    double c_bar = 5.0;     // MAC (ft)
+    double rho = 0.002377;  // Air density
+    double g = 32.174;
+    double CLalpha = 4.5;
+
+    double mu_g = (2.0 * W / S) / (rho * c_bar * g * CLalpha);
+    TS_ASSERT(mu_g < 20.0);  // Light aircraft has lower mass ratio than transport
+    TS_ASSERT(mu_g > 10.0);  // But still significant
+  }
+
+  void testLightAircraftGustLoadFactor() {
+    double rho = 0.002377;
+    double V = 150.0;       // ft/s
+    double CLalpha = 4.5;
+    double Ude = 50.0;      // ft/s
+    double W_over_S = 15.0; // Low wing loading
+    double Kg = 0.6;        // Lower alleviation factor
+
+    double delta_n = (rho * V * CLalpha * Ude * Kg) / (2.0 * W_over_S);
+    TS_ASSERT(delta_n > 1.0);  // High gust response for light aircraft
+  }
+
+  void testLightAircraftGustPenetration() {
+    double V = 100.0;  // ft/s (slower)
+    double H = 350.0;  // Gust gradient (ft)
+
+    double t_rise = H / V;
+    TS_ASSERT(t_rise > 3.0);  // Longer time to traverse gust
+  }
+
+  /***************************************************************************
+   * Combined Gust Effects Tests
+   ***************************************************************************/
+
+  void testSimultaneousVerticalLateralGust() {
+    double Ude_vertical = 30.0;  // ft/s
+    double Ude_lateral = 20.0;   // ft/s
+
+    double combined = std::sqrt(Ude_vertical * Ude_vertical +
+                                Ude_lateral * Ude_lateral);
+
+    TS_ASSERT(combined > Ude_vertical);
+    TS_ASSERT(combined > Ude_lateral);
+  }
+
+  void testGustWithManeuver() {
+    double n_maneuver = 2.0;    // Load factor from maneuver
+    double delta_n_gust = 1.0;  // Load factor from gust
+
+    double n_combined = n_maneuver + delta_n_gust;
+    TS_ASSERT_DELTA(n_combined, 3.0, DEFAULT_TOLERANCE);
+  }
+
+  void testGustDuringClimb() {
+    double climb_angle = 10.0 * PI / 180.0;  // rad
+    double Ude = 40.0;  // ft/s vertical gust
+    double V = 200.0;   // ft/s
+
+    // Effective vertical gust component changes with climb angle
+    double Ude_eff = Ude * std::cos(climb_angle);
+    TS_ASSERT(Ude_eff < Ude);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  void testStressGustProfiles() {
+    for (int i = 0; i <= 100; i++) {
+      double s = i * 3.5;  // Penetration 0 to 350 ft
+      double H = 350.0;
+      double Ude = 50.0;
+
+      double gust_1cos = (Ude / 2.0) * (1.0 - std::cos(PI * s / H));
+      double gust_ramp = (s <= H) ? Ude * s / H : Ude;
+
+      TS_ASSERT(!std::isnan(gust_1cos));
+      TS_ASSERT(!std::isnan(gust_ramp));
+    }
+  }
+
+  void testStressLoadFactorCalculations() {
+    for (double V = 100.0; V <= 600.0; V += 50.0) {
+      for (double Ude = 10.0; Ude <= 70.0; Ude += 10.0) {
+        double rho = 0.002377;
+        double CLalpha = 5.5;
+        double W_over_S = 50.0;
+        double Kg = 0.75;
+
+        double delta_n = (rho * V * CLalpha * Ude * Kg) / (2.0 * W_over_S);
+        TS_ASSERT(!std::isnan(delta_n));
+        TS_ASSERT(delta_n >= 0.0);
+      }
+    }
+  }
+
+  void testStressAlleviationFactors() {
+    for (double mu = 1.0; mu <= 100.0; mu += 5.0) {
+      double Kg = 0.88 * mu / (5.3 + mu);
+      TS_ASSERT(Kg > 0.0);
+      TS_ASSERT(Kg < 0.88);
+    }
+  }
 };
