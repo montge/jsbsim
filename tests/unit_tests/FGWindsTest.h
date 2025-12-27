@@ -865,4 +865,438 @@ public:
     TS_ASSERT(beta > 0 && beta < 1);
     TS_ASSERT_DELTA(alpha * alpha + beta * beta, 1.0, 0.01);
   }
+
+  /***************************************************************************
+   * Additional Wind Direction Tests
+   ***************************************************************************/
+
+  // Test 8 cardinal wind directions
+  void testCardinalWindDirections() {
+    double directions[] = {0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0};
+    double windSpeed = 10.0;
+
+    for (double dir : directions) {
+      double dirRad = dir * DEG_TO_RAD;
+      double windN = -windSpeed * std::cos(dirRad);
+      double windE = -windSpeed * std::sin(dirRad);
+
+      double resultant = std::sqrt(windN*windN + windE*windE);
+      TS_ASSERT_DELTA(resultant, windSpeed, 0.001);
+    }
+  }
+
+  // Test wind direction wraparound at 360
+  void testWindDirectionWraparound() {
+    double dir1 = 350.0;
+    double dir2 = 10.0;
+
+    // Angle difference across 360
+    double diff = dir2 - dir1;
+    if (diff > 180.0) diff -= 360.0;
+    if (diff < -180.0) diff += 360.0;
+
+    TS_ASSERT_DELTA(diff, 20.0, epsilon);
+  }
+
+  // Test negative wind direction handling
+  void testNegativeWindDirection() {
+    double dir = -90.0;  // Same as 270
+    double normalized = dir;
+    while (normalized < 0) normalized += 360.0;
+
+    TS_ASSERT_DELTA(normalized, 270.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Wind Speed Variability Tests
+   ***************************************************************************/
+
+  // Test mean wind with gusts
+  void testMeanWindWithGusts() {
+    double meanWind = 20.0;
+    double gustAmplitude = 10.0;
+
+    double maxWind = meanWind + gustAmplitude;
+    double minWind = meanWind - gustAmplitude * 0.5;
+
+    TS_ASSERT(maxWind > meanWind);
+    TS_ASSERT(minWind > 0);
+  }
+
+  // Test wind variance calculation
+  void testWindVarianceCalculation() {
+    std::mt19937 gen(123);
+    std::normal_distribution<> wind(20.0, 5.0);
+
+    double sum = 0.0, sumSq = 0.0;
+    int N = 1000;
+    for (int i = 0; i < N; i++) {
+      double v = wind(gen);
+      sum += v;
+      sumSq += v * v;
+    }
+    double mean = sum / N;
+    double variance = sumSq / N - mean * mean;
+
+    TS_ASSERT_DELTA(mean, 20.0, 1.0);
+    TS_ASSERT_DELTA(variance, 25.0, 5.0);
+  }
+
+  // Test sustained vs instantaneous wind
+  void testSustainedVsInstantaneous() {
+    double sustainedWind = 25.0;  // 2-minute average
+    double instantaneousWind = 35.0;
+
+    double gustFactor = instantaneousWind / sustainedWind;
+    TS_ASSERT(gustFactor > 1.0);
+    TS_ASSERT(gustFactor < 2.0);
+  }
+
+  /***************************************************************************
+   * Altitude Layer Wind Tests
+   ***************************************************************************/
+
+  // Test wind at multiple altitudes
+  void testWindAtMultipleAltitudes() {
+    double surfaceWind = 10.0;
+    double alpha = 0.143;
+    double zRef = 33.0;
+
+    double altitudes[] = {100.0, 500.0, 1000.0, 2000.0, 5000.0};
+
+    double prevWind = surfaceWind;
+    for (double z : altitudes) {
+      double windAtZ = surfaceWind * std::pow(z / zRef, alpha);
+      TS_ASSERT(windAtZ >= prevWind);
+      prevWind = windAtZ;
+    }
+  }
+
+  // Test temperature inversion wind effects
+  void testTemperatureInversionWind() {
+    double belowInversionWind = 15.0;
+    double aboveInversionWind = 35.0;
+    double inversionHeight = 3000.0;
+
+    // Sharp wind change at inversion
+    double windDiff = std::abs(aboveInversionWind - belowInversionWind);
+    TS_ASSERT(windDiff > 10.0);
+  }
+
+  // Test tropopause wind maximum
+  void testTropopauseWind() {
+    double tropopauseHeight = 36000.0;  // ft
+    double jetStreamSpeed = 150.0;       // kts
+
+    TS_ASSERT(jetStreamSpeed > 100.0);
+    TS_ASSERT(tropopauseHeight > 30000.0);
+  }
+
+  /***************************************************************************
+   * Wind Component Combination Tests
+   ***************************************************************************/
+
+  // Test 3D wind vector magnitude
+  void test3DWindMagnitude() {
+    double windN = 10.0, windE = 20.0, windD = 5.0;
+
+    double magnitude = std::sqrt(windN*windN + windE*windE + windD*windD);
+    TS_ASSERT_DELTA(magnitude, 22.91, 0.01);
+  }
+
+  // Test horizontal vs vertical wind components
+  void testHorizontalVsVerticalWind() {
+    double horizontalWind = 30.0;  // kts
+    double verticalWind = 5.0;     // kts (updraft)
+
+    double totalWind = std::sqrt(horizontalWind*horizontalWind +
+                                 verticalWind*verticalWind);
+    TS_ASSERT(totalWind > horizontalWind);
+    TS_ASSERT_DELTA(totalWind, 30.41, 0.01);
+  }
+
+  // Test wind vector addition
+  void testWindVectorAddition() {
+    double wind1N = 10.0, wind1E = 5.0;
+    double wind2N = 5.0, wind2E = 10.0;
+
+    double totalN = wind1N + wind2N;
+    double totalE = wind1E + wind2E;
+
+    TS_ASSERT_DELTA(totalN, 15.0, epsilon);
+    TS_ASSERT_DELTA(totalE, 15.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Gust Profile Tests
+   ***************************************************************************/
+
+  // Test step gust profile
+  void testStepGustProfile() {
+    double gustAmplitude = 15.0;
+    double x = 50.0;
+    double gustStart = 25.0;
+
+    double gust = (x >= gustStart) ? gustAmplitude : 0.0;
+    TS_ASSERT_DELTA(gust, gustAmplitude, epsilon);
+  }
+
+  // Test ramp gust profile
+  void testRampGustProfile() {
+    double gustAmplitude = 20.0;
+    double rampLength = 100.0;
+    double x = 50.0;
+
+    double gust = gustAmplitude * std::min(x / rampLength, 1.0);
+    TS_ASSERT_DELTA(gust, 10.0, epsilon);
+  }
+
+  // Test sinusoidal gust
+  void testSinusoidalGust() {
+    double gustAmplitude = 10.0;
+    double wavelength = 200.0;
+    double x = 30.0;  // Not at peak (peak is at x=50 where sin=1)
+
+    double gust = gustAmplitude * std::sin(2.0 * M_PI * x / wavelength);
+    TS_ASSERT(gust > 0);
+    TS_ASSERT(gust < gustAmplitude);
+  }
+
+  // Test gust frequency
+  void testGustFrequency() {
+    double wavelength = 300.0;  // ft
+    double TAS = 200.0;         // ft/s
+
+    double frequency = TAS / wavelength;
+    TS_ASSERT_DELTA(frequency, 0.667, 0.01);  // Hz
+  }
+
+  /***************************************************************************
+   * Shear Layer Tests
+   ***************************************************************************/
+
+  // Test linear shear layer
+  void testLinearShearLayer() {
+    double windBottom = 10.0;
+    double windTop = 30.0;
+    double layerThickness = 500.0;
+    double heightInLayer = 250.0;
+
+    double windAtHeight = windBottom + (windTop - windBottom) *
+                          (heightInLayer / layerThickness);
+    TS_ASSERT_DELTA(windAtHeight, 20.0, epsilon);
+  }
+
+  // Test shear exponent variation
+  void testShearExponentVariation() {
+    double exponents[] = {0.10, 0.14, 0.20, 0.25, 0.40};
+    double windRef = 20.0;
+    double zRef = 33.0;
+    double z = 100.0;
+
+    for (double alpha : exponents) {
+      double wind = windRef * std::pow(z / zRef, alpha);
+      TS_ASSERT(wind > windRef);
+    }
+  }
+
+  // Test nocturnal low-level jet profile
+  void testNocturnalJetProfile() {
+    double jetMaxSpeed = 45.0;
+    double jetHeight = 1200.0;
+    double altitude = 600.0;
+
+    // Parabolic profile below jet
+    double wind = jetMaxSpeed * (1.0 - std::pow((altitude - jetHeight) / jetHeight, 2.0));
+    TS_ASSERT(wind > 0);
+    TS_ASSERT(wind < jetMaxSpeed);
+  }
+
+  /***************************************************************************
+   * Consistency and Validation Tests
+   ***************************************************************************/
+
+  // Test wind components to speed/direction roundtrip
+  void testWindRoundtrip() {
+    double originalSpeed = 25.0;
+    double originalDir = 135.0;
+    double dirRad = originalDir * DEG_TO_RAD;
+
+    // To components
+    double windN = -originalSpeed * std::cos(dirRad);
+    double windE = -originalSpeed * std::sin(dirRad);
+
+    // Back to speed/direction
+    double speed = std::sqrt(windN*windN + windE*windE);
+    double fromDir = std::atan2(-windE, -windN) * RAD_TO_DEG;
+    if (fromDir < 0) fromDir += 360.0;
+
+    TS_ASSERT_DELTA(speed, originalSpeed, 0.001);
+    TS_ASSERT_DELTA(fromDir, originalDir, 0.001);
+  }
+
+  // Test wind triangle closure
+  void testWindTriangleClosure() {
+    double TAS = 200.0;
+    double heading = 90.0 * DEG_TO_RAD;  // East
+    double windSpeed = 30.0;
+    double windDir = 180.0 * DEG_TO_RAD;  // From south
+
+    // Aircraft velocity in NED
+    double acN = TAS * std::cos(heading);
+    double acE = TAS * std::sin(heading);
+
+    // Wind velocity (blowing TO)
+    double wN = -windSpeed * std::cos(windDir);
+    double wE = -windSpeed * std::sin(windDir);
+
+    // Ground speed
+    double gsN = acN + wN;
+    double gsE = acE + wE;
+    double GS = std::sqrt(gsN*gsN + gsE*gsE);
+
+    TS_ASSERT(GS > TAS - windSpeed);
+    TS_ASSERT(GS < TAS + windSpeed);
+  }
+
+  // Test multiple calculations consistency
+  void testCalculationsConsistency() {
+    double windSpeed = 20.0;
+    double windDir = 270.0;
+
+    for (int i = 0; i < 100; i++) {
+      double dirRad = windDir * DEG_TO_RAD;
+      double windN = -windSpeed * std::cos(dirRad);
+      double windE = -windSpeed * std::sin(dirRad);
+      double speed = std::sqrt(windN*windN + windE*windE);
+
+      TS_ASSERT_DELTA(speed, windSpeed, 0.0001);
+    }
+  }
+
+  /***************************************************************************
+   * Stress and Edge Case Tests
+   ***************************************************************************/
+
+  // Test very high wind speeds
+  void testVeryHighWindSpeed() {
+    double windSpeed = 200.0;  // kts (extreme jet stream)
+    double windFPS = windSpeed * KTS_TO_FPS;
+
+    TS_ASSERT(std::isfinite(windFPS));
+    TS_ASSERT(windFPS > 300.0);
+  }
+
+  // Test near-zero wind speed
+  void testNearZeroWindSpeed() {
+    double windSpeed = 0.001;
+    double windDir = 45.0 * DEG_TO_RAD;
+
+    double windN = -windSpeed * std::cos(windDir);
+    double windE = -windSpeed * std::sin(windDir);
+
+    TS_ASSERT(std::isfinite(windN));
+    TS_ASSERT(std::isfinite(windE));
+  }
+
+  // Test rapid wind direction changes
+  void testRapidDirectionChanges() {
+    double windSpeed = 20.0;
+
+    for (double dir = 0.0; dir <= 360.0; dir += 10.0) {
+      double dirRad = dir * DEG_TO_RAD;
+      double windN = -windSpeed * std::cos(dirRad);
+      double windE = -windSpeed * std::sin(dirRad);
+
+      TS_ASSERT(std::isfinite(windN));
+      TS_ASSERT(std::isfinite(windE));
+
+      double speed = std::sqrt(windN*windN + windE*windE);
+      TS_ASSERT_DELTA(speed, windSpeed, 0.001);
+    }
+  }
+
+  // Test altitude sweep wind calculation
+  void testAltitudeSweepWind() {
+    double surfaceWind = 10.0;
+    double alpha = 0.143;
+    double zRef = 33.0;
+
+    for (double z = 10.0; z <= 50000.0; z *= 2.0) {
+      double windAtZ = surfaceWind * std::pow(z / zRef, alpha);
+
+      TS_ASSERT(std::isfinite(windAtZ));
+      TS_ASSERT(windAtZ > 0);
+    }
+  }
+
+  /***************************************************************************
+   * Meteorological Conversion Tests
+   ***************************************************************************/
+
+  // Test wind from TO to FROM direction
+  void testWindToFromConversion() {
+    double toDir = 90.0;   // Blowing TO east
+    double fromDir = toDir + 180.0;
+    if (fromDir >= 360.0) fromDir -= 360.0;
+
+    TS_ASSERT_DELTA(fromDir, 270.0, epsilon);
+  }
+
+  // Test Beaufort scale wind
+  void testBeaufortScale() {
+    // Beaufort 6 = 22-27 kts (strong breeze)
+    double beaufort6Min = 22.0;
+    double beaufort6Max = 27.0;
+
+    double midpoint = (beaufort6Min + beaufort6Max) / 2.0;
+    TS_ASSERT_DELTA(midpoint, 24.5, epsilon);
+  }
+
+  // Test wind chill effect (simplified)
+  void testWindChillEffect() {
+    double temp = 40.0;       // Fahrenheit
+    double windSpeed = 15.0;  // mph
+
+    // Simplified wind chill formula
+    double windChill = 35.74 + 0.6215 * temp -
+                       35.75 * std::pow(windSpeed, 0.16) +
+                       0.4275 * temp * std::pow(windSpeed, 0.16);
+
+    TS_ASSERT(windChill < temp);
+  }
+
+  /***************************************************************************
+   * Atmospheric Stability Tests
+   ***************************************************************************/
+
+  // Test stable atmosphere turbulence
+  void testStableAtmosphereTurbulence() {
+    // In stable conditions, turbulence is suppressed
+    double stableSigma = 2.0;   // Low turbulence
+    double unstableSigma = 8.0; // High turbulence
+
+    TS_ASSERT(stableSigma < unstableSigma);
+  }
+
+  // Test convective mixing depth
+  void testConvectiveMixingDepth() {
+    double surfaceTemp = 95.0;    // F
+    double morningTemp = 65.0;    // F
+    double lapseRate = 5.4;       // F per 1000 ft
+
+    double mixingDepth = (surfaceTemp - morningTemp) / lapseRate * 1000.0;
+    TS_ASSERT(mixingDepth > 0);
+    TS_ASSERT(mixingDepth < 10000.0);
+  }
+
+  // Test Pasquill stability class
+  void testPasquillStabilityClass() {
+    // Class A = very unstable (daytime, light winds, strong sun)
+    // Class F = very stable (nighttime, light winds, clear)
+    double daytimeWindThreshold = 6.0;  // m/s
+    double nighttimeWindThreshold = 3.0;
+
+    TS_ASSERT(daytimeWindThreshold > nighttimeWindThreshold);
+  }
 };
