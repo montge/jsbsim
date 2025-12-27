@@ -673,4 +673,321 @@ public:
     TS_ASSERT_DELTA(prop1->GetForces(1), 0.0, epsilon);
     TS_ASSERT_DELTA(prop2->GetForces(1), 0.0, epsilon);
   }
+
+  /***************************************************************************
+   * Model Identity Tests
+   ***************************************************************************/
+
+  void testGetName() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    std::string name = prop->GetName();
+    TS_ASSERT(!name.empty());
+  }
+
+  void testGetExec() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    TS_ASSERT(prop->GetExec() == &fdmex);
+  }
+
+  void testSetRate() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetRate(5);
+    TS_ASSERT_EQUALS(prop->GetRate(), 5u);
+  }
+
+  void testRatePersistence() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetRate(7);
+    prop->Run(false);
+    TS_ASSERT_EQUALS(prop->GetRate(), 7u);
+  }
+
+  void testRateZero() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetRate(0);
+    TS_ASSERT_EQUALS(prop->GetRate(), 0u);
+  }
+
+  /***************************************************************************
+   * Fuel Management Tests
+   ***************************************************************************/
+
+  void testTankInertiaMatrixSymmetry() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    const FGMatrix33& inertia = prop->CalculateTankInertias();
+
+    // Verify symmetry
+    TS_ASSERT_DELTA(inertia(1,2), inertia(2,1), epsilon);
+    TS_ASSERT_DELTA(inertia(1,3), inertia(3,1), epsilon);
+    TS_ASSERT_DELTA(inertia(2,3), inertia(3,2), epsilon);
+  }
+
+  void testTankInertiaMatrixNonNegativeDiagonal() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    const FGMatrix33& inertia = prop->CalculateTankInertias();
+
+    // Diagonal should be non-negative
+    TS_ASSERT(inertia(1,1) >= 0.0);
+    TS_ASSERT(inertia(2,2) >= 0.0);
+    TS_ASSERT(inertia(3,3) >= 0.0);
+  }
+
+  /***************************************************************************
+   * Force and Moment Detailed Tests
+   ***************************************************************************/
+
+  void testForcesAfterMultipleRuns() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 50; i++) {
+      prop->Run(false);
+    }
+
+    // Forces should still be zero without engines
+    TS_ASSERT_DELTA(prop->GetForces(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(prop->GetForces(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(prop->GetForces(3), 0.0, epsilon);
+  }
+
+  void testMomentsAfterMultipleRuns() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 50; i++) {
+      prop->Run(false);
+    }
+
+    TS_ASSERT_DELTA(prop->GetMoments(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(prop->GetMoments(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(prop->GetMoments(3), 0.0, epsilon);
+  }
+
+  void testForcesVectorNonNegativeX() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->Run(false);
+    // Without engines, thrust (X-force) should be zero
+    TS_ASSERT_DELTA(prop->GetForces(1), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Engine and Tank Count Tests
+   ***************************************************************************/
+
+  void testEngineCountZero() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    TS_ASSERT_EQUALS(prop->GetNumEngines(), 0u);
+  }
+
+  void testTankCountZero() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    TS_ASSERT_EQUALS(prop->GetNumTanks(), 0u);
+  }
+
+  /***************************************************************************
+   * Stability Tests
+   ***************************************************************************/
+
+  void testRapidFuelFreezeToggle() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 1000; i++) {
+      prop->SetFuelFreeze(i % 2 == 0);
+    }
+
+    TS_ASSERT_EQUALS(prop->GetFuelFreeze(), false);
+  }
+
+  void testStressRun() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 500; i++) {
+      prop->Run(false);
+    }
+
+    TS_ASSERT_DELTA(prop->GetForces(1), 0.0, epsilon);
+  }
+
+  void testStressInitAndRun() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 100; i++) {
+      prop->InitModel();
+      prop->Run(false);
+    }
+
+    TS_ASSERT_EQUALS(prop->GetNumEngines(), 0u);
+  }
+
+  void testStressMultipleInstances() {
+    for (int i = 0; i < 20; i++) {
+      FGFDMExec fdmex;
+      auto prop = fdmex.GetPropulsion();
+
+      prop->Run(false);
+      TS_ASSERT(prop != nullptr);
+    }
+  }
+
+  /***************************************************************************
+   * Cross-Instance Tests
+   ***************************************************************************/
+
+  void testThreeFDMExecInstances() {
+    FGFDMExec fdmex1, fdmex2, fdmex3;
+
+    auto p1 = fdmex1.GetPropulsion();
+    auto p2 = fdmex2.GetPropulsion();
+    auto p3 = fdmex3.GetPropulsion();
+
+    p1->SetFuelFreeze(true);
+    p2->SetFuelFreeze(false);
+    p3->SetFuelFreeze(true);
+
+    TS_ASSERT_EQUALS(p1->GetFuelFreeze(), true);
+    TS_ASSERT_EQUALS(p2->GetFuelFreeze(), false);
+    TS_ASSERT_EQUALS(p3->GetFuelFreeze(), true);
+  }
+
+  void testConcurrentRuns() {
+    FGFDMExec fdmex1, fdmex2;
+
+    auto p1 = fdmex1.GetPropulsion();
+    auto p2 = fdmex2.GetPropulsion();
+
+    for (int i = 0; i < 50; i++) {
+      p1->Run(false);
+      p2->Run(false);
+    }
+
+    TS_ASSERT_EQUALS(p1->GetNumEngines(), 0u);
+    TS_ASSERT_EQUALS(p2->GetNumEngines(), 0u);
+  }
+
+  /***************************************************************************
+   * Additional State Tests
+   ***************************************************************************/
+
+  void testInitModelResetsState() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetFuelFreeze(true);
+    prop->Run(false);
+    prop->InitModel();
+
+    // FuelFreeze is preserved across InitModel
+    TS_ASSERT_EQUALS(prop->GetFuelFreeze(), true);
+  }
+
+  void testForcesMomentsBothZero() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->Run(false);
+
+    // Without engines, both should be zero
+    double totalForce = std::abs(prop->GetForces(1)) +
+                        std::abs(prop->GetForces(2)) +
+                        std::abs(prop->GetForces(3));
+    double totalMoment = std::abs(prop->GetMoments(1)) +
+                         std::abs(prop->GetMoments(2)) +
+                         std::abs(prop->GetMoments(3));
+
+    TS_ASSERT_DELTA(totalForce, 0.0, epsilon);
+    TS_ASSERT_DELTA(totalMoment, 0.0, epsilon);
+  }
+
+  void testTankWeightMomentConsistent() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->Run(false);
+
+    double weight = prop->GetTanksWeight();
+    const FGColumnVector3& moment = prop->GetTanksMoment();
+
+    // If weight is zero, moment should be zero
+    if (weight < epsilon) {
+      TS_ASSERT_DELTA(moment(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(moment(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(moment(3), 0.0, epsilon);
+    }
+  }
+
+  void testTankInertiaZeroWithoutTanks() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    // Without tanks, inertias should be zero
+    const FGMatrix33& inertia = prop->CalculateTankInertias();
+
+    TS_ASSERT_DELTA(inertia(1,1), 0.0, epsilon);
+    TS_ASSERT_DELTA(inertia(2,2), 0.0, epsilon);
+    TS_ASSERT_DELTA(inertia(3,3), 0.0, epsilon);
+  }
+
+  void testActiveEngineRange() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    // Try various active engine values
+    for (int i = -2; i < 5; i++) {
+      prop->SetActiveEngine(i);
+      int active = prop->GetActiveEngine();
+      // Should be -1 (all) or >= 0
+      TS_ASSERT(active >= -1);
+    }
+  }
+
+  void testMagnetosRange() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    // Test all magneto positions
+    for (int pos = 0; pos <= 3; pos++) {
+      prop->SetMagnetos(pos);
+      // Should not crash
+      TS_ASSERT(true);
+    }
+  }
+
+  void testStarterCutoffInteraction() {
+    FGFDMExec fdmex;
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetStarter(1);
+    prop->SetCutoff(0);
+    prop->Run(false);
+
+    prop->SetStarter(0);
+    prop->SetCutoff(1);
+    prop->Run(false);
+
+    // Should complete without error
+    TS_ASSERT(true);
+  }
 };
