@@ -1031,4 +1031,499 @@ public:
     }
     TS_ASSERT_EQUALS(count, 3);
   }
+
+  /***************************************************************************
+   * Additional Malformed XML Tests
+   ***************************************************************************/
+
+  // Test 64: Malformed XML - missing root element
+  void testMalformedXMLMissingRoot() {
+    FGXMLParse parser;
+    std::string xml = "<child>data</child><sibling>more</sibling>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    // Multiple root elements should fail (well-formed XML has one root)
+    // Note: Some parsers may accept the first element only
+    // The behavior depends on the parser implementation
+    if (doc != nullptr) {
+      // If it parses, it should at least get the first element
+      TS_ASSERT_EQUALS(doc->GetName(), "child");
+    }
+  }
+
+  // Test 65: Malformed XML - illegal character in element name
+  void testMalformedXMLIllegalCharInName() {
+    FGXMLParse parser;
+    std::string xml = "<123element>data</123element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    // Element names cannot start with numbers
+    TS_ASSERT(doc == nullptr);
+  }
+
+  // Test 66: Malformed XML - unclosed attribute
+  void testMalformedXMLUnclosedAttribute() {
+    FGXMLParse parser;
+    std::string xml = "<element attr=\"value></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc == nullptr);
+  }
+
+  // Test 67: Malformed XML - duplicate attributes
+  void testMalformedXMLDuplicateAttributes() {
+    FGXMLParse parser;
+    std::string xml = "<element attr=\"value1\" attr=\"value2\"></element>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    // Duplicate attributes are not well-formed XML
+    // Parser may either reject or use last value
+    if (doc != nullptr) {
+      TS_ASSERT(doc->HasAttribute("attr"));
+    }
+  }
+
+  /***************************************************************************
+   * JSBSim-Specific XML Pattern Tests
+   ***************************************************************************/
+
+  // Test 68: JSBSim channel definition
+  void testJSBSimChannelDefinition() {
+    FGXMLParse parser;
+    std::string xml = "<channel name=\"pitch\">"
+                      "<summer name=\"Pitch Trim Sum\">"
+                      "<input>fcs/elevator-cmd-norm</input>"
+                      "<input>fcs/pitch-trim-cmd-norm</input>"
+                      "</summer>"
+                      "<aerosurface_scale name=\"Elevator Control\">"
+                      "<input>fcs/pitch-trim-sum</input>"
+                      "<range>"
+                      "<min>-0.35</min>"
+                      "<max>0.3</max>"
+                      "</range>"
+                      "</aerosurface_scale>"
+                      "</channel>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "channel");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("name"), "pitch");
+
+    Element* summer = doc->FindElement("summer");
+    TS_ASSERT(summer != nullptr);
+    TS_ASSERT_EQUALS(summer->GetNumElements("input"), 2u);
+
+    Element* scale = doc->FindElement("aerosurface_scale");
+    TS_ASSERT(scale != nullptr);
+
+    Element* range = scale->FindElement("range");
+    TS_ASSERT(range != nullptr);
+
+    Element* minElem = range->FindElement("min");
+    TS_ASSERT(minElem != nullptr);
+    TS_ASSERT_DELTA(minElem->GetDataAsNumber(), -0.35, epsilon);
+  }
+
+  // Test 69: JSBSim ground reactions
+  void testJSBSimGroundReactions() {
+    FGXMLParse parser;
+    std::string xml = "<contact type=\"BOGEY\" name=\"NOSE\">"
+                      "<location unit=\"IN\">"
+                      "<x>33</x>"
+                      "<y>0</y>"
+                      "<z>-54</z>"
+                      "</location>"
+                      "<static_friction>0.8</static_friction>"
+                      "<dynamic_friction>0.5</dynamic_friction>"
+                      "<spring_coeff unit=\"LBS/FT\">1200</spring_coeff>"
+                      "<damping_coeff unit=\"LBS/FT/SEC\">200</damping_coeff>"
+                      "</contact>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "contact");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("type"), "BOGEY");
+
+    Element* location = doc->FindElement("location");
+    TS_ASSERT(location != nullptr);
+    TS_ASSERT_EQUALS(location->GetAttributeValue("unit"), "IN");
+
+    Element* staticFric = doc->FindElement("static_friction");
+    TS_ASSERT(staticFric != nullptr);
+    TS_ASSERT_DELTA(staticFric->GetDataAsNumber(), 0.8, epsilon);
+  }
+
+  // Test 70: JSBSim autopilot PID controller
+  void testJSBSimAutopilotPID() {
+    FGXMLParse parser;
+    std::string xml = "<pid name=\"heading-hold\">"
+                      "<input>ap/heading-error</input>"
+                      "<kp>0.1</kp>"
+                      "<ki>0.01</ki>"
+                      "<kd>0.05</kd>"
+                      "<clipto>"
+                      "<min>-1.0</min>"
+                      "<max>1.0</max>"
+                      "</clipto>"
+                      "<output>ap/heading-command</output>"
+                      "</pid>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "pid");
+
+    Element* kp = doc->FindElement("kp");
+    TS_ASSERT(kp != nullptr);
+    TS_ASSERT_DELTA(kp->GetDataAsNumber(), 0.1, epsilon);
+
+    Element* clipto = doc->FindElement("clipto");
+    TS_ASSERT(clipto != nullptr);
+    TS_ASSERT_EQUALS(clipto->GetNumElements(), 2u);
+  }
+
+  /***************************************************************************
+   * Edge Case Value Tests
+   ***************************************************************************/
+
+  // Test 71: Infinity representation
+  void testInfinityValue() {
+    FGXMLParse parser;
+    std::string xml = "<value>inf</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    // Parser behavior for "inf" varies - just check it parses
+  }
+
+  // Test 72: Negative zero
+  void testNegativeZero() {
+    FGXMLParse parser;
+    std::string xml = "<value>-0.0</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 0.0, epsilon);
+  }
+
+  // Test 73: Extremely deep nesting
+  void testExtremelyDeepNesting() {
+    FGXMLParse parser;
+    std::string xml = "<l1><l2><l3><l4><l5><l6><l7><l8><l9><l10>deep</l10></l9></l8></l7></l6></l5></l4></l3></l2></l1>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "l1");
+
+    // Navigate to deepest level
+    Element* current = doc;
+    for (int i = 2; i <= 10; i++) {
+      std::string name = "l" + std::to_string(i);
+      current = current->FindElement(name);
+      TS_ASSERT(current != nullptr);
+    }
+    TS_ASSERT_EQUALS(current->GetDataLine(), "deep");
+  }
+
+  // Test 74: Many attributes on single element
+  void testManyAttributes() {
+    FGXMLParse parser;
+    std::string xml = "<element a1=\"v1\" a2=\"v2\" a3=\"v3\" a4=\"v4\" a5=\"v5\" "
+                      "a6=\"v6\" a7=\"v7\" a8=\"v8\" a9=\"v9\" a10=\"v10\"/>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    for (int i = 1; i <= 10; i++) {
+      std::string attrName = "a" + std::to_string(i);
+      std::string attrValue = "v" + std::to_string(i);
+      TS_ASSERT(doc->HasAttribute(attrName));
+      TS_ASSERT_EQUALS(doc->GetAttributeValue(attrName), attrValue);
+    }
+  }
+
+  // Test 75: Many children elements
+  void testManyChildren() {
+    FGXMLParse parser;
+    std::string xml = "<root>";
+    for (int i = 0; i < 50; i++) {
+      xml += "<item>" + std::to_string(i) + "</item>";
+    }
+    xml += "</root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetNumElements("item"), 50u);
+  }
+
+  /***************************************************************************
+   * Special Character and Encoding Tests
+   ***************************************************************************/
+
+  // Test 76: Numeric character references
+  void testNumericCharacterReferences() {
+    FGXMLParse parser;
+    std::string xml = "<text>&#60;tag&#62;</text>";  // < and > as numeric refs
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    std::string data = doc->GetDataLine();
+    TS_ASSERT(data.find("<") != std::string::npos);
+    TS_ASSERT(data.find(">") != std::string::npos);
+  }
+
+  // Test 77: Mixed content and elements
+  void testMixedContentElements() {
+    FGXMLParse parser;
+    std::string xml = "<root>text before <child>child content</child> text after</root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* child = doc->FindElement("child");
+    TS_ASSERT(child != nullptr);
+  }
+
+  // Test 78: Element with namespace-like prefix
+  void testNamespaceLikePrefix() {
+    FGXMLParse parser;
+    std::string xml = "<root><jsbsim:config>data</jsbsim:config></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    // May or may not parse depending on namespace support
+    if (doc != nullptr) {
+      TS_ASSERT_EQUALS(doc->GetName(), "root");
+    }
+  }
+
+  /***************************************************************************
+   * Parser State and Reuse Tests
+   ***************************************************************************/
+
+  // Test 79: Multiple documents sequential parsing
+  void testMultipleDocumentsSequential() {
+    FGXMLParse parser;
+
+    for (int i = 0; i < 5; i++) {
+      parser.reset();
+      std::string xml = "<doc" + std::to_string(i) + ">data" + std::to_string(i) + "</doc" + std::to_string(i) + ">";
+      Element* doc = parseXMLString(xml, parser);
+
+      TS_ASSERT(doc != nullptr);
+      TS_ASSERT_EQUALS(doc->GetName(), "doc" + std::to_string(i));
+    }
+  }
+
+  // Test 80: Parse after failure
+  void testParseAfterFailure() {
+    FGXMLParse parser;
+
+    // First, try to parse malformed XML
+    std::string badXml = "<broken>";
+    Element* badDoc = parseXMLString(badXml, parser);
+    TS_ASSERT(badDoc == nullptr);
+
+    // Reset and parse valid XML
+    parser.reset();
+    std::string goodXml = "<valid>data</valid>";
+    Element* goodDoc = parseXMLString(goodXml, parser);
+
+    TS_ASSERT(goodDoc != nullptr);
+    TS_ASSERT_EQUALS(goodDoc->GetName(), "valid");
+  }
+
+  /***************************************************************************
+   * Additional Data Format Tests
+   ***************************************************************************/
+
+  // Test 81: Hexadecimal-like numeric value
+  void testHexLikeNumericValue() {
+    FGXMLParse parser;
+    std::string xml = "<value>0x1A</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    // Most XML parsers treat this as a string, not a hex number
+    TS_ASSERT_EQUALS(doc->GetDataLine(), "0x1A");
+  }
+
+  // Test 82: Data line with multiple values
+  void testDataLineMultipleValues() {
+    FGXMLParse parser;
+    std::string xml = "<coords>1.0 2.0 3.0</coords>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    std::string data = doc->GetDataLine();
+    TS_ASSERT(data.find("1.0") != std::string::npos);
+    TS_ASSERT(data.find("2.0") != std::string::npos);
+    TS_ASSERT(data.find("3.0") != std::string::npos);
+  }
+
+  // Test 83: Scientific notation with capital E
+  void testScientificNotationCapitalE() {
+    FGXMLParse parser;
+    std::string xml = "<value>1.5E+10</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 1.5e10, 1e5);
+  }
+
+  // Test 84: Leading zeros in numeric value
+  void testLeadingZerosNumeric() {
+    FGXMLParse parser;
+    std::string xml = "<value>007.5</value>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_DELTA(doc->GetDataAsNumber(), 7.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Stress and Boundary Tests
+   ***************************************************************************/
+
+  // Test 85: Very long text content
+  void testVeryLongTextContent() {
+    FGXMLParse parser;
+    std::string longContent = std::string(5000, 'x');
+    std::string xml = "<data>" + longContent + "</data>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetDataLine().length(), 5000u);
+  }
+
+  // Test 86: Many nested same-level elements
+  void testManyNestedSameLevelElements() {
+    FGXMLParse parser;
+    std::string xml = "<root>";
+    for (int i = 0; i < 100; i++) {
+      xml += "<item" + std::to_string(i) + ">v" + std::to_string(i) + "</item" + std::to_string(i) + ">";
+    }
+    xml += "</root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetNumElements(), 100u);
+  }
+
+  // Test 87: Rapid parser reuse
+  void testRapidParserReuse() {
+    FGXMLParse parser;
+
+    for (int i = 0; i < 100; i++) {
+      parser.reset();
+      std::string xml = "<test>" + std::to_string(i) + "</test>";
+      Element* doc = parseXMLString(xml, parser);
+
+      TS_ASSERT(doc != nullptr);
+      TS_ASSERT_DELTA(doc->GetDataAsNumber(), static_cast<double>(i), epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * JSBSim Real-World Pattern Tests
+   ***************************************************************************/
+
+  // Test 88: JSBSim engine definition
+  void testJSBSimEngineDefinition() {
+    FGXMLParse parser;
+    std::string xml = "<turbine_engine name=\"F100-PW-200\">"
+                      "<milthrust unit=\"LBS\">14590</milthrust>"
+                      "<maxthrust unit=\"LBS\">23770</maxthrust>"
+                      "<bypassratio>0.6</bypassratio>"
+                      "<tsfc>0.97</tsfc>"
+                      "<atsfc>1.9</atsfc>"
+                      "<idlen1>65.0</idlen1>"
+                      "<idlen2>60.0</idlen2>"
+                      "</turbine_engine>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "turbine_engine");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("name"), "F100-PW-200");
+
+    Element* milthrust = doc->FindElement("milthrust");
+    TS_ASSERT(milthrust != nullptr);
+    TS_ASSERT_EQUALS(milthrust->GetAttributeValue("unit"), "LBS");
+    TS_ASSERT_DELTA(milthrust->GetDataAsNumber(), 14590.0, 1.0);
+
+    Element* bypassratio = doc->FindElement("bypassratio");
+    TS_ASSERT(bypassratio != nullptr);
+    TS_ASSERT_DELTA(bypassratio->GetDataAsNumber(), 0.6, epsilon);
+  }
+
+  // Test 89: JSBSim script event
+  void testJSBSimScriptEvent() {
+    FGXMLParse parser;
+    std::string xml = "<event name=\"Start Engine\">"
+                      "<condition>"
+                      "simulation/sim-time-sec ge 0.5"
+                      "</condition>"
+                      "<set name=\"propulsion/engine/set-running\" value=\"1\"/>"
+                      "<notify>"
+                      "<property>propulsion/engine/n1</property>"
+                      "</notify>"
+                      "</event>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "event");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("name"), "Start Engine");
+
+    Element* condition = doc->FindElement("condition");
+    TS_ASSERT(condition != nullptr);
+
+    Element* set = doc->FindElement("set");
+    TS_ASSERT(set != nullptr);
+    TS_ASSERT_EQUALS(set->GetAttributeValue("name"), "propulsion/engine/set-running");
+    TS_ASSERT_EQUALS(set->GetAttributeValue("value"), "1");
+  }
+
+  // Test 90: JSBSim 2D table
+  void testJSBSim2DTable() {
+    FGXMLParse parser;
+    std::string xml = "<table>"
+                      "<independentVar lookup=\"row\">velocities/mach</independentVar>"
+                      "<independentVar lookup=\"column\">aero/alpha-rad</independentVar>"
+                      "<tableData>\n"
+                      "       -0.2   0.0   0.2\n"
+                      " 0.0   -0.1   0.0   0.1\n"
+                      " 0.5   -0.2   0.0   0.2\n"
+                      " 1.0   -0.3   0.0   0.3\n"
+                      "</tableData>"
+                      "</table>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "table");
+    TS_ASSERT_EQUALS(doc->GetNumElements("independentVar"), 2u);
+
+    Element* tableData = doc->FindElement("tableData");
+    TS_ASSERT(tableData != nullptr);
+    TS_ASSERT(tableData->GetNumDataLines() > 0);
+  }
 };
