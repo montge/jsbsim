@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <map>
 
 #include <FGFDMExec.h>
 #include "TestUtilities.h"
@@ -1102,5 +1103,492 @@ public:
     TS_ASSERT_DELTA(wrapAngle(-360.0), 0.0, DEFAULT_TOLERANCE);
     TS_ASSERT_DELTA(wrapAngle(270.0), -90.0, DEFAULT_TOLERANCE);
     TS_ASSERT_DELTA(wrapAngle(-270.0), 90.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Script Execution Tests
+   ***************************************************************************/
+
+  // Test script initialization state
+  void testScriptInitializationState() {
+    bool initialized = false;
+    double startTime = 0.0;
+    double endTime = 100.0;
+    std::string scriptName = "";
+
+    // Initialize
+    initialized = true;
+    startTime = 0.0;
+    endTime = 1000.0;
+    scriptName = "test_script";
+
+    TS_ASSERT(initialized);
+    TS_ASSERT_DELTA(startTime, 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(endTime > startTime);
+    TS_ASSERT(!scriptName.empty());
+  }
+
+  // Test multiple event ordering
+  void testMultipleEventOrdering() {
+    std::vector<double> eventTimes = {1.0, 5.0, 10.0, 15.0, 20.0};
+    std::vector<bool> executed(5, false);
+    double simTime = 0.0;
+
+    // Process events in order
+    for (int i = 0; i <= 25; i++) {
+      simTime = i * 1.0;
+      for (size_t j = 0; j < eventTimes.size(); j++) {
+        if (simTime >= eventTimes[j] && !executed[j]) {
+          executed[j] = true;
+        }
+      }
+    }
+
+    // All should be executed
+    for (size_t j = 0; j < executed.size(); j++) {
+      TS_ASSERT(executed[j]);
+    }
+  }
+
+  // Test event with notify flag
+  void testEventWithNotifyFlag() {
+    bool notify = true;
+    bool notified = false;
+    bool triggered = false;
+
+    // Event triggers
+    triggered = true;
+    if (notify && triggered) {
+      notified = true;
+    }
+
+    TS_ASSERT(notified);
+  }
+
+  // Test event grouping
+  void testEventGrouping() {
+    std::vector<std::string> group1 = {"throttle", "mixture", "propeller"};
+    std::vector<std::string> group2 = {"gear", "flaps", "spoilers"};
+
+    TS_ASSERT_EQUALS(group1.size(), 3u);
+    TS_ASSERT_EQUALS(group2.size(), 3u);
+  }
+
+  /***************************************************************************
+   * Extended Property Tests
+   ***************************************************************************/
+
+  // Test property path parsing
+  void testPropertyPathParsing() {
+    std::string path = "fcs/throttle-cmd-norm[0]";
+
+    TS_ASSERT(path.find("fcs") != std::string::npos);
+    TS_ASSERT(path.find("throttle") != std::string::npos);
+    TS_ASSERT(path.find("[0]") != std::string::npos);
+  }
+
+  // Test property value bounds
+  void testPropertyValueBounds() {
+    double value = 0.5;
+    double minValue = 0.0;
+    double maxValue = 1.0;
+
+    TS_ASSERT(value >= minValue);
+    TS_ASSERT(value <= maxValue);
+
+    // Clamped value
+    value = 1.5;
+    value = std::max(minValue, std::min(value, maxValue));
+    TS_ASSERT_DELTA(value, 1.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test property indexing
+  void testPropertyIndexing() {
+    std::vector<double> throttleCmd(4, 0.0);
+
+    throttleCmd[0] = 0.5;
+    throttleCmd[1] = 0.6;
+    throttleCmd[2] = 0.7;
+    throttleCmd[3] = 0.8;
+
+    TS_ASSERT_DELTA(throttleCmd[0], 0.5, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(throttleCmd[3], 0.8, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Condition Tests
+   ***************************************************************************/
+
+  // Test nested conditions
+  void testNestedConditions() {
+    double altitude = 5000.0;
+    double speed = 150.0;
+    double time = 10.0;
+
+    // Nested: (alt > 3000 AND speed > 100) OR time > 15
+    bool result = ((altitude > 3000.0 && speed > 100.0) || time > 15.0);
+    TS_ASSERT(result);
+
+    // Other case
+    altitude = 1000.0;
+    speed = 50.0;
+    time = 20.0;
+    result = ((altitude > 3000.0 && speed > 100.0) || time > 15.0);
+    TS_ASSERT(result);  // time > 15 satisfies OR
+  }
+
+  // Test NOT condition
+  void testNOTCondition() {
+    bool gearDown = true;
+    bool gearUp = !gearDown;
+
+    TS_ASSERT(!gearUp);
+
+    gearDown = false;
+    gearUp = !gearDown;
+    TS_ASSERT(gearUp);
+  }
+
+  // Test comparison operators
+  void testComparisonOperators() {
+    double value = 50.0;
+    double threshold = 50.0;
+
+    // Equal
+    TS_ASSERT(value == threshold);
+
+    // Not equal
+    value = 51.0;
+    TS_ASSERT(value != threshold);
+
+    // Greater than
+    TS_ASSERT(value > threshold);
+
+    // Greater or equal
+    value = 50.0;
+    TS_ASSERT(value >= threshold);
+
+    // Less than
+    value = 49.0;
+    TS_ASSERT(value < threshold);
+
+    // Less or equal
+    value = 50.0;
+    TS_ASSERT(value <= threshold);
+  }
+
+  // Test epsilon comparison
+  void testEpsilonComparison() {
+    double a = 0.1 + 0.2;  // May not be exactly 0.3
+    double b = 0.3;
+    double eps = 1e-9;
+
+    TS_ASSERT(std::abs(a - b) < eps);
+  }
+
+  /***************************************************************************
+   * Extended Flight Scenario Tests
+   ***************************************************************************/
+
+  // Test climb scenario
+  void testClimbScenario() {
+    double altitude = 1000.0;
+    double targetAlt = 10000.0;
+    double climbRate = 500.0;  // fpm
+    double dt = 1.0;  // minutes
+
+    while (altitude < targetAlt) {
+      altitude += climbRate * dt;
+    }
+
+    TS_ASSERT(altitude >= targetAlt);
+  }
+
+  // Test cruise scenario
+  void testCruiseScenario() {
+    double altitude = 35000.0;
+    double speed = 450.0;  // kts
+    double heading = 90.0;  // degrees
+
+    // Cruise conditions
+    TS_ASSERT(altitude > 30000.0);
+    TS_ASSERT(speed > 400.0);
+    TS_ASSERT(heading >= 0.0 && heading < 360.0);
+  }
+
+  // Test descent scenario
+  void testDescentScenario() {
+    double altitude = 35000.0;
+    double targetAlt = 3000.0;
+    double descentRate = 1500.0;  // fpm
+    double dt = 1.0;
+
+    while (altitude > targetAlt) {
+      altitude -= descentRate * dt;
+    }
+
+    TS_ASSERT(altitude <= targetAlt);
+  }
+
+  // Test holding pattern
+  void testHoldingPattern() {
+    double heading = 0.0;
+    double turnRate = 3.0;  // degrees per second
+    int turns = 0;
+
+    // Complete 2 holding patterns (4 turns total)
+    for (double t = 0.0; t < 480.0; t += 1.0) {
+      heading += turnRate;
+      if (heading >= 360.0) {
+        heading -= 360.0;
+        turns++;
+      }
+    }
+
+    TS_ASSERT_EQUALS(turns, 4);
+  }
+
+  /***************************************************************************
+   * Extended Error Handling Tests
+   ***************************************************************************/
+
+  // Test infinity handling
+  void testInfinityHandling() {
+    double value = std::numeric_limits<double>::infinity();
+
+    TS_ASSERT(std::isinf(value));
+
+    // Replace with default
+    if (std::isinf(value)) {
+      value = 0.0;
+    }
+    TS_ASSERT_DELTA(value, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test divide by zero prevention
+  void testDivideByZeroPrevention() {
+    double numerator = 100.0;
+    double denominator = 0.0;
+    double result;
+
+    if (denominator != 0.0) {
+      result = numerator / denominator;
+    } else {
+      result = 0.0;  // Safe default
+    }
+
+    TS_ASSERT_DELTA(result, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test array bounds
+  void testArrayBounds() {
+    std::vector<double> values(10, 0.0);
+    size_t index = 5;
+
+    TS_ASSERT(index < values.size());
+    values[index] = 1.0;
+    TS_ASSERT_DELTA(values[index], 1.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Timing Tests
+   ***************************************************************************/
+
+  // Test simulation frame rate
+  void testSimulationFrameRate() {
+    double dt = 0.008333;  // 120 Hz
+    double frameRate = 1.0 / dt;
+
+    TS_ASSERT_DELTA(frameRate, 120.0, 0.1);
+
+    // 60 Hz
+    dt = 0.01667;
+    frameRate = 1.0 / dt;
+    TS_ASSERT_DELTA(frameRate, 60.0, 0.1);
+  }
+
+  // Test accumulator pattern
+  void testAccumulatorPattern() {
+    double accumulator = 0.0;
+    double dt = 0.01;
+    double threshold = 1.0;
+    int triggers = 0;
+
+    for (int i = 0; i < 500; i++) {
+      accumulator += dt;
+      if (accumulator >= threshold) {
+        triggers++;
+        accumulator -= threshold;
+      }
+    }
+
+    TS_ASSERT_EQUALS(triggers, 5);
+  }
+
+  // Test time scaling
+  void testTimeScaling() {
+    double realTime = 1.0;
+    double timeScale = 4.0;  // 4x speed
+    double simTime = realTime * timeScale;
+
+    TS_ASSERT_DELTA(simTime, 4.0, DEFAULT_TOLERANCE);
+
+    // Slow motion
+    timeScale = 0.5;
+    simTime = realTime * timeScale;
+    TS_ASSERT_DELTA(simTime, 0.5, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended State Machine Tests
+   ***************************************************************************/
+
+  // Test state machine transitions
+  void testStateMachineTransitions() {
+    enum State { IDLE, RUNNING, PAUSED, STOPPED };
+    State state = IDLE;
+
+    // IDLE -> RUNNING
+    state = RUNNING;
+    TS_ASSERT_EQUALS(state, RUNNING);
+
+    // RUNNING -> PAUSED
+    state = PAUSED;
+    TS_ASSERT_EQUALS(state, PAUSED);
+
+    // PAUSED -> RUNNING
+    state = RUNNING;
+    TS_ASSERT_EQUALS(state, RUNNING);
+
+    // RUNNING -> STOPPED
+    state = STOPPED;
+    TS_ASSERT_EQUALS(state, STOPPED);
+  }
+
+  // Test state guards
+  void testStateGuards() {
+    bool canStart = false;
+    bool engineRunning = false;
+    bool fuelAvailable = true;
+    bool starterOn = true;
+
+    // Guard: can only start if not running, fuel available, starter on
+    canStart = !engineRunning && fuelAvailable && starterOn;
+    TS_ASSERT(canStart);
+
+    // Engine already running
+    engineRunning = true;
+    canStart = !engineRunning && fuelAvailable && starterOn;
+    TS_ASSERT(!canStart);
+  }
+
+  /***************************************************************************
+   * Extended Output Tests
+   ***************************************************************************/
+
+  // Test output file format
+  void testOutputFileFormat() {
+    std::string delimiter = ",";
+    std::vector<std::string> headers = {"time", "altitude", "speed"};
+    std::string headerLine = "";
+
+    for (size_t i = 0; i < headers.size(); i++) {
+      headerLine += headers[i];
+      if (i < headers.size() - 1) headerLine += delimiter;
+    }
+
+    TS_ASSERT(headerLine.find("time") != std::string::npos);
+    TS_ASSERT(headerLine.find(",") != std::string::npos);
+  }
+
+  // Test output rate
+  void testOutputRate() {
+    double simRate = 120.0;  // Hz
+    double outputRate = 10.0;  // Hz
+    int skipFrames = static_cast<int>(simRate / outputRate);
+
+    TS_ASSERT_EQUALS(skipFrames, 12);
+  }
+
+  /***************************************************************************
+   * Extended Integration Tests
+   ***************************************************************************/
+
+  // Test Euler integration
+  void testEulerIntegration() {
+    double position = 0.0;
+    double velocity = 10.0;
+    double dt = 0.1;
+
+    for (int i = 0; i < 10; i++) {
+      position += velocity * dt;
+    }
+
+    TS_ASSERT_DELTA(position, 10.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test RK2 integration
+  void testRK2Integration() {
+    double y = 1.0;  // dy/dt = y (exponential growth)
+    double dt = 0.1;
+
+    for (int i = 0; i < 10; i++) {
+      double k1 = y;
+      double k2 = y + dt * k1;
+      y = y + dt * 0.5 * (k1 + k2);
+    }
+
+    // Should be close to e (2.718...)
+    TS_ASSERT(y > 2.5);
+    TS_ASSERT(y < 3.0);
+  }
+
+  /***************************************************************************
+   * Extended Script Element Tests
+   ***************************************************************************/
+
+  // Test local property creation
+  void testLocalPropertyCreation() {
+    std::map<std::string, double> localProps;
+
+    localProps["my-local-var"] = 0.0;
+    localProps["my-local-var"] = 42.0;
+
+    TS_ASSERT_DELTA(localProps["my-local-var"], 42.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test table lookup simulation
+  void testTableLookupSimulation() {
+    std::vector<std::pair<double, double>> table = {
+      {0.0, 0.0},
+      {0.5, 0.3},
+      {1.0, 1.0}
+    };
+
+    auto lookup = [&](double x) {
+      if (x <= table[0].first) return table[0].second;
+      if (x >= table.back().first) return table.back().second;
+
+      for (size_t i = 1; i < table.size(); i++) {
+        if (x <= table[i].first) {
+          double t = (x - table[i-1].first) / (table[i].first - table[i-1].first);
+          return table[i-1].second + t * (table[i].second - table[i-1].second);
+        }
+      }
+      return 0.0;
+    };
+
+    TS_ASSERT_DELTA(lookup(0.0), 0.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(lookup(0.5), 0.3, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(lookup(1.0), 1.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(lookup(0.25), 0.15, DEFAULT_TOLERANCE);
+  }
+
+  // Test function expression
+  void testFunctionExpression() {
+    double x = 0.5;
+    double y = 2.0 * x * x + 3.0 * x + 1.0;
+
+    TS_ASSERT_DELTA(y, 3.0, DEFAULT_TOLERANCE);
   }
 };

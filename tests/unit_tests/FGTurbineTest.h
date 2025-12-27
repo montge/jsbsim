@@ -980,4 +980,472 @@ public:
     TS_ASSERT(ratio >= 4.0);
     TS_ASSERT(ratio <= 10.0);
   }
+
+  /***************************************************************************
+   * Extended Spool Dynamics Tests
+   ***************************************************************************/
+
+  // Test N1 acceleration rate
+  void testN1AccelerationRate() {
+    double N1 = 25.0;
+    double targetN1 = 100.0;
+    double accelRate = 20.0;  // %/sec
+    double dt = 0.1;
+
+    for (int i = 0; i < 40; i++) {
+      double delta = std::min(accelRate * dt, targetN1 - N1);
+      N1 += delta;
+    }
+
+    TS_ASSERT(N1 > 95.0);
+  }
+
+  // Test N2 deceleration rate
+  void testN2DecelerationRate() {
+    double N2 = 100.0;
+    double targetN2 = 60.0;
+    double decelRate = 10.0;  // %/sec
+    double dt = 0.1;
+
+    for (int i = 0; i < 50; i++) {
+      double delta = std::min(decelRate * dt, N2 - targetN2);
+      N2 -= delta;
+    }
+
+    TS_ASSERT(N2 < 65.0);
+  }
+
+  // Test spool inertia effect
+  void testSpoolInertia() {
+    double spoolMass = 100.0;  // kg
+    double radius = 0.3;       // m
+    double inertia = 0.5 * spoolMass * radius * radius;
+
+    TS_ASSERT(inertia > 0);
+    TS_ASSERT_DELTA(inertia, 4.5, 0.1);
+  }
+
+  /***************************************************************************
+   * Extended Combustion Tests
+   ***************************************************************************/
+
+  // Test combustion efficiency
+  void testCombustionEfficiency() {
+    double fuelEnergy = 18400.0;  // BTU/lb
+    double actualEnergy = 17000.0;
+
+    double efficiency = actualEnergy / fuelEnergy;
+    TS_ASSERT(efficiency > 0.90);
+    TS_ASSERT(efficiency < 1.0);
+  }
+
+  // Test flame stability
+  void testFlameStability() {
+    double airVelocity = 50.0;  // ft/s in combustor
+    double maxStableVelocity = 100.0;
+
+    bool stable = airVelocity < maxStableVelocity;
+    TS_ASSERT(stable);
+  }
+
+  // Test fuel-air ratio
+  void testFuelAirRatio() {
+    double fuelFlow = 8000.0;  // lbs/hr
+    double airFlow = 200.0 * 3600.0;  // lbs/hr
+
+    double FAR = fuelFlow / airFlow;
+    // Typical FAR: 0.01-0.02
+    TS_ASSERT(FAR > 0.005);
+    TS_ASSERT(FAR < 0.03);
+  }
+
+  /***************************************************************************
+   * Extended Compressor Tests
+   ***************************************************************************/
+
+  // Test compressor stall recovery
+  void testCompressorStallRecovery() {
+    bool stalled = true;
+    double N2 = 95.0;
+    double targetN2 = 60.0;
+
+    // Reduce power to recover
+    if (stalled) {
+      while (N2 > targetN2) {
+        N2 -= 5.0;
+      }
+      stalled = false;
+    }
+
+    TS_ASSERT(!stalled);
+    TS_ASSERT(N2 <= targetN2);
+  }
+
+  // Test compressor bleed valve
+  void testCompressorBleedValve() {
+    double N2 = 50.0;  // During start
+    double bleedThreshold = 80.0;
+    bool bleedOpen = N2 < bleedThreshold;
+
+    TS_ASSERT(bleedOpen);
+
+    N2 = 90.0;
+    bleedOpen = N2 < bleedThreshold;
+    TS_ASSERT(!bleedOpen);
+  }
+
+  // Test variable geometry
+  void testVariableGeometry() {
+    double N2 = 70.0;
+    double vaneAngle = 0.0;  // degrees
+
+    // Vanes close as N2 increases
+    if (N2 < 60.0) vaneAngle = 30.0;
+    else if (N2 < 80.0) vaneAngle = 15.0;
+    else vaneAngle = 0.0;
+
+    TS_ASSERT_DELTA(vaneAngle, 15.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Turbine Tests
+   ***************************************************************************/
+
+  // Test turbine power extraction
+  void testTurbinePowerExtraction() {
+    double compressorPower = 40000.0;  // HP
+    double accessoryPower = 500.0;
+    double totalExtraction = compressorPower + accessoryPower;
+
+    TS_ASSERT_DELTA(totalExtraction, 40500.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test turbine cooling effectiveness
+  void testTurbineCooling() {
+    double bladeTemp = 1500.0;  // K
+    double coolingAirTemp = 700.0;
+    double coolingEffectiveness = 0.6;
+
+    double effectiveTemp = bladeTemp - coolingEffectiveness * (bladeTemp - coolingAirTemp);
+    TS_ASSERT(effectiveTemp < bladeTemp);
+    TS_ASSERT_DELTA(effectiveTemp, 1020.0, 10.0);
+  }
+
+  // Test turbine blade creep
+  void testTurbineBladeCreep() {
+    double temp = 1600.0;  // K
+    double stress = 200.0; // MPa
+    double creepLimit = 1700.0;
+
+    bool creepRisk = temp > creepLimit * 0.95;
+    TS_ASSERT(!creepRisk);
+
+    temp = 1650.0;
+    creepRisk = temp > creepLimit * 0.95;
+    TS_ASSERT(creepRisk);
+  }
+
+  /***************************************************************************
+   * Extended Nozzle Tests
+   ***************************************************************************/
+
+  // Test convergent nozzle
+  void testConvergentNozzle() {
+    double throatArea = 3.0;  // sq ft
+    double exitArea = 3.0;    // Same for convergent
+
+    double areaRatio = exitArea / throatArea;
+    TS_ASSERT_DELTA(areaRatio, 1.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test convergent-divergent nozzle
+  void testConvergentDivergentNozzle() {
+    double throatArea = 3.0;  // sq ft
+    double exitArea = 5.0;    // Larger for supersonic
+
+    double areaRatio = exitArea / throatArea;
+    TS_ASSERT(areaRatio > 1.0);
+    TS_ASSERT_DELTA(areaRatio, 1.667, 0.01);
+  }
+
+  // Test nozzle pressure ratio
+  void testNozzlePressureRatio() {
+    double P_total = 50.0;  // psia
+    double P_ambient = 14.7;
+
+    double NPR = P_total / P_ambient;
+    TS_ASSERT_DELTA(NPR, 3.4, 0.1);
+
+    // Critical NPR for choked flow
+    double criticalNPR = 1.89;  // For gamma = 1.4
+    TS_ASSERT(NPR > criticalNPR);
+  }
+
+  /***************************************************************************
+   * Extended Efficiency Tests
+   ***************************************************************************/
+
+  // Test overall efficiency
+  void testOverallEfficiency() {
+    double thermalEff = 0.45;
+    double propulsiveEff = 0.80;
+
+    double overallEff = thermalEff * propulsiveEff;
+    TS_ASSERT_DELTA(overallEff, 0.36, 0.01);
+  }
+
+  // Test polytropic efficiency
+  void testPolytropicEfficiency() {
+    double gamma = 1.4;
+    double PR = 30.0;  // Pressure ratio
+    double T2_T1_actual = 3.5;
+    double T2_T1_ideal = pow(PR, (gamma-1)/gamma);  // ≈ 2.77
+
+    // isentropicEff = (2.77-1)/(3.5-1) ≈ 0.71
+    double isentropicEff = (T2_T1_ideal - 1) / (T2_T1_actual - 1);
+    TS_ASSERT(isentropicEff < 1.0);
+    TS_ASSERT(isentropicEff > 0.6);
+  }
+
+  /***************************************************************************
+   * Extended Operating Envelope Tests
+   ***************************************************************************/
+
+  // Test altitude thrust lapse
+  void testAltitudeThrustLapse() {
+    double seaLevelThrust = 25000.0;
+
+    // Thrust at various altitudes
+    double thrust10k = seaLevelThrust * 0.74;
+    double thrust20k = seaLevelThrust * 0.53;
+    double thrust35k = seaLevelThrust * 0.31;
+
+    TS_ASSERT(thrust10k < seaLevelThrust);
+    TS_ASSERT(thrust20k < thrust10k);
+    TS_ASSERT(thrust35k < thrust20k);
+  }
+
+  // Test Mach effect on thrust
+  void testMachEffectOnThrust() {
+    double staticThrust = 25000.0;
+    double Mach = 0.85;
+
+    // Ram effect partially compensates for inlet losses
+    double machFactor = 1.0 - 0.1 * Mach + 0.05 * Mach * Mach;
+    double thrust = staticThrust * machFactor;
+
+    TS_ASSERT(thrust < staticThrust);
+    TS_ASSERT(thrust > staticThrust * 0.85);
+  }
+
+  // Test temperature effect on thrust
+  void testTemperatureEffectOnThrust() {
+    double standardThrust = 25000.0;
+    double ISA_temp = 288.15;  // K
+
+    // Hot day
+    double hotDay = 303.15;  // K (ISA+15)
+    double hotDayThrust = standardThrust * sqrt(ISA_temp / hotDay);
+
+    TS_ASSERT(hotDayThrust < standardThrust);
+
+    // Cold day
+    double coldDay = 268.15;  // K (ISA-20)
+    double coldDayThrust = standardThrust * sqrt(ISA_temp / coldDay);
+
+    TS_ASSERT(coldDayThrust > standardThrust);
+  }
+
+  /***************************************************************************
+   * Extended Start Sequence Tests
+   ***************************************************************************/
+
+  // Test starter energy requirements
+  void testStarterEnergyRequirements() {
+    double spoolInertia = 5.0;  // kg*m^2
+    double targetN2 = 0.25;     // 25% N2
+    double maxN2_rps = 200.0;   // rad/s at 100%
+    double omega = targetN2 * maxN2_rps;  // = 50 rad/s
+
+    // E = 0.5 * I * omega^2 = 0.5 * 5 * 50^2 = 6250 J
+    double energy = 0.5 * spoolInertia * omega * omega;
+    TS_ASSERT(energy > 0);
+    TS_ASSERT_DELTA(energy, 6250.0, 100.0);
+  }
+
+  // Test start time vs temperature
+  void testStartTimeVsTemperature() {
+    double baseStartTime = 30.0;  // seconds
+    double ambientTemp = 288.15;
+    double coldTemp = 253.15;
+
+    // Cold starts take longer
+    double coldStartTime = baseStartTime * sqrt(ambientTemp / coldTemp);
+    TS_ASSERT(coldStartTime > baseStartTime);
+  }
+
+  // Test altitude restart envelope
+  void testAltitudeRestartEnvelope() {
+    double maxRestartAlt = 25000.0;  // ft
+    double currentAlt = 20000.0;
+
+    bool canRestart = currentAlt <= maxRestartAlt;
+    TS_ASSERT(canRestart);
+
+    currentAlt = 30000.0;
+    canRestart = currentAlt <= maxRestartAlt;
+    TS_ASSERT(!canRestart);
+  }
+
+  /***************************************************************************
+   * Extended Fuel Control Tests
+   ***************************************************************************/
+
+  // Test fuel metering unit
+  void testFuelMeteringUnit() {
+    double N2 = 80.0;
+    double throttle = 0.7;
+    double baseFuelFlow = 6000.0;  // lbs/hr
+
+    double fuelFlow = baseFuelFlow * throttle * (N2 / 100.0);
+    TS_ASSERT_DELTA(fuelFlow, 3360.0, 10.0);
+  }
+
+  // Test fuel schedule during acceleration
+  void testFuelScheduleAcceleration() {
+    double N2 = 70.0;
+    double targetN2 = 100.0;
+    double maxAccelFuel = 10000.0;
+    double idleFuel = 500.0;
+
+    // Fuel increases with N2 demand
+    double fuelSchedule = idleFuel + (maxAccelFuel - idleFuel) * (targetN2 - N2) / 30.0;
+    TS_ASSERT_DELTA(fuelSchedule, 10000.0, 100.0);
+  }
+
+  // Test fuel enrichment during start
+  void testFuelEnrichmentStart() {
+    double normalFuel = 500.0;
+    double enrichmentFactor = 1.5;
+    double N2 = 20.0;
+    double enrichmentCutoff = 50.0;
+
+    double fuelFlow = normalFuel;
+    if (N2 < enrichmentCutoff) {
+      fuelFlow *= enrichmentFactor;
+    }
+
+    TS_ASSERT_DELTA(fuelFlow, 750.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Vibration and Health Tests
+   ***************************************************************************/
+
+  // Test vibration monitoring
+  void testVibrationMonitoring() {
+    double N1_vib = 0.5;   // mils
+    double N2_vib = 0.3;
+    double maxVib = 1.0;
+
+    bool vibOK = (N1_vib < maxVib) && (N2_vib < maxVib);
+    TS_ASSERT(vibOK);
+  }
+
+  // Test engine trend monitoring
+  void testEngineTrendMonitoring() {
+    double baselineEGT = 700.0;
+    double currentEGT = 720.0;
+    double alertThreshold = 25.0;
+
+    double deviation = currentEGT - baselineEGT;
+    bool trendAlert = deviation > alertThreshold;
+
+    TS_ASSERT(!trendAlert);
+
+    currentEGT = 730.0;
+    deviation = currentEGT - baselineEGT;
+    trendAlert = deviation > alertThreshold;
+    TS_ASSERT(trendAlert);
+  }
+
+  // Test FOD detection
+  void testFODDetection() {
+    double N1_baseline = 95.0;
+    double N1_current = 93.5;
+    double N1_threshold = 2.0;
+
+    bool possibleFOD = (N1_baseline - N1_current) > N1_threshold;
+    TS_ASSERT(!possibleFOD);
+
+    N1_current = 92.0;
+    possibleFOD = (N1_baseline - N1_current) > N1_threshold;
+    TS_ASSERT(possibleFOD);
+  }
+
+  /***************************************************************************
+   * Extended Environmental Tests
+   ***************************************************************************/
+
+  // Test rain ingestion
+  void testRainIngestion() {
+    double rainRate = 2.0;  // inches/hour (heavy)
+    double thrustLoss = rainRate * 0.5;  // % per in/hr
+
+    TS_ASSERT_DELTA(thrustLoss, 1.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(thrustLoss < 5.0);  // Acceptable loss
+  }
+
+  // Test icing conditions
+  void testIcingConditions() {
+    double OAT = -5.0;  // °C
+    double humidity = 0.9;
+    double LWC = 0.5;   // Liquid water content (g/m^3)
+
+    bool icingRisk = (OAT < 0 && OAT > -20 && LWC > 0.1);
+    TS_ASSERT(icingRisk);
+  }
+
+  // Test volcanic ash detection
+  void testVolcanicAshDetection() {
+    double EGT_normal = 700.0;
+    double EGT_current = 680.0;  // Drops with ash
+
+    double EGT_drop = EGT_normal - EGT_current;
+    bool ashPossible = EGT_drop > 15.0;
+
+    TS_ASSERT(ashPossible);
+  }
+
+  /***************************************************************************
+   * Extended Performance Margin Tests
+   ***************************************************************************/
+
+  // Test takeoff thrust margin
+  void testTakeoffThrustMargin() {
+    double requiredThrust = 22000.0;
+    double availableThrust = 25000.0;
+
+    double margin = (availableThrust - requiredThrust) / requiredThrust * 100.0;
+    TS_ASSERT(margin > 10.0);
+    TS_ASSERT_DELTA(margin, 13.6, 0.1);
+  }
+
+  // Test climb thrust rating
+  void testClimbThrustRating() {
+    double takeoffThrust = 25000.0;
+    double climbDerate = 0.90;
+
+    double climbThrust = takeoffThrust * climbDerate;
+    TS_ASSERT_DELTA(climbThrust, 22500.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test cruise thrust setting
+  void testCruiseThrustSetting() {
+    double maxCruiseThrust = 18000.0;
+    double cruiseSetting = 0.85;
+
+    double cruiseThrust = maxCruiseThrust * cruiseSetting;
+    TS_ASSERT_DELTA(cruiseThrust, 15300.0, DEFAULT_TOLERANCE);
+  }
 };

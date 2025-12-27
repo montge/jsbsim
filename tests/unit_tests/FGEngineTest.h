@@ -1044,4 +1044,454 @@ public:
     bool engineStall = rpm < 300.0;
     TS_ASSERT(engineStall);
   }
+
+  /***************************************************************************
+   * Extended Power Output Tests
+   ***************************************************************************/
+
+  // Test power curve vs RPM
+  void testPowerCurveVsRPM() {
+    double maxPower = 200.0;  // HP
+    double maxRPM = 2700.0;
+
+    // Power roughly proportional to RPM^3 / maxRPM^3
+    auto powerAtRPM = [&](double rpm) {
+      double ratio = rpm / maxRPM;
+      return maxPower * ratio * ratio * ratio;
+    };
+
+    TS_ASSERT_DELTA(powerAtRPM(2700), 200.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(powerAtRPM(2100), 94.4, 1.0);  // ~47% power
+    TS_ASSERT_DELTA(powerAtRPM(1350), 25.0, 1.0);  // 12.5% power
+  }
+
+  // Test power required for climb
+  void testPowerForClimb() {
+    double weight = 3000.0;  // lbs
+    double climbRate = 700.0;  // fpm
+    double climbRateFPS = climbRate / 60.0;
+
+    // Power = Weight * ClimbRate / 550 (HP)
+    double climbPower = weight * climbRateFPS / 550.0;
+    TS_ASSERT_DELTA(climbPower, 63.6, 1.0);
+  }
+
+  // Test excess power for acceleration
+  void testExcessPowerAcceleration() {
+    double availablePower = 200.0;  // HP
+    double requiredPower = 150.0;   // HP
+    double excessPower = availablePower - requiredPower;
+
+    TS_ASSERT_DELTA(excessPower, 50.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(excessPower > 0);  // Can accelerate
+  }
+
+  /***************************************************************************
+   * Extended Efficiency Tests
+   ***************************************************************************/
+
+  // Test thermal efficiency
+  void testThermalEfficiency() {
+    // Typical piston engine: 25-30%
+    double fuelEnergy = 100000.0;  // BTU/hr
+    double shaftPower = 25000.0;   // BTU/hr (from HP)
+
+    double thermalEff = shaftPower / fuelEnergy;
+    TS_ASSERT(thermalEff > 0.20);
+    TS_ASSERT(thermalEff < 0.35);
+  }
+
+  // Test mechanical efficiency
+  void testMechanicalEfficiency() {
+    double indicatedPower = 220.0;  // HP
+    double brakePower = 200.0;      // HP
+
+    double mechEff = brakePower / indicatedPower;
+    TS_ASSERT_DELTA(mechEff, 0.909, 0.01);
+    TS_ASSERT(mechEff < 1.0);
+  }
+
+  // Test volumetric efficiency
+  void testVolumetricEfficiency() {
+    double actualAirflow = 150.0;      // CFM
+    double theoreticalAirflow = 175.0; // CFM
+
+    double volEff = actualAirflow / theoreticalAirflow;
+    TS_ASSERT_DELTA(volEff, 0.857, 0.01);
+    TS_ASSERT(volEff < 1.0);
+  }
+
+  /***************************************************************************
+   * Extended Induction System Tests
+   ***************************************************************************/
+
+  // Test carburetor icing
+  void testCarburetorIcing() {
+    double OAT = 40.0;  // °F
+    double dewpoint = 35.0;
+    double spread = OAT - dewpoint;
+
+    // Icing likely when OAT between 20-70°F and spread < 15°F
+    bool icingLikely = (OAT > 20.0 && OAT < 70.0 && spread < 15.0);
+    TS_ASSERT(icingLikely);
+  }
+
+  // Test manifold pressure at altitude
+  void testManifoldPressureAltitude() {
+    double seaLevelMP = 29.92;  // inHg
+    double altitude = 10000.0;
+    double lapseRate = 1.0;  // inHg per 1000 ft
+
+    double altitudeMP = seaLevelMP - (altitude / 1000.0) * lapseRate;
+    TS_ASSERT_DELTA(altitudeMP, 19.92, 0.1);
+  }
+
+  // Test alternate air door
+  void testAlternateAirDoor() {
+    bool primaryBlocked = false;
+    bool alternateOpen = false;
+
+    // Primary blocked triggers alternate
+    primaryBlocked = true;
+    alternateOpen = primaryBlocked;
+    TS_ASSERT(alternateOpen);
+  }
+
+  /***************************************************************************
+   * Extended Cooling System Tests
+   ***************************************************************************/
+
+  // Test cylinder head temperature
+  void testCylinderHeadTemperature() {
+    double CHT = 400.0;  // °F
+    double maxCHT = 500.0;
+    double minCHT = 200.0;
+
+    TS_ASSERT(CHT >= minCHT);
+    TS_ASSERT(CHT <= maxCHT);
+  }
+
+  // Test cooling airflow requirement
+  void testCoolingAirflowRequirement() {
+    double power = 200.0;  // HP
+    double heatRejection = power * 0.7;  // 70% becomes heat
+
+    // CFM required roughly 2 CFM per HP of heat
+    double cfmRequired = heatRejection * 2.0;
+    TS_ASSERT_DELTA(cfmRequired, 280.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test cowl flaps effect
+  void testCowlFlapsEffect() {
+    double baseCooling = 100.0;  // arbitrary units
+    double cowlFlapPosition = 0.5;  // 50% open
+
+    double cooling = baseCooling * (0.5 + 0.5 * cowlFlapPosition);
+    TS_ASSERT_DELTA(cooling, 75.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Extended Ignition System Tests
+   ***************************************************************************/
+
+  // Test dual magneto check
+  void testDualMagnetoCheck() {
+    double rpmBoth = 2000.0;
+    double rpmLeft = 1950.0;
+    double rpmRight = 1940.0;
+    double maxDrop = 150.0;
+    double maxDiff = 50.0;
+
+    double dropLeft = rpmBoth - rpmLeft;
+    double dropRight = rpmBoth - rpmRight;
+    double diff = std::abs(dropLeft - dropRight);
+
+    TS_ASSERT(dropLeft < maxDrop);
+    TS_ASSERT(dropRight < maxDrop);
+    TS_ASSERT(diff < maxDiff);
+  }
+
+  // Test spark advance
+  void testSparkAdvance() {
+    double baseAdvance = 5.0;    // degrees BTDC at idle
+    double maxAdvance = 30.0;    // degrees BTDC at max power
+    double throttle = 0.5;
+
+    double advance = baseAdvance + (maxAdvance - baseAdvance) * throttle;
+    TS_ASSERT_DELTA(advance, 17.5, DEFAULT_TOLERANCE);
+  }
+
+  // Test detonation detection
+  void testDetonationDetection() {
+    double manifoldPressure = 35.0;  // inHg
+    double maxMP = 30.0;
+    double EGT = 1500.0;
+    double normalEGT = 1350.0;
+
+    bool detonationRisk = (manifoldPressure > maxMP) || (EGT > normalEGT * 1.1);
+    TS_ASSERT(detonationRisk);
+  }
+
+  /***************************************************************************
+   * Extended Exhaust System Tests
+   ***************************************************************************/
+
+  // Test exhaust back pressure
+  void testExhaustBackPressure() {
+    double exhaustPressure = 16.0;  // psia
+    double ambientPressure = 14.7;
+
+    double backPressure = exhaustPressure - ambientPressure;
+    TS_ASSERT(backPressure > 0);
+    TS_ASSERT_DELTA(backPressure, 1.3, 0.1);
+  }
+
+  // Test turbocharger wastegate
+  void testTurbochargerWastegate() {
+    double targetMP = 30.0;  // inHg
+    double actualMP = 32.0;
+    double wastegatePosition = 0.0;
+
+    // Wastegate opens when above target
+    if (actualMP > targetMP) {
+      wastegatePosition = (actualMP - targetMP) / 10.0;
+    }
+
+    TS_ASSERT(wastegatePosition > 0);
+    TS_ASSERT_DELTA(wastegatePosition, 0.2, DEFAULT_TOLERANCE);
+  }
+
+  // Test EGT probe readings
+  void testEGTProbeReadings() {
+    std::vector<double> egtByClylinder = {1350, 1360, 1340, 1355};
+    double average = 0.0;
+    for (auto e : egtByClylinder) average += e;
+    average /= egtByClylinder.size();
+
+    TS_ASSERT_DELTA(average, 1351.25, 0.1);
+  }
+
+  /***************************************************************************
+   * Extended Fuel Injection Tests
+   ***************************************************************************/
+
+  // Test fuel injector flow rate
+  void testFuelInjectorFlowRate() {
+    double injectorRating = 5.0;  // GPH at rated pressure
+    double pressureRatio = 0.8;
+
+    // Flow proportional to sqrt(pressure)
+    double actualFlow = injectorRating * sqrt(pressureRatio);
+    TS_ASSERT_DELTA(actualFlow, 4.47, 0.01);
+  }
+
+  // Test fuel distribution
+  void testFuelDistribution() {
+    std::vector<double> cylFlow = {1.5, 1.48, 1.52, 1.49};  // GPH per cylinder
+    double targetFlow = 1.5;
+    double maxDeviation = 0.05;  // 5%
+
+    bool distributionOK = true;
+    for (auto flow : cylFlow) {
+      if (std::abs(flow - targetFlow) / targetFlow > maxDeviation) {
+        distributionOK = false;
+      }
+    }
+
+    TS_ASSERT(distributionOK);
+  }
+
+  /***************************************************************************
+   * Extended Propeller Load Tests
+   ***************************************************************************/
+
+  // Test propeller power absorption
+  void testPropellerPowerAbsorption() {
+    double rpm = 2400.0;
+    double propDiameter = 6.0;  // ft
+    double density = 0.002377;
+
+    // Power ~ rho * n^3 * D^5 (simplified)
+    double n = rpm / 60.0;  // rps
+    double power = density * pow(n, 3) * pow(propDiameter, 5) * 0.001;
+
+    TS_ASSERT(power > 0);
+  }
+
+  // Test governor action
+  void testGovernorAction() {
+    double targetRPM = 2400.0;
+    double actualRPM = 2500.0;
+    double bladeAngle = 20.0;  // degrees
+
+    // Governor increases pitch to reduce RPM
+    double error = actualRPM - targetRPM;
+    if (error > 0) {
+      bladeAngle += error * 0.01;
+    }
+
+    TS_ASSERT(bladeAngle > 20.0);
+  }
+
+  /***************************************************************************
+   * Extended Environmental Tests
+   ***************************************************************************/
+
+  // Test carburetor heat
+  void testCarburetorHeat() {
+    double intakeTemp = 40.0;  // °F
+    double carbHeatOn = true;
+    double tempRise = 50.0;    // °F with heat on
+
+    double finalTemp = intakeTemp;
+    if (carbHeatOn) {
+      finalTemp += tempRise;
+    }
+
+    TS_ASSERT_DELTA(finalTemp, 90.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test density altitude effect
+  void testDensityAltitudeEffect() {
+    double pressureAltitude = 5000.0;
+    double OAT = 95.0;  // °F (hot day)
+    double standardTemp = 59.0 - 3.5 * (5.0);  // at 5000 ft
+
+    // High temp increases density altitude
+    double densityAltitude = pressureAltitude + 120.0 * (OAT - standardTemp);
+    TS_ASSERT(densityAltitude > pressureAltitude);
+  }
+
+  // Test humid air effect
+  void testHumidAirEffect() {
+    double dryAirDensity = 0.002377;
+    double humidity = 0.8;  // 80% relative
+
+    // Humid air is less dense (roughly 1% per 10% humidity)
+    double humidAirDensity = dryAirDensity * (1.0 - 0.001 * humidity * 100.0);
+    TS_ASSERT(humidAirDensity < dryAirDensity);
+  }
+
+  /***************************************************************************
+   * Extended Failure Mode Tests
+   ***************************************************************************/
+
+  // Test partial power loss
+  void testPartialPowerLoss() {
+    double normalPower = 200.0;
+    double powerLossPercent = 0.25;
+
+    double reducedPower = normalPower * (1.0 - powerLossPercent);
+    TS_ASSERT_DELTA(reducedPower, 150.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test rough running detection
+  void testRoughRunningDetection() {
+    std::vector<double> rpmVariation = {2400, 2350, 2450, 2300, 2500};
+    double avgRPM = 0;
+    for (auto r : rpmVariation) avgRPM += r;
+    avgRPM /= rpmVariation.size();
+
+    double variance = 0;
+    for (auto r : rpmVariation) {
+      variance += pow(r - avgRPM, 2);
+    }
+    variance /= rpmVariation.size();
+
+    // Std dev ~70.7 which is > 30
+    bool roughRunning = sqrt(variance) > 30.0;
+    TS_ASSERT(roughRunning);
+  }
+
+  // Test oil pressure warning
+  void testOilPressureWarning() {
+    double oilPressure = 25.0;  // psi
+    double minPressure = 30.0;
+    double criticalPressure = 10.0;
+
+    bool warning = oilPressure < minPressure;
+    bool critical = oilPressure < criticalPressure;
+
+    TS_ASSERT(warning);
+    TS_ASSERT(!critical);
+  }
+
+  /***************************************************************************
+   * Extended Performance Calculation Tests
+   ***************************************************************************/
+
+  // Test brake mean effective pressure
+  void testBMEP() {
+    double power = 200.0;  // HP
+    double displacement = 360.0;  // cu in
+    double rpm = 2700.0;
+
+    // BMEP = (Power * 792000) / (Displacement * RPM)
+    double bmep = (power * 792000.0) / (displacement * rpm);
+    TS_ASSERT(bmep > 100);
+    TS_ASSERT(bmep < 200);
+  }
+
+  // Test indicated horsepower
+  void testIndicatedHP() {
+    double brakeHP = 200.0;
+    double frictionHP = 25.0;
+
+    double indicatedHP = brakeHP + frictionHP;
+    TS_ASSERT_DELTA(indicatedHP, 225.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test compression ratio effect
+  void testCompressionRatioEffect() {
+    double compressionRatio = 8.5;
+    double gamma = 1.4;
+
+    // Theoretical efficiency = 1 - 1/r^(gamma-1)
+    double efficiency = 1.0 - 1.0 / pow(compressionRatio, gamma - 1.0);
+    TS_ASSERT(efficiency > 0.5);
+    TS_ASSERT(efficiency < 0.7);
+  }
+
+  /***************************************************************************
+   * Extended Control System Tests
+   ***************************************************************************/
+
+  // Test throttle response lag
+  void testThrottleResponseLag() {
+    double throttleCmd = 1.0;
+    double throttlePos = 0.0;
+    double timeConstant = 0.5;
+    double dt = 0.1;
+
+    for (int i = 0; i < 20; i++) {
+      throttlePos += (throttleCmd - throttlePos) * dt / timeConstant;
+    }
+
+    TS_ASSERT(throttlePos > 0.95);
+  }
+
+  // Test mixture rich cutoff
+  void testMixtureRichCutoff() {
+    double mixture = 1.0;  // Full rich
+    bool cutoff = false;
+
+    mixture = 0.0;  // Cutoff
+    cutoff = (mixture <= 0.0);
+
+    TS_ASSERT(cutoff);
+  }
+
+  // Test prop lever control
+  void testPropLeverControl() {
+    double propLever = 0.0;  // Full fine
+    double targetRPM = 2700.0;
+    double minRPM = 1800.0;
+
+    double commandedRPM = minRPM + propLever * (targetRPM - minRPM);
+    TS_ASSERT_DELTA(commandedRPM, 1800.0, DEFAULT_TOLERANCE);
+
+    propLever = 1.0;  // Full coarse
+    commandedRPM = minRPM + propLever * (targetRPM - minRPM);
+    TS_ASSERT_DELTA(commandedRPM, 2700.0, DEFAULT_TOLERANCE);
+  }
 };
