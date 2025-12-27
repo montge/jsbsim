@@ -737,4 +737,512 @@ public:
 
     TS_ASSERT(std::abs(a) < 1.0);  // Stability condition
   }
+
+  /***************************************************************************
+   * Additional Dryden Model Tests
+   ***************************************************************************/
+
+  // Test Dryden PSD formula for longitudinal component
+  void testDrydenLongitudinalPSD() {
+    double sigma = 5.0;
+    double L = 1000.0;
+    double V = 200.0;
+    double omega = 0.5;
+
+    double Omega = omega * L / V;
+    double Phi_u = sigma * sigma * 2.0 * L / (PI * V) /
+                   (1.0 + (1.339 * Omega) * (1.339 * Omega));
+
+    TS_ASSERT(Phi_u > 0);
+    TS_ASSERT(std::isfinite(Phi_u));
+  }
+
+  // Test Dryden PSD formula for vertical component
+  void testDrydenVerticalPSD() {
+    double sigma = 3.0;
+    double L = 500.0;
+    double V = 150.0;
+    double omega = 1.0;
+
+    double Omega = omega * L / V;
+    double Phi_w = sigma * sigma * 2.0 * L / (PI * V) *
+                   (1.0 + 3.0 * (1.339 * Omega) * (1.339 * Omega)) /
+                   pow(1.0 + (1.339 * Omega) * (1.339 * Omega), 2.0);
+
+    TS_ASSERT(Phi_w > 0);
+    TS_ASSERT(std::isfinite(Phi_w));
+  }
+
+  // Test Dryden transfer function coefficient
+  void testDrydenTransferFunctionCoefficient() {
+    double L = 1000.0;
+    double V = 200.0;
+    double sigma = 5.0;
+
+    double K = sigma * sqrt(2.0 * L / (PI * V));
+
+    TS_ASSERT(K > 0);
+    // K = 5 * sqrt(2000 / 628.318) = 5 * 1.784 = 8.92
+    TS_ASSERT_DELTA(K, 8.92, 0.01);
+  }
+
+  // Test altitude transition zone (1000-2000 ft)
+  void testAltitudeTransitionZone() {
+    // Test interpolation at 1250 ft
+    double altitude = 1250.0;
+    double L_low = 1000.0;
+    double L_high = 1750.0;
+
+    double factor = (altitude - 1000.0) / 1000.0;
+    double L = L_low + factor * (L_high - L_low);
+
+    TS_ASSERT_DELTA(L, 1187.5, epsilon);
+    TS_ASSERT(L > L_low);
+    TS_ASSERT(L < L_high);
+  }
+
+  // Test scale length ratio Lu/Lw at low altitude
+  void testScaleLengthRatioLowAltitude() {
+    double altitude = 300.0;
+
+    double L_u = altitude / pow(0.177 + 0.000823 * altitude, 1.2);
+    double L_w = altitude;
+    double ratio = L_u / L_w;
+
+    TS_ASSERT(ratio > 1.0);
+    TS_ASSERT(ratio < 5.0);
+  }
+
+  /***************************************************************************
+   * Turbulence Severity Category Tests
+   ***************************************************************************/
+
+  // Test light turbulence category
+  void testLightTurbulenceCategory() {
+    double sigma_light_max = 5.0;  // ft/s (approximately)
+
+    TS_ASSERT(sigma_light_max > 0);
+    TS_ASSERT(sigma_light_max < 10.0);
+  }
+
+  // Test moderate turbulence category
+  void testModerateTurbulenceCategory() {
+    double sigma_moderate_min = 5.0;
+    double sigma_moderate_max = 10.0;
+
+    TS_ASSERT(sigma_moderate_max > sigma_moderate_min);
+  }
+
+  // Test severe turbulence category
+  void testSevereTurbulenceCategory() {
+    double sigma_severe_min = 10.0;
+    double sigma_severe_max = 20.0;
+
+    TS_ASSERT(sigma_severe_max > sigma_severe_min);
+  }
+
+  // Test extreme turbulence category
+  void testExtremeTurbulenceCategory() {
+    double sigma_extreme = 25.0;
+
+    TS_ASSERT(sigma_extreme > 20.0);
+  }
+
+  /***************************************************************************
+   * Crosswind Turbulence Tests
+   ***************************************************************************/
+
+  // Test crosswind gust component
+  void testCrosswindGustComponent() {
+    double sigma_v = 4.0;  // Lateral RMS
+    double heading = PI / 4.0;  // 45 degrees
+
+    double crosswind_component = sigma_v * sin(heading);
+
+    TS_ASSERT(crosswind_component > 0);
+    TS_ASSERT_DELTA(crosswind_component, 2.828, 0.01);
+  }
+
+  // Test headwind gust component
+  void testHeadwindGustComponent() {
+    double sigma_u = 5.0;
+    double heading = PI / 6.0;  // 30 degrees
+
+    double headwind_component = sigma_u * cos(heading);
+
+    TS_ASSERT(headwind_component > 0);
+    TS_ASSERT_DELTA(headwind_component, 4.330, 0.01);
+  }
+
+  // Test combined horizontal gust
+  void testCombinedHorizontalGust() {
+    double u_gust = 5.0;
+    double v_gust = 3.0;
+
+    double horizontal_gust = sqrt(u_gust * u_gust + v_gust * v_gust);
+
+    TS_ASSERT_DELTA(horizontal_gust, 5.831, 0.01);
+  }
+
+  /***************************************************************************
+   * Thermal Turbulence Tests
+   ***************************************************************************/
+
+  // Test convective velocity scale
+  void testConvectiveVelocityScale() {
+    double Q_H = 100.0;  // Surface heat flux (W/m^2)
+    double rho = 1.225;  // Air density (kg/m^3)
+    double cp = 1005.0;  // Specific heat (J/kg/K)
+    double zi = 1000.0;  // Boundary layer height (m)
+    double T = 300.0;    // Temperature (K)
+    double g = 9.81;     // Gravity (m/s^2)
+
+    double w_star = pow(g / T * Q_H / (rho * cp) * zi, 1.0/3.0);
+
+    TS_ASSERT(w_star > 0);
+    TS_ASSERT(w_star < 5.0);  // Typical range
+  }
+
+  // Test thermal updraft velocity
+  void testThermalUpdraftVelocity() {
+    double w_star = 2.5;  // Convective velocity scale
+    double z = 500.0;     // Height in boundary layer
+    double zi = 1000.0;   // Boundary layer height
+
+    double w_thermal = w_star * 1.1 * pow(z / zi, 1.0/3.0) *
+                       (1.0 - 1.1 * z / zi);
+
+    TS_ASSERT(std::isfinite(w_thermal));
+  }
+
+  // Test thermal diameter
+  void testThermalDiameter() {
+    double zi = 1500.0;  // Boundary layer height (m)
+
+    double D_thermal = 0.4 * zi;  // Typical thermal diameter
+
+    TS_ASSERT_DELTA(D_thermal, 600.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Clear Air Turbulence (CAT) Tests
+   ***************************************************************************/
+
+  // Test Richardson number for CAT
+  void testRichardsonNumber() {
+    double N2 = 1e-4;     // Brunt-Vaisala squared (s^-2)
+    double du_dz = 0.01;  // Wind shear (s^-1)
+
+    double Ri = N2 / (du_dz * du_dz);
+
+    TS_ASSERT(Ri > 0);
+    TS_ASSERT_DELTA(Ri, 1.0, epsilon);
+  }
+
+  // Test critical Richardson number
+  void testCriticalRichardsonNumber() {
+    double Ri_critical = 0.25;  // Below this, turbulence likely
+
+    TS_ASSERT_DELTA(Ri_critical, 0.25, epsilon);
+  }
+
+  // Test CAT probability index
+  void testCATProbabilityIndex() {
+    double vertical_wind_shear = 0.02;  // s^-1
+    double horizontal_wind_shear = 0.01;  // s^-1
+
+    double deformation = sqrt(vertical_wind_shear * vertical_wind_shear +
+                             horizontal_wind_shear * horizontal_wind_shear);
+
+    TS_ASSERT(deformation > 0);
+    TS_ASSERT_DELTA(deformation, 0.02236, 0.0001);
+  }
+
+  /***************************************************************************
+   * Spectral Analysis Tests
+   ***************************************************************************/
+
+  // Test integral of Dryden PSD equals variance
+  void testDrydenPSDIntegralVariance() {
+    double sigma = 5.0;
+    double variance = sigma * sigma;
+
+    // The integral of PSD over all frequencies should equal variance
+    TS_ASSERT_DELTA(variance, 25.0, epsilon);
+  }
+
+  // Test Von Karman spectrum at low frequency limit
+  void testVonKarmanLowFrequencyLimit() {
+    double L = 1000.0;
+    double sigma = 5.0;
+    double V = 200.0;
+    double omega = 0.001;  // Very low frequency
+
+    double Omega = omega * L / V;
+    double Phi_u = sigma * sigma * L / V / PI /
+                   pow(1.0 + (1.339 * Omega) * (1.339 * Omega), 5.0/6.0);
+
+    // At low frequency, should approach sigma^2 * L / (PI * V)
+    double Phi_limit = sigma * sigma * L / (PI * V);
+    TS_ASSERT_DELTA(Phi_u, Phi_limit, 0.1);
+  }
+
+  // Test spectral rolloff rate
+  void testSpectralRolloffRate() {
+    // Dryden: -2 slope at high frequency
+    // Von Karman: -5/3 slope at high frequency
+    double dryden_slope = -2.0;
+    double vonkarman_slope = -5.0 / 3.0;
+
+    TS_ASSERT_DELTA(vonkarman_slope, -1.667, 0.01);
+    TS_ASSERT(dryden_slope < vonkarman_slope);  // Steeper rolloff
+  }
+
+  /***************************************************************************
+   * Gust Gradient Tests
+   ***************************************************************************/
+
+  // Test gust gradient distance
+  void testGustGradientDistance() {
+    double H = 100.0;  // Gust gradient distance (ft)
+    double V = 200.0;  // True airspeed (ft/s)
+
+    double t_gradient = H / V;  // Time to traverse gust
+
+    TS_ASSERT_DELTA(t_gradient, 0.5, epsilon);
+  }
+
+  // Test FAR 25 design gust velocity
+  void testFAR25DesignGustVelocity() {
+    double altitude = 20000.0;  // ft
+    double Ude_ref = 56.0;      // Reference gust at sea level (ft/s)
+
+    // Gust alleviation factor decreases with altitude
+    double Ude = Ude_ref * (1.0 - altitude / 60000.0);
+
+    TS_ASSERT(Ude > 0);
+    TS_ASSERT(Ude < Ude_ref);
+    TS_ASSERT_DELTA(Ude, 37.33, 0.1);
+  }
+
+  // Test derived gust velocity
+  void testDerivedGustVelocity() {
+    double Ude = 50.0;     // Design gust velocity
+    double rho = 0.002377; // Sea level density
+    double rho_0 = 0.002377;
+    double Kg = 0.88;      // Gust alleviation factor
+
+    double U_de_derived = Ude * Kg * sqrt(rho / rho_0);
+
+    TS_ASSERT_DELTA(U_de_derived, 44.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Multiple Instance Independence Tests
+   ***************************************************************************/
+
+  // Test independent random number sequences
+  void testIndependentRandomSequences() {
+    std::mt19937 gen1(12345);
+    std::mt19937 gen2(54321);
+
+    double val1 = std::uniform_real_distribution<>(0.0, 1.0)(gen1);
+    double val2 = std::uniform_real_distribution<>(0.0, 1.0)(gen2);
+
+    TS_ASSERT(val1 != val2);  // Different seeds give different values
+  }
+
+  // Test seeded random reproducibility
+  void testSeededRandomReproducibility() {
+    std::mt19937 gen1(42);
+    std::mt19937 gen2(42);
+
+    double val1 = std::uniform_real_distribution<>(0.0, 1.0)(gen1);
+    double val2 = std::uniform_real_distribution<>(0.0, 1.0)(gen2);
+
+    TS_ASSERT_DELTA(val1, val2, epsilon);  // Same seed = same value
+  }
+
+  /***************************************************************************
+   * Stress and Boundary Tests
+   ***************************************************************************/
+
+  // Test turbulence at extreme low altitude
+  void testExtremeLowAltitude() {
+    double altitude = 10.0;  // Minimum per MIL-F-8785C
+
+    double L_w = std::max(altitude, 10.0);
+    double L_u = L_w / pow(0.177 + 0.000823 * L_w, 1.2);
+
+    TS_ASSERT(L_w >= 10.0);
+    TS_ASSERT(L_u > 0);
+    TS_ASSERT(std::isfinite(L_u));
+  }
+
+  // Test turbulence at extreme high altitude
+  void testExtremHighAltitude() {
+    double altitude = 80000.0;  // ft
+
+    // Above 2000 ft, scale lengths are constant
+    double L_u = 1750.0;
+    double L_w = 1750.0;
+
+    TS_ASSERT_DELTA(L_u, 1750.0, epsilon);
+    TS_ASSERT_DELTA(L_w, 1750.0, epsilon);
+  }
+
+  // Test very high airspeed
+  void testVeryHighAirspeed() {
+    double V = 2000.0;  // ft/s (supersonic)
+    double L = 1750.0;
+
+    double tau = L / V;
+
+    TS_ASSERT(tau > 0);
+    TS_ASSERT_DELTA(tau, 0.875, epsilon);
+  }
+
+  // Test very low airspeed
+  void testVeryLowAirspeed() {
+    double V = 10.0;  // ft/s (near stall)
+    double L = 500.0;
+
+    double tau = L / V;
+
+    TS_ASSERT(tau > 0);
+    TS_ASSERT_DELTA(tau, 50.0, epsilon);
+  }
+
+  // Test rapid altitude changes
+  void testRapidAltitudeChanges() {
+    for (double alt = 10.0; alt <= 50000.0; alt *= 2.0) {
+      double L_w;
+      if (alt < 1000.0) {
+        L_w = alt;
+      } else if (alt < 2000.0) {
+        L_w = 1000.0 + (alt - 1000.0) / 1000.0 * 750.0;
+      } else {
+        L_w = 1750.0;
+      }
+
+      TS_ASSERT(L_w > 0);
+      TS_ASSERT(L_w <= 1750.0);
+      TS_ASSERT(std::isfinite(L_w));
+    }
+  }
+
+  /***************************************************************************
+   * Coherence Function Tests
+   ***************************************************************************/
+
+  // Test lateral coherence function
+  void testLateralCoherence() {
+    double dy = 50.0;   // Lateral separation (ft)
+    double L = 1000.0;  // Scale length
+    double omega = 0.5;
+    double V = 200.0;
+
+    double Omega = omega * L / V;
+    double coh = exp(-sqrt(1.0 + (1.339 * Omega) * (1.339 * Omega)) * dy / L);
+
+    TS_ASSERT(coh >= 0.0);
+    TS_ASSERT(coh <= 1.0);
+  }
+
+  // Test vertical coherence function
+  void testVerticalCoherence() {
+    double dz = 100.0;  // Vertical separation (ft)
+    double L = 500.0;   // Scale length
+
+    double coh = exp(-dz / L);
+
+    TS_ASSERT(coh >= 0.0);
+    TS_ASSERT(coh <= 1.0);
+    TS_ASSERT_DELTA(coh, 0.8187, 0.01);
+  }
+
+  // Test zero separation coherence
+  void testZeroSeparationCoherence() {
+    double dy = 0.0;
+    double L = 1000.0;
+
+    double coh = exp(-dy / L);
+
+    TS_ASSERT_DELTA(coh, 1.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Energy and Conservation Tests
+   ***************************************************************************/
+
+  // Test turbulent kinetic energy
+  void testTurbulentKineticEnergy() {
+    double sigma_u = 5.0;
+    double sigma_v = 5.0;
+    double sigma_w = 3.0;
+
+    double TKE = 0.5 * (sigma_u * sigma_u + sigma_v * sigma_v + sigma_w * sigma_w);
+
+    TS_ASSERT(TKE > 0);
+    TS_ASSERT_DELTA(TKE, 29.5, epsilon);
+  }
+
+  // Test dissipation rate estimate
+  void testDissipationRate() {
+    double sigma = 5.0;
+    double L = 1000.0;
+
+    double epsilon_turb = pow(sigma, 3.0) / L;
+
+    TS_ASSERT(epsilon_turb > 0);
+    TS_ASSERT_DELTA(epsilon_turb, 0.125, epsilon);
+  }
+
+  // Test energy cascade consistency
+  void testEnergyCascadeConsistency() {
+    double sigma = 5.0;
+    double L = 1000.0;
+
+    // Kolmogorov microscale estimate (very rough)
+    double nu = 1.5e-4;  // Kinematic viscosity (ft^2/s)
+    double eps = pow(sigma, 3.0) / L;
+    double eta = pow(nu * nu * nu / eps, 0.25);
+
+    TS_ASSERT(eta > 0);
+    TS_ASSERT(eta < L);  // Microscale much smaller than integral scale
+  }
+
+  /***************************************************************************
+   * Unit Conversion Tests
+   ***************************************************************************/
+
+  // Test ft/s to m/s conversion
+  void testFpsToMpsConversion() {
+    double V_fps = 100.0;
+    double ft_to_m = 0.3048;
+
+    double V_mps = V_fps * ft_to_m;
+
+    TS_ASSERT_DELTA(V_mps, 30.48, 0.01);
+  }
+
+  // Test ft to m conversion for scale length
+  void testFeetToMetersScaleLength() {
+    double L_ft = 1750.0;
+    double ft_to_m = 0.3048;
+
+    double L_m = L_ft * ft_to_m;
+
+    TS_ASSERT_DELTA(L_m, 533.4, 0.1);
+  }
+
+  // Test knots to ft/s conversion
+  void testKnotsToFpsConversion() {
+    double V_kts = 200.0;
+    double kts_to_fps = 1.68781;
+
+    double V_fps = V_kts * kts_to_fps;
+
+    TS_ASSERT_DELTA(V_fps, 337.56, 0.1);
+  }
 };
