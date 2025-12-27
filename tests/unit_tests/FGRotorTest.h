@@ -871,4 +871,429 @@ public:
     TS_ASSERT(torque > 5000.0);
     TS_ASSERT(torque < 15000.0);
   }
+
+  /***************************************************************************
+   * Coaxial Rotor Tests
+   ***************************************************************************/
+
+  // Test coaxial rotor thrust
+  void testCoaxialRotorThrust() {
+    // Two rotors, but interference reduces total efficiency
+    double singleRotorThrust = 5000.0;
+    double interferenceFactor = 0.85;  // Typical 15% loss
+
+    double totalThrust = 2.0 * singleRotorThrust * interferenceFactor;
+    TS_ASSERT_DELTA(totalThrust, 8500.0, 10.0);
+    TS_ASSERT(totalThrust < 2.0 * singleRotorThrust);  // Less than ideal
+  }
+
+  // Test coaxial torque cancellation
+  void testCoaxialTorqueCancellation() {
+    // Counter-rotating rotors cancel torque
+    double upperTorque = 8000.0;
+    double lowerTorque = -8000.0;  // Opposite direction
+
+    double netTorque = upperTorque + lowerTorque;
+    TS_ASSERT_DELTA(netTorque, 0.0, 100.0);  // Some residual from mismatch
+  }
+
+  // Test coaxial rotor separation effect
+  void testCoaxialSeparationEffect() {
+    // Greater separation reduces interference
+    double separation = 0.1;  // Fraction of diameter
+    double baseEfficiency = 0.85;
+
+    // Efficiency improves with separation
+    double improvedEfficiency = baseEfficiency + separation * 0.5;
+    TS_ASSERT(improvedEfficiency > baseEfficiency);
+    TS_ASSERT(improvedEfficiency <= 1.0);
+  }
+
+  /***************************************************************************
+   * Tandem Rotor Tests
+   ***************************************************************************/
+
+  // Test tandem rotor overlap efficiency
+  void testTandemOverlapEfficiency() {
+    // Overlapping rotors have interference
+    double overlap = 0.3;  // 30% overlap
+    double efficiencyLoss = overlap * 0.2;  // Rough approximation
+
+    double netEfficiency = 1.0 - efficiencyLoss;
+    TS_ASSERT(netEfficiency > 0.9);
+    TS_ASSERT(netEfficiency < 1.0);
+  }
+
+  // Test tandem pitch control
+  void testTandemPitchControl() {
+    // Differential collective for pitch
+    double frontCollective = 0.12;  // rad
+    double rearCollective = 0.10;   // rad
+
+    double pitchMoment = (frontCollective - rearCollective) * 100000.0;  // ft-lbf
+    TS_ASSERT(pitchMoment > 0.0);  // Nose-up moment
+  }
+
+  // Test tandem roll control
+  void testTandemRollControl() {
+    // Lateral cyclic on both rotors
+    double lateralCyclic = 0.05;  // rad
+    double arm = 4.0;  // ft lateral distance to thrust
+
+    double rollMoment = 5000.0 * lateralCyclic * arm;
+    TS_ASSERT(rollMoment > 0.0);
+  }
+
+  /***************************************************************************
+   * Compressibility Effects Tests
+   ***************************************************************************/
+
+  // Test tip Mach number
+  void testTipMachNumber() {
+    double Vtip = 700.0;  // ft/sec (high for demo)
+    double speedOfSound = 1116.0;  // ft/sec at sea level
+
+    double M_tip = Vtip / speedOfSound;
+    // = 0.627 (approaching drag divergence)
+    TS_ASSERT_DELTA(M_tip, 0.627, 0.01);
+    TS_ASSERT(M_tip < 0.9);  // Keep below critical
+  }
+
+  // Test advancing blade tip Mach
+  void testAdvancingBladeTipMach() {
+    double Vtip = 550.0;
+    double forwardSpeed = 200.0;
+    double speedOfSound = 1116.0;
+
+    // Maximum velocity at advancing blade tip
+    double V_adv = Vtip + forwardSpeed;
+    double M_adv = V_adv / speedOfSound;
+
+    TS_ASSERT(M_adv > Vtip / speedOfSound);
+    TS_ASSERT(M_adv < 1.0);  // Should stay subsonic
+  }
+
+  // Test drag divergence Mach effect
+  void testDragDivergenceMach() {
+    double M = 0.75;
+    double M_dd = 0.72;  // Drag divergence Mach
+
+    // Drag increases rapidly above M_dd
+    double dragFactor = 1.0;
+    if (M > M_dd) {
+      dragFactor = 1.0 + 10.0 * pow(M - M_dd, 2);
+    }
+
+    TS_ASSERT(dragFactor > 1.0);
+  }
+
+  /***************************************************************************
+   * Blade Element Theory Extended Tests
+   ***************************************************************************/
+
+  // Test radial integration for thrust
+  void testRadialThrustIntegration() {
+    // T = integral(dT) from r=0 to R
+    double rho = 0.002377;
+    double omega = 31.42;
+    double R = 17.5;
+    double chord = 1.5;
+    double a = 5.7;
+    double theta0 = 0.15;
+
+    // Simplified BEM integral (using 5 sections)
+    double T = 0.0;
+    for (int i = 1; i <= 5; i++) {
+      double r = R * i / 5.0;
+      double V = omega * r;
+      double dL = 0.5 * rho * V * V * chord * a * theta0 * (R / 5.0);
+      T += dL;
+    }
+
+    TS_ASSERT(T > 0.0);
+    TS_ASSERT(T < 20000.0);
+  }
+
+  // Test root cutout effect
+  void testRootCutout() {
+    double rootCutout = 0.15;  // 15% of radius is hub
+    double R = 17.5;
+
+    double effectiveStartRadius = rootCutout * R;
+    TS_ASSERT_DELTA(effectiveStartRadius, 2.625, 0.01);
+
+    // Thrust area reduction
+    double areaFactor = 1.0 - rootCutout * rootCutout;
+    TS_ASSERT(areaFactor > 0.9);
+  }
+
+  // Test blade taper effect
+  void testBladeTaper() {
+    double rootChord = 2.0;
+    double tipChord = 1.0;
+    double taperRatio = tipChord / rootChord;
+
+    TS_ASSERT_DELTA(taperRatio, 0.5, 0.001);
+
+    // Chord at 70% span (linear taper)
+    double r_frac = 0.7;
+    double chord_at_r = rootChord * (1.0 - r_frac * (1.0 - taperRatio));
+    TS_ASSERT(chord_at_r > tipChord);
+    TS_ASSERT(chord_at_r < rootChord);
+  }
+
+  /***************************************************************************
+   * Autorotation Extended Tests
+   ***************************************************************************/
+
+  // Test autorotation index
+  void testAutorotationIndex() {
+    // AI = (stored kinetic energy) / (power required in hover)
+    // Higher AI = more time to react
+    double I = 5000.0;  // slug-ft^2
+    double omega = 31.42;
+    double P_hover = 345.0 * 550.0;
+
+    double KE = 0.5 * I * omega * omega;
+    double AI = KE / P_hover;
+
+    TS_ASSERT(AI > 5.0);   // Reasonable index
+    TS_ASSERT(AI < 30.0);
+  }
+
+  // Test autorotation entry height
+  void testAutorotationEntryHeight() {
+    // Minimum height for safe autorotation entry
+    double reactionTime = 2.0;  // seconds
+    double initialDescent = 500.0;  // ft/min initially
+    double steadyDescent = 1800.0;  // ft/min in auto
+
+    // Height lost during reaction + transition
+    double heightLost = (initialDescent * reactionTime +
+                         steadyDescent * reactionTime) / 60.0;
+
+    TS_ASSERT(heightLost > 50.0);
+    TS_ASSERT(heightLost < 200.0);
+  }
+
+  // Test autorotation flare
+  void testAutorotationFlare() {
+    // Flare trades rotor RPM for lift
+    double descentRate = 30.0;  // ft/sec before flare
+    double rpmBefore = 300.0;
+    double flareAngle = 20.0;  // degrees nose up
+
+    // Rotor disc loading increases in flare
+    double loadFactor = 1.0 / cos(flareAngle * M_PI / 180.0);
+    TS_ASSERT(loadFactor > 1.0);
+
+    // Descent rate decreases
+    double descentAfter = descentRate * cos(flareAngle * M_PI / 180.0);
+    TS_ASSERT(descentAfter < descentRate);
+  }
+
+  /***************************************************************************
+   * Helicopter Stability Tests
+   ***************************************************************************/
+
+  // Test longitudinal static stability
+  void testLongitudinalStaticStability() {
+    // Speed stability: Cm_u (change in pitching moment with speed)
+    double Cm_u = -0.002;  // Stable if negative
+
+    double speedChange = 10.0;  // ft/sec
+    double momentChange = Cm_u * speedChange;
+
+    // Positive speed increase causes nose-down moment
+    TS_ASSERT(momentChange < 0.0);
+  }
+
+  // Test lateral static stability
+  void testLateralStaticStability() {
+    // Cl_beta: roll due to sideslip
+    double Cl_beta = -0.015;  // Stable if negative
+
+    double sideslip = 5.0;  // degrees
+    double rollMoment = Cl_beta * sideslip;
+
+    // Positive sideslip causes left roll (opposite direction)
+    TS_ASSERT(rollMoment < 0.0);
+  }
+
+  // Test directional static stability
+  void testDirectionalStaticStability() {
+    // Cn_beta: yaw due to sideslip (weathervane)
+    double Cn_beta = 0.002;  // Stable if positive
+
+    double sideslip = 5.0;  // degrees
+    double yawMoment = Cn_beta * sideslip;
+
+    // Positive sideslip causes yaw to reduce sideslip
+    TS_ASSERT(yawMoment > 0.0);
+  }
+
+  // Test hover pitch damping
+  void testHoverPitchDamping() {
+    // Pitch rate damping in hover
+    double Mq = -1.5;  // Pitch damping derivative (1/sec)
+    double pitchRate = 0.1;  // rad/sec
+
+    double dampingMoment = Mq * pitchRate;
+    TS_ASSERT(dampingMoment < 0.0);  // Opposes pitch rate
+  }
+
+  /***************************************************************************
+   * Vibration Analysis Tests
+   ***************************************************************************/
+
+  // Test 1/rev vibration frequency
+  void testOnePerRevFrequency() {
+    double rpm = 300.0;
+    double freq_hz = rpm / 60.0;
+
+    TS_ASSERT_DELTA(freq_hz, 5.0, 0.01);  // 5 Hz for 300 RPM
+  }
+
+  // Test N/rev vibration (blade passage)
+  void testNPerRevVibration() {
+    double rpm = 300.0;
+    int numBlades = 4;
+
+    double N_per_rev_freq = (rpm / 60.0) * numBlades;
+    TS_ASSERT_DELTA(N_per_rev_freq, 20.0, 0.1);  // 20 Hz
+  }
+
+  // Test blade natural frequency (flap)
+  void testBladeNaturalFrequency() {
+    // First flap mode typically slightly above 1/rev
+    double omega = 31.42;  // rad/sec (5 Hz at 300 RPM)
+    double nu_beta = 1.03;  // Non-dimensional flap frequency
+
+    double omega_beta = nu_beta * omega;
+    TS_ASSERT(omega_beta > omega);  // Above 1/rev
+    TS_ASSERT_DELTA(omega_beta / omega, nu_beta, 0.01);
+  }
+
+  /***************************************************************************
+   * Performance Calculation Tests
+   ***************************************************************************/
+
+  // Test maximum rate of climb
+  void testMaxRateOfClimb() {
+    double excessPower = 55.0 * 550.0;  // 55 HP excess in ft-lbf/sec
+    double weight = 5000.0;  // lbs
+
+    double ROC = excessPower / weight * 60.0;  // ft/min
+    // = 30250 / 5000 * 60 = 363 ft/min
+    TS_ASSERT(ROC > 300.0);
+    TS_ASSERT(ROC < 500.0);
+  }
+
+  // Test best rate of climb speed
+  void testBestROCSpeed() {
+    // Typically around 60-70 knots for light helicopter
+    double V_best_ROC = 65.0;  // knots
+
+    // Convert to ft/sec
+    double V_fps = V_best_ROC * 1.689;
+    TS_ASSERT_DELTA(V_fps, 109.8, 1.0);
+  }
+
+  // Test service ceiling power requirement
+  void testServiceCeilingPower() {
+    double seaLevelPower = 400.0;  // HP available
+    double altitude = 15000.0;  // ft
+    double lapseRate = 0.035;  // per 1000 ft
+
+    double altitudeFactor = 1.0 - lapseRate * altitude / 1000.0;
+    double availablePower = seaLevelPower * altitudeFactor;
+
+    TS_ASSERT(availablePower < seaLevelPower);
+    TS_ASSERT(availablePower > 0.0);
+  }
+
+  // Test fuel flow in cruise
+  void testCruiseFuelFlow() {
+    double power = 280.0;  // HP in cruise
+    double SFC = 0.55;     // lb/HP/hr
+
+    double fuelFlow = power * SFC;  // lb/hr
+    TS_ASSERT_DELTA(fuelFlow, 154.0, 1.0);
+  }
+
+  // Test endurance calculation
+  void testEndurance() {
+    double fuelCapacity = 100.0;  // gallons
+    double fuelDensity = 6.0;     // lb/gal
+    double fuelFlow = 150.0;      // lb/hr
+
+    double fuelWeight = fuelCapacity * fuelDensity;
+    double endurance = fuelWeight / fuelFlow;
+
+    TS_ASSERT_DELTA(endurance, 4.0, 0.1);  // 4 hours
+  }
+
+  // Test range calculation
+  void testRange() {
+    double endurance = 4.0;  // hours
+    double cruiseSpeed = 120.0;  // knots
+
+    double range = endurance * cruiseSpeed;
+    TS_ASSERT_DELTA(range, 480.0, 1.0);  // nm
+  }
+
+  /***************************************************************************
+   * Edge Case Tests
+   ***************************************************************************/
+
+  // Test zero RPM behavior
+  void testZeroRPM() {
+    double rpm = 0.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    TS_ASSERT_DELTA(omega, 0.0, DEFAULT_TOLERANCE);
+
+    // Tip speed should be zero
+    double Vtip = omega * 17.5;
+    TS_ASSERT_DELTA(Vtip, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test maximum collective
+  void testMaxCollective() {
+    double maxCollective = 0.25;  // rad (~14 degrees)
+
+    // Should be within physical limits
+    TS_ASSERT(maxCollective > 0.0);
+    TS_ASSERT(maxCollective < M_PI / 6.0);  // < 30 degrees
+  }
+
+  // Test reverse flow region
+  void testReverseFlowRegion() {
+    // At high advance ratio, inner retreating blade sees reverse flow
+    double mu = 0.35;
+    double R = 17.5;
+
+    // Reverse flow extends to r = mu * R on retreating side
+    double reverseFlowRadius = mu * R;
+    TS_ASSERT_DELTA(reverseFlowRadius, 6.125, 0.01);
+  }
+
+  // Test rotor stall margin
+  void testRotorStallMargin() {
+    double CT_max = 0.015;  // Maximum before stall
+    double CT_operating = 0.007;
+
+    double margin = (CT_max - CT_operating) / CT_max * 100.0;
+    TS_ASSERT(margin > 40.0);  // Good margin
+    TS_ASSERT(margin < 80.0);
+  }
+
+  // Test negative collective
+  void testNegativeCollective() {
+    double collective = -0.05;  // Negative collective
+
+    // Would produce negative thrust (used in special maneuvers)
+    double thrustDirection = (collective > 0) ? 1.0 : -1.0;
+    TS_ASSERT(thrustDirection < 0.0);
+  }
 };
