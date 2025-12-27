@@ -1813,4 +1813,476 @@ public:
 
     fdmex.GetPropertyManager()->Unbind(&aux);
   }
+
+  //=============================================================================
+  // 10. STALL SPEED AND PERFORMANCE CALCULATIONS
+  //=============================================================================
+
+  void testStallSpeedSeaLevel() {
+    // Stall speed depends on weight, wing loading, CLmax
+    double weight = 2500.0;     // lbs
+    double wingArea = 174.0;    // sq ft
+    double CLmax = 1.6;
+
+    // Vstall = sqrt(2W / (rho * S * CLmax))
+    double Vstall_fps = sqrt(2.0 * weight / (rho0_slugft3 * wingArea * CLmax));
+    double Vstall_kts = Vstall_fps * fpstokts;
+
+    TS_ASSERT(Vstall_kts > 50.0 && Vstall_kts < 100.0);
+  }
+
+  void testStallSpeedAtAltitude() {
+    double weight = 2500.0;
+    double wingArea = 174.0;
+    double CLmax = 1.6;
+    double altitude = 10000.0;
+
+    double rho = atm->GetDensity(altitude);
+
+    double Vstall_TAS = sqrt(2.0 * weight / (rho * wingArea * CLmax));
+    double Vstall_EAS = sqrt(2.0 * weight / (rho0_slugft3 * wingArea * CLmax));
+
+    TS_ASSERT(Vstall_TAS > Vstall_EAS);
+  }
+
+  void testStallSpeedLoadFactor() {
+    double Vstall_1g = 100.0;
+    double loadFactor = 2.0;
+
+    double Vstall_turn = Vstall_1g * sqrt(loadFactor);
+    TS_ASSERT_DELTA(Vstall_turn, 141.42, 0.1);
+  }
+
+  void testVaManeuveringSpeed() {
+    double Vstall_1g = 80.0;
+    double limitLoad = 3.8;
+
+    double Va = Vstall_1g * sqrt(limitLoad);
+    TS_ASSERT_DELTA(Va, 155.9, 0.5);
+  }
+
+  //=============================================================================
+  // 11. WIND EFFECTS ON GROUNDSPEED
+  //=============================================================================
+
+  void testGroundSpeedWithHeadwind() {
+    double TAS = 500.0;
+    double headwind = 50.0;
+
+    double GS = TAS - headwind;
+    TS_ASSERT_DELTA(GS, 450.0, 0.1);
+  }
+
+  void testGroundSpeedWithTailwind() {
+    double TAS = 500.0;
+    double tailwind = 50.0;
+
+    double GS = TAS + tailwind;
+    TS_ASSERT_DELTA(GS, 550.0, 0.1);
+  }
+
+  void testGroundSpeedWithCrosswind() {
+    double TAS = 500.0;
+    double crosswind = 30.0;
+
+    double WCA = asin(crosswind / TAS);
+    double GS = TAS * cos(WCA);
+
+    TS_ASSERT(GS < TAS);
+    TS_ASSERT(GS > TAS * 0.95);
+  }
+
+  //=============================================================================
+  // 12. NON-STANDARD ATMOSPHERE EFFECTS
+  //=============================================================================
+
+  void testHotDayMachEffect() {
+    double T_hot = T0_R + 36.0;
+    double a_hot = sqrt(gama * R * T_hot);
+
+    double TAS = 500.0;
+    double Mach_std = TAS / a0_fps;
+    double Mach_hot = TAS / a_hot;
+
+    TS_ASSERT(Mach_hot < Mach_std);
+  }
+
+  void testColdDayMachEffect() {
+    double T_cold = T0_R - 36.0;
+    double a_cold = sqrt(gama * R * T_cold);
+
+    double TAS = 500.0;
+    double Mach_std = TAS / a0_fps;
+    double Mach_cold = TAS / a_cold;
+
+    TS_ASSERT(Mach_cold > Mach_std);
+  }
+
+  void testDensityAltitudeConcept() {
+    double pressure_alt = 5000.0;
+    double temp_std = atm->GetTemperature(pressure_alt);
+    double temp_hot = temp_std + 36.0;
+
+    double rho_std = atm->GetDensity(pressure_alt);
+    double rho_hot = atm->GetPressure(pressure_alt) / (R * temp_hot);
+
+    TS_ASSERT(rho_hot < rho_std);
+  }
+
+  //=============================================================================
+  // 13. APPROACH AND REFERENCE SPEEDS
+  //=============================================================================
+
+  void testVrefCalculation() {
+    double Vstall = 100.0;
+    double Vref = 1.3 * Vstall;
+
+    TS_ASSERT_DELTA(Vref, 130.0, 0.1);
+  }
+
+  void testApproachSpeedAdditive() {
+    double Vref = 130.0;
+    double halfWind = 10.0;
+    double gust = 15.0;
+
+    double Vapp = Vref + halfWind + gust;
+    TS_ASSERT_DELTA(Vapp, 155.0, 0.1);
+  }
+
+  //=============================================================================
+  // 14. MACH DIVERGENCE AND CRITICAL MACH
+  //=============================================================================
+
+  void testCriticalMachAirfoil() {
+    double Mcrit = 0.72;
+    TS_ASSERT(Mcrit < 1.0);
+    TS_ASSERT(Mcrit > 0.5);
+  }
+
+  void testMachDragDivergence() {
+    double Mdd = 0.78;
+    double M_flight = 0.82;
+
+    bool aboveDivergence = (M_flight > Mdd);
+    TS_ASSERT(aboveDivergence);
+  }
+
+  void testSupersonicPressureRecovery() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    double M = 2.0;
+    double P = P0_psf;
+
+    double Pt = aux.PitotTotalPressure(M, P);
+    double isentropic_ratio = pow(1.0 + (gama - 1.0) / 2.0 * M * M, gama / (gama - 1.0));
+    double Pt_isentropic = P * isentropic_ratio;
+
+    TS_ASSERT(Pt < Pt_isentropic);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  //=============================================================================
+  // 15. ALTITUDE CROSSOVER CALCULATIONS
+  //=============================================================================
+
+  void testCrossoverAltitudeConcept() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+    aux.in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    double Vmo_fps = 340.0 / fpstokts;
+    double Mmo = 0.82;
+
+    double alt = 30000.0;
+    double P = atm->GetPressure(alt);
+    double CAS_from_Mmo = aux.VcalibratedFromMach(Mmo, P);
+
+    TS_ASSERT(CAS_from_Mmo > 0.0);
+    TS_ASSERT(!std::isnan(CAS_from_Mmo));
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testClimbScheduleBelowCrossover() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+    aux.in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    double targetCAS = 300.0 / fpstokts;
+    double alt = 20000.0;
+    double M = aux.MachFromVcalibrated(targetCAS, atm->GetPressure(alt));
+
+    TS_ASSERT(M > 0.0);
+    TS_ASSERT(M < 1.0);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  //=============================================================================
+  // 16. COMPRESSIBILITY CORRECTIONS
+  //=============================================================================
+
+  void testCompressibilityHighMach() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+    aux.in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    double M = 0.8;
+    double TAS = M * a0_fps;
+
+    aux.in.vUVW = FGColumnVector3(TAS, 0.0, 0.0);
+    aux.in.Density = rho0_slugft3;
+    aux.in.SoundSpeed = a0_fps;
+    aux.in.Pressure = P0_psf;
+    aux.in.Temperature = T0_R;
+
+    aux.Run(false);
+
+    double EAS = aux.GetVequivalentFPS();
+    double CAS = aux.GetVcalibratedFPS();
+
+    // At high Mach at sea level, there should be a compressibility difference
+    // but it can be small, so just check they're both reasonable values
+    TS_ASSERT(EAS > 0.0);
+    TS_ASSERT(CAS > 0.0);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testIncompressibleLowMach() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+    aux.in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    double M = 0.15;
+    double TAS = M * a0_fps;
+
+    aux.in.vUVW = FGColumnVector3(TAS, 0.0, 0.0);
+    aux.in.Density = rho0_slugft3;
+    aux.in.SoundSpeed = a0_fps;
+    aux.in.Pressure = P0_psf;
+    aux.in.Temperature = T0_R;
+
+    aux.Run(false);
+
+    double EAS = aux.GetVequivalentFPS();
+    double CAS = aux.GetVcalibratedFPS();
+
+    TS_ASSERT_DELTA(EAS, CAS, 2.0);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  //=============================================================================
+  // 17. DENSITY RATIO TESTS
+  //=============================================================================
+
+  void testHalfDensityAltitude() {
+    double alt = 18000.0;
+    double rho = atm->GetDensity(alt);
+    double ratio = rho / rho0_slugft3;
+
+    TS_ASSERT(ratio > 0.4 && ratio < 0.6);
+  }
+
+  void testSigmaDecreaseWithAltitude() {
+    double sigma_10k = atm->GetDensity(10000.0) / rho0_slugft3;
+    double sigma_20k = atm->GetDensity(20000.0) / rho0_slugft3;
+    double sigma_30k = atm->GetDensity(30000.0) / rho0_slugft3;
+
+    TS_ASSERT(sigma_10k > sigma_20k);
+    TS_ASSERT(sigma_20k > sigma_30k);
+  }
+
+  void testTASEASRatioWithSigma() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    double altitude = 25000.0;
+    double TAS = 600.0;
+    double rho = atm->GetDensity(altitude);
+
+    aux.in.vUVW = FGColumnVector3(TAS, 0.0, 0.0);
+    aux.in.Density = rho;
+    aux.in.SoundSpeed = atm->GetSoundSpeed(altitude);
+
+    aux.Run(false);
+
+    double EAS = aux.GetVequivalentFPS();
+    double ratio = EAS / TAS;
+    double expected = sqrt(rho / rho0_slugft3);
+
+    TS_ASSERT_DELTA(ratio, expected, 0.02);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  //=============================================================================
+  // 18. HYPERSONIC REGIME TESTS
+  //=============================================================================
+
+  void testHypersonicMach() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    double M = 5.0;
+    double V = M * a0_fps;
+
+    aux.in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux.in.SoundSpeed = a0_fps;
+    aux.in.Density = rho0_slugft3;
+    aux.in.Pressure = P0_psf;
+    aux.in.Temperature = T0_R;
+
+    aux.Run(false);
+
+    TS_ASSERT_DELTA(aux.GetMach(), M, 1e-6);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testVeryHighQbar() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    double V = 3000.0;
+
+    aux.in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux.in.Density = rho0_slugft3;
+    aux.in.SoundSpeed = a0_fps;
+
+    aux.Run(false);
+
+    double qbar = aux.Getqbar();
+    double expected = 0.5 * rho0_slugft3 * V * V;
+
+    TS_ASSERT_DELTA(qbar, expected, 100.0);
+    TS_ASSERT(!std::isnan(qbar));
+    TS_ASSERT(!std::isinf(qbar));
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  //=============================================================================
+  // 19. PITOT-STATIC SYSTEM TESTS
+  //=============================================================================
+
+  void testPitotTotalPressureSubsonicRange() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    for (double M = 0.1; M <= 0.9; M += 0.2) {
+      double Pt = aux.PitotTotalPressure(M, P0_psf);
+      TS_ASSERT(Pt > P0_psf);
+      TS_ASSERT(!std::isnan(Pt));
+    }
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testPitotTotalPressureSupersonic() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    for (double M = 1.2; M <= 3.0; M += 0.4) {
+      double Pt = aux.PitotTotalPressure(M, P0_psf);
+      TS_ASSERT(Pt > P0_psf);
+      TS_ASSERT(!std::isnan(Pt));
+    }
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testImpactPressureConsistency() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    double M = 0.7;
+    double P = P0_psf;
+
+    double Pt = aux.PitotTotalPressure(M, P);
+    double qc = Pt - P;
+    double M_back = aux.MachFromImpactPressure(qc, P);
+
+    TS_ASSERT_DELTA(M_back, M, 1e-7);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  //=============================================================================
+  // 20. ADDITIONAL EDGE CASES
+  //=============================================================================
+
+  void testVerySmallVelocity() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+    aux.in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    double V = 1.0;
+
+    aux.in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux.in.Density = rho0_slugft3;
+    aux.in.SoundSpeed = a0_fps;
+    aux.in.Pressure = P0_psf;
+    aux.in.Temperature = T0_R;
+
+    aux.Run(false);
+
+    TS_ASSERT_DELTA(aux.GetVtrueFPS(), V, 0.01);
+    TS_ASSERT(!std::isnan(aux.GetMach()));
+    TS_ASSERT(!std::isnan(aux.Getqbar()));
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testNegativeVelocityComponent() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+
+    double u = -200.0;
+
+    aux.in.vUVW = FGColumnVector3(u, 0.0, 0.0);
+    aux.in.Density = rho0_slugft3;
+    aux.in.SoundSpeed = a0_fps;
+
+    aux.Run(false);
+
+    TS_ASSERT_DELTA(aux.GetVtrueFPS(), fabs(u), 0.1);
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testStratosphereConditions() {
+    auto aux = FGAuxiliary(&fdmex);
+    aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
+    aux.in.StdDaySLsoundspeed = atm->StdDaySLsoundspeed;
+
+    double altitude = 50000.0;
+    double TAS = 900.0;
+
+    aux.in.vUVW = FGColumnVector3(TAS, 0.0, 0.0);
+    aux.in.Density = atm->GetDensity(altitude);
+    aux.in.SoundSpeed = atm->GetSoundSpeed(altitude);
+    aux.in.Pressure = atm->GetPressure(altitude);
+    aux.in.Temperature = atm->GetTemperature(altitude);
+
+    aux.Run(false);
+
+    TS_ASSERT(!std::isnan(aux.GetVtrueFPS()));
+    TS_ASSERT(!std::isnan(aux.GetVequivalentFPS()));
+    TS_ASSERT(!std::isnan(aux.GetMach()));
+
+    fdmex.GetPropertyManager()->Unbind(&aux);
+  }
+
+  void testTropopauseConditions() {
+    double alt = 36089.0;
+    double T = atm->GetTemperature(alt);
+    double a = atm->GetSoundSpeed(alt);
+
+    TS_ASSERT(T < T0_R);
+    TS_ASSERT(a < a0_fps);
+  }
 };

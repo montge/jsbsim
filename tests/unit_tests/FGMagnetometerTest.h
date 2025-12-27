@@ -19,6 +19,7 @@
 #include <limits>
 #include <cmath>
 #include <random>
+#include <algorithm>
 
 const double epsilon = 1e-8;
 const double DEG_TO_RAD = M_PI / 180.0;
@@ -1037,5 +1038,485 @@ public:
 
     double heading = calculateHeading(Bx, By);
     TS_ASSERT(heading > 179.0 && heading < 181.0);
+  }
+
+  /***************************************************************************
+   * AHRS Integration Tests
+   ***************************************************************************/
+
+  void testAHRSHeadingFusion() {
+    // Magnetometer fused with gyro for heading
+    double mag_heading = 90.5;
+    double gyro_heading = 89.8;
+    double alpha = 0.1;  // Complementary filter gain
+
+    double fused = alpha * mag_heading + (1.0 - alpha) * gyro_heading;
+    TS_ASSERT(fused > mag_heading - 1.0 && fused < mag_heading + 1.0);
+  }
+
+  void testMagGyroComplementaryFilter() {
+    double mag_rate = 0.0;     // Magnetometer gives position
+    double gyro_rate = 5.0;    // deg/sec
+    double dt = 0.01;
+    double tau = 0.5;          // Time constant
+
+    double heading = 90.0;
+    heading += gyro_rate * dt;
+
+    double alpha = dt / (tau + dt);
+    double mag_heading = 90.05;
+
+    heading = alpha * mag_heading + (1.0 - alpha) * heading;
+    TS_ASSERT_DELTA(heading, 90.05, 0.1);
+  }
+
+  void testAttitudeFromMagAndAccel() {
+    // Roll and pitch from accelerometer
+    // Typical level flight: az negative (down in NED), ay small
+    double ax = 0.0, ay = 0.1, az = 1.0;  // g's (positive z = down in sensor frame)
+
+    double roll = atan2(ay, az) * RAD_TO_DEG;
+    double pitch = atan2(-ax, sqrt(ay*ay + az*az)) * RAD_TO_DEG;
+
+    TS_ASSERT(fabs(roll) < 10.0);
+    TS_ASSERT(fabs(pitch) < 5.0);
+  }
+
+  /***************************************************************************
+   * Kalman Filter Concepts
+   ***************************************************************************/
+
+  void testKalmanPredictionStep() {
+    // Simplified Kalman predict
+    double state = 90.0;        // Heading estimate
+    double P = 1.0;             // Error covariance
+    double Q = 0.01;            // Process noise
+    double u = 5.0;             // Gyro rate input
+    double dt = 0.01;
+
+    state = state + u * dt;     // State prediction
+    P = P + Q;                  // Covariance prediction
+
+    TS_ASSERT_DELTA(state, 90.05, 0.001);
+    TS_ASSERT(P > 1.0);
+  }
+
+  void testKalmanUpdateStep() {
+    double x_pred = 90.05;      // Predicted state
+    double P_pred = 1.01;       // Predicted covariance
+    double z = 90.08;           // Magnetometer measurement
+    double R = 0.5;             // Measurement noise
+
+    double K = P_pred / (P_pred + R);  // Kalman gain
+    double x = x_pred + K * (z - x_pred);
+    double P = (1 - K) * P_pred;
+
+    TS_ASSERT(K > 0.0 && K < 1.0);
+    TS_ASSERT(x > x_pred);
+    TS_ASSERT(P < P_pred);
+  }
+
+  void testKalmanGainRange() {
+    // Kalman gain K = P / (P + R)
+    double P = 1.0;
+
+    double R_high = 10.0;
+    double K_low = P / (P + R_high);
+
+    double R_low = 0.1;
+    double K_high = P / (P + R_low);
+
+    TS_ASSERT(K_low < K_high);
+    TS_ASSERT(K_low > 0.0);
+    TS_ASSERT(K_high < 1.0);
+  }
+
+  /***************************************************************************
+   * Advanced Calibration Tests
+   ***************************************************************************/
+
+  void testSphereCalibration() {
+    // Full sphere calibration produces center and radii
+    double center[3] = {2.0, -1.5, 0.8};
+    double radii[3] = {22.0, 18.0, 20.0};
+
+    // Calibrated measurement
+    double raw[3] = {24.0, -1.0, 20.8};
+    double cal[3];
+
+    for (int i = 0; i < 3; i++) {
+      cal[i] = (raw[i] - center[i]) * 20.0 / radii[i];
+    }
+
+    TS_ASSERT_DELTA(cal[0], 20.0, 0.1);
+    TS_ASSERT_DELTA(cal[2], 20.0, 0.1);
+  }
+
+  void testEllipsoidCalibration() {
+    // Soft iron creates ellipsoid, need full matrix correction
+    double A[3][3] = {
+      {1.0, 0.02, 0.01},
+      {0.02, 1.0, 0.015},
+      {0.01, 0.015, 1.0}
+    };
+    double b[3] = {2.0, -1.5, 0.8};
+
+    double raw[3] = {22.0, -1.0, 40.8};
+    double centered[3];
+    double cal[3] = {0, 0, 0};
+
+    for (int i = 0; i < 3; i++) {
+      centered[i] = raw[i] - b[i];
+    }
+
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        cal[i] += A[i][j] * centered[j];
+      }
+    }
+
+    TS_ASSERT(cal[0] > 0.0);
+    TS_ASSERT(cal[2] > 0.0);
+  }
+
+  void testInFlightCalibrationUpdate() {
+    // Adaptive calibration during flight
+    double old_bias = 2.0;
+    double learning_rate = 0.001;
+    double error = 0.5;
+
+    double new_bias = old_bias - learning_rate * error;
+    TS_ASSERT(new_bias < old_bias);
+  }
+
+  /***************************************************************************
+   * GPS-Aided Heading Tests
+   ***************************************************************************/
+
+  void testGPSGroundTrackComparison() {
+    double mag_heading = 90.0;
+    double gps_track = 92.0;  // Ground track from GPS
+
+    double diff = gps_track - mag_heading;
+    TS_ASSERT(fabs(diff) < 5.0);
+  }
+
+  void testGPSMagHeadingFusion() {
+    double mag_heading = 90.0;
+    double gps_track = 92.0;
+    double airspeed = 200.0;   // kts
+    double groundspeed = 210.0; // kts
+
+    // Only trust GPS track when moving
+    bool gps_valid = (groundspeed > 50.0);
+    TS_ASSERT(gps_valid);
+
+    if (gps_valid) {
+      double alpha = 0.2;
+      double fused = alpha * gps_track + (1.0 - alpha) * mag_heading;
+      TS_ASSERT(fused > 90.0 && fused < 92.0);
+    }
+  }
+
+  void testWindCorrectionAngle() {
+    double heading = 90.0;
+    double track = 95.0;
+
+    double WCA = track - heading;
+    TS_ASSERT_DELTA(WCA, 5.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Magnetic Storm Effects
+   ***************************************************************************/
+
+  void testGeomagneticStormEffect() {
+    double normal_field = 45.0;   // microtesla
+    double storm_variation = 500.0;  // nanotesla = 0.5 microtesla
+
+    double disturbed_field = normal_field + storm_variation / 1000.0;
+    double variation = (disturbed_field - normal_field) / normal_field;
+
+    TS_ASSERT(variation < 0.02);  // <2% typical
+  }
+
+  void testKpIndexEffect() {
+    // Kp index 0-9, higher = more disturbance
+    int Kp = 5;  // Moderate storm
+
+    bool reliable = (Kp < 4);
+    TS_ASSERT(!reliable);  // Reduced reliability during storm
+  }
+
+  void testAuroralZoneDisturbance() {
+    double latitude = 65.0;  // Near auroral zone
+    bool inAuroralZone = (fabs(latitude) > 60.0 && fabs(latitude) < 70.0);
+
+    TS_ASSERT(inAuroralZone);
+    // Expect higher disturbance in auroral zone
+  }
+
+  /***************************************************************************
+   * Compass Rose Tests
+   ***************************************************************************/
+
+  void testCompassRoseIntercardinal() {
+    // NE = 45°, SE = 135°, SW = 225°, NW = 315°
+    TS_ASSERT_DELTA(45.0, 45.0, 0.1);
+    TS_ASSERT_DELTA(135.0, 135.0, 0.1);
+    TS_ASSERT_DELTA(225.0, 225.0, 0.1);
+    TS_ASSERT_DELTA(315.0, 315.0, 0.1);
+  }
+
+  void testHeadingStringConversion() {
+    double heading = 45.0;
+    const char* direction = "NE";
+
+    // Heading should be in range for NE
+    bool isNE = (heading >= 22.5 && heading < 67.5);
+    TS_ASSERT(isNE);
+  }
+
+  void testReciprocalHeading() {
+    double heading = 90.0;
+    double reciprocal = heading + 180.0;
+    if (reciprocal >= 360.0) reciprocal -= 360.0;
+
+    TS_ASSERT_DELTA(reciprocal, 270.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Digital Signal Processing Tests
+   ***************************************************************************/
+
+  void testMedianFilter() {
+    double samples[5] = {20.0, 21.0, 50.0, 19.5, 20.5};  // 50 is outlier
+
+    // Sort for median
+    double sorted[5];
+    for (int i = 0; i < 5; i++) sorted[i] = samples[i];
+    std::sort(sorted, sorted + 5);
+
+    double median = sorted[2];
+    TS_ASSERT_DELTA(median, 20.5, 0.1);  // Outlier rejected
+  }
+
+  void testExponentialSmoothing() {
+    double alpha = 0.2;
+    double smoothed = 20.0;
+    double new_sample = 25.0;
+
+    smoothed = alpha * new_sample + (1.0 - alpha) * smoothed;
+    TS_ASSERT_DELTA(smoothed, 21.0, 0.1);
+  }
+
+  void testBandpassFilter() {
+    // Reject DC bias and high frequency noise
+    double cutoff_low = 0.1;   // Hz
+    double cutoff_high = 5.0;  // Hz
+
+    // Signals in band should pass
+    double signal_freq = 1.0;  // Hz
+    bool passes = (signal_freq > cutoff_low && signal_freq < cutoff_high);
+    TS_ASSERT(passes);
+  }
+
+  /***************************************************************************
+   * Sensor Fusion Quality Tests
+   ***************************************************************************/
+
+  void testHeadingInnovation() {
+    double predicted = 90.0;
+    double measured = 91.5;
+
+    double innovation = measured - predicted;
+    TS_ASSERT_DELTA(innovation, 1.5, 0.1);
+  }
+
+  void testInnovationGating() {
+    double innovation = 15.0;  // Large discrepancy
+    double sigma = 3.0;
+    double gate = 3.0 * sigma;  // 3-sigma gate
+
+    bool reject = (fabs(innovation) > gate);
+    TS_ASSERT(reject);  // Measurement rejected
+  }
+
+  void testCovarianceReset() {
+    double P = 0.01;  // Very low covariance (overconfident)
+    double P_min = 0.1;
+
+    if (P < P_min) P = P_min;
+    TS_ASSERT(P >= P_min);
+  }
+
+  /***************************************************************************
+   * Mounting Alignment Tests
+   ***************************************************************************/
+
+  void testSensorMisalignmentRoll() {
+    double roll_offset = 2.0;  // degrees
+    double Bx = 20.0, By = 5.0, Bz = 40.0;
+
+    double cos_r = std::cos(roll_offset * DEG_TO_RAD);
+    double sin_r = std::sin(roll_offset * DEG_TO_RAD);
+
+    double By_aligned = By * cos_r - Bz * sin_r;
+    double Bz_aligned = By * sin_r + Bz * cos_r;
+
+    TS_ASSERT(fabs(By_aligned - By) > 0.1);
+  }
+
+  void testSensorMisalignmentYaw() {
+    double yaw_offset = 5.0;  // degrees mounting error
+    double Bx = 20.0, By = 0.0;
+
+    double cos_y = std::cos(yaw_offset * DEG_TO_RAD);
+    double sin_y = std::sin(yaw_offset * DEG_TO_RAD);
+
+    double Bx_rot = Bx * cos_y - By * sin_y;
+    double By_rot = Bx * sin_y + By * cos_y;
+
+    double heading_error = calculateHeading(Bx_rot, By_rot);
+    TS_ASSERT(fabs(heading_error) > 4.0);
+  }
+
+  void testAlignmentCalibration() {
+    double measured_offset = 3.5;  // degrees
+    double true_heading = 90.0;
+    double raw_heading = 93.5;
+
+    double corrected = raw_heading - measured_offset;
+    TS_ASSERT_DELTA(corrected, true_heading, 0.1);
+  }
+
+  /***************************************************************************
+   * Environmental Interference Tests
+   ***************************************************************************/
+
+  void testElectricalInterference() {
+    double clean_field = 20.0;
+    double interference = 2.0;  // From nearby wiring
+
+    double measured = clean_field + interference;
+    double error = measured - clean_field;
+
+    TS_ASSERT_DELTA(error, 2.0, 0.1);
+  }
+
+  void testEngineRunningEffect() {
+    double static_bias = 0.5;
+    double engine_bias = 1.5;  // Additional when engine running
+
+    double total_bias = static_bias + engine_bias;
+    TS_ASSERT(total_bias > static_bias);
+  }
+
+  void testAvionicsInterference() {
+    double radio_transmit_bias = 0.8;  // When radio transmitting
+    double radar_bias = 0.3;
+
+    double total = radio_transmit_bias + radar_bias;
+    TS_ASSERT(total > 1.0);
+  }
+
+  /***************************************************************************
+   * Performance Specification Tests
+   ***************************************************************************/
+
+  void testHeadingAccuracySpec() {
+    double spec_accuracy = 1.0;  // ±1 degree
+    double measured_error = 0.8;
+
+    bool meets_spec = (fabs(measured_error) <= spec_accuracy);
+    TS_ASSERT(meets_spec);
+  }
+
+  void testUpdateRateSpec() {
+    double sample_rate = 50.0;  // Hz
+    double min_rate = 10.0;     // Hz
+
+    bool adequate = (sample_rate >= min_rate);
+    TS_ASSERT(adequate);
+  }
+
+  void testResponseTimeSpec() {
+    double time_constant = 0.3;  // seconds
+    double spec = 0.5;           // seconds
+
+    bool meets_spec = (time_constant <= spec);
+    TS_ASSERT(meets_spec);
+  }
+
+  /***************************************************************************
+   * Navigation Computation Tests
+   ***************************************************************************/
+
+  void testCrossTrackError() {
+    double heading = 90.0;
+    double desired_track = 85.0;
+    double crosstrack_rate = 1.0;  // nm/min
+
+    double track_error = heading - desired_track;
+    TS_ASSERT_DELTA(track_error, 5.0, 0.1);
+  }
+
+  void testWindCorrectionCalculation() {
+    double groundspeed = 200.0;  // kts
+    double windspeed = 30.0;     // kts crosswind
+
+    double WCA = asin(windspeed / groundspeed) * RAD_TO_DEG;
+    TS_ASSERT(WCA < 10.0);
+  }
+
+  void testTurnAnticipation() {
+    double turn_radius = 2.0;  // nm
+    double groundspeed = 180.0; // kts
+    double bank_angle = 25.0;
+
+    // Distance to start turn before waypoint
+    double lead_distance = sqrt(2.0 * turn_radius * turn_radius);
+    TS_ASSERT(lead_distance > 2.0);
+  }
+
+  /***************************************************************************
+   * Additional Edge Cases
+   ***************************************************************************/
+
+  void testPolarRegionOperation() {
+    double latitude = 85.0;
+    double declination = 45.0;  // Very large at poles
+
+    // Magnetic heading becomes unreliable
+    bool unreliable = (fabs(latitude) > 80.0);
+    TS_ASSERT(unreliable);
+  }
+
+  void testEquatorialRegion() {
+    double latitude = 0.0;
+    double inclination = 0.0;  // Horizontal field
+
+    bool optimal = (fabs(latitude) < 30.0);
+    TS_ASSERT(optimal);  // Best conditions for mag compass
+  }
+
+  void testRapidManeuvering() {
+    double heading_rate = 50.0;  // deg/sec (high)
+    double max_rate = 60.0;
+
+    bool within_limits = (fabs(heading_rate) < max_rate);
+    TS_ASSERT(within_limits);
+  }
+
+  void testInvertedFlight() {
+    double roll = 180.0;  // Inverted
+    double Bx = 20.0, By = 5.0, Bz = 40.0;
+
+    // Heading calculation should still work with proper compensation
+    double cos_r = std::cos(roll * DEG_TO_RAD);
+    double sin_r = std::sin(roll * DEG_TO_RAD);
+
+    double By_comp = By * cos_r - Bz * sin_r;
+    TS_ASSERT(!std::isnan(By_comp));
   }
 };

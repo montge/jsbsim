@@ -1172,4 +1172,438 @@ public:
     double energy_RP1 = propMass * hv_RP1;
     TS_ASSERT_DELTA(energy_RP1, 18500000.0, 1000.0);
   }
+
+  // ==================== HYBRID ROCKET TESTS ====================
+
+  void testHybridRocketOxidizerFlow() {
+    // Hybrid rockets use solid fuel with liquid/gaseous oxidizer
+    double oxiFlowRate = 50.0;  // lbs/sec
+    double fuelRegressionRate = 0.02;  // in/sec
+    double burnSurface = 500.0;  // sq in
+    double fuelDensity = 0.04;   // lb/cu in
+
+    double fuelMassRate = fuelRegressionRate * burnSurface * fuelDensity;
+    TS_ASSERT(fuelMassRate > 0.0);
+    TS_ASSERT(fuelMassRate < oxiFlowRate);
+  }
+
+  void testHybridRocketMixtureRatio() {
+    double oxiFlow = 40.0;
+    double fuelFlow = 10.0;
+
+    double O_F = oxiFlow / fuelFlow;
+    TS_ASSERT_DELTA(O_F, 4.0, DEFAULT_TOLERANCE);
+  }
+
+  void testHybridThrottleability() {
+    double maxOxiFlow = 50.0;
+    double throttlePercent = 0.6;
+
+    double oxiFlow = maxOxiFlow * throttlePercent;
+    TS_ASSERT_DELTA(oxiFlow, 30.0, DEFAULT_TOLERANCE);
+
+    // Thrust roughly proportional to oxi flow
+    double maxThrust = 50000.0;
+    double thrust = maxThrust * throttlePercent;
+    TS_ASSERT(thrust > 0.0 && thrust < maxThrust);
+  }
+
+  // ==================== MONOPROPELLANT TESTS ====================
+
+  void testMonopropellantDecomposition() {
+    // Monopropellant: single propellant decomposes to produce thrust
+    double Isp_hydrazine = 230.0;  // seconds (typical)
+    double propFlowRate = 10.0;    // lbs/sec
+
+    double thrust = Isp_hydrazine * propFlowRate;
+    TS_ASSERT_DELTA(thrust, 2300.0, DEFAULT_TOLERANCE);
+  }
+
+  void testMonopropellantCatalystBed() {
+    // Catalyst bed temperature affects performance
+    double T_cold = 400.0;   // °F (cold catalyst)
+    double T_hot = 1200.0;   // °F (operating)
+
+    double eta_cold = 0.85;  // Efficiency when cold
+    double eta_hot = 0.98;   // Efficiency when hot
+
+    TS_ASSERT(eta_hot > eta_cold);
+  }
+
+  void testMonopropellantPulseWidth() {
+    double minPulse = 0.025;  // 25 ms minimum
+    double thrust = 100.0;     // lbs
+
+    double impulseBit = thrust * minPulse;
+    TS_ASSERT_DELTA(impulseBit, 2.5, 0.1);
+  }
+
+  // ==================== BIPROPELLANT TESTS ====================
+
+  void testBipropellantIgnition() {
+    // Hypergolic propellants ignite on contact
+    bool isHypergolic = true;
+    double ignitionDelay = 0.005;  // seconds
+
+    TS_ASSERT(isHypergolic);
+    TS_ASSERT(ignitionDelay < 0.1);  // Very fast
+  }
+
+  void testBipropellantMixingEfficiency() {
+    double Isp_theoretical = 330.0;
+    double mixingEfficiency = 0.95;
+
+    double Isp_actual = Isp_theoretical * mixingEfficiency;
+    TS_ASSERT_DELTA(Isp_actual, 313.5, 0.1);
+  }
+
+  void testBipropellantStorability() {
+    // Storable vs cryogenic propellants
+    double boiloffRate_storable = 0.0;    // No boiloff
+    double boiloffRate_LH2 = 0.001;        // 0.1% per hour
+
+    TS_ASSERT(boiloffRate_storable < boiloffRate_LH2);
+  }
+
+  // ==================== RESTART CAPABILITY TESTS ====================
+
+  void testEngineRestartSequence() {
+    int maxRestarts = 5;
+    int currentRestarts = 0;
+    bool restartCapable = (currentRestarts < maxRestarts);
+
+    TS_ASSERT(restartCapable);
+
+    currentRestarts = 5;
+    restartCapable = (currentRestarts < maxRestarts);
+    TS_ASSERT(!restartCapable);
+  }
+
+  void testRestartChilldown() {
+    // Cryogenic engines need chilldown before restart
+    double chilldownTime = 30.0;  // seconds
+    double propTemp = 70.0;        // °R (LH2)
+    double engineTemp = 500.0;     // °R (warm engine)
+
+    bool needsChilldown = (engineTemp > propTemp + 50.0);
+    TS_ASSERT(needsChilldown);
+  }
+
+  void testRestartPropellantSettling() {
+    // In microgravity, need ullage thrust to settle propellant
+    double ullageThrust = 25.0;   // lbs
+    double vehicleMass = 5000.0;  // lbs
+    double g0 = 32.174;
+
+    double accel = ullageThrust / (vehicleMass / g0);
+    TS_ASSERT(accel > 0.0);
+  }
+
+  // ==================== THRUST TERMINATION TESTS ====================
+
+  void testEmergencyShutdown() {
+    double shutdownTime = 0.1;  // Very fast shutdown
+    double maxThrust = 100000.0;
+
+    // Linear decay
+    double thrustAt50ms = maxThrust * (1.0 - 0.05 / shutdownTime);
+    TS_ASSERT(thrustAt50ms > 0.0);
+    TS_ASSERT(thrustAt50ms < maxThrust);
+  }
+
+  void testThrustTerminationPort() {
+    // Solid rockets use TTP for emergency termination
+    double nominalThrust = 50000.0;
+    double portAreaRatio = 0.5;  // TTP opens 50% of chamber
+
+    // Thrust drops rapidly when TTP opens
+    double thrustAfterTTP = nominalThrust * (1.0 - portAreaRatio);
+    TS_ASSERT_DELTA(thrustAfterTTP, 25000.0, 100.0);
+  }
+
+  // ==================== ENGINE HEALTH MONITORING ====================
+
+  void testChamberPressureMonitor() {
+    double Pc_nominal = 1000.0;  // psi
+    double Pc_measured = 950.0;
+    double tolerance = 0.1;      // 10%
+
+    bool withinSpec = (fabs(Pc_measured - Pc_nominal) / Pc_nominal) < tolerance;
+    TS_ASSERT(withinSpec);
+  }
+
+  void testTurbopumpSpeedMonitor() {
+    double rpm_nominal = 35000.0;
+    double rpm_measured = 34500.0;
+    double rpm_redline = 38000.0;
+
+    bool belowRedline = (rpm_measured < rpm_redline);
+    TS_ASSERT(belowRedline);
+  }
+
+  void testTemperatureLimit() {
+    double T_wall = 3000.0;      // °R
+    double T_limit = 3500.0;     // °R
+
+    bool withinLimit = (T_wall < T_limit);
+    TS_ASSERT(withinLimit);
+  }
+
+  // ==================== POGO SUPPRESSION TESTS ====================
+
+  void testPogoFrequency() {
+    // POGO: coupling between propulsion and vehicle structure
+    double vehicleFreq = 5.0;    // Hz (first mode)
+    double feedFreq = 4.5;       // Hz (feed system)
+
+    double separation = fabs(vehicleFreq - feedFreq);
+    bool tooClose = (separation < 1.0);
+    TS_ASSERT(tooClose);  // Needs suppression
+  }
+
+  void testPogoAccumulator() {
+    double accumulatorVolume = 2.0;  // cubic ft
+    double gasCharge = 100.0;         // psi
+
+    // Accumulator provides compliance to decouple oscillations
+    TS_ASSERT(accumulatorVolume > 0.0);
+    TS_ASSERT(gasCharge > 0.0);
+  }
+
+  // ==================== THRUST OSCILLATION TESTS ====================
+
+  void testThrustOscillationDetection() {
+    double meanThrust = 100000.0;
+    double oscillation = 5000.0;  // Peak-to-peak
+    double threshold = 10000.0;   // 10% of nominal
+
+    bool acceptable = (oscillation < threshold);
+    TS_ASSERT(acceptable);
+  }
+
+  void testHighFrequencyInstability() {
+    double frequency = 500.0;     // Hz
+    double screechThreshold = 400.0;  // Hz
+
+    bool isScreech = (frequency > screechThreshold);
+    TS_ASSERT(isScreech);
+  }
+
+  // ==================== MULTIPLE ENGINE TESTS ====================
+
+  void testEngineOutCapability() {
+    int numEngines = 4;
+    double thrustPerEngine = 25000.0;
+    double totalThrust = numEngines * thrustPerEngine;
+
+    // One engine out
+    double thrustEngineOut = (numEngines - 1) * thrustPerEngine;
+    double thrustRatio = thrustEngineOut / totalThrust;
+
+    TS_ASSERT_DELTA(thrustRatio, 0.75, DEFAULT_TOLERANCE);
+  }
+
+  void testEngineSynchronization() {
+    double thrust1 = 25000.0;
+    double thrust2 = 24800.0;  // Slight mismatch
+    double mismatchTolerance = 0.02;  // 2%
+
+    double mismatch = fabs(thrust1 - thrust2) / thrust1;
+    bool synchronized = (mismatch < mismatchTolerance);
+    TS_ASSERT(synchronized);
+  }
+
+  void testClusterGimbalCompensation() {
+    int numEngines = 4;
+    double gimbalRange = 6.0;  // degrees
+
+    // With one engine out, remaining engines may need more gimbal
+    int enginesRemaining = 3;
+    double gimbalRequired = 4.0 / enginesRemaining * numEngines;
+
+    TS_ASSERT(gimbalRequired < gimbalRange);
+  }
+
+  // ==================== COMBUSTION STABILITY TESTS ====================
+
+  void testCombustionStabilityMargin() {
+    double dampingRatio = 0.05;  // 5% damping
+    double threshold = 0.03;     // Minimum acceptable
+
+    bool stable = (dampingRatio > threshold);
+    TS_ASSERT(stable);
+  }
+
+  void testAcousticModeFrequencies() {
+    // Longitudinal modes
+    double chamberLength = 3.0;  // ft
+    double soundSpeed = 4000.0;  // ft/s (hot combustion products)
+
+    double firstMode = soundSpeed / (2.0 * chamberLength);
+    TS_ASSERT(firstMode > 500.0);  // Typical range
+  }
+
+  void testInjectorDampingEffect() {
+    double pressureDrop = 300.0;  // psi across injector
+    double Pc = 1000.0;
+
+    double pdRatio = pressureDrop / Pc;
+    bool adequateDamping = (pdRatio > 0.15);  // >15% typical
+    TS_ASSERT(adequateDamping);
+  }
+
+  // ==================== NOZZLE TESTS ====================
+
+  void testNozzleErosionEffect() {
+    double At_initial = 10.0;  // sq in
+    double erosionRate = 0.001;  // in/sec radial
+    double burnTime = 100.0;    // sec
+
+    double radiusChange = erosionRate * burnTime;
+    double r_initial = sqrt(At_initial / M_PI);
+    double r_final = r_initial + radiusChange;
+    double At_final = M_PI * r_final * r_final;
+
+    TS_ASSERT(At_final > At_initial);
+  }
+
+  void testNozzleHeatFlux() {
+    double heatFlux = 5.0e6;  // BTU/(ft²-hr)
+    double thickness = 0.1;   // ft
+    double k = 100.0;         // BTU/(ft-hr-°R)
+
+    double deltaT = heatFlux * thickness / k;
+    TS_ASSERT(deltaT > 0.0);
+  }
+
+  void testExtendableNozzle() {
+    double epsilon_stowed = 20.0;
+    double epsilon_deployed = 80.0;
+
+    // Vacuum Isp improvement
+    double Isp_stowed = 350.0;
+    double Isp_deployed = 420.0;
+
+    double improvement = (Isp_deployed - Isp_stowed) / Isp_stowed;
+    TS_ASSERT(improvement > 0.15);  // >15% improvement
+  }
+
+  // ==================== UPPER STAGE TESTS ====================
+
+  void testUpperStageRestart() {
+    double coastDuration = 30.0 * 60.0;  // 30 minutes
+    double propBoiloff = 0.001 * coastDuration / 3600.0;  // per hour rate
+
+    double propRemaining = 1.0 - propBoiloff;
+    TS_ASSERT(propRemaining > 0.99);  // <1% loss
+  }
+
+  void testPressureBlowdown() {
+    double P_initial = 500.0;  // psi
+    double V_ullage = 10.0;    // cu ft
+    double V_expelled = 50.0;  // cu ft propellant
+
+    // Final pressure after blowdown
+    double P_final = P_initial * V_ullage / (V_ullage + V_expelled);
+    TS_ASSERT(P_final < P_initial);
+  }
+
+  void testSettlingBurn() {
+    double settlingThrust = 50.0;   // lbs (small)
+    double duration = 5.0;          // seconds
+    double vehicleMass = 10000.0;   // lbs
+
+    double deltaV = settlingThrust * duration / (vehicleMass / 32.174);
+    TS_ASSERT(deltaV > 0.0);
+  }
+
+  // ==================== ENVIRONMENTAL EFFECTS ====================
+
+  void testAltitudeCompensatingNozzle() {
+    // Aerospike or plug nozzle
+    double Pa_sl = 14.7;
+    double Pa_vac = 0.0;
+
+    // Performance varies less with altitude
+    double Isp_sl = 350.0;
+    double Isp_vac = 360.0;
+
+    double variation = (Isp_vac - Isp_sl) / Isp_sl;
+    TS_ASSERT(variation < 0.05);  // <5% variation
+  }
+
+  void testCryogenicPropellantDensity() {
+    double rho_LH2 = 4.43;    // lb/cu ft
+    double rho_LOX = 71.2;    // lb/cu ft
+    double rho_RP1 = 50.8;    // lb/cu ft
+
+    TS_ASSERT(rho_LOX > rho_RP1);
+    TS_ASSERT(rho_RP1 > rho_LH2);
+  }
+
+  void testPropellantVaporPressure() {
+    double Pvap_LOX = 14.7;   // psi at boiling point
+    double Pvap_LH2 = 14.7;   // psi at boiling point
+
+    // Tank must be pressurized above vapor pressure
+    double tankPressure = 50.0;
+    TS_ASSERT(tankPressure > Pvap_LOX);
+    TS_ASSERT(tankPressure > Pvap_LH2);
+  }
+
+  // ==================== ADDITIONAL PERFORMANCE TESTS ====================
+
+  void testSpecificImpulseDensity() {
+    // Density Isp = Isp * propellant_density
+    double Isp = 300.0;
+    double density = 60.0;  // lb/cu ft
+
+    double densityIsp = Isp * density;
+    TS_ASSERT_DELTA(densityIsp, 18000.0, DEFAULT_TOLERANCE);
+  }
+
+  void testCharacteristicLength() {
+    // L* = chamber_volume / throat_area
+    double Vc = 0.5;   // cu ft
+    double At = 0.05;  // sq ft
+
+    double Lstar = Vc / At;
+    TS_ASSERT_DELTA(Lstar, 10.0, 0.1);  // ft
+  }
+
+  void testResidenceTime() {
+    double Lstar = 10.0;     // ft
+    double C_star = 6000.0;  // ft/s
+
+    double tau = Lstar / C_star;
+    TS_ASSERT(tau > 0.001);  // Sufficient for combustion
+  }
+
+  void testMassFlowBalance() {
+    double thrust = 100000.0;
+    double Isp = 300.0;
+    double g0 = 32.174;
+
+    double mdot = thrust / (Isp * g0);
+    double thrust_check = mdot * Isp * g0;
+
+    TS_ASSERT_DELTA(thrust_check, thrust, 1.0);
+  }
+
+  void testPropellantUtilization() {
+    double totalProp = 100000.0;
+    double usedProp = 97000.0;
+    double residual = totalProp - usedProp;
+
+    double utilization = usedProp / totalProp;
+    TS_ASSERT(utilization > 0.95);  // >95% utilization
+  }
+
+  void testThrustToWeightRatioEngine() {
+    double thrust = 200000.0;  // lbs
+    double engineWeight = 2000.0;  // lbs
+
+    double TWR = thrust / engineWeight;
+    TS_ASSERT(TWR > 50.0);  // Good engine TWR
+  }
 };

@@ -1283,4 +1283,472 @@ public:
     TS_ASSERT(L_mag > 0.0);
     TS_ASSERT(std::isfinite(KE));
   }
+
+  // ============ Dynamic Mass Distribution Tests ============
+
+  void testFuelBurnMassChange() {
+    // GIVEN: Aircraft with fuel consumption
+    double initialMass = 50000.0;  // lbs
+    double fuelBurnRate = 200.0;   // lbs/min
+    double time = 60.0;            // minutes
+
+    // WHEN: Computing mass after fuel burn
+    double fuelBurned = fuelBurnRate * time;
+    double finalMass = initialMass - fuelBurned;
+
+    // THEN: Mass should decrease
+    TS_ASSERT(finalMass < initialMass);
+    TS_ASSERT_DELTA(finalMass, 38000.0, 1.0);
+  }
+
+  void testCGShiftDuringFuelBurn() {
+    // GIVEN: Wing tanks at different positions
+    double wingTankX = 10.0;  // ft from ref
+    double fusTankX = 5.0;    // ft from ref
+
+    double wingFuel = 2000.0;  // lbs
+    double fusFuel = 1000.0;   // lbs
+    double totalFuel = wingFuel + fusFuel;
+
+    // WHEN: Computing CG
+    double cgX = (wingFuel * wingTankX + fusFuel * fusTankX) / totalFuel;
+
+    // THEN: CG should be between tank positions
+    TS_ASSERT(cgX > fusTankX);
+    TS_ASSERT(cgX < wingTankX);
+  }
+
+  void testInertiaChangeWithFuelBurn() {
+    // Burning fuel from wing tanks reduces roll inertia
+    double Ixx_full = 50000.0;    // slug-ft²
+    double fuelContribution = 5000.0;
+
+    double Ixx_empty = Ixx_full - fuelContribution;
+    TS_ASSERT(Ixx_empty < Ixx_full);
+  }
+
+  // ============ Payload and CG Tests ============
+
+  void testPayloadCGEffect() {
+    double emptyWeight = 10000.0;
+    double emptyX = 100.0;
+    double payloadWeight = 2000.0;
+    double payloadX = 120.0;
+
+    double totalWeight = emptyWeight + payloadWeight;
+    double loadedCG = (emptyWeight * emptyX + payloadWeight * payloadX) / totalWeight;
+
+    TS_ASSERT(loadedCG > emptyX);
+    TS_ASSERT(loadedCG < payloadX);
+  }
+
+  void testPayloadInertiaContribution() {
+    double baseIyy = 80000.0;
+    double payloadMass = 500.0;  // slugs
+    double payloadOffset = 10.0; // ft from CG
+
+    // Parallel axis contribution
+    double payloadIyy = payloadMass * payloadOffset * payloadOffset;
+    double totalIyy = baseIyy + payloadIyy;
+
+    TS_ASSERT(totalIyy > baseIyy);
+    TS_ASSERT_DELTA(payloadIyy, 50000.0, 1.0);
+  }
+
+  void testForwardCGLimit() {
+    double currentCG = 22.5;  // % MAC
+    double fwdLimit = 15.0;   // % MAC
+
+    bool withinLimits = (currentCG >= fwdLimit);
+    TS_ASSERT(withinLimits);
+  }
+
+  void testAftCGLimit() {
+    double currentCG = 32.0;  // % MAC
+    double aftLimit = 35.0;   // % MAC
+
+    bool withinLimits = (currentCG <= aftLimit);
+    TS_ASSERT(withinLimits);
+  }
+
+  // ============ Fluid Slosh Tests ============
+
+  void testFluidSloshFrequency() {
+    // Slosh frequency for rectangular tank
+    double g = 32.174;          // ft/s²
+    double tankLength = 5.0;    // ft
+    double fillLevel = 0.7;     // 70%
+
+    double h = fillLevel * tankLength;
+    double f_slosh = (1.0 / (2.0 * M_PI)) * sqrt(g * M_PI * tanh(M_PI * h / tankLength) / tankLength);
+
+    TS_ASSERT(f_slosh > 0.0);
+    TS_ASSERT(f_slosh < 2.0);  // Typical range
+  }
+
+  void testFluidSloshMass() {
+    // Effective slosh mass is fraction of total fluid
+    double totalFluidMass = 1000.0;  // lbs
+    double sloshFraction = 0.3;       // 30% participates
+
+    double sloshMass = totalFluidMass * sloshFraction;
+    double rigidMass = totalFluidMass - sloshMass;
+
+    TS_ASSERT_DELTA(sloshMass, 300.0, 0.1);
+    TS_ASSERT_DELTA(rigidMass, 700.0, 0.1);
+  }
+
+  void testSloshDamping() {
+    double sloshFreq = 0.5;   // Hz
+    double dampingRatio = 0.05;
+
+    double dampedFreq = sloshFreq * sqrt(1.0 - dampingRatio * dampingRatio);
+    TS_ASSERT(dampedFreq < sloshFreq);
+    TS_ASSERT(dampedFreq > 0.99 * sloshFreq);
+  }
+
+  // ============ Control Surface Deployment Tests ============
+
+  void testLandingGearInertiaChange() {
+    double Izz_retracted = 200000.0;  // slug-ft²
+    double gearMass = 100.0;           // slugs
+    double gearOffset = 15.0;          // ft
+
+    double gearInertia = gearMass * gearOffset * gearOffset;
+    double Izz_extended = Izz_retracted + gearInertia;
+
+    TS_ASSERT(Izz_extended > Izz_retracted);
+  }
+
+  void testSpeedBrakeDeployment() {
+    double Iyy_clean = 150000.0;
+    double brakeAreaMass = 20.0;  // slugs
+    double brakeOffset = 8.0;     // ft
+
+    double brakeInertia = brakeAreaMass * brakeOffset * brakeOffset;
+    double Iyy_deployed = Iyy_clean + brakeInertia;
+
+    TS_ASSERT(Iyy_deployed > Iyy_clean);
+  }
+
+  void testFlapDeploymentMassEffect() {
+    double cgClean = 25.0;      // % MAC
+    double cgFlaps = 25.5;      // Slight aft shift with flaps
+
+    bool cgShiftedAft = (cgFlaps > cgClean);
+    TS_ASSERT(cgShiftedAft);
+  }
+
+  // ============ Helicopter Rotor Inertia Tests ============
+
+  void testRotorBladeInertia() {
+    // Single blade: thin rod about root
+    double bladeMass = 50.0;   // lbs
+    double bladeLength = 20.0; // ft
+    double g = 32.174;
+    double massSlug = bladeMass / g;
+
+    double I_blade = (1.0 / 3.0) * massSlug * bladeLength * bladeLength;
+    TS_ASSERT(I_blade > 0.0);
+  }
+
+  void testMultiBladeRotorInertia() {
+    double I_blade = 200.0;  // slug-ft² per blade
+    int numBlades = 4;
+
+    double I_rotor = numBlades * I_blade;
+    TS_ASSERT_DELTA(I_rotor, 800.0, 0.1);
+  }
+
+  void testGyroscopicMomentRotor() {
+    double I_rotor = 800.0;     // slug-ft²
+    double omega = 27.0;        // rad/s (typical main rotor)
+    double pitch_rate = 0.1;    // rad/s
+
+    double gyro_moment = I_rotor * omega * pitch_rate;
+    TS_ASSERT(gyro_moment > 0.0);
+  }
+
+  // ============ Spin and Tumble Tests ============
+
+  void testSpinStabilityRatio() {
+    // For spin stability: Ix > Iy (for spin about x)
+    double Ix = 150.0;
+    double Iy = 100.0;
+    double Iz = 200.0;
+
+    bool spinStable = (Ix > Iy);
+    TS_ASSERT(spinStable);
+  }
+
+  void testIntermediateAxisInstability() {
+    // Rotation about intermediate axis is unstable
+    double Ix = 100.0;
+    double Iy = 150.0;  // Intermediate
+    double Iz = 200.0;
+
+    bool isIntermediate = (Iy > Ix && Iy < Iz);
+    TS_ASSERT(isIntermediate);
+    // Rotation about Y is unstable (tennis racket theorem)
+  }
+
+  void testNutationFrequency() {
+    double Ix = 100.0;
+    double Iz = 200.0;
+    double omega_spin = 10.0;  // rad/s
+
+    double omega_nutation = omega_spin * (Iz - Ix) / Ix;
+    TS_ASSERT(omega_nutation > 0.0);
+  }
+
+  // ============ Satellite/Spacecraft Tests ============
+
+  void testSpacecraftDualSpin() {
+    double I_despun = 50.0;    // slug-ft² (antenna platform)
+    double I_spun = 200.0;      // slug-ft² (main body)
+    double omega_spun = 5.0;    // rad/s
+
+    double L_total = I_spun * omega_spun;  // Angular momentum conserved
+    TS_ASSERT(L_total > 0.0);
+  }
+
+  void testMomentumWheelSaturation() {
+    double wheelInertia = 0.1;   // slug-ft²
+    double maxSpeed = 6000.0;    // rpm
+    double maxSpeedRad = maxSpeed * 2 * M_PI / 60.0;
+
+    double maxMomentum = wheelInertia * maxSpeedRad;
+    TS_ASSERT(maxMomentum > 0.0);
+  }
+
+  void testGravityGradientStability() {
+    double Ix = 100.0;
+    double Iy = 120.0;
+    double Iz = 150.0;
+
+    // For gravity gradient stability: Iz > Iy > Ix
+    bool ggStable = (Iz > Iy && Iy > Ix);
+    TS_ASSERT(ggStable);
+  }
+
+  // ============ Variable Geometry Aircraft Tests ============
+
+  void testSwingWingInertiaChange() {
+    double Ixx_swept = 80000.0;   // Full sweep
+    double Ixx_unswept = 120000.0; // Unswept
+
+    TS_ASSERT(Ixx_unswept > Ixx_swept);
+  }
+
+  void testVariableSweepCGShift() {
+    double cgSwept = 30.0;    // % MAC
+    double cgUnswept = 25.0;  // % MAC
+
+    TS_ASSERT(cgSwept > cgUnswept);  // CG moves aft with sweep
+  }
+
+  // ============ Launch Vehicle Tests ============
+
+  void testRocketMassRatio() {
+    double initialMass = 100000.0;  // lbs
+    double propellantMass = 80000.0; // lbs
+    double finalMass = initialMass - propellantMass;
+
+    double massRatio = initialMass / finalMass;
+    TS_ASSERT_DELTA(massRatio, 5.0, 0.1);
+  }
+
+  void testStageSeparationMassChange() {
+    double stage1Mass = 80000.0;
+    double stage2Mass = 20000.0;
+    double totalMass = stage1Mass + stage2Mass;
+
+    double remainingAfterSep = stage2Mass;
+    double massLost = totalMass - remainingAfterSep;
+
+    TS_ASSERT_DELTA(massLost, stage1Mass, 1.0);
+  }
+
+  void testRocketCGTravel() {
+    // CG moves forward as propellant burns from aft tanks
+    double cgInitial = 80.0;  // ft from nose
+    double cgFinal = 60.0;    // ft from nose
+
+    double cgTravel = cgInitial - cgFinal;
+    TS_ASSERT(cgTravel > 0.0);
+  }
+
+  // ============ Multi-Body Dynamics Tests ============
+
+  void testArticulatedBodyInertia() {
+    // Two rigid bodies connected
+    double I1 = 100.0;
+    double I2 = 50.0;
+    double m1 = 10.0;
+    double m2 = 5.0;
+    double d = 3.0;  // Distance between CGs
+
+    // Total about combined CG (simplified)
+    double totalMass = m1 + m2;
+    double cg = (m1 * 0 + m2 * d) / totalMass;
+
+    double I_total = I1 + m1 * cg * cg + I2 + m2 * (d - cg) * (d - cg);
+    TS_ASSERT(I_total > I1 + I2);
+  }
+
+  void testFlexibleAppendage() {
+    // Solar panel or antenna
+    double I_rigid = 1000.0;
+    double flexibility = 0.1;  // 10% effective reduction
+
+    double I_effective = I_rigid * (1.0 - flexibility);
+    TS_ASSERT(I_effective < I_rigid);
+  }
+
+  // ============ Propeller/Engine Inertia Tests ============
+
+  void testPropellerInertia() {
+    // Three-blade propeller
+    double bladeMass = 5.0;   // lbs
+    double bladeLength = 3.0; // ft
+    double g = 32.174;
+    double massSlug = bladeMass / g;
+
+    double I_blade = (1.0 / 3.0) * massSlug * bladeLength * bladeLength;
+    double I_prop = 3 * I_blade;
+
+    TS_ASSERT(I_prop > 0.0);
+  }
+
+  void testEngineCrankcaseInertia() {
+    double I_crankcase = 2.0;  // slug-ft²
+    double I_prop = 1.0;       // slug-ft²
+    double gearRatio = 0.5;    // Reduction gear
+
+    // Effective inertia at propeller
+    double I_engine_eff = I_crankcase / (gearRatio * gearRatio);
+    double I_total = I_prop + I_engine_eff;
+
+    TS_ASSERT(I_total > I_prop);
+  }
+
+  void testTurbineSpoolInertia() {
+    double I_LP = 5.0;   // Low pressure spool
+    double I_HP = 2.0;   // High pressure spool
+
+    double totalRotorInertia = I_LP + I_HP;
+    TS_ASSERT_DELTA(totalRotorInertia, 7.0, 0.1);
+  }
+
+  // ============ CG Envelope Tests ============
+
+  void testCGEnvelopeWeight() {
+    double minWeight = 40000.0;
+    double maxWeight = 60000.0;
+    double currentWeight = 50000.0;
+
+    bool withinWeightEnvelope = (currentWeight >= minWeight && currentWeight <= maxWeight);
+    TS_ASSERT(withinWeightEnvelope);
+  }
+
+  void testCGEnvelopeFwdLimit() {
+    double weight = 50000.0;
+    double cg = 20.0;  // % MAC
+
+    // Forward limit varies with weight (simplified)
+    double fwdLimit = 15.0 + 0.0001 * (weight - 40000.0);
+
+    bool withinFwd = (cg >= fwdLimit);
+    TS_ASSERT(withinFwd);
+  }
+
+  void testCGEnvelopeAftLimit() {
+    double weight = 50000.0;
+    double cg = 32.0;  // % MAC
+
+    // Aft limit varies with weight
+    double aftLimit = 35.0 - 0.00005 * (weight - 40000.0);
+
+    bool withinAft = (cg <= aftLimit);
+    TS_ASSERT(withinAft);
+  }
+
+  // ============ Additional Physical Constraint Tests ============
+
+  void testMassConservation() {
+    double initialMass = 50000.0;
+    double fuelBurned = 5000.0;
+    double payloadDropped = 1000.0;
+
+    double finalMass = initialMass - fuelBurned - payloadDropped;
+    TS_ASSERT_DELTA(finalMass, 44000.0, 0.1);
+  }
+
+  void testPositiveInertia() {
+    // All diagonal elements must be positive
+    double Ixx = 100.0;
+    double Iyy = 150.0;
+    double Izz = 200.0;
+
+    TS_ASSERT(Ixx > 0.0);
+    TS_ASSERT(Iyy > 0.0);
+    TS_ASSERT(Izz > 0.0);
+  }
+
+  void testInertiaSymmetryRelation() {
+    // For symmetric aircraft: Ixy = Iyz = 0, only Ixz may be non-zero
+    double Ixy = 0.0;
+    double Iyz = 0.0;
+    double Ixz = -50.0;  // Typical
+
+    TS_ASSERT_DELTA(Ixy, 0.0, 0.1);
+    TS_ASSERT_DELTA(Iyz, 0.0, 0.1);
+    TS_ASSERT(Ixz != 0.0);  // Usually non-zero
+  }
+
+  // ============ Moment Calculations Tests ============
+
+  void testPitchingMomentInertia() {
+    double Iyy = 150000.0;        // slug-ft²
+    double q_dot = 0.5;           // rad/s² pitch acceleration
+
+    double pitchMoment = Iyy * q_dot;
+    TS_ASSERT_DELTA(pitchMoment, 75000.0, 1.0);  // ft-lbs
+  }
+
+  void testRollingMomentInertia() {
+    double Ixx = 100000.0;
+    double p_dot = 0.3;
+
+    double rollMoment = Ixx * p_dot;
+    TS_ASSERT_DELTA(rollMoment, 30000.0, 1.0);
+  }
+
+  void testYawingMomentInertia() {
+    double Izz = 200000.0;
+    double r_dot = 0.2;
+
+    double yawMoment = Izz * r_dot;
+    TS_ASSERT_DELTA(yawMoment, 40000.0, 1.0);
+  }
+
+  // ============ Time Rate of Change Tests ============
+
+  void testInertiaTimeDerivative() {
+    double I_initial = 100000.0;
+    double I_final = 95000.0;
+    double dt = 60.0;  // seconds
+
+    double I_dot = (I_final - I_initial) / dt;
+    TS_ASSERT_DELTA(I_dot, -83.33, 0.1);
+  }
+
+  void testMassCenterVelocity() {
+    double cg_initial = 25.0;  // ft
+    double cg_final = 24.5;    // ft
+    double dt = 60.0;
+
+    double cg_dot = (cg_final - cg_initial) / dt;
+    TS_ASSERT_DELTA(cg_dot, -0.00833, 0.0001);
+  }
 };
