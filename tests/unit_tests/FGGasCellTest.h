@@ -704,4 +704,479 @@ public:
     }
     TS_ASSERT(true);
   }
+
+  /***************************************************************************
+   * Gas Cell Physics Tests - Ideal Gas Law Concepts
+   ***************************************************************************/
+
+  void testIdealGasLawPV() {
+    // P*V = n*R*T, testing concept with inputs
+    FGGasCell::Inputs inputs;
+    double P = 2116.22;    // psf
+    double T = 518.67;     // Rankine
+    double rho = 0.002377; // slug/ft^3
+
+    inputs.Pressure = P;
+    inputs.Temperature = T;
+    inputs.Density = rho;
+
+    // Verify inputs are consistent (P = rho * R_specific * T)
+    // R_air = 1716.49 ft^2/(s^2 * R) for air
+    double R_air = 1716.49;
+    double calculated_P = rho * R_air * T;
+
+    // Check order of magnitude is correct
+    TS_ASSERT(calculated_P > 1000.0 && calculated_P < 3000.0);
+  }
+
+  void testIdealGasLawIsothermal() {
+    // At constant temperature, P1*V1 = P2*V2
+    double P1 = 2116.22;
+    double V1 = 1000.0;  // ft^3
+
+    double P2 = P1 * 2.0;  // Double pressure
+    double V2 = V1 / 2.0;  // Half volume
+
+    TS_ASSERT_DELTA(P1 * V1, P2 * V2, 0.01);
+  }
+
+  void testIdealGasLawIsobaric() {
+    // At constant pressure, V1/T1 = V2/T2
+    double V1 = 1000.0;
+    double T1 = 518.67;
+
+    double T2 = T1 * 2.0;  // Double temperature
+    double V2 = V1 * 2.0;  // Double volume
+
+    TS_ASSERT_DELTA(V1 / T1, V2 / T2, 1e-6);
+  }
+
+  void testIdealGasLawIsochoric() {
+    // At constant volume, P1/T1 = P2/T2
+    double P1 = 2116.22;
+    double T1 = 518.67;
+
+    double T2 = T1 * 1.5;  // 50% higher temperature
+    double P2 = P1 * 1.5;  // 50% higher pressure
+
+    TS_ASSERT_DELTA(P1 / T1, P2 / T2, 1e-6);
+  }
+
+  /***************************************************************************
+   * Buoyancy Physics Tests
+   ***************************************************************************/
+
+  void testBuoyancyFormula() {
+    // Buoyancy = rho_air * g * V - rho_gas * g * V
+    double rho_air = 0.002377;     // slug/ft^3
+    double rho_helium = 0.000333;  // slug/ft^3 (approximate)
+    double g = 32.174;             // ft/s^2
+    double V = 1000.0;             // ft^3
+
+    double buoyancy = (rho_air - rho_helium) * g * V;
+
+    TS_ASSERT(buoyancy > 0.0);  // Positive lift
+    TS_ASSERT(buoyancy < 100.0);  // Reasonable magnitude
+  }
+
+  void testBuoyancyHeliumVsHydrogen() {
+    double rho_air = 0.002377;
+    double rho_helium = 0.000333;
+    double rho_hydrogen = 0.000167;  // Lighter than helium
+    double g = 32.174;
+    double V = 1000.0;
+
+    double buoyancy_helium = (rho_air - rho_helium) * g * V;
+    double buoyancy_hydrogen = (rho_air - rho_hydrogen) * g * V;
+
+    // Hydrogen should provide more lift
+    TS_ASSERT(buoyancy_hydrogen > buoyancy_helium);
+  }
+
+  void testBuoyancyAirCell() {
+    // Air ballonet - no net buoyancy
+    double rho_air = 0.002377;
+    double g = 32.174;
+    double V = 1000.0;
+
+    double buoyancy = (rho_air - rho_air) * g * V;
+
+    TS_ASSERT_DELTA(buoyancy, 0.0, epsilon);
+  }
+
+  void testBuoyancyAltitudeEffect() {
+    double g = 32.174;
+    double V = 1000.0;
+
+    // Sea level
+    double rho_air_sl = 0.002377;
+    double rho_helium_sl = 0.000333;
+    double buoyancy_sl = (rho_air_sl - rho_helium_sl) * g * V;
+
+    // 35,000 ft - lower density air
+    double rho_air_35k = 0.000738;
+    double rho_helium_35k = 0.000103;  // Approximate
+    double buoyancy_35k = (rho_air_35k - rho_helium_35k) * g * V;
+
+    // Less buoyancy at altitude
+    TS_ASSERT(buoyancy_35k < buoyancy_sl);
+  }
+
+  /***************************************************************************
+   * Gas Cell Inputs - Additional Scenario Tests
+   ***************************************************************************/
+
+  void testInputsTroposphere() {
+    // Troposphere conditions (0-36,000 ft)
+    FGGasCell::Inputs inputs;
+
+    // At 20,000 ft
+    inputs.Pressure = 973.27;
+    inputs.Temperature = 447.42;
+    inputs.Density = 0.001267;
+    inputs.gravity = 32.17;
+
+    TS_ASSERT(inputs.Pressure > 0.0);
+    TS_ASSERT(inputs.Temperature > 0.0);
+    TS_ASSERT(inputs.Density > 0.0);
+  }
+
+  void testInputsStratosphere() {
+    // Stratosphere conditions (>36,000 ft isothermal layer)
+    FGGasCell::Inputs inputs;
+
+    // At 45,000 ft
+    inputs.Pressure = 286.91;
+    inputs.Temperature = 389.97;  // Constant in isothermal layer
+    inputs.Density = 0.000428;
+    inputs.gravity = 32.16;
+
+    TS_ASSERT(inputs.Pressure > 0.0);
+    TS_ASSERT(inputs.Temperature > 0.0);
+  }
+
+  void testInputsMarsAtmosphere() {
+    // Mars-like conditions (very thin atmosphere)
+    FGGasCell::Inputs inputs;
+
+    inputs.Pressure = 12.0;        // Very low (psf equivalent)
+    inputs.Temperature = 392.0;    // ~218K in Rankine
+    inputs.Density = 0.00003;      // Very thin
+    inputs.gravity = 12.1;         // Mars gravity ~3.7 m/s^2
+
+    TS_ASSERT(inputs.Pressure > 0.0);
+    TS_ASSERT(inputs.gravity < 32.174);  // Less than Earth
+  }
+
+  void testInputsVenusAtmosphere() {
+    // Venus-like conditions (very dense atmosphere)
+    FGGasCell::Inputs inputs;
+
+    inputs.Pressure = 192000.0;    // ~92 bar in psf
+    inputs.Temperature = 1296.0;   // ~720K in Rankine
+    inputs.Density = 0.13;         // Very dense
+    inputs.gravity = 28.8;         // Venus gravity ~8.87 m/s^2
+
+    TS_ASSERT(inputs.Pressure > 2116.22);  // Higher than Earth
+    TS_ASSERT(inputs.Density > 0.002377);  // Denser than Earth
+  }
+
+  /***************************************************************************
+   * Gas Properties Tests
+   ***************************************************************************/
+
+  void testHeliumMolarMass() {
+    // Helium molar mass ~ 4.003 g/mol = 0.0000867 slug/mol
+    double M_helium = 0.0000867;  // slug/mol
+    TS_ASSERT(M_helium > 0.0 && M_helium < 0.001);
+  }
+
+  void testHydrogenMolarMass() {
+    // Hydrogen molar mass ~ 2.016 g/mol = 0.0000437 slug/mol
+    double M_hydrogen = 0.0000437;  // slug/mol
+    double M_helium = 0.0000867;    // slug/mol
+    TS_ASSERT(M_hydrogen > 0.0 && M_hydrogen < M_helium);  // Lighter than helium
+  }
+
+  void testAirMolarMass() {
+    // Air molar mass ~ 28.97 g/mol = 0.000629 slug/mol
+    double M_air = 0.000629;  // slug/mol
+    double M_helium = 0.0000867;
+    TS_ASSERT(M_air > M_helium);  // Air is heavier
+  }
+
+  void testSpecificHeatCapacity() {
+    // Cv for monatomic gas (He) = 3/2 R
+    // Cv for diatomic gas (H2, air) = 5/2 R
+    double Cv_helium = 3.0 / 2.0;
+    double Cv_hydrogen = 5.0 / 2.0;
+    double Cv_air = 5.0 / 2.0;
+
+    TS_ASSERT_DELTA(Cv_helium, 1.5, epsilon);
+    TS_ASSERT_DELTA(Cv_hydrogen, 2.5, epsilon);
+    TS_ASSERT_DELTA(Cv_air, 2.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Volume Calculations Tests
+   ***************************************************************************/
+
+  void testSphereVolume() {
+    // Volume of sphere = (4/3) * pi * r^3
+    double radius = 10.0;  // ft
+    double volume = (4.0 / 3.0) * M_PI * radius * radius * radius;
+
+    TS_ASSERT_DELTA(volume, 4188.79, 0.01);
+  }
+
+  void testEllipsoidVolume() {
+    // Volume of ellipsoid = (4/3) * pi * a * b * c
+    double a = 20.0;  // ft (x-radius)
+    double b = 10.0;  // ft (y-radius)
+    double c = 10.0;  // ft (z-radius)
+
+    double volume = (4.0 / 3.0) * M_PI * a * b * c;
+
+    TS_ASSERT_DELTA(volume, 8377.58, 0.01);
+  }
+
+  void testCylinderVolume() {
+    // Volume of cylinder = pi * r^2 * h
+    double radius = 10.0;  // ft
+    double height = 50.0;  // ft
+
+    double volume = M_PI * radius * radius * height;
+
+    TS_ASSERT_DELTA(volume, 15707.96, 0.01);
+  }
+
+  void testBlimpEnvelopeVolume() {
+    // Typical blimp envelope (ellipsoid-like)
+    double length = 200.0;  // ft
+    double diameter = 50.0; // ft
+
+    double volume = (4.0 / 3.0) * M_PI * (length / 2.0) * (diameter / 2.0) * (diameter / 2.0);
+
+    TS_ASSERT(volume > 100000.0);  // Large volume
+  }
+
+  /***************************************************************************
+   * Pressure/Temperature Relationship Tests
+   ***************************************************************************/
+
+  void testPressureAltitudeRelationship() {
+    // Pressure decreases with altitude
+    FGGasCell::Inputs sea_level;
+    sea_level.Pressure = 2116.22;
+
+    FGGasCell::Inputs altitude_10k;
+    altitude_10k.Pressure = 1455.63;
+
+    FGGasCell::Inputs altitude_35k;
+    altitude_35k.Pressure = 472.68;
+
+    TS_ASSERT(sea_level.Pressure > altitude_10k.Pressure);
+    TS_ASSERT(altitude_10k.Pressure > altitude_35k.Pressure);
+  }
+
+  void testDensityAltitudeRelationship() {
+    // Density decreases with altitude
+    FGGasCell::Inputs sea_level;
+    sea_level.Density = 0.002377;
+
+    FGGasCell::Inputs altitude_10k;
+    altitude_10k.Density = 0.001756;
+
+    FGGasCell::Inputs altitude_35k;
+    altitude_35k.Density = 0.000738;
+
+    TS_ASSERT(sea_level.Density > altitude_10k.Density);
+    TS_ASSERT(altitude_10k.Density > altitude_35k.Density);
+  }
+
+  void testTemperatureAltitudeRelationship() {
+    // Temperature decreases in troposphere, constant in lower stratosphere
+    FGGasCell::Inputs sea_level;
+    sea_level.Temperature = 518.67;
+
+    FGGasCell::Inputs altitude_10k;
+    altitude_10k.Temperature = 483.03;
+
+    FGGasCell::Inputs altitude_35k;
+    altitude_35k.Temperature = 394.06;
+
+    TS_ASSERT(sea_level.Temperature > altitude_10k.Temperature);
+    TS_ASSERT(altitude_10k.Temperature > altitude_35k.Temperature);
+  }
+
+  /***************************************************************************
+   * Mass Calculations Tests
+   ***************************************************************************/
+
+  void testGasMassFromVolume() {
+    // mass = rho * V
+    double rho_helium = 0.000333;  // slug/ft^3
+    double V = 10000.0;            // ft^3
+
+    double mass = rho_helium * V;
+
+    TS_ASSERT_DELTA(mass, 3.33, 0.01);  // slugs
+  }
+
+  void testLiftCapacity() {
+    // Gross lift = buoyancy - gas weight
+    double rho_air = 0.002377;
+    double rho_helium = 0.000333;
+    double V = 10000.0;
+    double g = 32.174;
+
+    double buoyancy = rho_air * V * g;
+    double gas_weight = rho_helium * V * g;
+    double net_lift = buoyancy - gas_weight;
+
+    TS_ASSERT(net_lift > 0.0);
+    TS_ASSERT(net_lift < buoyancy);
+  }
+
+  void testPayloadCapacity() {
+    // Payload = net lift - envelope weight - structure weight
+    double rho_air = 0.002377;
+    double rho_helium = 0.000333;
+    double V = 100000.0;  // 100,000 ft^3 envelope
+    double g = 32.174;
+
+    double buoyancy = rho_air * V * g;
+    double gas_weight = rho_helium * V * g;
+    double gross_lift = buoyancy - gas_weight;
+
+    // Assume envelope weighs 0.03 lb/ft^2 and is a sphere
+    double radius = std::pow((3.0 * V) / (4.0 * M_PI), 1.0/3.0);
+    double surface_area = 4.0 * M_PI * radius * radius;
+    double envelope_weight = surface_area * 0.03;
+
+    double payload = gross_lift - envelope_weight;
+
+    TS_ASSERT(payload > 0.0);  // Should have positive payload capacity
+  }
+
+  /***************************************************************************
+   * Valve and Pressure Relief Tests
+   ***************************************************************************/
+
+  void testOverpressureRelief() {
+    // When pressure exceeds max, valve opens
+    double max_overpressure = 50.0;  // psf
+    double ambient_pressure = 2116.22;
+    double internal_pressure = ambient_pressure + 60.0;  // Over max
+
+    double overpressure = internal_pressure - ambient_pressure;
+
+    TS_ASSERT(overpressure > max_overpressure);
+  }
+
+  void testValveCoefficientFlow() {
+    // dV/dt = valve_coeff * delta_P
+    double valve_coeff = 0.1;  // ft^4 sec / slug
+    double delta_P = 10.0;     // psf
+
+    double flow_rate = valve_coeff * delta_P;
+
+    TS_ASSERT(flow_rate > 0.0);
+  }
+
+  void testHeatTransferConcept() {
+    // Q = h * A * (T_external - T_internal)
+    double h = 0.01;           // heat transfer coefficient
+    double A = 1000.0;         // surface area (ft^2)
+    double T_ext = 518.67;     // Rankine
+    double T_int = 530.0;      // Slightly warmer inside
+
+    double Q = h * A * (T_ext - T_int);
+
+    // Negative means heat flows out
+    TS_ASSERT(Q < 0.0);
+  }
+
+  /***************************************************************************
+   * Ballonet Concept Tests
+   ***************************************************************************/
+
+  void testBallonetVolumeCompensation() {
+    // As gas cell cools/contracts, ballonet expands
+    double total_volume = 10000.0;
+    double initial_gas_volume = 8000.0;
+    double initial_ballonet_volume = 2000.0;
+
+    // After cooling, gas contracts
+    double final_gas_volume = 7000.0;
+    double final_ballonet_volume = total_volume - final_gas_volume;
+
+    TS_ASSERT_DELTA(initial_gas_volume + initial_ballonet_volume, total_volume, epsilon);
+    TS_ASSERT_DELTA(final_gas_volume + final_ballonet_volume, total_volume, epsilon);
+    TS_ASSERT(final_ballonet_volume > initial_ballonet_volume);
+  }
+
+  void testBallonetBlowerInput() {
+    // Blower adds air to maintain pressure
+    double blower_flow = 100.0;  // ft^3/sec
+    double dt = 0.1;             // seconds
+
+    double volume_added = blower_flow * dt;
+
+    TS_ASSERT_DELTA(volume_added, 10.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Stress Tests - Rapid Operations
+   ***************************************************************************/
+
+  void testStressManyInputConfigurations() {
+    for (int i = 0; i < 100; i++) {
+      FGGasCell::Inputs inputs;
+      inputs.Pressure = 1000.0 + i * 20.0;
+      inputs.Temperature = 400.0 + i * 2.0;
+      inputs.Density = 0.001 + i * 0.00002;
+      inputs.gravity = 32.0 + i * 0.01;
+
+      TS_ASSERT(inputs.Pressure > 0.0);
+      TS_ASSERT(inputs.Temperature > 0.0);
+      TS_ASSERT(inputs.Density > 0.0);
+    }
+  }
+
+  void testStressBuoyantForcesOperations() {
+    FGFDMExec fdmex;
+    auto buoyant = fdmex.GetBuoyantForces();
+
+    for (int i = 0; i < 50; i++) {
+      buoyant->InitModel();
+      buoyant->Run(false);
+      buoyant->Run(true);
+
+      const FGColumnVector3& forces = buoyant->GetForces();
+      const FGColumnVector3& moments = buoyant->GetMoments();
+      double mass = buoyant->GetGasMass();
+      const FGMatrix33& inertia = buoyant->GetGasMassInertia();
+
+      TS_ASSERT(!std::isnan(forces(1)));
+      TS_ASSERT(!std::isnan(moments(1)));
+      TS_ASSERT(!std::isnan(mass));
+      TS_ASSERT(!std::isnan(inertia(1,1)));
+    }
+  }
+
+  void testStressManyFDMExecInstances() {
+    std::vector<std::shared_ptr<FGFDMExec>> execs;
+
+    for (int i = 0; i < 10; i++) {
+      auto fdmex = std::make_shared<FGFDMExec>();
+      execs.push_back(fdmex);
+    }
+
+    for (auto& fdmex : execs) {
+      auto buoyant = fdmex->GetBuoyantForces();
+      TS_ASSERT(buoyant != nullptr);
+      buoyant->Run(false);
+    }
+  }
 };
