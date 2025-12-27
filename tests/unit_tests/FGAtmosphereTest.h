@@ -1776,4 +1776,310 @@ public:
       TS_ASSERT_DELTA(atm.GetPressure(), P_expected, epsilon);
     }
   }
+
+  /***************************************************************************
+   * Model Identity Tests
+   ***************************************************************************/
+
+  void testGetName()
+  {
+    auto atm = fdmex.GetAtmosphere();
+    std::string name = atm->GetName();
+    TS_ASSERT(!name.empty());
+  }
+
+  void testGetExec()
+  {
+    auto atm = fdmex.GetAtmosphere();
+    TS_ASSERT(atm->GetExec() == &fdmex);
+  }
+
+  void testSetGetRate()
+  {
+    auto atm = fdmex.GetAtmosphere();
+    int originalRate = atm->GetRate();
+
+    atm->SetRate(2);
+    TS_ASSERT_EQUALS(atm->GetRate(), 2);
+
+    atm->SetRate(originalRate);
+    TS_ASSERT_EQUALS(atm->GetRate(), originalRate);
+  }
+
+  /***************************************************************************
+   * Multiple Instance Tests
+   ***************************************************************************/
+
+  void testMultipleFDMExecInstances()
+  {
+    FGFDMExec fdm1;
+    FGFDMExec fdm2;
+
+    auto atm1 = fdm1.GetAtmosphere();
+    auto atm2 = fdm2.GetAtmosphere();
+
+    TS_ASSERT(atm1 != atm2);
+    TS_ASSERT(atm1->GetExec() == &fdm1);
+    TS_ASSERT(atm2->GetExec() == &fdm2);
+  }
+
+  void testIndependentInstanceState()
+  {
+    FGFDMExec fdm1;
+    FGFDMExec fdm2;
+
+    auto atm1 = DummyAtmosphere(&fdm1, -0.003, -0.1);
+    auto atm2 = DummyAtmosphere(&fdm2, -0.005, -0.2);
+
+    TS_ASSERT(atm1.InitModel());
+    TS_ASSERT(atm2.InitModel());
+
+    double h = 10000.0;
+    atm1.in.altitudeASL = h;
+    atm2.in.altitudeASL = h;
+
+    TS_ASSERT(atm1.Run(false) == false);
+    TS_ASSERT(atm2.Run(false) == false);
+
+    // Different lapse rates should give different temperatures
+    TS_ASSERT(std::abs(atm1.GetTemperature() - atm2.GetTemperature()) > 1.0);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  void testRapidAltitudeOscillation()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.08);
+    TS_ASSERT(atm.InitModel());
+
+    constexpr double T0 = FGAtmosphere::StdDaySLtemperature;
+
+    for (int i = 0; i < 50; i++) {
+      double h = (i % 2 == 0) ? 0.0 : 20000.0;
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T_expected = T0 - 0.003 * h;
+      TS_ASSERT_DELTA(atm.GetTemperature(), T_expected, epsilon);
+    }
+  }
+
+  void testManyConsecutiveRuns()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.08);
+    TS_ASSERT(atm.InitModel());
+
+    for (int i = 0; i < 500; i++) {
+      double h = (i % 40) * 1000.0;  // 0 to 39000 ft
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      TS_ASSERT(std::isfinite(atm.GetTemperature()));
+      TS_ASSERT(std::isfinite(atm.GetPressure()));
+    }
+  }
+
+  void testRandomAltitudeSequence()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.08);
+    TS_ASSERT(atm.InitModel());
+
+    double altitudes[] = {5000.0, 15000.0, 2000.0, 30000.0, 0.0, 25000.0, 10000.0};
+
+    for (double h : altitudes) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      TS_ASSERT(atm.GetTemperature() > 0.0);
+      TS_ASSERT(atm.GetPressure() > 0.0);
+      TS_ASSERT(atm.GetDensity() > 0.0);
+      TS_ASSERT(atm.GetSoundSpeed() > 0.0);
+    }
+  }
+
+  /***************************************************************************
+   * Ratio Consistency Tests
+   ***************************************************************************/
+
+  void testRatioConsistency()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.08);
+    TS_ASSERT(atm.InitModel());
+
+    for (double h = 0.0; h <= 30000.0; h += 5000.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      // Verify ratios match computed values
+      double theta = atm.GetTemperature() / atm.GetTemperatureSL();
+      double delta = atm.GetPressure() / atm.GetPressureSL();
+      double sigma = atm.GetDensity() / atm.GetDensitySL();
+      double a_ratio = atm.GetSoundSpeed() / atm.GetSoundSpeedSL();
+
+      TS_ASSERT_DELTA(atm.GetTemperatureRatio(), theta, epsilon);
+      TS_ASSERT_DELTA(atm.GetPressureRatio(), delta, epsilon);
+      TS_ASSERT_DELTA(atm.GetDensityRatio(), sigma, epsilon);
+      TS_ASSERT_DELTA(atm.GetSoundSpeedRatio(), a_ratio, epsilon);
+    }
+  }
+
+  void testSoundSpeedRatioEqualsSquareRootTempRatio()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.1);
+    TS_ASSERT(atm.InitModel());
+
+    for (double h = 0.0; h <= 20000.0; h += 2500.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double theta = atm.GetTemperatureRatio();
+      double a_ratio = atm.GetSoundSpeedRatio();
+
+      // a = sqrt(gamma * R * T), so a_ratio = sqrt(theta)
+      TS_ASSERT_DELTA(a_ratio, std::sqrt(theta), epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Ideal Gas Law Verification
+   ***************************************************************************/
+
+  void testIdealGasLawDifferentLapseRate()
+  {
+    // Test ideal gas law with a different pressure lapse rate than original test
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.08);
+    TS_ASSERT(atm.InitModel());
+
+    for (double h = 0.0; h <= 30000.0; h += 5000.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double P = atm.GetPressure();
+      double rho = atm.GetDensity();
+
+      // P = rho * R * T (ideal gas law)
+      double P_calculated = rho * R * T;
+      TS_ASSERT_DELTA(P, P_calculated, epsilon * P);
+    }
+  }
+
+  void testIdealGasLawWithOverrides()
+  {
+    auto pm = fdmex.GetPropertyManager();
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.08);
+    TS_ASSERT(atm.InitModel());
+
+    auto t_node = pm->GetNode("atmosphere/override/temperature", true);
+    auto p_node = pm->GetNode("atmosphere/override/pressure", true);
+
+    t_node->setDoubleValue(450.0);
+    p_node->setDoubleValue(1800.0);
+
+    atm.in.altitudeASL = 10000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double T = atm.GetTemperature();
+    double P = atm.GetPressure();
+    double rho = atm.GetDensity();
+
+    // Ideal gas law should still hold
+    double P_calculated = rho * R * T;
+    TS_ASSERT_DELTA(P, P_calculated, epsilon * P);
+
+    // Cleanup
+    auto parent = t_node->getParent();
+    parent->removeChild(t_node);
+    parent->removeChild(p_node);
+  }
+
+  /***************************************************************************
+   * Unit Conversion Verification
+   ***************************************************************************/
+
+  void testPSFtoPaConversion()
+  {
+    double P_psf = 2116.22;  // Standard sea level pressure
+    double P_pa = P_psf * psftopa;
+
+    // Should be approximately 101325 Pa
+    TS_ASSERT_DELTA(P_pa, 101325.0, 10.0);
+  }
+
+  void testPSFtoMillibarConversion()
+  {
+    double P_psf = 2116.22;
+    double P_mbar = P_psf * psftombar;
+
+    // Should be approximately 1013.25 mbar
+    TS_ASSERT_DELTA(P_mbar, 1013.25, 0.1);
+  }
+
+  void testPSFtoInHgConversion()
+  {
+    double P_psf = 2116.22;
+    double P_inhg = P_psf * psftoinhg;
+
+    // Should be approximately 29.92 inHg
+    TS_ASSERT_DELTA(P_inhg, 29.92, 0.01);
+  }
+
+  /***************************************************************************
+   * Additional Edge Case Tests
+   ***************************************************************************/
+
+  void testAltitudeSweepSmallIncrements()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double prev_T = atm.GetTemperatureSL();
+    double prev_P = atm.GetPressureSL();
+
+    for (double h = 0.0; h <= 1000.0; h += 10.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double P = atm.GetPressure();
+
+      // Temperature should decrease slightly
+      TS_ASSERT(T <= prev_T + epsilon);
+      // Pressure should decrease
+      TS_ASSERT(P <= prev_P + epsilon);
+
+      prev_T = T;
+      prev_P = P;
+    }
+  }
+
+  void testExtremelySmallLapseRates()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.0001, -0.001);
+    TS_ASSERT(atm.InitModel());
+
+    atm.in.altitudeASL = 50000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    // With tiny lapse rates, values should be close to sea level
+    TS_ASSERT_DELTA(atm.GetTemperature(), atm.GetTemperatureSL(), 10.0);
+  }
+
+  void testNegativeAltitudeSweep()
+  {
+    // Use positive lapse rate to ensure valid temps below SL
+    auto atm = DummyAtmosphere(&fdmex, 0.003, 0.1);
+    TS_ASSERT(atm.InitModel());
+
+    for (double h = -1000.0; h <= 0.0; h += 100.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      TS_ASSERT(atm.GetTemperature() > 0.0);
+      TS_ASSERT(atm.GetPressure() > 0.0);
+      TS_ASSERT(atm.GetDensity() > 0.0);
+    }
+  }
 };
