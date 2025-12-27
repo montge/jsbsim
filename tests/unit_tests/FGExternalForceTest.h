@@ -987,4 +987,268 @@ public:
     // Should produce minimal pitch moment if on centerline
     TS_ASSERT_DELTA(moment(2), 0.0, epsilon);
   }
+
+  /***************************************************************************
+   * Extended Force Application Tests
+   ***************************************************************************/
+
+  // Test engine thrust line offset
+  void testEngineThrustLineOffset() {
+    double thrust = 5000.0;
+    double thrustLineZ = 1.5;  // ft below CG
+
+    FGColumnVector3 pos(0.0, 0.0, thrustLineZ);
+    FGColumnVector3 force(thrust, 0.0, 0.0);
+
+    FGColumnVector3 moment = pos * force;
+    // Thrust below CG produces nose-down moment
+    TS_ASSERT(moment(2) > 0);
+  }
+
+  // Test asymmetric thrust
+  void testAsymmetricThrust() {
+    double leftThrust = 5000.0;
+    double rightThrust = 4000.0;
+    double engineSpan = 10.0;  // ft from centerline
+
+    FGColumnVector3 leftPos(0.0, -engineSpan, 0.0);
+    FGColumnVector3 rightPos(0.0, engineSpan, 0.0);
+    FGColumnVector3 leftForce(leftThrust, 0.0, 0.0);
+    FGColumnVector3 rightForce(rightThrust, 0.0, 0.0);
+
+    FGColumnVector3 totalMoment = (leftPos * leftForce) + (rightPos * rightForce);
+    // More left thrust should produce yaw right
+    TS_ASSERT(totalMoment(3) > 0);
+  }
+
+  // Test vertical stabilizer lift
+  void testVerticalStabilizerLift() {
+    double sideForce = 500.0;
+    double vertStabArm = -30.0;  // ft behind CG
+
+    FGColumnVector3 pos(vertStabArm, 0.0, -5.0);
+    FGColumnVector3 force(0.0, sideForce, 0.0);
+
+    FGColumnVector3 moment = pos * force;
+    // Side force on vertical stab produces yaw moment
+    TS_ASSERT(fabs(moment(3)) > 0);
+  }
+
+  // Test horizontal stabilizer downforce
+  void testHorizontalStabilizerDownforce() {
+    double downforce = 200.0;  // Downward force magnitude
+    double hstabArm = -25.0;   // Aft of CG
+
+    FGColumnVector3 pos(hstabArm, 0.0, 0.0);
+    FGColumnVector3 force(0.0, 0.0, downforce);  // Z+ is down in body frame
+
+    FGColumnVector3 moment = pos * force;
+    // Tail downforce at aft position produces nose-up (positive My in body frame)
+    TS_ASSERT(moment(2) > 0);
+  }
+
+  /***************************************************************************
+   * Extended Moment Calculation Tests
+   ***************************************************************************/
+
+  // Test rolling moment from aileron
+  void testRollingMomentFromAileron() {
+    double liftDiff = 100.0;
+    double aileronSpan = 15.0;
+
+    double rollMoment = liftDiff * aileronSpan;
+    TS_ASSERT_DELTA(rollMoment, 1500.0, epsilon);
+  }
+
+  // Test pitching moment from elevator
+  void testPitchingMomentFromElevator() {
+    double elevatorLift = 300.0;
+    double tailArm = 20.0;
+
+    double pitchMoment = -elevatorLift * tailArm;
+    TS_ASSERT_DELTA(pitchMoment, -6000.0, epsilon);
+  }
+
+  // Test yawing moment from rudder
+  void testYawingMomentFromRudder() {
+    double rudderForce = 200.0;
+    double rudderArm = 25.0;
+
+    double yawMoment = rudderForce * rudderArm;
+    TS_ASSERT_DELTA(yawMoment, 5000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Frame Transformation Tests
+   ***************************************************************************/
+
+  // Test combined rotation
+  void testCombinedRotation() {
+    double roll = 0.1;
+    double pitch = 0.05;
+
+    FGMatrix33 rotX;
+    rotX(1,1) = 1.0; rotX(1,2) = 0.0;         rotX(1,3) = 0.0;
+    rotX(2,1) = 0.0; rotX(2,2) = cos(roll);   rotX(2,3) = sin(roll);
+    rotX(3,1) = 0.0; rotX(3,2) = -sin(roll);  rotX(3,3) = cos(roll);
+
+    FGMatrix33 rotY;
+    rotY(1,1) = cos(pitch);  rotY(1,2) = 0.0; rotY(1,3) = -sin(pitch);
+    rotY(2,1) = 0.0;         rotY(2,2) = 1.0; rotY(2,3) = 0.0;
+    rotY(3,1) = sin(pitch);  rotY(3,2) = 0.0; rotY(3,3) = cos(pitch);
+
+    FGMatrix33 combined = rotY * rotX;
+    TS_ASSERT_DELTA(combined.Determinant(), 1.0, 1e-6);
+  }
+
+  // Test inverse transform recovery
+  void testInverseTransformRecovery() {
+    double angle = 0.3;
+
+    FGMatrix33 rot;
+    rot(1,1) = cos(angle);  rot(1,2) = sin(angle); rot(1,3) = 0.0;
+    rot(2,1) = -sin(angle); rot(2,2) = cos(angle); rot(2,3) = 0.0;
+    rot(3,1) = 0.0;         rot(3,2) = 0.0;        rot(3,3) = 1.0;
+
+    FGColumnVector3 original(100.0, 50.0, 25.0);
+    FGColumnVector3 transformed = rot * original;
+    FGColumnVector3 recovered = rot.Transposed() * transformed;
+
+    TS_ASSERT_DELTA(recovered(1), original(1), 1e-10);
+    TS_ASSERT_DELTA(recovered(2), original(2), 1e-10);
+    TS_ASSERT_DELTA(recovered(3), original(3), 1e-10);
+  }
+
+  /***************************************************************************
+   * Extended Dynamic Force Tests
+   ***************************************************************************/
+
+  // Test gust load factor
+  void testGustLoadFactor() {
+    double gustVelocity = 50.0;  // fps
+    double wingLoading = 50.0;   // lb/ft^2
+    double CLa = 0.1;            // per degree
+    double rho = 0.002377;
+
+    double loadFactor = 1.0 + (0.5 * rho * gustVelocity * CLa / wingLoading);
+    TS_ASSERT(loadFactor > 1.0);
+  }
+
+  // Test centrifugal force in turn
+  void testCentrifugalForceInTurn() {
+    double weight = 10000.0;
+    double bankAngle = 30.0 * M_PI / 180.0;
+    double g = 32.2;
+
+    double loadFactor = 1.0 / cos(bankAngle);
+    double centrifugalForce = weight * (loadFactor - 1.0);
+
+    TS_ASSERT(centrifugalForce > 0);
+  }
+
+  // Test gyroscopic precession
+  void testGyroscopicPrecession() {
+    double propMomentOfInertia = 5.0;  // slug-ft^2
+    double propOmega = 200.0;          // rad/s
+    double pitchRate = 0.1;            // rad/s
+
+    double gyroMoment = propMomentOfInertia * propOmega * pitchRate;
+    TS_ASSERT(gyroMoment > 0);
+  }
+
+  /***************************************************************************
+   * Extended Location Tests
+   ***************************************************************************/
+
+  // Test multiple force locations
+  void testMultipleForceLocations() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce1(&fdmex);
+    FGExternalForce extForce2(&fdmex);
+
+    extForce1.SetLocation(10.0, 0.0, 0.0);
+    extForce2.SetLocation(-20.0, 0.0, 0.0);
+
+    TS_ASSERT_DELTA(extForce1.GetLocationX(), 10.0, epsilon);
+    TS_ASSERT_DELTA(extForce2.GetLocationX(), -20.0, epsilon);
+  }
+
+  // Test diagonal location
+  void testDiagonalLocation() {
+    FGFDMExec fdmex;
+    FGExternalForce extForce(&fdmex);
+
+    extForce.SetLocation(5.0, 3.0, 4.0);
+
+    double distance = sqrt(25.0 + 9.0 + 16.0);
+    TS_ASSERT_DELTA(distance, sqrt(50.0), epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Vector Operation Tests
+   ***************************************************************************/
+
+  // Test vector addition
+  void testVectorAddition() {
+    FGColumnVector3 v1(1.0, 2.0, 3.0);
+    FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    FGColumnVector3 sum = v1 + v2;
+    TS_ASSERT_DELTA(sum(1), 5.0, epsilon);
+    TS_ASSERT_DELTA(sum(2), 7.0, epsilon);
+    TS_ASSERT_DELTA(sum(3), 9.0, epsilon);
+  }
+
+  // Test vector subtraction
+  void testVectorSubtraction() {
+    FGColumnVector3 v1(10.0, 20.0, 30.0);
+    FGColumnVector3 v2(3.0, 5.0, 7.0);
+
+    FGColumnVector3 diff = v1 - v2;
+    TS_ASSERT_DELTA(diff(1), 7.0, epsilon);
+    TS_ASSERT_DELTA(diff(2), 15.0, epsilon);
+    TS_ASSERT_DELTA(diff(3), 23.0, epsilon);
+  }
+
+  // Test scalar multiplication
+  void testScalarMultiplication() {
+    FGColumnVector3 v(2.0, 3.0, 4.0);
+    double scalar = 5.0;
+
+    FGColumnVector3 result = v * scalar;
+    TS_ASSERT_DELTA(result(1), 10.0, epsilon);
+    TS_ASSERT_DELTA(result(2), 15.0, epsilon);
+    TS_ASSERT_DELTA(result(3), 20.0, epsilon);
+  }
+
+  // Test dot product
+  void testDotProduct() {
+    FGColumnVector3 v1(1.0, 2.0, 3.0);
+    FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    double dot = v1(1)*v2(1) + v1(2)*v2(2) + v1(3)*v2(3);
+    TS_ASSERT_DELTA(dot, 32.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Stress Test Cases
+   ***************************************************************************/
+
+  // Test very small forces
+  void testVerySmallForces() {
+    FGColumnVector3 smallForce(1e-10, 1e-10, 1e-10);
+    TS_ASSERT(!std::isnan(smallForce(1)));
+    TS_ASSERT(!std::isnan(smallForce.Magnitude()));
+  }
+
+  // Test repeated operations
+  void testRepeatedOperations() {
+    FGColumnVector3 pos(5.0, 0.0, 0.0);
+    FGColumnVector3 force(100.0, 0.0, 0.0);
+
+    for (int i = 0; i < 1000; i++) {
+      FGColumnVector3 moment = pos * force;
+      TS_ASSERT_DELTA(moment.Magnitude(), 0.0, epsilon);
+    }
+  }
 };

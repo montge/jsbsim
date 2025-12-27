@@ -1316,4 +1316,505 @@ public:
       TS_ASSERT(vContact.Magnitude() > 0);
     }
   }
+
+  /***************************************************************************
+   * Extended Spherical Earth Tests
+   ***************************************************************************/
+
+  // Test 65: Spherical earth radius consistency
+  void testSphericalRadiusConsistency() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // All points at same altitude should have same AGL
+    double h = 5000.0;
+    double aglSum = 0.0;
+    int count = 0;
+
+    for (double lat = -60.0; lat <= 60.0; lat += 30.0) {
+      for (double lon = 0.0; lon <= 180.0; lon += 45.0) {
+        loc = FGLocation(lon * M_PI/180.0, lat * M_PI/180.0, RadiusReference + h);
+        double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+        aglSum += agl;
+        count++;
+      }
+    }
+
+    double avgAgl = aglSum / count;
+    TS_ASSERT_DELTA(avgAgl, h, 1e-6);
+  }
+
+  // Test 66: Spherical earth surface normal orthogonality
+  void testSurfaceNormalOrthogonality() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    loc = FGLocation(0.5, 0.5, RadiusReference + 1000.0);
+    cb->GetAGLevel(loc, contact, normal, v, w);
+
+    // Create tangent vectors at contact point
+    FGColumnVector3 vContact = contact;
+    double lat = 0.5;
+    double lon = 0.5;
+
+    // Tangent in longitude direction
+    FGColumnVector3 tangentLon(-std::sin(lon), std::cos(lon), 0.0);
+    // Tangent in latitude direction
+    FGColumnVector3 tangentLat(-std::sin(lat)*std::cos(lon), -std::sin(lat)*std::sin(lon), std::cos(lat));
+
+    // Dot product of normal with tangents should be zero
+    double dotLon = normal(1)*tangentLon(1) + normal(2)*tangentLon(2) + normal(3)*tangentLon(3);
+    double dotLat = normal(1)*tangentLat(1) + normal(2)*tangentLat(2) + normal(3)*tangentLat(3);
+
+    TS_ASSERT_DELTA(dotLon, 0.0, 1e-6);
+    TS_ASSERT_DELTA(dotLat, 0.0, 1e-6);
+  }
+
+  // Test 67: Negative altitude (below surface)
+  void testNegativeAltitude() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // Point below the surface
+    double h = -100.0;
+    loc = FGLocation(0.0, 0.0, RadiusReference + h);
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl, h, 1e-6);
+    TS_ASSERT(agl < 0.0);
+  }
+
+  // Test 68: Very close to center of earth
+  void testVeryLowRadius() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // Point far below surface
+    double radius = RadiusReference * 0.5;
+    loc = FGLocation(0.0, 0.0, radius);
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT(agl < 0.0);
+    TS_ASSERT_DELTA(agl, radius - RadiusReference, 1e-6);
+  }
+
+  /***************************************************************************
+   * Extended WGS84 Tests
+   ***************************************************************************/
+
+  // Test 69: WGS84 polar flattening verification
+  void testWGS84PolarFlattening() {
+    FGLocation locEquator, locPole;
+    locEquator.SetEllipse(a, b);
+    locPole.SetEllipse(a, b);
+
+    locEquator.SetPositionGeodetic(0.0, 0.0, 0.0);
+    locPole.SetPositionGeodetic(0.0, M_PI/2.0, 0.0);
+
+    FGColumnVector3 vEquator = locEquator;
+    FGColumnVector3 vPole = locPole;
+
+    // Difference should be approximately 70,160 feet (21.4 km)
+    double diff = vEquator.Magnitude() - vPole.Magnitude();
+    TS_ASSERT_DELTA(diff, a - b, 1.0);
+  }
+
+  // Test 70: WGS84 at various geodetic latitudes
+  void testWGS84GeodeticLatitudes() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(a, b));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 10000.0;
+
+    double latitudes[] = {0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0};
+    for (double lat : latitudes) {
+      loc.SetEllipse(a, b);
+      loc.SetPositionGeodetic(0.0, lat * M_PI/180.0, h);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(agl, h, 1e-5);
+    }
+  }
+
+  // Test 71: WGS84 terrain on ellipsoid
+  void testWGS84TerrainOnEllipsoid() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(a, b));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double terrainElev = 5000.0;
+    double aircraftAlt = 15000.0;
+    cb->SetTerrainElevation(terrainElev);
+
+    loc.SetEllipse(a, b);
+    loc.SetPositionGeodetic(0.0, 45.0 * M_PI/180.0, aircraftAlt);
+
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+    TS_ASSERT_DELTA(agl, aircraftAlt - terrainElev, 1e-6);
+  }
+
+  /***************************************************************************
+   * Terrain Model Extension Tests
+   ***************************************************************************/
+
+  // Test 72: Terrain elevation range test
+  void testTerrainElevationRange() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 50000.0);
+
+    // Test various terrain elevations from sea level to high mountains
+    double elevations[] = {0.0, 1000.0, 5000.0, 10000.0, 20000.0, 29029.0};
+    for (double elev : elevations) {
+      cb->SetTerrainElevation(elev);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(agl, 50000.0 - elev, 1e-6);
+    }
+  }
+
+  // Test 73: Terrain below sea level (Dead Sea region)
+  void testTerrainBelowSeaLevel() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // Dead Sea: approximately -1400 feet below sea level
+    double deadSeaElev = -1400.0;
+    cb->SetTerrainElevation(deadSeaElev);
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 5000.0);
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl, 5000.0 - deadSeaElev, 1e-6);
+    TS_ASSERT_DELTA(agl, 6400.0, 1e-6);
+  }
+
+  // Test 74: Contact point radius with terrain
+  void testContactPointRadiusWithTerrain() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double terrainElev = 3000.0;
+    cb->SetTerrainElevation(terrainElev);
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 10000.0);
+    cb->GetAGLevel(loc, contact, normal, v, w);
+
+    FGColumnVector3 vContact = contact;
+    TS_ASSERT_DELTA(vContact.Magnitude(), RadiusReference + terrainElev, 1e-6);
+  }
+
+  /***************************************************************************
+   * Custom Callback Extension Tests
+   ***************************************************************************/
+
+  // Test 75: Tracking callback time sequence
+  void testTrackingCallbackTimeSequence() {
+    TrackingGroundCallback* cb = new TrackingGroundCallback(RadiusReference, RadiusReference);
+    std::unique_ptr<FGGroundCallback> cbPtr(cb);
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 1000.0);
+
+    // Simulate time advancing
+    for (int i = 0; i < 100; i++) {
+      double t = i * 0.1;
+      cb->GetAGLevel(t, loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(cb->lastTime, t, 1e-10);
+    }
+    TS_ASSERT_EQUALS(cb->callCount, 100);
+  }
+
+  // Test 76: Custom callback with FDMExec
+  void testCustomCallbackWithFDMExec() {
+    FGFDMExec fdmex;
+    auto planet = fdmex.GetInertial();
+
+    TrackingGroundCallback* cb = new TrackingGroundCallback(planet->GetSemimajor(),
+                                                             planet->GetSemiminor());
+    planet->SetGroundCallback(cb);
+
+    FGLocation loc;
+    loc.SetEllipse(planet->GetSemimajor(), planet->GetSemiminor());
+    loc.SetPositionGeodetic(0.0, 0.0, 5000.0);
+
+    planet->SetAltitudeAGL(loc, 1000.0);
+    TS_ASSERT(cb->callCount > 0);
+  }
+
+  /***************************************************************************
+   * Geographic Position Tests
+   ***************************************************************************/
+
+  // Test 77: Prime meridian crossing
+  void testPrimeMeridianCrossing() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 1000.0;
+
+    // Just west of prime meridian
+    loc = FGLocation(-0.01 * M_PI/180.0, 0.0, RadiusReference + h);
+    double agl1 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    // Just east of prime meridian
+    loc = FGLocation(0.01 * M_PI/180.0, 0.0, RadiusReference + h);
+    double agl2 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl1, h, 1e-6);
+    TS_ASSERT_DELTA(agl2, h, 1e-6);
+  }
+
+  // Test 78: Equator crossing
+  void testEquatorCrossing() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 1000.0;
+
+    // Just south of equator
+    loc = FGLocation(0.0, -0.01 * M_PI/180.0, RadiusReference + h);
+    double agl1 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    // Just north of equator
+    loc = FGLocation(0.0, 0.01 * M_PI/180.0, RadiusReference + h);
+    double agl2 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl1, h, 1e-6);
+    TS_ASSERT_DELTA(agl2, h, 1e-6);
+  }
+
+  // Test 79: Arctic circle region
+  void testArcticCircleRegion() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 5000.0;
+
+    double arcticLat = 66.5 * M_PI/180.0;
+    loc = FGLocation(0.0, arcticLat, RadiusReference + h);
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl, h, 1e-6);
+    TS_ASSERT_DELTA(normal.Magnitude(), 1.0, epsilon);
+  }
+
+  // Test 80: Antarctic circle region
+  void testAntarcticCircleRegion() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 5000.0;
+
+    double antarcticLat = -66.5 * M_PI/180.0;
+    loc = FGLocation(0.0, antarcticLat, RadiusReference + h);
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl, h, 1e-6);
+    TS_ASSERT_DELTA(normal.Magnitude(), 1.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Numerical Precision Tests
+   ***************************************************************************/
+
+  // Test 81: Very small altitude changes
+  void testVerySmallAltitudeChanges() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double baseAlt = 10000.0;
+    double delta = 0.01;  // 0.01 feet
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + baseAlt);
+    double agl1 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + baseAlt + delta);
+    double agl2 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl2 - agl1, delta, 1e-4);
+  }
+
+  // Test 82: Altitude precision at different altitudes
+  void testAltitudePrecisionAtDifferentAltitudes() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double altitudes[] = {100.0, 1000.0, 10000.0, 100000.0};
+    for (double alt : altitudes) {
+      loc = FGLocation(0.0, 0.0, RadiusReference + alt);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+      // Relative precision check
+      TS_ASSERT_DELTA(agl / alt, 1.0, 1e-6);
+    }
+  }
+
+  // Test 83: Contact normal consistency
+  void testContactNormalConsistency() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal1, normal2, v, w;
+
+    loc = FGLocation(0.5, 0.3, RadiusReference + 1000.0);
+    cb->GetAGLevel(loc, contact, normal1, v, w);
+
+    // Call again - should get same normal
+    cb->GetAGLevel(loc, contact, normal2, v, w);
+
+    TS_ASSERT_DELTA(normal1(1), normal2(1), 1e-12);
+    TS_ASSERT_DELTA(normal1(2), normal2(2), 1e-12);
+    TS_ASSERT_DELTA(normal1(3), normal2(3), 1e-12);
+  }
+
+  /***************************************************************************
+   * Stress and Boundary Tests
+   ***************************************************************************/
+
+  // Test 84: Rapid terrain changes
+  void testRapidTerrainChanges() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 20000.0);
+
+    // Simulate flying over rapidly varying terrain
+    for (int i = 0; i < 1000; i++) {
+      double elev = 5000.0 * std::sin(i * 0.1);
+      cb->SetTerrainElevation(elev);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(agl, 20000.0 - elev, 1e-6);
+    }
+  }
+
+  // Test 85: Multiple callback instances stress test
+  void testMultipleCallbackInstances() {
+    std::vector<std::unique_ptr<FGGroundCallback>> callbacks;
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // Create many callback instances
+    for (int i = 0; i < 10; i++) {
+      callbacks.push_back(std::unique_ptr<FGGroundCallback>(
+          new FGDefaultGroundCallback(RadiusReference, RadiusReference)));
+      callbacks.back()->SetTerrainElevation(i * 1000.0);
+    }
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 50000.0);
+
+    // Query all callbacks
+    for (size_t i = 0; i < callbacks.size(); i++) {
+      double agl = callbacks[i]->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(agl, 50000.0 - i * 1000.0, 1e-6);
+    }
+  }
+
+  // Test 86: Ellipse parameter change stress
+  void testEllipseParameterChangeStress() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 1000.0);
+
+    // Change ellipse parameters multiple times
+    for (int i = 0; i < 100; i++) {
+      double factor = 1.0 + i * 0.001;
+      cb->SetEllipse(RadiusReference * factor, RadiusReference * factor);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT(!std::isnan(agl));
+    }
+  }
+
+  /***************************************************************************
+   * WGS84 Specific Extended Tests
+   ***************************************************************************/
+
+  // Test 87: WGS84 eccentricity check
+  void testWGS84Eccentricity() {
+    // First eccentricity squared: e^2 = 1 - (b/a)^2
+    double e2 = 1.0 - (b/a) * (b/a);
+    // WGS84 e^2 ≈ 0.00669437999
+    TS_ASSERT_DELTA(e2, 0.00669438, 1e-6);
+  }
+
+  // Test 88: WGS84 at tropic of Cancer
+  void testWGS84TropicOfCancer() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(a, b));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double tropicLat = 23.5 * M_PI/180.0;
+    double h = 10000.0;
+
+    loc.SetEllipse(a, b);
+    loc.SetPositionGeodetic(0.0, tropicLat, h);
+
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+    TS_ASSERT_DELTA(agl, h, 1e-6);
+  }
+
+  // Test 89: WGS84 at tropic of Capricorn
+  void testWGS84TropicOfCapricorn() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(a, b));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double tropicLat = -23.5 * M_PI/180.0;
+    double h = 10000.0;
+
+    loc.SetEllipse(a, b);
+    loc.SetPositionGeodetic(0.0, tropicLat, h);
+
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+    TS_ASSERT_DELTA(agl, h, 1e-6);
+  }
+
+  // Test 90: WGS84 normal vector validation
+  void testWGS84NormalVectorValidation() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(a, b));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    for (double lat = -80.0; lat <= 80.0; lat += 20.0) {
+      loc.SetEllipse(a, b);
+      loc.SetPositionGeodetic(0.0, lat * M_PI/180.0, 5000.0);
+
+      cb->GetAGLevel(loc, contact, normal, v, w);
+
+      // Normal should be unit vector
+      TS_ASSERT_DELTA(normal.Magnitude(), 1.0, 1e-10);
+
+      // Normal should not be NaN
+      TS_ASSERT(!std::isnan(normal(1)));
+      TS_ASSERT(!std::isnan(normal(2)));
+      TS_ASSERT(!std::isnan(normal(3)));
+    }
+  }
 };

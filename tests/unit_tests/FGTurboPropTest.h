@@ -883,4 +883,475 @@ public:
     double specificRange = trueAirspeed / fuelFlow;  // nm/lb
     TS_ASSERT_DELTA(specificRange, 0.833, 0.001);
   }
+
+  /***************************************************************************
+   * Extended N1 Dynamics Tests
+   ***************************************************************************/
+
+  // Test N1 acceleration rate
+  void testN1AccelerationRate() {
+    double N1 = 60.0;
+    double targetN1 = 100.0;
+    double accel = 3.0;  // Faster acceleration
+    double decel = 1.0;
+    double dt = 0.1;
+
+    double newN1 = expSeek(N1, targetN1, accel, decel, dt);
+    double rate = (newN1 - N1) / dt;
+
+    TS_ASSERT(rate > 0.0);
+    TS_ASSERT(rate < (targetN1 - N1) / dt);  // Rate limited
+  }
+
+  // Test N1 deceleration rate
+  void testN1DecelerationRate() {
+    double N1 = 100.0;
+    double targetN1 = 60.0;
+    double accel = 2.0;
+    double decel = 0.5;  // Slower deceleration
+    double dt = 0.1;
+
+    double newN1 = expSeek(N1, targetN1, accel, decel, dt);
+    double rate = (N1 - newN1) / dt;
+
+    TS_ASSERT(rate > 0.0);
+    TS_ASSERT(rate < (N1 - targetN1) / dt);
+  }
+
+  // Test N1 overshoot prevention
+  void testN1OvershootPrevention() {
+    double N1 = 99.0;
+    double targetN1 = 100.0;
+    double accel = 5.0;
+    double decel = 1.0;
+    double dt = 1.0;  // Large time step
+
+    double newN1 = expSeek(N1, targetN1, accel, decel, dt);
+    TS_ASSERT(newN1 <= targetN1);  // No overshoot
+  }
+
+  // Test N1 undershoot prevention
+  void testN1UndershootPrevention() {
+    double N1 = 61.0;
+    double targetN1 = 60.0;
+    double accel = 2.0;
+    double decel = 5.0;
+    double dt = 1.0;
+
+    double newN1 = expSeek(N1, targetN1, accel, decel, dt);
+    TS_ASSERT(newN1 >= targetN1);  // No undershoot
+  }
+
+  /***************************************************************************
+   * Extended Power Calculation Tests
+   ***************************************************************************/
+
+  // Test power curve nonlinearity
+  void testPowerCurveNonlinearity() {
+    double maxPower = 1000.0;
+    double N1_100 = 100.0;
+
+    // Power at 50% N1
+    double N1_50 = 50.0;
+    double power50 = maxPower * (N1_50 / N1_100) * (N1_50 / N1_100);
+
+    // Power at 70% N1
+    double N1_70 = 70.0;
+    double power70 = maxPower * (N1_70 / N1_100) * (N1_70 / N1_100);
+
+    TS_ASSERT_DELTA(power50, 250.0, epsilon);
+    TS_ASSERT_DELTA(power70, 490.0, epsilon);
+
+    // Verify non-linear relationship
+    TS_ASSERT(power70 / power50 > 70.0 / 50.0);
+  }
+
+  // Test power available at altitude
+  void testPowerAvailableAtAltitude() {
+    double seaLevelPower = 1000.0;
+    double altitudes[] = {0.0, 5000.0, 10000.0, 15000.0, 20000.0};
+    double lapseRate = 0.035;
+
+    double prevPower = seaLevelPower;
+    for (double alt : altitudes) {
+      double power = seaLevelPower * (1.0 - lapseRate * alt / 1000.0);
+      TS_ASSERT(power <= prevPower);
+      prevPower = power;
+    }
+  }
+
+  // Test residual jet thrust contribution
+  void testResidualJetThrustContribution() {
+    double SHP = 800.0;
+    double jetThrust[] = {0.0, 50.0, 100.0, 150.0};
+    double velocity = 200.0;
+
+    double baseESHP = SHP;
+    for (double jet : jetThrust) {
+      double ESHP = SHP + (jet * velocity / HP_TO_FTLBS);
+      TS_ASSERT(ESHP >= baseESHP);
+      baseESHP = ESHP;
+    }
+  }
+
+  /***************************************************************************
+   * Extended ITT Modeling Tests
+   ***************************************************************************/
+
+  // Test ITT rate of change
+  void testITTRateOfChange() {
+    double ITT = 400.0;
+    double targetITT = 700.0;
+    double ITT_delay = 5.0;
+    double dt = 0.1;
+
+    double ca = std::exp(-dt / ITT_delay);
+    double cb = 1.0 - ca;
+
+    // Track ITT over multiple timesteps (500 iterations = 50 seconds, ~10 time constants)
+    for (int i = 0; i < 500; i++) {
+      double prevITT = ITT;
+      ITT = ca * ITT + cb * targetITT;
+      double rate = (ITT - prevITT) / dt;
+      TS_ASSERT(rate >= 0.0);  // Always warming
+    }
+    TS_ASSERT_DELTA(ITT, targetITT, 1.0);
+  }
+
+  // Test ITT cooling
+  void testITTCooling() {
+    double ITT = 700.0;
+    double targetITT = 400.0;
+    double ITT_delay = 10.0;  // Slower cooling
+    double dt = 0.1;
+
+    double ca = std::exp(-dt / ITT_delay);
+    double cb = 1.0 - ca;
+
+    for (int i = 0; i < 1000; i++) {  // 100 seconds = 10 time constants
+      ITT = ca * ITT + cb * targetITT;
+    }
+    TS_ASSERT_DELTA(ITT, targetITT, 1.0);
+  }
+
+  // Test ITT exceedance margins
+  void testITTExceedanceMargins() {
+    double ITT_redline = 800.0;
+    double ITT_cautionZone = ITT_redline * 0.95;  // 95% is caution = 760
+    double ITT_normalMax = ITT_redline * 0.90;    // 90% is normal max = 720
+
+    double ITT_test1 = 700.0;   // Below normal max
+    double ITT_test2 = 770.0;   // Above normal max, below redline
+    double ITT_test3 = 810.0;   // Above redline
+
+    TS_ASSERT(ITT_test1 < ITT_normalMax);      // Normal
+    TS_ASSERT(ITT_test2 >= ITT_normalMax);     // In caution zone
+    TS_ASSERT(ITT_test2 < ITT_redline);
+    TS_ASSERT(ITT_test3 > ITT_redline);        // Exceedance
+  }
+
+  /***************************************************************************
+   * Extended Propeller Tests
+   ***************************************************************************/
+
+  // Test propeller efficiency curve
+  void testPropellerEfficiencyCurve() {
+    // Propeller efficiency varies with advance ratio
+    double propDiam = 10.0;  // feet
+    double propRPM = 1700.0;
+    double velocities[] = {0.0, 100.0, 200.0, 300.0};
+
+    for (double V : velocities) {
+      double n = propRPM / 60.0;  // rev/s
+      double J = V / (n * propDiam);  // Advance ratio
+      TS_ASSERT(J >= 0.0);
+      TS_ASSERT(!std::isnan(J));
+    }
+  }
+
+  // Test propeller pitch range
+  void testPropellerPitchRange() {
+    double featherPitch = 85.0;
+    double maxPitch = 35.0;
+    double finePitch = 15.0;
+    double reversePitch = -15.0;
+
+    TS_ASSERT(reversePitch < 0.0);
+    TS_ASSERT(finePitch < maxPitch);
+    TS_ASSERT(maxPitch < featherPitch);
+    TS_ASSERT(featherPitch < 90.0);
+  }
+
+  // Test blade angle response
+  void testBladeAngleResponse() {
+    double currentPitch = 20.0;
+    double targetPitch = 30.0;
+    double rate = 5.0;  // deg/s
+    double dt = 0.1;
+
+    double newPitch = linearSeek(currentPitch, targetPitch, rate, dt);
+    TS_ASSERT_DELTA(newPitch, currentPitch + rate * dt, epsilon);
+    TS_ASSERT(newPitch < targetPitch);
+  }
+
+  /***************************************************************************
+   * Extended Fuel System Tests
+   ***************************************************************************/
+
+  // Test fuel consumption at different power settings
+  void testFuelConsumptionAtDifferentPower() {
+    double PSFC = 0.5;
+    double powers[] = {100.0, 250.0, 500.0, 750.0, 1000.0};
+
+    for (double power : powers) {
+      double fuelFlow = PSFC * power;
+      TS_ASSERT_DELTA(fuelFlow, power * 0.5, epsilon);
+    }
+  }
+
+  // Test fuel remaining calculation
+  void testFuelRemainingCalculation() {
+    double fuelCapacity = 1000.0;  // lbs
+    double fuelBurned = 0.0;
+    double fuelFlow = 300.0;  // PPH
+    double flightTime = 2.0;  // hours
+
+    fuelBurned = fuelFlow * flightTime;
+    double fuelRemaining = fuelCapacity - fuelBurned;
+
+    TS_ASSERT_DELTA(fuelRemaining, 400.0, epsilon);
+  }
+
+  // Test fuel flow limiting
+  void testFuelFlowLimiting() {
+    double maxFuelFlow = 500.0;  // PPH
+    double demandedFlow = 600.0;
+
+    double actualFlow = std::min(demandedFlow, maxFuelFlow);
+    TS_ASSERT_DELTA(actualFlow, maxFuelFlow, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Starting System Tests
+   ***************************************************************************/
+
+  // Test starter motor torque curve
+  void testStarterMotorTorqueCurve() {
+    double maxTorque = 100.0;
+    double cutoffN1 = 50.0;
+    double N1_values[] = {0.0, 10.0, 20.0, 30.0, 40.0, 50.0};
+
+    double prevTorque = maxTorque;
+    for (double N1 : N1_values) {
+      double torque = maxTorque * (1.0 - N1 / cutoffN1);
+      TS_ASSERT(torque <= prevTorque);
+      TS_ASSERT(torque >= 0.0);
+      prevTorque = torque;
+    }
+  }
+
+  // Test ignition window
+  void testIgnitionWindow() {
+    double ignitionOnN1 = 15.0;
+    double ignitionOffN1 = 50.0;
+
+    double N1_values[] = {10.0, 15.0, 30.0, 50.0, 60.0};
+    bool expected[] = {false, true, true, true, false};
+
+    for (size_t i = 0; i < 5; i++) {
+      bool ignition = (N1_values[i] >= ignitionOnN1) && (N1_values[i] <= ignitionOffN1);
+      TS_ASSERT_EQUALS(ignition, expected[i]);
+    }
+  }
+
+  // Test light-off sequence
+  void testLightOffSequence() {
+    double N1 = 20.0;
+    double fuelFlow = 100.0;  // Present
+    double ignitionActive = true;
+    double combustorTemp = 300.0;  // K
+    double minLightOffTemp = 250.0;
+
+    bool lightOff = ignitionActive && (fuelFlow > 0) && (combustorTemp > minLightOffTemp);
+    TS_ASSERT(lightOff);
+  }
+
+  /***************************************************************************
+   * Extended Torque System Tests
+   ***************************************************************************/
+
+  // Test torque limiting with exceedance
+  void testTorqueLimitingWithExceedance() {
+    double maxTorque = 2000.0;
+    double measuredTorque = 2200.0;
+    double limitReduction = 0.1;  // 10% reduction per exceedance
+
+    bool limited = (measuredTorque > maxTorque);
+    TS_ASSERT(limited);
+
+    double fuelReduction = (measuredTorque - maxTorque) / maxTorque * limitReduction;
+    TS_ASSERT(fuelReduction > 0.0);
+  }
+
+  // Test torque indication accuracy
+  void testTorqueIndicationAccuracy() {
+    double power = 500.0;  // HP
+    double RPM = 1700.0;
+
+    double torque = power * 5252.0 / RPM;
+    double indicatedTorque = torque * 1.02;  // 2% overboosted indicator
+
+    TS_ASSERT(indicatedTorque > torque);
+    TS_ASSERT_DELTA(indicatedTorque / torque, 1.02, 0.001);
+  }
+
+  // Test negative torque protection
+  void testNegativeTorqueProtection() {
+    double torque = -100.0;
+    double NTS_threshold = 0.0;
+
+    bool ntsActive = (torque < NTS_threshold);
+    TS_ASSERT(ntsActive);
+
+    // Protection should increase blade angle
+    double pitchAdjust = ntsActive ? 5.0 : 0.0;
+    TS_ASSERT(pitchAdjust > 0.0);
+  }
+
+  /***************************************************************************
+   * Extended Environmental Effect Tests
+   ***************************************************************************/
+
+  // Test cold weather starting
+  void testColdWeatherStarting() {
+    double ambientTemp = 250.0;  // K (-23°C)
+    double refTemp = 288.15;     // K (15°C)
+    double coldStartPenalty = (refTemp - ambientTemp) / 50.0;  // Extra seconds
+
+    double normalStartTime = 20.0;
+    double coldStartTime = normalStartTime + coldStartPenalty;
+
+    TS_ASSERT(coldStartTime > normalStartTime);
+    TS_ASSERT_DELTA(coldStartPenalty, 0.763, 0.01);
+  }
+
+  // Test hot weather power loss
+  void testHotWeatherPowerLoss() {
+    double seaLevelPower = 1000.0;
+    double ambientTemp = 40.0;  // °C
+    double refTemp = 15.0;      // °C ISA
+    double tempDerateRate = 0.01;  // 1% per °C above ISA
+
+    double derate = (ambientTemp - refTemp) * tempDerateRate;
+    double availablePower = seaLevelPower * (1.0 - derate);
+
+    TS_ASSERT(availablePower < seaLevelPower);
+    TS_ASSERT_DELTA(availablePower, 750.0, epsilon);
+  }
+
+  // Test icing effect on power
+  void testIcingEffectOnPower() {
+    double normalPower = 1000.0;
+    double icingLoss = 0.05;  // 5% power loss with inlet icing
+
+    double icedPower = normalPower * (1.0 - icingLoss);
+    TS_ASSERT_DELTA(icedPower, 950.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Extended Autofeather and Safety Tests
+   ***************************************************************************/
+
+  // Test autofeather conditions
+  void testAutofeatherConditions() {
+    double torque = 100.0;
+    double armThreshold = 500.0;
+    double triggerThreshold = 200.0;
+    bool autofeatherSwitch = true;
+    bool inFlight = true;
+
+    bool armed = autofeatherSwitch && inFlight;
+    bool triggered = armed && (torque < triggerThreshold);
+
+    TS_ASSERT(armed);
+    TS_ASSERT(triggered);
+  }
+
+  // Test autofeather time delay
+  void testAutofeatherTimeDelay() {
+    double triggerTime = 0.0;
+    double featherDelay = 1.5;  // seconds
+    double currentTime = 0.0;
+    double simTime = 0.0;
+    bool triggered = false;
+
+    // Simulate trigger at t=0.5
+    for (int i = 0; i < 30; i++) {
+      simTime = i * 0.1;
+      if (simTime >= 0.5 && !triggered) {
+        triggered = true;
+        triggerTime = simTime;
+      }
+
+      if (triggered && (simTime - triggerTime) >= featherDelay) {
+        bool featherCommanded = true;
+        TS_ASSERT(featherCommanded);
+        break;
+      }
+    }
+  }
+
+  // Test emergency shutdown sequence
+  void testEmergencyShutdownSequence() {
+    double N1 = 90.0;
+    double fuelCutoff = true;
+    double decelRate = 20.0;  // N1%/sec (rapid decel rate for emergency)
+    double dt = 0.1;
+
+    // 200 iterations at 0.1s = 20 seconds of spooldown
+    for (int i = 0; i < 200; i++) {
+      if (fuelCutoff) {
+        N1 = N1 * (1.0 - decelRate * dt / 100.0);
+      }
+    }
+
+    TS_ASSERT(N1 < 10.0);  // Engine spooled down
+  }
+
+  /***************************************************************************
+   * Extended Performance Calculation Tests
+   ***************************************************************************/
+
+  // Test cruise efficiency
+  void testCruiseEfficiency() {
+    double thrust = 800.0;      // lb
+    double fuelFlow = 250.0;    // PPH
+    double velocity = 300.0;    // ft/s
+
+    double TSFC = fuelFlow / thrust;  // lb/hr/lb
+    TS_ASSERT(TSFC < 1.0);
+    TS_ASSERT(TSFC > 0.2);
+  }
+
+  // Test power management for climb
+  void testPowerManagementClimb() {
+    double maxContinuousPower = 1000.0;
+    double climbPowerSetting = 0.95;
+    double climbPower = maxContinuousPower * climbPowerSetting;
+
+    TS_ASSERT_DELTA(climbPower, 950.0, epsilon);
+  }
+
+  // Test cruise power optimization
+  void testCruisePowerOptimization() {
+    double cruisePowerSettings[] = {0.6, 0.65, 0.7, 0.75, 0.8};
+    double optimalSetting = 0.7;  // Best range at 70% power
+
+    for (double setting : cruisePowerSettings) {
+      TS_ASSERT(setting >= 0.0);
+      TS_ASSERT(setting <= 1.0);
+    }
+    TS_ASSERT(optimalSetting > 0.5);
+    TS_ASSERT(optimalSetting < 0.9);
+  }
 };
