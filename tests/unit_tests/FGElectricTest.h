@@ -861,4 +861,311 @@ public:
 
     TS_ASSERT_DELTA(watts, 745.69, 0.1);
   }
+
+  /***************************************************************************
+   * Battery System Integration Tests
+   ***************************************************************************/
+
+  // Test battery capacity to flight time
+  void testBatteryCapacityToFlightTime() {
+    double batteryCapacity = 100.0;  // kWh
+    double avgPowerDraw = 50.0;      // kW
+
+    double flightTimeHours = batteryCapacity / avgPowerDraw;
+    TS_ASSERT_DELTA(flightTimeHours, 2.0, 0.01);
+  }
+
+  // Test battery voltage under load
+  void testBatteryVoltageUnderLoad() {
+    double nominalVoltage = 400.0;  // V
+    double internalResistance = 0.1;  // Ohms
+    double current = 200.0;  // A
+
+    double loadVoltage = nominalVoltage - (current * internalResistance);
+    TS_ASSERT_DELTA(loadVoltage, 380.0, 0.1);
+  }
+
+  // Test battery state of charge
+  void testBatteryStateOfCharge() {
+    double initialSOC = 100.0;  // percent
+    double energyUsed = 25.0;   // kWh
+    double totalCapacity = 100.0;  // kWh
+
+    double currentSOC = initialSOC - (energyUsed / totalCapacity * 100.0);
+    TS_ASSERT_DELTA(currentSOC, 75.0, 0.1);
+  }
+
+  // Test battery thermal limits
+  void testBatteryThermalLimits() {
+    double batteryTemp = 45.0;  // °C
+    double maxTemp = 55.0;      // °C
+    double minTemp = -20.0;     // °C
+
+    bool withinLimits = (batteryTemp <= maxTemp) && (batteryTemp >= minTemp);
+    TS_ASSERT(withinLimits);
+  }
+
+  /***************************************************************************
+   * Motor Controller Tests
+   ***************************************************************************/
+
+  // Test PWM duty cycle to power
+  void testPWMDutyCycleToPower() {
+    double maxPowerWatts = 100000.0;  // 100 kW
+    double dutyCycle = 0.75;  // 75%
+
+    double outputPower = maxPowerWatts * dutyCycle;
+    TS_ASSERT_DELTA(outputPower, 75000.0, 0.1);
+  }
+
+  // Test field-oriented control torque
+  void testFieldOrientedControlTorque() {
+    double Kt = 0.5;  // Nm/A
+    double Iq = 100.0;  // A (torque-producing current)
+
+    double torqueNm = Kt * Iq;
+    double torqueFtLbf = torqueNm * 0.7376;
+
+    TS_ASSERT_DELTA(torqueNm, 50.0, 0.1);
+    TS_ASSERT_DELTA(torqueFtLbf, 36.88, 0.1);
+  }
+
+  // Test controller current limit
+  void testControllerCurrentLimit() {
+    double maxCurrent = 500.0;  // A
+    double requestedCurrent = 600.0;  // A
+
+    double actualCurrent = std::min(requestedCurrent, maxCurrent);
+    TS_ASSERT_DELTA(actualCurrent, 500.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Propeller Matching Tests
+   ***************************************************************************/
+
+  // Test motor-propeller speed matching
+  void testMotorPropellerSpeedMatching() {
+    double motorRPM = 6000.0;
+    double gearRatio = 3.0;  // Reduction
+
+    double propRPM = motorRPM / gearRatio;
+    TS_ASSERT_DELTA(propRPM, 2000.0, 0.1);
+  }
+
+  // Test propeller loading curve
+  void testPropellerLoadingCurve() {
+    // Propeller power ∝ n³
+    double rpm1 = 2000.0;
+    double rpm2 = 2500.0;
+
+    double powerRatio = std::pow(rpm2 / rpm1, 3.0);
+    TS_ASSERT_DELTA(powerRatio, 1.953, 0.01);
+  }
+
+  // Test operating point determination
+  void testOperatingPointDetermination() {
+    // Motor torque = a - b*rpm (simplified linear model)
+    // Prop torque = c*rpm² (simplified quadratic model)
+    double a = 100.0;  // Nm stall torque
+    double b = 0.01;   // torque drop per rpm
+    double c = 0.000005;  // prop coefficient
+
+    // At equilibrium: a - b*rpm = c*rpm²
+    // Solve for rpm (simplified: assume prop torque dominates)
+    double operatingRPM = std::sqrt((a) / (c + b / 100.0));
+
+    TS_ASSERT(operatingRPM > 0);
+    TS_ASSERT(operatingRPM < 10000);
+  }
+
+  /***************************************************************************
+   * Thermal Management Tests
+   ***************************************************************************/
+
+  // Test motor temperature rise
+  void testMotorTemperatureRise() {
+    double powerLoss = 5000.0;  // W (heat generated)
+    double thermalResistance = 0.01;  // °C/W
+    double ambientTemp = 25.0;  // °C
+
+    double motorTemp = ambientTemp + (powerLoss * thermalResistance);
+    TS_ASSERT_DELTA(motorTemp, 75.0, 0.1);
+  }
+
+  // Test thermal derating
+  void testThermalDerating() {
+    double maxPower = 100.0;  // kW at 25°C
+    double currentTemp = 80.0;  // °C
+    double derateStartTemp = 60.0;  // °C
+    double maxTemp = 100.0;  // °C
+
+    double derateFactor = 1.0;
+    if (currentTemp > derateStartTemp) {
+      derateFactor = 1.0 - (currentTemp - derateStartTemp) / (maxTemp - derateStartTemp);
+    }
+
+    double deratedPower = maxPower * derateFactor;
+    TS_ASSERT(deratedPower < maxPower);
+    TS_ASSERT_DELTA(deratedPower, 50.0, 1.0);
+  }
+
+  // Test cooling system capacity
+  void testCoolingSystemCapacity() {
+    double heatGenerated = 8000.0;  // W
+    double coolingCapacity = 10000.0;  // W
+
+    bool thermallyStable = coolingCapacity >= heatGenerated;
+    double thermalMargin = (coolingCapacity - heatGenerated) / coolingCapacity;
+
+    TS_ASSERT(thermallyStable);
+    TS_ASSERT_DELTA(thermalMargin, 0.2, 0.01);
+  }
+
+  /***************************************************************************
+   * Range and Endurance Tests
+   ***************************************************************************/
+
+  // Test range calculation
+  void testRangeCalculation() {
+    double batteryEnergy = 150.0;  // kWh
+    double cruisePower = 75.0;     // kW
+    double cruiseSpeed = 150.0;    // kts
+
+    double enduranceHours = batteryEnergy / cruisePower;
+    double rangeNM = cruiseSpeed * enduranceHours;
+
+    TS_ASSERT_DELTA(enduranceHours, 2.0, 0.01);
+    TS_ASSERT_DELTA(rangeNM, 300.0, 0.1);
+  }
+
+  // Test reserve energy requirement
+  void testReserveEnergyRequirement() {
+    double totalEnergy = 100.0;  // kWh
+    double reservePercent = 20.0;  // 20% reserve
+
+    double usableEnergy = totalEnergy * (1.0 - reservePercent / 100.0);
+    TS_ASSERT_DELTA(usableEnergy, 80.0, 0.1);
+  }
+
+  // Test energy consumption rate
+  void testEnergyConsumptionRate() {
+    double power = 50.0;  // kW
+    double time = 0.5;    // hours
+
+    double energyConsumed = power * time;
+    TS_ASSERT_DELTA(energyConsumed, 25.0, 0.1);  // kWh
+  }
+
+  /***************************************************************************
+   * Failure Mode Tests
+   ***************************************************************************/
+
+  // Test motor short circuit
+  void testMotorShortCircuit() {
+    double normalResistance = 0.1;  // Ohms
+    double shortedResistance = 0.01;  // Ohms
+
+    bool shortCircuit = shortedResistance < (normalResistance * 0.2);
+    TS_ASSERT(shortCircuit);
+  }
+
+  // Test inverter failure detection
+  void testInverterFailureDetection() {
+    double expectedOutput = 100.0;  // kW
+    double actualOutput = 5.0;      // kW
+
+    double outputRatio = actualOutput / expectedOutput;
+    bool inverterFailed = outputRatio < 0.1;
+
+    TS_ASSERT(inverterFailed);
+  }
+
+  // Test battery cell imbalance
+  void testBatteryCellImbalance() {
+    double cellVoltages[] = {3.7, 3.65, 3.7, 3.68, 3.2, 3.7};
+    double minVoltage = 3.2;
+    double maxVoltage = 3.7;
+
+    double imbalance = maxVoltage - minVoltage;
+    bool imbalanceExcessive = imbalance > 0.3;
+
+    TS_ASSERT(imbalanceExcessive);
+  }
+
+  /***************************************************************************
+   * Regeneration Extended Tests
+   ***************************************************************************/
+
+  // Test regeneration during descent
+  void testRegenerationDuringDescent() {
+    double sinkRate = 500.0;  // fpm
+    double weight = 2000.0;   // lbs
+    double regenEfficiency = 0.7;
+
+    // Potential energy recovery rate
+    double potentialEnergyRate = weight * (sinkRate / 60.0);  // ft-lbs/sec
+    double regenPower = potentialEnergyRate * regenEfficiency / 550.0;  // HP
+
+    TS_ASSERT(regenPower > 0);
+    TS_ASSERT(!std::isnan(regenPower));
+  }
+
+  // Test regen limited by battery SOC
+  void testRegenLimitedBySOC() {
+    double regenPowerRequested = 50.0;  // kW
+    double batterySOC = 95.0;  // percent
+    double maxSOCForRegen = 90.0;  // percent
+
+    double regenLimit = (100.0 - batterySOC) / (100.0 - maxSOCForRegen);
+    double actualRegen = regenPowerRequested * std::min(1.0, regenLimit);
+
+    TS_ASSERT(actualRegen < regenPowerRequested);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  // Test continuous power cycling
+  void testContinuousPowerCycling() {
+    double maxPower = 100.0;
+
+    for (int i = 0; i < 100; i++) {
+      double throttle = (i % 10) / 10.0;
+      double power = maxPower * throttle;
+
+      TS_ASSERT(power >= 0.0);
+      TS_ASSERT(power <= maxPower);
+    }
+  }
+
+  // Test power calculation numerical stability
+  void testPowerCalculationNumericalStability() {
+    double hptowatts = 745.7;
+
+    for (double watts = 1.0; watts <= 1000000.0; watts *= 10.0) {
+      double hp = watts / hptowatts;
+      TS_ASSERT(!std::isnan(hp));
+      TS_ASSERT(!std::isinf(hp));
+      TS_ASSERT(hp > 0);
+    }
+  }
+
+  // Test torque at boundary RPM values
+  void testTorqueAtBoundaryRPM() {
+    double power = 55000.0;  // ft-lbf/sec (100 HP)
+
+    // Very low RPM
+    double rpm = 10.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+    double torque = power / omega;
+    TS_ASSERT(!std::isinf(torque));
+
+    // Very high RPM
+    rpm = 50000.0;
+    omega = rpm * 2.0 * M_PI / 60.0;
+    torque = power / omega;
+    TS_ASSERT(torque > 0);
+    TS_ASSERT(torque < 100.0);
+  }
 };

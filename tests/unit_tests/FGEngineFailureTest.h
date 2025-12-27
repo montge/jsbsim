@@ -960,4 +960,366 @@ public:
     TS_ASSERT_DELTA(climbRateReduction, 1300.0, DEFAULT_TOLERANCE);
     TS_ASSERT(OEI_climbRate > 0.0);  // Still climbing
   }
+
+  /***************************************************************************
+   * Single Engine Performance Extended Tests
+   ***************************************************************************/
+
+  // Test single engine ceiling altitude
+  void testSingleEngineCeiling() {
+    double normalCeiling = 25000.0;  // ft
+    double OEI_ceiling = 14000.0;  // ft
+
+    double ceilingReduction = normalCeiling - OEI_ceiling;
+    TS_ASSERT_DELTA(ceilingReduction, 11000.0, 100.0);
+    TS_ASSERT(OEI_ceiling > 0);
+  }
+
+  // Test single engine cruise speed
+  void testSingleEngineCruiseSpeed() {
+    double normalCruise = 180.0;  // kts
+    double OEI_cruise = 140.0;    // kts
+
+    double speedReduction = normalCruise - OEI_cruise;
+    TS_ASSERT_DELTA(speedReduction, 40.0, 1.0);
+    TS_ASSERT(OEI_cruise > 0);
+  }
+
+  // Test single engine range
+  void testSingleEngineRange() {
+    double normalRange = 1000.0;  // nm
+    double fuelConsumptionRatio = 1.3;  // OEI consumes more per nm
+
+    double OEI_range = normalRange / fuelConsumptionRatio;
+    TS_ASSERT_DELTA(OEI_range, 769.2, 1.0);
+  }
+
+  /***************************************************************************
+   * Propeller Autofeather Tests
+   ***************************************************************************/
+
+  // Test autofeather arm conditions
+  void testAutofeatherArmConditions() {
+    double airspeed = 120.0;  // kts
+    double minArmSpeed = 80.0;
+    double power1 = 90.0;  // percent
+    double power2 = 90.0;  // percent
+    double minPower = 70.0;
+
+    bool armed = (airspeed > minArmSpeed) &&
+                 (power1 > minPower) && (power2 > minPower);
+    TS_ASSERT(armed);
+  }
+
+  // Test autofeather trigger
+  void testAutofeatherTrigger() {
+    double torqueNormal = 1000.0;  // ft-lbf
+    double torqueFailed = 100.0;   // ft-lbf
+    double triggerThreshold = 0.3;
+
+    double torqueRatio = torqueFailed / torqueNormal;
+    bool shouldFeather = torqueRatio < triggerThreshold;
+
+    TS_ASSERT(shouldFeather);
+  }
+
+  // Test feather time constant
+  void testFeatherTimeConstant() {
+    double featherTime = 3.0;  // seconds to full feather
+    double pitchChange = 90.0 - 25.0;  // degrees (flat to feather)
+
+    double featherRate = pitchChange / featherTime;
+    TS_ASSERT_DELTA(featherRate, 21.67, 0.1);
+  }
+
+  /***************************************************************************
+   * Engine Out Approach Tests
+   ***************************************************************************/
+
+  // Test single engine approach speed
+  void testSingleEngineApproachSpeed() {
+    double normalVref = 110.0;  // kts
+    double OEI_increment = 10.0;  // kts higher for safety
+
+    double OEI_Vref = normalVref + OEI_increment;
+    TS_ASSERT_DELTA(OEI_Vref, 120.0, 0.1);
+  }
+
+  // Test single engine landing distance
+  void testSingleEngineLandingDistance() {
+    double normalDistance = 3000.0;  // ft
+    double OEI_factor = 1.15;  // 15% longer
+
+    double OEI_distance = normalDistance * OEI_factor;
+    TS_ASSERT_DELTA(OEI_distance, 3450.0, 10.0);
+  }
+
+  // Test single engine missed approach
+  void testSingleEngineMissedApproach() {
+    double OEI_climbGradient = 2.1;  // percent (minimum required)
+    double actualGradient = 2.5;     // percent
+
+    bool canMakeMAP = actualGradient >= OEI_climbGradient;
+    TS_ASSERT(canMakeMAP);
+  }
+
+  /***************************************************************************
+   * Thrust Asymmetry Extended Tests
+   ***************************************************************************/
+
+  // Test yaw moment vs airspeed
+  void testYawMomentVsAirspeed() {
+    double thrust = 5000.0;
+    double engineArm = 10.0;
+    double yawMoment = thrust * engineArm;
+
+    // Yaw moment is constant (independent of airspeed)
+    // But rudder effectiveness increases with airspeed
+    TS_ASSERT_DELTA(yawMoment, 50000.0, 1.0);
+  }
+
+  // Test yaw moment with partial power
+  void testYawMomentPartialPower() {
+    double maxThrust = 5000.0;
+    double partialPower = 0.7;  // 70%
+    double engineArm = 10.0;
+
+    double yawMoment = maxThrust * partialPower * engineArm;
+    TS_ASSERT_DELTA(yawMoment, 35000.0, 1.0);
+  }
+
+  // Test yaw damping effect
+  void testYawDampingEffect() {
+    double yawRate = 10.0;  // deg/sec
+    double dampingCoeff = 0.5;
+
+    double dampingMoment = dampingCoeff * yawRate;
+    TS_ASSERT(dampingMoment > 0);
+  }
+
+  /***************************************************************************
+   * Engine Fire/Shutdown Procedures
+   ***************************************************************************/
+
+  // Test fuel cutoff effect
+  void testFuelCutoffEffect() {
+    double normalFuelFlow = 100.0;  // lbs/hr
+    double cutoffPosition = 0.0;    // 0 = cutoff, 1 = on
+
+    double actualFlow = normalFuelFlow * cutoffPosition;
+    TS_ASSERT_DELTA(actualFlow, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test fire loop detection
+  void testFireLoopDetection() {
+    double loopTemp1 = 600.0;  // °F
+    double loopTemp2 = 150.0;  // °F (normal)
+    double fireThreshold = 500.0;
+
+    bool fireLoop1 = loopTemp1 >= fireThreshold;
+    bool fireLoop2 = loopTemp2 >= fireThreshold;
+
+    TS_ASSERT(fireLoop1);
+    TS_ASSERT(!fireLoop2);
+  }
+
+  // Test engine secured checklist
+  void testEngineSecuredChecklist() {
+    bool throttle_idle = true;
+    bool mixture_cutoff = true;
+    bool prop_feathered = true;
+    bool fuel_off = true;
+    bool magnetos_off = true;
+
+    bool engineSecured = throttle_idle && mixture_cutoff &&
+                         prop_feathered && fuel_off && magnetos_off;
+    TS_ASSERT(engineSecured);
+  }
+
+  /***************************************************************************
+   * Performance Degradation Tests
+   ***************************************************************************/
+
+  // Test takeoff performance with OEI at V1
+  void testTakeoffPerformanceOEI() {
+    double normalV2 = 130.0;  // kts
+    double OEI_V2 = 125.0;    // kts (reduced due to less thrust)
+
+    TS_ASSERT(OEI_V2 < normalV2);
+    TS_ASSERT(OEI_V2 > 0);
+  }
+
+  // Test climb gradient segments
+  void testClimbGradientSegments() {
+    double firstSegment = 0.0;   // percent (gear retraction)
+    double secondSegment = 2.4;  // percent (min requirement)
+    double thirdSegment = 1.2;   // percent (accel/cleanup)
+    double fourthSegment = 1.2;  // percent (en route)
+
+    TS_ASSERT(secondSegment >= 2.4);  // FAR requirement
+  }
+
+  // Test drift down fuel consumption
+  void testDriftDownFuelConsumption() {
+    double normalFuelFlow = 1500.0;  // lbs/hr (both engines)
+    double OEI_fuelFlow = 900.0;     // lbs/hr (one engine at MCT)
+
+    double flowReduction = normalFuelFlow - OEI_fuelFlow;
+    TS_ASSERT_DELTA(flowReduction, 600.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Multi-Engine Coordination Tests
+   ***************************************************************************/
+
+  // Test thrust lever synchronization
+  void testThrustLeverSync() {
+    double lever1 = 85.0;  // percent
+    double lever2 = 85.0;  // percent
+
+    double difference = std::abs(lever1 - lever2);
+    TS_ASSERT(difference < 5.0);  // Within sync tolerance
+  }
+
+  // Test automatic thrust mode with OEI
+  void testAutoThrustModeOEI() {
+    double MCT_limit = 95.0;  // percent (max continuous thrust)
+    double operatingThrust = 93.0;  // percent
+
+    bool withinMCT = operatingThrust <= MCT_limit;
+    TS_ASSERT(withinMCT);
+  }
+
+  // Test torque matching
+  void testTorqueMatching() {
+    double torque1 = 100.0;  // percent
+    double torque2 = 0.0;    // percent (failed)
+
+    double asymmetry = std::abs(torque1 - torque2);
+    TS_ASSERT_DELTA(asymmetry, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Alternate Airfield Considerations
+   ***************************************************************************/
+
+  // Test fuel required to alternate
+  void testFuelToAlternate() {
+    double distanceToAlternate = 100.0;  // nm
+    double OEI_specificRange = 5.0;      // nm per 100 lbs fuel
+    double contingency = 1.1;            // 10% contingency
+
+    double fuelRequired = (distanceToAlternate / OEI_specificRange) * 100.0 * contingency;
+    TS_ASSERT_DELTA(fuelRequired, 2200.0, 10.0);
+  }
+
+  // Test time to alternate
+  void testTimeToAlternate() {
+    double distanceToAlternate = 150.0;  // nm
+    double OEI_cruiseSpeed = 160.0;      // kts
+
+    double timeToAlternate = distanceToAlternate / OEI_cruiseSpeed * 60.0;  // minutes
+    TS_ASSERT_DELTA(timeToAlternate, 56.25, 0.1);
+  }
+
+  // Test alternate runway requirements
+  void testAlternateRunwayRequirements() {
+    double OEI_landingDistance = 4000.0;  // ft
+    double safetyFactor = 1.67;           // FAR requirement
+
+    double requiredRunway = OEI_landingDistance * safetyFactor;
+    TS_ASSERT_DELTA(requiredRunway, 6680.0, 10.0);
+  }
+
+  /***************************************************************************
+   * Stress and Edge Case Tests
+   ***************************************************************************/
+
+  // Test double engine failure glide
+  void testDoubleEngineFailureGlide() {
+    double weight = 45000.0;   // lbs
+    double liftToDrag = 12.0;  // typical twin L/D
+    double altitude = 10000.0; // ft
+
+    double glideRange = altitude * liftToDrag / 5280.0;  // nm
+    TS_ASSERT(glideRange > 0);
+    TS_ASSERT(glideRange < 50.0);
+  }
+
+  // Test engine failure at max altitude
+  void testEngineFailureAtMaxAltitude() {
+    double altitude = 25000.0;  // ft
+    double OEI_ceiling = 15000.0;
+
+    bool mustDescend = altitude > OEI_ceiling;
+    double descentRequired = altitude - OEI_ceiling;
+
+    TS_ASSERT(mustDescend);
+    TS_ASSERT_DELTA(descentRequired, 10000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test VMC at various weights
+  void testVMCVsWeight() {
+    double VMC_MTOW = 110.0;  // kts at max weight
+    double VMC_light = 95.0; // kts at light weight
+
+    // VMC decreases at lighter weights
+    TS_ASSERT(VMC_light < VMC_MTOW);
+  }
+
+  // Test VMC at various CG positions
+  void testVMCVsCG() {
+    double VMC_fwdCG = 105.0;  // kts
+    double VMC_aftCG = 115.0; // kts
+
+    // VMC increases with aft CG
+    TS_ASSERT(VMC_aftCG > VMC_fwdCG);
+  }
+
+  // Test controllability margin
+  void testControllabilityMargin() {
+    double VMC = 100.0;  // kts
+    double currentSpeed = 130.0;  // kts
+
+    double margin = (currentSpeed - VMC) / VMC * 100.0;
+    TS_ASSERT(margin > 20.0);  // At least 20% above VMC
+  }
+
+  // Test engine restart in-flight
+  void testEngineRestartInFlight() {
+    double airspeed = 180.0;  // kts
+    double altitude = 8000.0;  // ft
+    double minRestartAirspeed = 150.0;
+    double minRestartAlt = 3000.0;
+
+    bool restartConditionsMet = (airspeed >= minRestartAirspeed) &&
+                                 (altitude >= minRestartAlt);
+    TS_ASSERT(restartConditionsMet);
+  }
+
+  // Test power settling time
+  void testPowerSettlingTime() {
+    double targetPower = 100.0;  // percent
+    double currentPower = 50.0;
+    double settlingTime = 3.0;   // seconds for piston
+    double timeConstant = 1.0;
+
+    // Exponential approach to target
+    double powerAfter1Sec = targetPower - (targetPower - currentPower) *
+                            std::exp(-1.0 / timeConstant);
+    TS_ASSERT(powerAfter1Sec > currentPower);
+    TS_ASSERT(powerAfter1Sec < targetPower);
+  }
+
+  // Test numerical stability of yaw calculations
+  void testYawCalculationStability() {
+    for (double thrust = 100.0; thrust <= 10000.0; thrust += 500.0) {
+      for (double arm = 5.0; arm <= 30.0; arm += 5.0) {
+        double yawMoment = thrust * arm;
+        TS_ASSERT(!std::isnan(yawMoment));
+        TS_ASSERT(!std::isinf(yawMoment));
+        TS_ASSERT(yawMoment > 0);
+      }
+    }
+  }
 };

@@ -858,4 +858,347 @@ public:
     TS_ASSERT(restoringMoment > 0.0);
     TS_ASSERT(staticStabilityCoeff > 0.0);  // Positive = stable
   }
+
+  /***************************************************************************
+   * Extended Wind Component Tests
+   ***************************************************************************/
+
+  // Test quartering headwind
+  void testQuarteringHeadwind() {
+    double windSpeed = 30.0;  // knots
+    double windAngle = 30.0 * Constants::DEG_TO_RAD;
+
+    double headwind = windSpeed * std::cos(windAngle);
+    double crosswind = windSpeed * std::sin(windAngle);
+
+    TS_ASSERT_DELTA(headwind, 25.98, 0.1);
+    TS_ASSERT_DELTA(crosswind, 15.0, 0.1);
+  }
+
+  // Test quartering tailwind
+  void testQuarteringTailwind() {
+    double windSpeed = 25.0;
+    double windAngle = 150.0 * Constants::DEG_TO_RAD;
+
+    double headwind = windSpeed * std::cos(windAngle);
+    double crosswind = windSpeed * std::sin(windAngle);
+
+    TS_ASSERT(headwind < 0);  // Tailwind component
+    TS_ASSERT(crosswind > 0);  // Crosswind component
+  }
+
+  // Test gusty crosswind components
+  void testGustyCrosswindComponents() {
+    double steadyWind = 15.0;  // knots
+    double gustFactor = 1.4;
+    double windAngle = 60.0 * Constants::DEG_TO_RAD;
+
+    double peakCrosswind = steadyWind * gustFactor * std::sin(windAngle);
+    double steadyCrosswind = steadyWind * std::sin(windAngle);
+
+    TS_ASSERT(peakCrosswind > steadyCrosswind);
+    TS_ASSERT_DELTA(peakCrosswind / steadyCrosswind, gustFactor, 0.01);
+  }
+
+  /***************************************************************************
+   * Advanced Crab Angle Calculations
+   ***************************************************************************/
+
+  // Test crab angle at low airspeed
+  void testCrabAngleLowAirspeed() {
+    double airspeed = 50.0;  // knots (slow approach)
+    double crosswind = 15.0;
+
+    double crabAngle = std::asin(crosswind / airspeed);
+    TS_ASSERT_DELTA(crabAngle * Constants::RAD_TO_DEG, 17.46, 0.1);
+  }
+
+  // Test crab angle near maximum
+  void testCrabAngleNearMaximum() {
+    double airspeed = 55.0;
+    double crosswind = 50.0;  // Strong crosswind
+
+    double ratio = crosswind / airspeed;
+    TS_ASSERT(ratio < 1.0);  // Must be < 1 for valid asin
+
+    double crabAngle = std::asin(ratio);
+    TS_ASSERT(crabAngle * Constants::RAD_TO_DEG > 60.0);
+  }
+
+  // Test crab angle sensitivity to wind change
+  void testCrabAngleSensitivityToWindChange() {
+    double airspeed = 100.0;
+
+    double crosswind1 = 10.0;
+    double crosswind2 = 12.0;  // 20% increase
+
+    double crab1 = std::asin(crosswind1 / airspeed) * Constants::RAD_TO_DEG;
+    double crab2 = std::asin(crosswind2 / airspeed) * Constants::RAD_TO_DEG;
+
+    double crabChange = crab2 - crab1;
+    TS_ASSERT(crabChange > 0);
+  }
+
+  /***************************************************************************
+   * Wing-Low Technique Extended Tests
+   ***************************************************************************/
+
+  // Test maximum bank angle for wing-low
+  void testMaxBankAngleWingLow() {
+    double crosswind = 20.0;
+    double approachSpeed = 65.0;
+
+    double bankAngle = std::atan(crosswind / approachSpeed);
+    double bankDeg = bankAngle * Constants::RAD_TO_DEG;
+
+    // Should be significant but manageable
+    TS_ASSERT(bankDeg > 10.0);
+    TS_ASSERT(bankDeg < 25.0);
+  }
+
+  // Test rudder authority in wing-low
+  void testRudderAuthorityWingLow() {
+    double bankAngle = 10.0 * Constants::DEG_TO_RAD;
+    double rudderEffectiveness = 50.0;  // units
+
+    // Need opposite rudder to maintain runway alignment
+    double requiredRudder = bankAngle * 0.7;  // Simplified
+
+    TS_ASSERT(requiredRudder > 0);
+    TS_ASSERT(requiredRudder < rudderEffectiveness / 3.0);
+  }
+
+  // Test touchdown geometry wing-low
+  void testTouchdownGeometryWingLow() {
+    double bankAngle = 8.0 * Constants::DEG_TO_RAD;
+    double wheelTrack = 12.0;  // ft
+
+    // Upwind wheel touches first
+    double heightDifference = wheelTrack * std::sin(bankAngle);
+    TS_ASSERT(heightDifference > 0);
+    TS_ASSERT_DELTA(heightDifference, 1.67, 0.1);
+  }
+
+  /***************************************************************************
+   * Runway Selection for Crosswind
+   ***************************************************************************/
+
+  // Test optimal runway selection
+  void testOptimalRunwaySelection() {
+    double windDir = 270.0;  // From west
+    double windSpeed = 20.0;
+
+    // Available runways
+    double runways[] = {90.0, 180.0, 270.0, 360.0};
+    double minCrosswind = 999.0;
+    double bestRunway = 0.0;
+
+    for (double rwy : runways) {
+      double angle = std::abs(windDir - rwy);
+      if (angle > 180.0) angle = 360.0 - angle;
+      double crosswind = windSpeed * std::sin(angle * Constants::DEG_TO_RAD);
+
+      if (std::abs(crosswind) < minCrosswind) {
+        minCrosswind = std::abs(crosswind);
+        bestRunway = rwy;
+      }
+    }
+
+    TS_ASSERT_DELTA(bestRunway, 270.0, 0.1);  // Head wind runway
+  }
+
+  // Test crosswind limit decision
+  void testCrosswindLimitDecision() {
+    double demonstratedLimit = 15.0;
+    double personalLimit = 12.0;  // 80% of demonstrated
+    double actualCrosswind = 14.0;
+
+    bool withinDemonstrated = actualCrosswind <= demonstratedLimit;
+    bool withinPersonal = actualCrosswind <= personalLimit;
+
+    TS_ASSERT(withinDemonstrated);
+    TS_ASSERT(!withinPersonal);
+  }
+
+  /***************************************************************************
+   * Directional Control Tests
+   ***************************************************************************/
+
+  // Test rudder pedal force required
+  void testRudderPedalForce() {
+    double crosswind = 15.0;
+    double forcePerKnot = 2.0;  // lbs per knot crosswind
+
+    double pedalForce = crosswind * forcePerKnot;
+    TS_ASSERT_DELTA(pedalForce, 30.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test nosewheel steering in crosswind
+  void testNosewheelSteeringCrosswind() {
+    double crosswind = 12.0;
+    double groundSpeed = 30.0;  // kts
+
+    // More steering needed at low speed
+    double steeringAngle = std::atan(crosswind / groundSpeed) * 0.5;
+    TS_ASSERT(steeringAngle > 0);
+  }
+
+  // Test brake differential in crosswind taxi
+  void testBrakeDifferentialTaxi() {
+    double crosswind = 18.0;
+    double baseBraking = 0.3;  // Normal braking fraction
+
+    // Upwind brake used more to counter weathervane
+    double upwindBrake = baseBraking * (1.0 + crosswind / 50.0);
+    double downwindBrake = baseBraking;
+
+    TS_ASSERT(upwindBrake > downwindBrake);
+  }
+
+  /***************************************************************************
+   * Crosswind During Climb and Descent
+   ***************************************************************************/
+
+  // Test ground track in climb with crosswind
+  void testGroundTrackInClimb() {
+    double airspeed = 80.0;  // kts
+    double crosswind = 15.0;  // kts
+    double heading = 360.0;  // Due north
+
+    double crabAngle = std::asin(crosswind / airspeed);
+    double groundTrack = heading - (crabAngle * Constants::RAD_TO_DEG);
+
+    // Ground track is west of heading due to right crosswind
+    TS_ASSERT(groundTrack < heading);
+  }
+
+  // Test rate of climb with crosswind
+  void testRateOfClimbCrosswind() {
+    double normalROC = 500.0;  // fpm
+    double crosswind = 20.0;
+
+    // Crosswind slightly reduces climb performance
+    double performanceLoss = crosswind * 0.5;  // fpm per knot
+    double actualROC = normalROC - performanceLoss;
+
+    TS_ASSERT(actualROC < normalROC);
+    TS_ASSERT_DELTA(actualROC, 490.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Crosswind Go-Around
+   ***************************************************************************/
+
+  // Test go-around with crosswind
+  void testGoAroundWithCrosswind() {
+    double crosswind = 18.0;
+    double airspeed = 85.0;
+
+    // Must maintain directional control during transition
+    double crabAngle = std::asin(crosswind / airspeed);
+    TS_ASSERT(crabAngle * Constants::RAD_TO_DEG < 15.0);
+  }
+
+  // Test climb gradient in crosswind go-around
+  void testClimbGradientCrosswindGoAround() {
+    double normalGradient = 4.0;  // percent
+    double crosswindPenalty = 0.3;  // percent per 10 kts
+    double crosswind = 20.0;
+
+    double actualGradient = normalGradient - (crosswindPenalty * crosswind / 10.0);
+    TS_ASSERT(actualGradient > 2.5);  // Still positive climb
+  }
+
+  /***************************************************************************
+   * Asymmetric Effects
+   ***************************************************************************/
+
+  // Test P-factor in crosswind
+  void testPFactorInCrosswind() {
+    double crosswind = 15.0;  // From right
+    double pFactorYaw = 2.0;  // degrees left yaw
+
+    // Crosswind from right adds to P-factor left yaw
+    double totalYaw = pFactorYaw + (crosswind * 0.1);
+
+    TS_ASSERT(totalYaw > pFactorYaw);
+  }
+
+  // Test torque effect in crosswind
+  void testTorqueEffectCrosswind() {
+    double torqueRoll = 3.0;  // degrees left roll tendency
+    double crosswindRoll = 2.0;  // degrees from crosswind
+
+    double combinedRoll = torqueRoll + crosswindRoll;
+    TS_ASSERT_DELTA(combinedRoll, 5.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Stress and Edge Cases
+   ***************************************************************************/
+
+  // Test extreme crosswind (near limit)
+  void testExtremeCrosswind() {
+    double crosswind = 35.0;  // kts
+    double approachSpeed = 70.0;
+
+    double ratio = crosswind / approachSpeed;
+    TS_ASSERT(ratio < 1.0);  // Valid
+
+    double crabAngle = std::asin(ratio);
+    TS_ASSERT(crabAngle * Constants::RAD_TO_DEG > 25.0);
+  }
+
+  // Test variable crosswind during approach
+  void testVariableCrosswindApproach() {
+    double altitudes[] = {500.0, 200.0, 50.0};
+    double crosswinds[] = {25.0, 18.0, 12.0};  // Decreases with altitude
+
+    for (int i = 1; i < 3; i++) {
+      TS_ASSERT(crosswinds[i] < crosswinds[i-1]);
+    }
+  }
+
+  // Test sudden crosswind reversal
+  void testCrosswindReversal() {
+    double initialCrosswind = 15.0;  // From right
+    double reversedCrosswind = -10.0;  // Now from left
+
+    double change = std::abs(reversedCrosswind - initialCrosswind);
+    TS_ASSERT_DELTA(change, 25.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test zero crosswind condition
+  void testZeroCrosswindCondition() {
+    double windSpeed = 15.0;
+    double windAngle = 0.0;  // Pure headwind
+
+    double crosswind = windSpeed * std::sin(windAngle);
+    TS_ASSERT_DELTA(crosswind, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test numerical stability at high crab angles
+  void testNumericalStabilityHighCrab() {
+    for (double ratio = 0.1; ratio < 0.95; ratio += 0.1) {
+      double crabAngle = std::asin(ratio);
+      TS_ASSERT(!std::isnan(crabAngle));
+      TS_ASSERT(!std::isinf(crabAngle));
+      TS_ASSERT(crabAngle > 0);
+    }
+  }
+
+  // Test many wind angles sweep
+  void testWindAnglesSweep() {
+    double windSpeed = 20.0;
+    double airspeed = 100.0;
+
+    for (double angle = 0.0; angle <= 180.0; angle += 15.0) {
+      double crosswind = windSpeed * std::sin(angle * Constants::DEG_TO_RAD);
+      double headwind = windSpeed * std::cos(angle * Constants::DEG_TO_RAD);
+
+      // Total should equal original wind
+      double total = std::sqrt(crosswind*crosswind + headwind*headwind);
+      TS_ASSERT_DELTA(total, windSpeed, 0.01);
+    }
+  }
 };

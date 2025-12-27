@@ -743,4 +743,415 @@ public:
 
     TS_ASSERT_DELTA(hazardIndex, 0.675, epsilon);
   }
+
+  /***************************************************************************
+   * Wind Shear Effects
+   ***************************************************************************/
+
+  // Test microburst wind shear
+  void testMicroburstWindShear() {
+    double altitude = 500.0;  // ft AGL
+    double headwindAtAltitude = 30.0;  // kts
+    double tailwindAtSurface = -20.0;  // kts (reverse)
+
+    double shearGradient = (headwindAtAltitude - tailwindAtSurface) / altitude;
+    TS_ASSERT_DELTA(shearGradient, 0.1, 0.001);  // 0.1 kts/ft
+  }
+
+  // Test gust front wind change
+  void testGustFrontWindChange() {
+    double preGustWind = 10.0;  // kts
+    double postGustWind = 40.0;  // kts
+    double timeToPass = 30.0;  // seconds
+
+    double windChangeRate = (postGustWind - preGustWind) / timeToPass;
+    TS_ASSERT_DELTA(windChangeRate, 1.0, 0.01);  // 1 kt/sec
+  }
+
+  // Test wind shear altitude profile
+  void testWindShearAltitudeProfile() {
+    double surfaceWind = 5.0;  // kts
+    double wind1000ft = 25.0;  // kts
+    double wind2000ft = 40.0;  // kts
+
+    // Low-level shear is stronger
+    double lowShear = (wind1000ft - surfaceWind) / 1000.0;
+    double highShear = (wind2000ft - wind1000ft) / 1000.0;
+
+    TS_ASSERT(lowShear > highShear);
+  }
+
+  /***************************************************************************
+   * Icing Intensity Categories
+   ***************************************************************************/
+
+  // Test trace icing accumulation
+  void testTraceIcing() {
+    double LWC = 0.1;  // g/m³ (liquid water content)
+    double temperature = -5.0;  // °C
+    double accumulationRate = 0.01;  // inches/hr
+
+    bool isTraceIcing = (accumulationRate < 0.1) && (LWC < 0.2);
+    TS_ASSERT(isTraceIcing);
+  }
+
+  // Test light icing accumulation
+  void testLightIcing() {
+    double accumulationRate = 0.3;  // inches/hr
+
+    bool isLightIcing = (accumulationRate >= 0.1) && (accumulationRate < 0.5);
+    TS_ASSERT(isLightIcing);
+  }
+
+  // Test moderate icing accumulation
+  void testModerateIcing() {
+    double accumulationRate = 0.8;  // inches/hr
+
+    bool isModerateIcing = (accumulationRate >= 0.5) && (accumulationRate < 1.0);
+    TS_ASSERT(isModerateIcing);
+  }
+
+  // Test severe icing accumulation
+  void testSevereIcing() {
+    double accumulationRate = 1.5;  // inches/hr
+
+    bool isSevereIcing = (accumulationRate >= 1.0);
+    TS_ASSERT(isSevereIcing);
+  }
+
+  /***************************************************************************
+   * Carburetor Icing
+   ***************************************************************************/
+
+  // Test carburetor icing temperature range
+  void testCarbIcingTempRange() {
+    double oat = 15.0;  // °C (outside air temp)
+    double dewPoint = 12.0;  // °C
+
+    // Carb ice most likely between -5°C and 25°C with high humidity
+    bool inIcingRange = (oat >= -5.0) && (oat <= 25.0);
+    bool highHumidity = (oat - dewPoint) < 5.0;
+    bool carbIceRisk = inIcingRange && highHumidity;
+
+    TS_ASSERT(carbIceRisk);
+  }
+
+  // Test carb heat effectiveness
+  void testCarbHeatEffectiveness() {
+    double intakeTemp = 10.0;  // °C without heat
+    double tempRise = 40.0;  // °C typical carb heat rise
+
+    double heatedTemp = intakeTemp + tempRise;
+    bool aboveFreezing = heatedTemp > 0.0;
+
+    TS_ASSERT_DELTA(heatedTemp, 50.0, epsilon);
+    TS_ASSERT(aboveFreezing);
+  }
+
+  /***************************************************************************
+   * Supercooled Large Droplets (SLD)
+   ***************************************************************************/
+
+  // Test SLD detection conditions
+  void testSLDConditions() {
+    double dropletSize = 50.0;  // microns (>40 = SLD)
+    double temperature = -10.0;  // °C
+    double LWC = 0.5;  // g/m³
+
+    bool isSLD = (dropletSize > 40.0) && (temperature < 0.0);
+    TS_ASSERT(isSLD);
+  }
+
+  // Test SLD runback ice formation
+  void testSLDRunbackIce() {
+    double dropletSize = 100.0;  // microns (large)
+    double temperature = -5.0;  // °C (warm enough for runback)
+
+    // Large droplets run back before freezing
+    bool runbackRisk = (dropletSize > 50.0) && (temperature > -10.0);
+    TS_ASSERT(runbackRisk);
+  }
+
+  /***************************************************************************
+   * Convective Weather
+   ***************************************************************************/
+
+  // Test convective SIGMET criteria
+  void testConvectiveSIGMETCriteria() {
+    double radarReflectivity = 45.0;  // dBZ
+    double cloudTops = 35000.0;  // ft
+    double visibility = 1.0;  // miles
+
+    bool meetsCriteria = (radarReflectivity >= 40.0) ||
+                         (cloudTops >= 30000.0) ||
+                         (visibility < 3.0);
+    TS_ASSERT(meetsCriteria);
+  }
+
+  // Test hail probability vs reflectivity
+  void testHailProbabilityVsReflectivity() {
+    double reflectivity = 55.0;  // dBZ
+
+    // Approximate probability based on reflectivity
+    double hailProb = 0.0;
+    if (reflectivity >= 60.0) hailProb = 0.9;
+    else if (reflectivity >= 50.0) hailProb = 0.5;
+    else if (reflectivity >= 40.0) hailProb = 0.2;
+
+    TS_ASSERT_DELTA(hailProb, 0.5, epsilon);
+  }
+
+  // Test severe turbulence proximity to convection
+  void testTurbulenceNearConvection() {
+    double distanceFromCell = 10.0;  // nm
+    double severeTurbRange = 20.0;  // nm
+
+    bool severeTurbRisk = distanceFromCell <= severeTurbRange;
+    TS_ASSERT(severeTurbRisk);
+  }
+
+  /***************************************************************************
+   * Mountain Wave Effects
+   ***************************************************************************/
+
+  // Test mountain wave amplitude
+  void testMountainWaveAmplitude() {
+    double windSpeed = 40.0;  // kts
+    double mountainHeight = 10000.0;  // ft
+    double stabilityFactor = 0.5;
+
+    // Wave amplitude proportional to wind and terrain
+    double amplitude = stabilityFactor * windSpeed * (mountainHeight / 10000.0);
+    TS_ASSERT_DELTA(amplitude, 20.0, epsilon);
+  }
+
+  // Test rotor turbulence below mountain wave
+  void testRotorTurbulence() {
+    double waveStrength = 0.8;  // 0-1 scale
+    double altitudeAGL = 3000.0;  // ft
+    double ridgeHeight = 8000.0;  // ft
+
+    // Rotor typically found below ridge height
+    bool rotorAltitude = altitudeAGL < ridgeHeight;
+    double rotorIntensity = waveStrength * (1.0 - altitudeAGL / ridgeHeight);
+
+    TS_ASSERT(rotorAltitude);
+    TS_ASSERT(rotorIntensity > 0.0);
+  }
+
+  // Test lenticular cloud indication
+  void testLenticularCloudIndication() {
+    double windSpeed = 35.0;  // kts perpendicular to ridge
+    double stability = 0.7;  // high stability
+
+    // Lenticular clouds indicate mountain waves
+    bool lenticularConditions = (windSpeed > 25.0) && (stability > 0.5);
+    TS_ASSERT(lenticularConditions);
+  }
+
+  /***************************************************************************
+   * Dust Devil and Whirlwind Effects
+   ***************************************************************************/
+
+  // Test dust devil formation conditions
+  void testDustDevilConditions() {
+    double surfaceTemp = 45.0;  // °C (hot surface)
+    double windSpeed = 5.0;  // kts (light wind)
+    double solarRadiation = 0.9;  // 0-1 scale
+
+    bool dustDevilConditions = (surfaceTemp > 35.0) &&
+                               (windSpeed < 10.0) &&
+                               (solarRadiation > 0.7);
+    TS_ASSERT(dustDevilConditions);
+  }
+
+  // Test dust devil wind speeds
+  void testDustDevilWindSpeeds() {
+    double rotationalSpeed = 40.0;  // kts (typical)
+    double maxSpeed = 70.0;  // kts (strong dust devil)
+
+    TS_ASSERT(rotationalSpeed > 30.0);
+    TS_ASSERT(rotationalSpeed < maxSpeed);
+  }
+
+  /***************************************************************************
+   * Sea Breeze and Land Breeze Effects
+   ***************************************************************************/
+
+  // Test sea breeze development
+  void testSeaBreezeDevelopment() {
+    double landTemp = 30.0;  // °C
+    double seaTemp = 22.0;  // °C
+    double tempDifferential = landTemp - seaTemp;
+
+    bool seaBreezeConditions = tempDifferential > 5.0;
+    TS_ASSERT(seaBreezeConditions);
+  }
+
+  // Test sea breeze front wind shear
+  void testSeaBreezeFrontShear() {
+    double onshoreWind = 15.0;  // kts (sea breeze)
+    double offshoreWind = -5.0;  // kts (pre-front)
+
+    double windChange = onshoreWind - offshoreWind;
+    TS_ASSERT_DELTA(windChange, 20.0, epsilon);
+  }
+
+  // Test sea breeze penetration distance
+  void testSeaBreezePenetration() {
+    double tempDiff = 10.0;  // °C
+    double timeOfDay = 14.0;  // hours (afternoon peak)
+
+    // Penetration distance proportional to temp diff
+    double penetration = tempDiff * 3.0;  // nm (simplified)
+    TS_ASSERT_DELTA(penetration, 30.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Wake Turbulence in Weather
+   ***************************************************************************/
+
+  // Test wake vortex decay in rain
+  void testWakeVortexDecayRain() {
+    double normalDecayTime = 120.0;  // seconds
+    double rainfall = 25.0;  // mm/hr
+
+    // Rain accelerates vortex decay
+    double decayFactor = 1.0 + (rainfall / 50.0);
+    double acceleratedDecay = normalDecayTime / decayFactor;
+
+    TS_ASSERT(acceleratedDecay < normalDecayTime);
+  }
+
+  // Test crosswind effect on wake transport
+  void testCrosswindWakeTransport() {
+    double crosswind = 8.0;  // kts
+    double time = 60.0;  // seconds
+
+    // Wake moves downwind
+    double lateralTransport = crosswind * (time / 3600.0) * 6076.0;  // ft
+    TS_ASSERT(lateralTransport > 0.0);
+  }
+
+  /***************************************************************************
+   * Additional Visibility Effects
+   ***************************************************************************/
+
+  // Test mist vs fog classification
+  void testMistVsFogClassification() {
+    double visibility1 = 0.8;  // km (fog)
+    double visibility2 = 3.0;  // km (mist)
+
+    bool isFog = visibility1 < 1.0;
+    bool isMist = visibility2 >= 1.0 && visibility2 < 5.0;
+
+    TS_ASSERT(isFog);
+    TS_ASSERT(isMist);
+  }
+
+  // Test haze effect on visibility
+  void testHazeVisibilityEffect() {
+    double clearVisibility = 50.0;  // km
+    double hazeConcentration = 0.5;  // 0-1 scale
+
+    double hazyVisibility = clearVisibility * (1.0 - hazeConcentration * 0.8);
+    TS_ASSERT(hazyVisibility < clearVisibility);
+    TS_ASSERT_DELTA(hazyVisibility, 30.0, epsilon);
+  }
+
+  // Test blowing snow visibility reduction
+  void testBlowingSnowVisibility() {
+    double windSpeed = 25.0;  // kts
+    double snowOnGround = 6.0;  // inches
+
+    // Visibility decreases with wind speed
+    double visibilityMiles = 10.0 / (windSpeed / 10.0);
+    TS_ASSERT_DELTA(visibilityMiles, 4.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Temperature Effects on Aircraft Performance
+   ***************************************************************************/
+
+  // Test cold weather oil viscosity
+  void testColdWeatherOilViscosity() {
+    double oat = -20.0;  // °C
+    double baseViscosity = 100.0;  // cSt at 40°C
+
+    // Viscosity increases exponentially with decreasing temp
+    double coldViscosity = baseViscosity * std::exp(-0.02 * oat);
+    TS_ASSERT(coldViscosity > baseViscosity);
+  }
+
+  // Test hot weather vapor lock risk
+  void testHotWeatherVaporLock() {
+    double oat = 40.0;  // °C
+    double fuelTemp = oat + 15.0;  // Fuel in wing absorbs heat
+    double vaporLockTemp = 60.0;  // °C threshold
+
+    bool vaporLockRisk = fuelTemp >= vaporLockTemp - 5.0;
+    TS_ASSERT(vaporLockRisk);
+  }
+
+  // Test cold weather battery performance
+  void testColdWeatherBatteryPerformance() {
+    double oat = -25.0;  // °C
+    double batteryCapacityAt25C = 100.0;  // percent
+
+    // Capacity decreases ~1% per degree below 0°C
+    double capacityReduction = std::max(0.0, -oat) * 1.0;
+    double actualCapacity = batteryCapacityAt25C - capacityReduction;
+
+    TS_ASSERT(actualCapacity < batteryCapacityAt25C);
+    TS_ASSERT_DELTA(actualCapacity, 75.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  // Test extreme rain scenario
+  void testExtremeRainScenario() {
+    double rainfall = 500.0;  // mm/hr (extreme monsoon)
+    double baseDrag = 0.025;
+
+    double rainDragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    double totalDrag = baseDrag * rainDragFactor;
+
+    TS_ASSERT(totalDrag > baseDrag * 2.0);
+    TS_ASSERT(!std::isnan(totalDrag));
+  }
+
+  // Test multiple simultaneous weather effects
+  void testMultipleWeatherEffects() {
+    double baseDrag = 0.025;
+    double baseLift = 0.45;
+
+    // Rain + frost + turbulence
+    double rainFactor = 1.05;
+    double frostFactor = 1.08;
+    double turbulenceGustFactor = 1.15;
+
+    double totalDrag = baseDrag * rainFactor * frostFactor * turbulenceGustFactor;
+    double totalLift = baseLift * 0.96 * 0.90;  // Reductions
+
+    TS_ASSERT(totalDrag > baseDrag);
+    TS_ASSERT(totalLift < baseLift);
+    TS_ASSERT(!std::isnan(totalDrag));
+    TS_ASSERT(!std::isnan(totalLift));
+  }
+
+  // Test weather effects at boundary conditions
+  void testWeatherBoundaryConditions() {
+    // Zero rainfall
+    double rainfall = 0.0;
+    double dragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    TS_ASSERT_DELTA(dragFactor, 1.0, epsilon);
+
+    // Maximum realistic rainfall
+    rainfall = 200.0;
+    dragFactor = 1.0 + 0.075 * (rainfall / 25.0);
+    TS_ASSERT(dragFactor > 1.0);
+    TS_ASSERT(!std::isinf(dragFactor));
+  }
 };
