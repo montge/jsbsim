@@ -2030,4 +2030,388 @@ public:
       first = false;
     }
   }
+
+  /***************************************************************************
+   * Model Identity Tests
+   ***************************************************************************/
+
+  // Test model name
+  void testModelName() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    std::string name = atm.GetName();
+    TS_ASSERT(!name.empty());
+  }
+
+  // Test GetExec returns correct FDMExec
+  void testGetExec() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    TS_ASSERT_EQUALS(atm.GetExec(), &fdmex);
+  }
+
+  /***************************************************************************
+   * Multiple Run Tests
+   ***************************************************************************/
+
+  // Test many consecutive runs
+  void testManyConsecutiveRuns() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    for (int i = 0; i < 100; i++) {
+      double h = (i % 10) * 50 * kmtoft;
+      atm.in.altitudeASL = h;
+      atm.SetSeconds(i * 100);
+
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double rho = atm.GetDensity();
+      double P = atm.GetPressure();
+
+      TS_ASSERT(T > 0.0);
+      TS_ASSERT(rho > 0.0);
+      TS_ASSERT(P > 0.0);
+      TS_ASSERT(!std::isnan(T));
+      TS_ASSERT(!std::isnan(rho));
+      TS_ASSERT(!std::isnan(P));
+    }
+  }
+
+  // Test rapid altitude changes
+  void testRapidAltitudeChanges() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    double altitudes_km[] = {0, 500, 100, 400, 50, 300, 0, 200};
+
+    for (double alt_km : altitudes_km) {
+      double h = alt_km * kmtoft;
+      atm.in.altitudeASL = h;
+
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double rho = atm.GetDensity();
+
+      TS_ASSERT(T > 0.0);
+      TS_ASSERT(rho > 0.0);
+    }
+  }
+
+  // Test latitude sweep
+  void testLatitudeSweep() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    double h = 400 * kmtoft;
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.altitudeASL = h;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    for (double lat = -90.0; lat <= 90.0; lat += 15.0) {
+      atm.in.GeodLatitudeDeg = lat;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double rho = atm.GetDensity();
+
+      TS_ASSERT(T > 0.0);
+      TS_ASSERT(rho > 0.0);
+    }
+  }
+
+  // Test longitude sweep
+  void testLongitudeSweep() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    double h = 400 * kmtoft;
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.altitudeASL = h;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    for (double lon = -180.0; lon <= 180.0; lon += 30.0) {
+      atm.in.LongitudeDeg = lon;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double rho = atm.GetDensity();
+
+      TS_ASSERT(T > 0.0);
+      TS_ASSERT(rho > 0.0);
+    }
+  }
+
+  // Test day of year sweep
+  void testDayOfYearSweep() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    double h = 400 * kmtoft;
+    atm.SetSeconds(29000);
+    atm.in.altitudeASL = h;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    for (int day = 1; day <= 365; day += 30) {
+      atm.SetDay(day);
+      TS_ASSERT(atm.Run(false) == false);
+
+      double T = atm.GetTemperature();
+      double rho = atm.GetDensity();
+
+      TS_ASSERT(T > 0.0);
+      TS_ASSERT(rho > 0.0);
+    }
+  }
+
+  /***************************************************************************
+   * Molecular Weight Variation Tests
+   ***************************************************************************/
+
+  // Test mean molecular mass changes with altitude
+  void testMolecularMassVariation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    // At lower altitudes, R should be relatively constant (N2/O2 mixture)
+    // At higher altitudes, R increases as lighter species dominate
+
+    atm.in.altitudeASL = 100 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double R_100km = atm.GetR();
+
+    atm.in.altitudeASL = 500 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double R_500km = atm.GetR();
+
+    // Both should be valid positive values
+    TS_ASSERT(R_100km > 0.0);
+    TS_ASSERT(R_500km > 0.0);
+  }
+
+  /***************************************************************************
+   * Troposphere/Stratosphere/Mesosphere Tests
+   ***************************************************************************/
+
+  // Test temperature inversion in stratosphere
+  void testStratosphereTemperature() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    // Get temperatures at various altitudes
+    atm.in.altitudeASL = 10 * kmtoft;  // Upper troposphere
+    TS_ASSERT(atm.Run(false) == false);
+    double T_10km = atm.GetTemperature();
+
+    atm.in.altitudeASL = 25 * kmtoft;  // Mid stratosphere
+    TS_ASSERT(atm.Run(false) == false);
+    double T_25km = atm.GetTemperature();
+
+    atm.in.altitudeASL = 50 * kmtoft;  // Stratopause
+    TS_ASSERT(atm.Run(false) == false);
+    double T_50km = atm.GetTemperature();
+
+    // All should be valid
+    TS_ASSERT(T_10km > 0.0);
+    TS_ASSERT(T_25km > 0.0);
+    TS_ASSERT(T_50km > 0.0);
+
+    // Stratosphere shows temperature increase with altitude
+    // (at least from tropopause to stratopause)
+    TS_ASSERT(T_50km > T_10km);
+  }
+
+  // Test mesopause temperature minimum
+  void testMesopauseTemperature() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    // Mesopause around 85-90 km is typically coldest point
+    atm.in.altitudeASL = 50 * kmtoft;  // Stratopause
+    TS_ASSERT(atm.Run(false) == false);
+    double T_50km = atm.GetTemperature();
+
+    atm.in.altitudeASL = 85 * kmtoft;  // Mesopause
+    TS_ASSERT(atm.Run(false) == false);
+    double T_85km = atm.GetTemperature();
+
+    atm.in.altitudeASL = 120 * kmtoft;  // Lower thermosphere
+    TS_ASSERT(atm.Run(false) == false);
+    double T_120km = atm.GetTemperature();
+
+    // Mesopause should be cooler than stratopause and thermosphere
+    TS_ASSERT(T_85km < T_50km);
+    TS_ASSERT(T_85km < T_120km);
+  }
+
+  /***************************************************************************
+   * Thermosphere Heating Tests
+   ***************************************************************************/
+
+  // Test thermosphere temperature increases with altitude
+  void testThermosphereHeating() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    double prev_T = 0.0;
+
+    for (double alt_km = 100; alt_km <= 400; alt_km += 50) {
+      double h = alt_km * kmtoft;
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+      double T = atm.GetTemperature();
+
+      if (alt_km > 100) {
+        // Temperature should generally increase in thermosphere
+        TS_ASSERT(T >= prev_T * 0.95);  // Allow small decrease
+      }
+      prev_T = T;
+    }
+  }
+
+  /***************************************************************************
+   * Atmospheric Composition Effect Tests
+   ***************************************************************************/
+
+  // Test atomic oxygen dominance at high altitude
+  void testAtomicOxygenDominance() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(4);
+
+    // At low altitude, mean molecular weight ~29 (N2/O2 mix)
+    // At high altitude, lighter species dominate, mean MW decreases
+    // This affects the gas constant R = Rstar / M
+
+    atm.in.altitudeASL = 100 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double R_100km = atm.GetR();
+
+    atm.in.altitudeASL = 400 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double R_400km = atm.GetR();
+
+    // R should increase as mean molecular weight decreases
+    TS_ASSERT(R_400km > R_100km);
+  }
+
+  /***************************************************************************
+   * Numerical Stability Tests
+   ***************************************************************************/
+
+  // Test no NaN or Inf values across parameter space
+  void testNumericalStability() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    double altitudes[] = {0, 100, 200, 300, 400, 500, 700, 1000};
+    double f107s[] = {65, 100, 150, 200, 250};
+    double aps[] = {2, 10, 50, 100, 200};
+
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetDay(172);
+    atm.SetSeconds(29000);
+
+    for (double alt_km : altitudes) {
+      for (double f107 : f107s) {
+        for (double ap : aps) {
+          atm.in.altitudeASL = alt_km * kmtoft;
+          atm.SetF107A(f107);
+          atm.SetF107(f107);
+          atm.SetAP(ap);
+
+          TS_ASSERT(atm.Run(false) == false);
+
+          double T = atm.GetTemperature();
+          double rho = atm.GetDensity();
+          double P = atm.GetPressure();
+          double a = atm.GetSoundSpeed();
+
+          TS_ASSERT(!std::isnan(T));
+          TS_ASSERT(!std::isnan(rho));
+          TS_ASSERT(!std::isnan(P));
+          TS_ASSERT(!std::isnan(a));
+          TS_ASSERT(!std::isinf(T));
+          TS_ASSERT(!std::isinf(rho));
+          TS_ASSERT(!std::isinf(P));
+          TS_ASSERT(!std::isinf(a));
+          TS_ASSERT(T > 0.0);
+          TS_ASSERT(rho > 0.0);
+          TS_ASSERT(P > 0.0);
+          TS_ASSERT(a > 0.0);
+        }
+      }
+    }
+  }
 };
