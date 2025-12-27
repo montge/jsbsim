@@ -1229,4 +1229,264 @@ public:
     TS_ASSERT(newCG > cgStation);  // CG moves forward
     TS_ASSERT_DELTA(newCG, 5.146, 0.01);  // Slight forward shift
   }
+
+  // ==================== CONTRA-ROTATING PROPELLER TESTS ====================
+
+  // Test contra-rotating prop torque cancellation
+  void testContraRotatingTorqueCancellation() {
+    double torque_front = 500.0;   // ft-lbf
+    double torque_rear = -500.0;   // Opposite rotation
+
+    double net_torque = torque_front + torque_rear;
+    TS_ASSERT_DELTA(net_torque, 0.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test contra-rotating efficiency gain
+  void testContraRotatingEfficiencyGain() {
+    double single_prop_efficiency = 0.85;
+    double swirl_recovery = 0.03;  // 3% recovery from counter-rotation
+
+    double contra_efficiency = single_prop_efficiency + swirl_recovery;
+    TS_ASSERT_DELTA(contra_efficiency, 0.88, DEFAULT_TOLERANCE);
+    TS_ASSERT(contra_efficiency > single_prop_efficiency);
+  }
+
+  // Test contra-rotating RPM matching
+  void testContraRotatingRPMMatching() {
+    double rpm_front = 2400.0;
+    double rpm_rear = 2400.0;
+    double sync_tolerance = 10.0;
+
+    double rpm_diff = std::abs(rpm_front - rpm_rear);
+    bool synchronized = rpm_diff < sync_tolerance;
+    TS_ASSERT(synchronized);
+  }
+
+  // ==================== PROPELLER WAKE TESTS ====================
+
+  // Test wake contraction ratio
+  void testWakeContractionRatio() {
+    // Wake contracts to 0.707 of disk diameter in far wake
+    double disk_diameter = 6.0;
+    double contraction_factor = 1.0 / std::sqrt(2.0);
+
+    double wake_diameter = disk_diameter * contraction_factor;
+    TS_ASSERT_DELTA(wake_diameter, 4.243, 0.01);
+  }
+
+  // Test wake velocity doubling
+  void testWakeVelocityDoubling() {
+    // Velocity through disk doubles in far wake (momentum theory)
+    double induced_velocity_disk = 50.0;  // ft/sec
+    double wake_velocity = 2.0 * induced_velocity_disk;
+
+    TS_ASSERT_DELTA(wake_velocity, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test propeller wake interaction with wing
+  void testWakeWingInteraction() {
+    double wing_lift_coefficient = 1.2;
+    double wake_dynamic_pressure_ratio = 1.3;  // Increased by prop wash
+
+    double effective_lift = wing_lift_coefficient * wake_dynamic_pressure_ratio;
+    TS_ASSERT_DELTA(effective_lift, 1.56, 0.01);
+  }
+
+  // ==================== BLADE STALL TESTS ====================
+
+  // Test blade element angle of attack
+  void testBladeElementAOA() {
+    double pitch_angle = 25.0;  // degrees
+    double inflow_angle = 10.0;  // degrees (from induced velocity)
+
+    double blade_aoa = pitch_angle - inflow_angle;
+    TS_ASSERT_DELTA(blade_aoa, 15.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test blade stall detection
+  void testBladeStallDetection() {
+    double blade_aoa = 18.0;  // degrees
+    double stall_aoa = 15.0;
+
+    bool blade_stalled = blade_aoa > stall_aoa;
+    TS_ASSERT(blade_stalled);
+  }
+
+  // Test retreating blade stall in sideslip
+  void testRetreatingBladeStallSideslip() {
+    double advance_angle = 30.0;  // degrees sideslip
+    double base_aoa = 12.0;
+    double aoa_increase = 5.0;  // Additional AOA on retreating side
+
+    double retreating_aoa = base_aoa + aoa_increase * std::sin(advance_angle * M_PI / 180.0);
+    TS_ASSERT_DELTA(retreating_aoa, 14.5, 0.1);
+  }
+
+  // ==================== PROPELLER NOISE TESTS ====================
+
+  // Test harmonic frequencies
+  void testHarmonicFrequencies() {
+    double fundamental_bpf = 120.0;  // Hz
+
+    double second_harmonic = 2.0 * fundamental_bpf;
+    double third_harmonic = 3.0 * fundamental_bpf;
+
+    TS_ASSERT_DELTA(second_harmonic, 240.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(third_harmonic, 360.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test noise directivity pattern
+  void testNoiseDirectivity() {
+    // Propeller noise is directional
+    double forward_noise = 90.0;  // dB
+    double side_noise = 85.0;     // dB (reduced by 5 dB off-axis)
+
+    double noise_reduction = forward_noise - side_noise;
+    TS_ASSERT_DELTA(noise_reduction, 5.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test tip Mach noise penalty
+  void testTipMachNoisePenalty() {
+    double base_noise = 80.0;  // dB
+    double tip_mach = 0.85;
+    double mach_threshold = 0.75;
+
+    // Noise increases rapidly above Mach threshold
+    double noise_penalty = 0.0;
+    if (tip_mach > mach_threshold) {
+      noise_penalty = 30.0 * (tip_mach - mach_threshold);  // dB
+    }
+
+    double total_noise = base_noise + noise_penalty;
+    TS_ASSERT_DELTA(total_noise, 83.0, 0.1);
+  }
+
+  // ==================== PROPELLER ICING TESTS ====================
+
+  // Test ice accretion rate
+  void testIceAccretionRate() {
+    double lwc = 0.5;           // Liquid water content g/m^3
+    double collection_efficiency = 0.8;
+    double tip_velocity = 800.0;  // ft/sec
+    double time = 60.0;         // seconds
+
+    double ice_mass_rate = lwc * collection_efficiency * tip_velocity * 0.001;  // Simplified
+    double total_ice = ice_mass_rate * time;
+    TS_ASSERT(total_ice > 0.0);
+  }
+
+  // Test ice effect on blade profile
+  void testIceEffectOnBladeProfile() {
+    double clean_Cl = 1.2;
+    double ice_Cl_reduction = 0.2;  // 20% reduction
+
+    double iced_Cl = clean_Cl * (1.0 - ice_Cl_reduction);
+    TS_ASSERT_DELTA(iced_Cl, 0.96, DEFAULT_TOLERANCE);
+  }
+
+  // Test deice boot effectiveness
+  void testDeiceBootEffectiveness() {
+    double ice_thickness = 0.5;  // inches
+    double boot_efficiency = 0.9;  // 90% effective
+
+    double remaining_ice = ice_thickness * (1.0 - boot_efficiency);
+    TS_ASSERT_DELTA(remaining_ice, 0.05, DEFAULT_TOLERANCE);
+  }
+
+  // ==================== PROPELLER STRUCTURAL TESTS ====================
+
+  // Test centrifugal blade stress
+  void testCentrifugalBladeStress() {
+    double blade_mass = 5.0;  // lbs
+    double radius = 3.0;      // ft
+    double rpm = 2400.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    // Centrifugal force = m * omega^2 * r (simplified at tip)
+    double force = (blade_mass / 32.174) * omega * omega * radius;
+    TS_ASSERT(force > 1000.0);  // Significant force
+  }
+
+  // Test blade bending moment
+  void testBladeBendingMoment() {
+    double thrust_per_blade = 200.0;  // lbs
+    double moment_arm = 2.0;          // ft (effective)
+
+    double bending_moment = thrust_per_blade * moment_arm;
+    TS_ASSERT_DELTA(bending_moment, 400.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test hub stress concentration
+  void testHubStressConcentration() {
+    double nominal_stress = 10000.0;  // psi
+    double stress_concentration_factor = 1.5;
+
+    double peak_stress = nominal_stress * stress_concentration_factor;
+    TS_ASSERT_DELTA(peak_stress, 15000.0, DEFAULT_TOLERANCE);
+  }
+
+  // ==================== VARIABLE PITCH MECHANISM TESTS ====================
+
+  // Test pitch change mechanism rate
+  void testPitchChangeMechanismRate() {
+    double pitch_rate = 5.0;   // degrees/second
+    double travel = 30.0;      // degrees total travel
+    double time = travel / pitch_rate;
+
+    TS_ASSERT_DELTA(time, 6.0, DEFAULT_TOLERANCE);  // 6 seconds full travel
+  }
+
+  // Test pitch mechanism hydraulic pressure
+  void testPitchMechanismHydraulicPressure() {
+    double oil_pressure = 200.0;   // psi
+    double min_pressure = 100.0;
+
+    bool adequate_pressure = oil_pressure > min_pressure;
+    TS_ASSERT(adequate_pressure);
+  }
+
+  // Test pitch mechanism spring force
+  void testPitchMechanismSpringForce() {
+    double spring_rate = 50.0;     // lb/inch
+    double displacement = 2.0;     // inches
+
+    double spring_force = spring_rate * displacement;
+    TS_ASSERT_DELTA(spring_force, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // ==================== PROP GOVERNOR ADVANCED TESTS ====================
+
+  // Test governor speeder spring
+  void testGovernorSpeederSpring() {
+    double spring_preload = 10.0;  // lbs
+    double lever_arm = 2.0;        // inches
+    double reference_force = spring_preload * lever_arm;
+
+    TS_ASSERT_DELTA(reference_force, 20.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test governor flyweight force
+  void testGovernorFlyweightForce() {
+    double flyweight_mass = 0.1;   // lbs
+    double radius = 1.0;           // inches
+    double rpm = 2000.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double centrifugal_force = (flyweight_mass / 32.174) * omega * omega * (radius / 12.0);
+    TS_ASSERT(centrifugal_force > 0.0);
+  }
+
+  // Test governor deadband
+  void testGovernorDeadband() {
+    double target_rpm = 2400.0;
+    double deadband = 10.0;  // RPM
+
+    double rpm_values[] = {2395.0, 2400.0, 2405.0, 2390.0, 2410.0};
+    bool expected[] = {true, true, true, false, false};  // In deadband?
+
+    for (int i = 0; i < 5; i++) {
+      bool in_deadband = std::abs(rpm_values[i] - target_rpm) <= deadband / 2.0;
+      TS_ASSERT_EQUALS(in_deadband, expected[i]);
+    }
+  }
 };

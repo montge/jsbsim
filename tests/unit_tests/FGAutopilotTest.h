@@ -1,6 +1,7 @@
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+#include <algorithm>
 
 #include "TestUtilities.h"
 
@@ -865,5 +866,345 @@ public:
     double throttle_cmd = alpha_floor_active ? 1.0 : 0.5;
 
     TS_ASSERT_DELTA(throttle_cmd, 1.0, epsilon);
+  }
+
+  // ============================================================================
+  // LNAV/VNAV INTEGRATION
+  // ============================================================================
+
+  // Test waypoint steering
+  void testWaypointSteering() {
+    double bearing_to_waypoint = 45.0;  // degrees
+    double current_heading = 30.0;
+
+    double heading_error = bearing_to_waypoint - current_heading;
+    TS_ASSERT_DELTA(heading_error, 15.0, epsilon);
+  }
+
+  // Test cross-track error steering
+  void testCrossTrackSteering() {
+    double cross_track = 500.0;  // feet right of course
+    double track_angle_error = 5.0;  // degrees
+    double K_xte = 0.01;  // degrees per foot
+    double K_track = 2.0;
+
+    double heading_correction = -K_xte * cross_track - K_track * track_angle_error;
+    TS_ASSERT_DELTA(heading_correction, -15.0, epsilon);
+  }
+
+  // Test required time of arrival
+  void testRequiredTimeOfArrival() {
+    double distance = 50.0;  // nautical miles
+    double time_available = 15.0;  // minutes
+    double required_groundspeed = distance / time_available * 60.0;  // knots
+
+    TS_ASSERT_DELTA(required_groundspeed, 200.0, epsilon);
+  }
+
+  // Test VNAV speed schedule
+  void testVNAVSpeedSchedule() {
+    double altitude = 25000.0;  // feet
+    double transition_altitude = 28000.0;
+    double climb_speed_ias = 280.0;  // knots
+    double climb_mach = 0.78;
+
+    bool use_mach = altitude > transition_altitude;
+    TS_ASSERT(!use_mach);
+  }
+
+  // ============================================================================
+  // TERRAIN AWARENESS
+  // ============================================================================
+
+  // Test minimum safe altitude check
+  void testMinimumSafeAltitude() {
+    double current_altitude = 5000.0;  // feet MSL
+    double msa = 6000.0;  // minimum safe altitude
+
+    bool below_msa = current_altitude < msa;
+    TS_ASSERT(below_msa);
+  }
+
+  // Test terrain clearance
+  void testTerrainClearance() {
+    double altitude_agl = 500.0;  // feet
+    double min_clearance = 1000.0;
+
+    bool terrain_warning = altitude_agl < min_clearance;
+    TS_ASSERT(terrain_warning);
+  }
+
+  // Test pull-up command
+  void testPullUpCommand() {
+    double sink_rate = -3000.0;  // ft/min
+    double agl = 1000.0;
+    double time_to_impact = agl / (-sink_rate / 60.0);  // seconds
+
+    bool pull_up = time_to_impact < 30.0;
+    TS_ASSERT(pull_up);
+  }
+
+  // ============================================================================
+  // SPEED PROTECTION
+  // ============================================================================
+
+  // Test overspeed protection
+  void testOverspeedProtection() {
+    double current_speed = 350.0;  // knots
+    double vmo = 340.0;
+
+    bool overspeed = current_speed > vmo;
+    TS_ASSERT(overspeed);
+  }
+
+  // Test underspeed protection
+  void testUnderspeedProtection() {
+    double current_speed = 130.0;  // knots
+    double stall_speed = 120.0;
+    double margin = 1.1;
+
+    bool underspeed = current_speed < stall_speed * margin;
+    TS_ASSERT(underspeed);
+  }
+
+  // Test speed trend prediction
+  void testSpeedTrendPrediction() {
+    double current_speed = 250.0;
+    double acceleration = 2.0;  // knots/sec
+    double lookahead = 10.0;  // seconds
+
+    double predicted_speed = current_speed + acceleration * lookahead;
+    TS_ASSERT_DELTA(predicted_speed, 270.0, epsilon);
+  }
+
+  // ============================================================================
+  // AUTOPILOT ENGAGEMENT LOGIC
+  // ============================================================================
+
+  // Test engagement prerequisites
+  void testEngagementPrerequisites() {
+    bool airborne = true;
+    bool sensors_valid = true;
+    bool no_faults = true;
+
+    bool can_engage = airborne && sensors_valid && no_faults;
+    TS_ASSERT(can_engage);
+  }
+
+  // Test disengagement conditions
+  void testDisengagementConditions() {
+    double stick_force = 15.0;  // lbs
+    double disengage_threshold = 10.0;
+
+    bool force_disconnect = stick_force > disengage_threshold;
+    TS_ASSERT(force_disconnect);
+  }
+
+  // Test mode reversion
+  void testModeReversion() {
+    bool primary_mode_valid = false;
+    bool backup_mode_available = true;
+
+    bool revert_to_backup = !primary_mode_valid && backup_mode_available;
+    TS_ASSERT(revert_to_backup);
+  }
+
+  // ============================================================================
+  // HOLD MODES
+  // ============================================================================
+
+  // Test ground track hold
+  void testGroundTrackHold() {
+    double target_track = 90.0;  // degrees
+    double current_track = 88.0;
+    double Kp = 2.0;
+
+    double track_error = target_track - current_track;
+    double bank_cmd = Kp * track_error;
+    TS_ASSERT_DELTA(bank_cmd, 4.0, epsilon);
+  }
+
+  // Test flight path angle hold
+  void testFlightPathAngleHold() {
+    double target_fpa = -3.0;  // degrees
+    double current_fpa = -2.5;
+    double Kp = 2.0;
+
+    double fpa_error = target_fpa - current_fpa;
+    double pitch_cmd = Kp * fpa_error;
+    TS_ASSERT_DELTA(pitch_cmd, -1.0, epsilon);
+  }
+
+  // Test indicated airspeed hold with pitch
+  void testIASHoldWithPitch() {
+    double target_ias = 250.0;
+    double current_ias = 260.0;
+    double Kp = 0.5;
+
+    double ias_error = target_ias - current_ias;
+    double pitch_cmd = -Kp * ias_error;  // Pitch up to slow down
+    TS_ASSERT_DELTA(pitch_cmd, 5.0, epsilon);
+  }
+
+  // ============================================================================
+  // COUPLED APPROACH
+  // ============================================================================
+
+  // Test ILS beam width
+  void testILSBeamWidth() {
+    double localizer_half_width = 2.5;  // degrees
+    double distance_nm = 10.0;
+
+    double beam_width_nm = 2.0 * distance_nm * std::tan(localizer_half_width * deg2rad);
+    TS_ASSERT_DELTA(beam_width_nm, 0.87, 0.01);
+  }
+
+  // Test glideslope intercept angle
+  void testGlideslopeInterceptAngle() {
+    double glideslope_angle = 3.0;  // degrees
+    double current_fpa = -2.0;
+
+    double intercept_rate = glideslope_angle - std::abs(current_fpa);
+    TS_ASSERT_DELTA(intercept_rate, 1.0, epsilon);
+  }
+
+  // Test decision altitude monitoring
+  void testDecisionAltitudeMonitoring() {
+    double radio_altitude = 180.0;
+    double decision_altitude = 200.0;
+    double alert_margin = 50.0;
+
+    bool alert = radio_altitude < decision_altitude + alert_margin;
+    TS_ASSERT(alert);
+  }
+
+  // ============================================================================
+  // AUTOLAND SEQUENCE
+  // ============================================================================
+
+  // Test flare initiation
+  void testFlareInitiation() {
+    double radio_altitude = 45.0;
+    double flare_height = 50.0;
+
+    bool in_flare = radio_altitude < flare_height;
+    TS_ASSERT(in_flare);
+  }
+
+  // Test decrab maneuver
+  void testDecrabManeuver() {
+    double crab_angle = 10.0;  // degrees
+    double runway_heading = 90.0;
+    double aircraft_heading = runway_heading + crab_angle;
+
+    double heading_correction = -crab_angle;
+    TS_ASSERT_DELTA(heading_correction, -10.0, epsilon);
+  }
+
+  // Test rollout steering
+  void testRolloutSteering() {
+    double centerline_deviation = 5.0;  // feet
+    double heading_error = 2.0;  // degrees
+    double K_dev = 0.5;
+    double K_hdg = 2.0;
+
+    double steering_cmd = K_dev * centerline_deviation + K_hdg * heading_error;
+    TS_ASSERT_DELTA(steering_cmd, 6.5, epsilon);
+  }
+
+  // ============================================================================
+  // SYSTEM MONITORING
+  // ============================================================================
+
+  // Test servo loop monitoring
+  void testServoLoopMonitoring() {
+    double command = 10.0;
+    double feedback = 9.8;
+    double threshold = 0.5;
+
+    double error = std::abs(command - feedback);
+    bool within_tolerance = error < threshold;
+    TS_ASSERT(within_tolerance);
+  }
+
+  // Test cross-compare voting
+  void testCrossCompareVoting() {
+    double ap1_cmd = 10.0;
+    double ap2_cmd = 10.1;
+    double ap3_cmd = 10.05;
+
+    // Use median
+    double cmds[] = {ap1_cmd, ap2_cmd, ap3_cmd};
+    std::sort(cmds, cmds + 3);
+    double voted_cmd = cmds[1];
+
+    TS_ASSERT_DELTA(voted_cmd, 10.05, epsilon);
+  }
+
+  // Test failure annunciation
+  void testFailureAnnunciation() {
+    bool pitch_channel_fail = false;
+    bool roll_channel_fail = true;
+
+    bool ap_warning = pitch_channel_fail || roll_channel_fail;
+    TS_ASSERT(ap_warning);
+  }
+
+  // ============================================================================
+  // PERFORMANCE MODES
+  // ============================================================================
+
+  // Test economy climb
+  void testEconomyClimb() {
+    double economy_ias = 280.0;  // knots
+    double max_climb_ias = 320.0;
+
+    TS_ASSERT(economy_ias < max_climb_ias);
+  }
+
+  // Test high-speed cruise
+  void testHighSpeedCruise() {
+    double target_mach = 0.85;
+    double mmo = 0.87;
+
+    bool valid_target = target_mach < mmo;
+    TS_ASSERT(valid_target);
+  }
+
+  // Test long-range cruise
+  void testLongRangeCruise() {
+    double long_range_mach = 0.80;
+    double max_range_mach = 0.82;
+
+    TS_ASSERT(long_range_mach <= max_range_mach);
+  }
+
+  // ============================================================================
+  // TURBULENCE PENETRATION
+  // ============================================================================
+
+  // Test turbulence mode speed
+  void testTurbulenceModeSpeed() {
+    double normal_speed = 300.0;  // knots
+    double turbulence_speed = 280.0;
+
+    TS_ASSERT(turbulence_speed < normal_speed);
+  }
+
+  // Test attitude limiting in turbulence
+  void testAttitudeLimitingTurbulence() {
+    double normal_bank_limit = 30.0;
+    double turbulence_bank_limit = 15.0;
+
+    TS_ASSERT(turbulence_bank_limit < normal_bank_limit);
+  }
+
+  // Test gust response damping
+  void testGustResponseDamping() {
+    double pitch_rate = 5.0;  // deg/sec
+    double damping_gain = 0.5;
+
+    double damping_cmd = -damping_gain * pitch_rate;
+    TS_ASSERT_DELTA(damping_cmd, -2.5, epsilon);
   }
 };

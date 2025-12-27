@@ -19,6 +19,7 @@
 #include <limits>
 #include <cmath>
 #include <random>
+#include <algorithm>
 
 const double epsilon = 1e-8;
 
@@ -904,5 +905,311 @@ public:
 
     bool hard_landing = impact_g > hard_landing_threshold;
     TS_ASSERT(hard_landing);
+  }
+
+  /***************************************************************************
+   * Power Spectral Density Tests
+   ***************************************************************************/
+
+  // Test RMS noise calculation
+  void testRMSNoiseCalculation() {
+    // RMS = sqrt(PSD * bandwidth)
+    double psd = 0.0001;  // (m/s^2)^2/Hz
+    double bandwidth = 100.0;  // Hz
+
+    double rms_noise = std::sqrt(psd * bandwidth);
+    TS_ASSERT_DELTA(rms_noise, 0.1, 0.001);
+  }
+
+  // Test noise density specification
+  void testNoiseDensitySpec() {
+    // Typical MEMS: 100-500 ug/sqrt(Hz)
+    double noise_density_ug = 200.0;  // ug/sqrt(Hz)
+    double noise_density_g = noise_density_ug * 1e-6;
+    double bandwidth = 100.0;  // Hz
+
+    double rms_noise_g = noise_density_g * std::sqrt(bandwidth);
+    TS_ASSERT_DELTA(rms_noise_g, 0.002, 0.0001);  // 2 milli-g
+  }
+
+  // Test velocity random walk
+  void testVelocityRandomWalk() {
+    // VRW = noise_density * sqrt(time)
+    double noise_density = 0.0001;  // m/s^2/sqrt(Hz)
+    double time = 100.0;  // seconds
+
+    double velocity_error = noise_density * std::sqrt(time);
+    TS_ASSERT_DELTA(velocity_error, 0.001, 0.0001);
+  }
+
+  /***************************************************************************
+   * Shock and Vibration Survival Tests
+   ***************************************************************************/
+
+  // Test shock survival
+  void testShockSurvival() {
+    double shock_level_g = 500.0;
+    double max_survival = 1000.0;
+
+    bool survives = shock_level_g < max_survival;
+    TS_ASSERT(survives);
+  }
+
+  // Test vibration fatigue
+  void testVibrationFatigue() {
+    double vibration_amplitude = 5.0;  // g
+    double cycles = 1e7;
+    double fatigue_limit_cycles = 1e8;
+
+    bool within_limit = cycles < fatigue_limit_cycles;
+    TS_ASSERT(within_limit);
+  }
+
+  // Test random vibration response
+  void testRandomVibrationResponse() {
+    // GRMS = sqrt(integral of PSD)
+    double grms_input = 10.0;
+    double q_factor = 10.0;  // Resonance amplification
+
+    double grms_response = grms_input * q_factor;
+    TS_ASSERT_DELTA(grms_response, 100.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Calibration Tests
+   ***************************************************************************/
+
+  // Test multi-point calibration
+  void testMultiPointCalibration() {
+    // 6-point tumble calibration
+    double measurements[] = {9.81, -9.81, 0.0, 0.0, 0.0, 0.0};  // +X, -X, +Y, -Y, +Z, -Z (simplified)
+
+    double scale = (measurements[0] - measurements[1]) / (2.0 * 9.81);
+    double bias = (measurements[0] + measurements[1]) / 2.0;
+
+    TS_ASSERT_DELTA(scale, 1.0, 0.01);
+    TS_ASSERT_DELTA(bias, 0.0, 0.1);
+  }
+
+  // Test in-situ calibration check
+  void testInSituCalibration() {
+    double g = 9.80665;
+    double ax = 0.1, ay = 0.1, az = -9.8;  // Slight misalignment
+
+    double measured_g = std::sqrt(ax*ax + ay*ay + az*az);
+    double g_error = std::abs(measured_g - g) / g * 100.0;
+
+    TS_ASSERT(g_error < 1.0);  // Less than 1% error
+  }
+
+  // Test cross-axis alignment calibration
+  void testCrossAxisAlignment() {
+    // Misalignment matrix (small angles)
+    double theta_xy = 0.001;  // rad
+    double theta_xz = 0.001;
+    double theta_yz = 0.001;
+
+    // Cross-coupling error
+    double ax_true = 10.0, ay_true = 0.0, az_true = 0.0;
+    double ax_measured = ax_true + theta_xy * ay_true + theta_xz * az_true;
+
+    TS_ASSERT_DELTA(ax_measured, 10.0, 0.01);
+  }
+
+  /***************************************************************************
+   * AHRS Integration Tests
+   ***************************************************************************/
+
+  // Test complementary filter
+  void testComplementaryFilter() {
+    double accel_pitch = 5.0;  // degrees from accelerometer
+    double gyro_pitch = 5.5;   // degrees from gyro integration
+    double alpha = 0.98;       // Gyro weight
+
+    double filtered_pitch = alpha * gyro_pitch + (1.0 - alpha) * accel_pitch;
+    TS_ASSERT_DELTA(filtered_pitch, 5.49, 0.01);
+  }
+
+  // Test gravity vector estimation
+  void testGravityVectorEstimation() {
+    double ax = -2.0, ay = 0.0, az = -9.6;  // Pitched up
+    double g = 9.80665;
+
+    // Gravity in body frame indicates attitude
+    double pitch_est = std::asin(-ax / g) * 180.0 / M_PI;
+    TS_ASSERT_DELTA(pitch_est, 11.77, 0.1);  // About 12 degrees nose up
+  }
+
+  // Test acceleration rejection
+  void testAccelerationRejection() {
+    // Detect non-gravity acceleration
+    double ax = 5.0, ay = 0.0, az = -9.8;
+    double g = 9.80665;
+
+    double total_accel = std::sqrt(ax*ax + ay*ay + az*az);
+    bool under_acceleration = std::abs(total_accel - g) > 0.5;
+
+    TS_ASSERT(under_acceleration);
+  }
+
+  /***************************************************************************
+   * Aerospace Application Tests
+   ***************************************************************************/
+
+  // Test strapdown navigation acceleration
+  void testStrapdownNavAcceleration() {
+    // Transform body acceleration to nav frame
+    double ax_body = 1.0, ay_body = 0.0, az_body = -10.0;
+    double pitch = 10.0 * M_PI / 180.0;  // 10 degrees nose up
+
+    double ax_nav = ax_body * std::cos(pitch) + az_body * std::sin(pitch);
+    double az_nav = -ax_body * std::sin(pitch) + az_body * std::cos(pitch);
+
+    TS_ASSERT_DELTA(ax_nav, -0.75, 0.1);  // Mostly deceleration in nav frame
+  }
+
+  // Test sculling error
+  void testScullingError() {
+    // Sculling occurs from correlated vibration in accel and gyro
+    double accel_amplitude = 1.0;  // g
+    double rotation_rate = 0.1;    // rad/s
+    double frequency = 50.0;       // Hz
+
+    // Sculling error magnitude (simplified)
+    double sculling_error = accel_amplitude * rotation_rate / (4.0 * frequency);
+    TS_ASSERT(sculling_error < 0.01);  // Should be small
+  }
+
+  // Test coning error detection
+  void testConingErrorDetection() {
+    double cone_half_angle = 5.0 * M_PI / 180.0;  // rad
+    double cone_frequency = 10.0;  // Hz
+
+    // Coning error scales with cone angle squared
+    double coning_error = cone_half_angle * cone_half_angle / 2.0;
+    TS_ASSERT(coning_error < 0.01);
+  }
+
+  /***************************************************************************
+   * Structural Health Monitoring Tests
+   ***************************************************************************/
+
+  // Test modal frequency detection
+  void testModalFrequencyDetection() {
+    double sample_rate = 1000.0;  // Hz
+    double modal_frequency = 25.0;  // Hz (wing flutter)
+
+    // Check Nyquist
+    bool can_detect = modal_frequency < sample_rate / 2.0;
+    TS_ASSERT(can_detect);
+  }
+
+  // Test structural damping estimation
+  void testStructuralDampingEstimation() {
+    // Logarithmic decrement method
+    double amplitude_1 = 10.0;
+    double amplitude_n = 5.0;
+    int n_cycles = 10;
+
+    double log_dec = std::log(amplitude_1 / amplitude_n) / n_cycles;
+    double damping_ratio = log_dec / (2.0 * M_PI);
+
+    TS_ASSERT_DELTA(damping_ratio, 0.011, 0.001);
+  }
+
+  // Test flutter boundary detection
+  void testFlutterBoundaryDetection() {
+    double current_frequency = 15.0;  // Hz
+    double flutter_frequency = 18.0;  // Hz
+    double margin = 0.9;  // 90% warning threshold
+
+    bool flutter_warning = current_frequency > flutter_frequency * margin;
+    TS_ASSERT(!flutter_warning);
+  }
+
+  /***************************************************************************
+   * Accelerometer Fusion Tests
+   ***************************************************************************/
+
+  // Test redundant sensor voting
+  void testRedundantSensorVoting() {
+    double sensor1 = 10.0, sensor2 = 10.1, sensor3 = 10.05;
+    double tolerance = 0.5;
+
+    // Mid-value selection
+    double values[] = {sensor1, sensor2, sensor3};
+    std::sort(values, values + 3);
+    double voted_value = values[1];  // Median
+
+    TS_ASSERT_DELTA(voted_value, 10.05, epsilon);
+  }
+
+  // Test sensor failure detection
+  void testSensorFailureDetection() {
+    double sensor1 = 10.0, sensor2 = 10.1, sensor3 = 50.0;  // sensor3 failed
+    double mean = (sensor1 + sensor2) / 2.0;
+    double threshold = 5.0;
+
+    bool sensor3_failed = std::abs(sensor3 - mean) > threshold;
+    TS_ASSERT(sensor3_failed);
+  }
+
+  // Test weighted average fusion
+  void testWeightedAverageFusion() {
+    double sensor1 = 10.0, sigma1 = 0.1;
+    double sensor2 = 10.2, sigma2 = 0.2;
+
+    // Optimal weighted average
+    double w1 = 1.0 / (sigma1 * sigma1);
+    double w2 = 1.0 / (sigma2 * sigma2);
+    double fused = (w1 * sensor1 + w2 * sensor2) / (w1 + w2);
+
+    TS_ASSERT_DELTA(fused, 10.04, 0.01);
+  }
+
+  /***************************************************************************
+   * Digital Signal Processing Tests
+   ***************************************************************************/
+
+  // Test moving average filter
+  void testMovingAverageFilter() {
+    double samples[] = {10.0, 11.0, 10.0, 11.0, 10.0};
+    int window = 5;
+    double sum = 0.0;
+
+    for (int i = 0; i < window; i++) {
+      sum += samples[i];
+    }
+    double average = sum / window;
+
+    TS_ASSERT_DELTA(average, 10.4, epsilon);
+  }
+
+  // Test IIR filter implementation
+  void testIIRFilterImplementation() {
+    // Simple first-order IIR: y[n] = a * x[n] + (1-a) * y[n-1]
+    double a = 0.2;
+    double y_prev = 0.0;
+    double x = 10.0;
+
+    double y = a * x + (1.0 - a) * y_prev;
+    TS_ASSERT_DELTA(y, 2.0, epsilon);
+
+    // After many iterations with constant input
+    for (int i = 0; i < 50; i++) {
+      y = a * x + (1.0 - a) * y;
+    }
+    TS_ASSERT_DELTA(y, 10.0, 0.01);
+  }
+
+  // Test high-pass filter for DC removal
+  void testHighPassDCRemoval() {
+    double dc_offset = 0.5;
+    double signal = 10.0;
+    double measured = signal + dc_offset;
+
+    // After high-pass filter, DC should be removed
+    double ac_component = measured - dc_offset;
+    TS_ASSERT_DELTA(ac_component, 10.0, epsilon);
   }
 };

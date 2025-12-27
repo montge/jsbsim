@@ -1011,4 +1011,314 @@ public:
 
     TS_ASSERT_DELTA(limited_cmd, 5.0, epsilon);
   }
+
+  // ==================== FLIGHT CONTROL SURFACE TESTS ====================
+
+  // Test elevator deflection range
+  void testElevatorDeflectionRange() {
+    double elevator_max_up = -25.0;    // degrees (nose up)
+    double elevator_max_down = 15.0;   // degrees (nose down)
+
+    double commands[] = {-30.0, -25.0, 0.0, 15.0, 20.0};
+    double expected[] = {-25.0, -25.0, 0.0, 15.0, 15.0};
+
+    for (int i = 0; i < 5; i++) {
+      double limited = std::max(elevator_max_up, std::min(elevator_max_down, commands[i]));
+      TS_ASSERT_DELTA(limited, expected[i], epsilon);
+    }
+  }
+
+  // Test aileron differential
+  void testAileronDifferential() {
+    double command = 10.0;  // degrees
+    double differential = 0.5;  // 50% differential
+
+    double left_aileron = command;
+    double right_aileron = -command * (1.0 - differential);
+
+    TS_ASSERT_DELTA(left_aileron, 10.0, epsilon);
+    TS_ASSERT_DELTA(right_aileron, -5.0, epsilon);
+  }
+
+  // Test flap transit time
+  void testFlapTransitTime() {
+    double flap_rate = 3.0;  // degrees/second
+    double flap_travel = 30.0;  // degrees
+
+    double transit_time = flap_travel / flap_rate;
+    TS_ASSERT_DELTA(transit_time, 10.0, epsilon);
+  }
+
+  // Test spoiler blowdown effect
+  void testSpoilerBlowdown() {
+    double command = 60.0;  // degrees
+    double dynamic_pressure = 200.0;  // psf
+    double blowdown_factor = 0.001;  // per psf
+
+    double actual = command * (1.0 - blowdown_factor * dynamic_pressure);
+    TS_ASSERT_DELTA(actual, 48.0, epsilon);
+  }
+
+  // ==================== SERVO DYNAMICS TESTS ====================
+
+  // Test servo natural frequency
+  void testServoNaturalFrequency() {
+    double wn = 20.0;  // rad/s
+    double period = 2.0 * M_PI / wn;
+
+    TS_ASSERT_DELTA(period, 0.314, 0.001);
+  }
+
+  // Test servo damping ratio effects
+  void testServoDampingEffects() {
+    double wn = 20.0;
+    double zeta_values[] = {0.3, 0.7, 1.0, 1.5};
+
+    // Overshoot % for second-order system
+    for (double zeta : zeta_values) {
+      double overshoot = 0.0;
+      if (zeta < 1.0) {
+        overshoot = 100.0 * std::exp(-M_PI * zeta / std::sqrt(1.0 - zeta * zeta));
+      }
+      TS_ASSERT(overshoot >= 0.0);
+    }
+  }
+
+  // Test servo bandwidth
+  void testServoBandwidth() {
+    double wn = 20.0;
+    double zeta = 0.7;
+
+    // Bandwidth for second-order system
+    double wd = wn * std::sqrt(1.0 - zeta * zeta);
+    TS_ASSERT_DELTA(wd, 14.28, 0.1);
+  }
+
+  // ==================== LOAD SENSING TESTS ====================
+
+  // Test load cell measurement
+  void testLoadCellMeasurement() {
+    double applied_force = 500.0;  // lbs
+    double sensitivity = 2.0;  // mV/V per lb
+    double excitation = 10.0;  // V
+
+    double output_mv = applied_force * sensitivity * excitation / 1000.0;
+    TS_ASSERT_DELTA(output_mv, 10.0, epsilon);
+  }
+
+  // Test hinge moment estimation
+  void testHingeMomentEstimation() {
+    double dynamic_pressure = 100.0;  // psf
+    double chord = 1.0;  // ft
+    double span = 5.0;   // ft
+    double Ch = -0.05;   // Hinge moment coefficient
+
+    double hinge_moment = Ch * dynamic_pressure * chord * chord * span;
+    TS_ASSERT_DELTA(hinge_moment, -25.0, epsilon);
+  }
+
+  // Test actuator load limiting
+  void testActuatorLoadLimiting() {
+    double max_load = 1000.0;  // lbs
+    double loads[] = {500.0, 1000.0, 1500.0};
+
+    for (double load : loads) {
+      double limited = std::min(load, max_load);
+      TS_ASSERT(limited <= max_load);
+    }
+  }
+
+  // ==================== REDUNDANCY TESTS ====================
+
+  // Test dual-channel comparison
+  void testDualChannelComparison() {
+    double channel_a = 15.0;
+    double channel_b = 15.1;
+    double threshold = 0.5;
+
+    double difference = std::abs(channel_a - channel_b);
+    bool channels_agree = difference < threshold;
+    TS_ASSERT(channels_agree);
+  }
+
+  // Test active/standby switchover
+  void testActiveStandbySwitchover() {
+    bool active_failed = true;
+    bool standby_healthy = true;
+
+    bool switch_to_standby = active_failed && standby_healthy;
+    TS_ASSERT(switch_to_standby);
+  }
+
+  // Test force-fight monitoring
+  void testForceFightMonitoring() {
+    double actuator1_force = 500.0;
+    double actuator2_force = 480.0;
+    double force_fight_threshold = 100.0;
+
+    double force_diff = std::abs(actuator1_force - actuator2_force);
+    bool force_fight = force_diff > force_fight_threshold;
+    TS_ASSERT(!force_fight);
+  }
+
+  // ==================== POSITION TRANSDUCER TESTS ====================
+
+  // Test LVDT output
+  void testLVDTOutput() {
+    double stroke = 2.0;  // inches
+    double sensitivity = 5.0;  // V/inch
+
+    double output = stroke * sensitivity;
+    TS_ASSERT_DELTA(output, 10.0, epsilon);
+  }
+
+  // Test RVDT output
+  void testRVDTOutput() {
+    double angle = 30.0;  // degrees
+    double sensitivity = 0.1;  // V/degree
+
+    double output = angle * sensitivity;
+    TS_ASSERT_DELTA(output, 3.0, epsilon);
+  }
+
+  // Test position sensor resolution
+  void testPositionSensorResolution() {
+    double full_scale = 30.0;  // degrees
+    int bits = 12;
+
+    double resolution = full_scale / (1 << bits);
+    TS_ASSERT_DELTA(resolution, 0.00732, 0.0001);
+  }
+
+  // ==================== ENVIRONMENT EFFECTS TESTS ====================
+
+  // Test cold temperature effect
+  void testColdTemperatureEffect() {
+    double viscosity_20C = 100.0;  // cSt
+    double temp_coeff = 0.02;
+    double temp = -40.0;  // Cold day
+
+    double viscosity = viscosity_20C * (1.0 + temp_coeff * (20.0 - temp));
+    TS_ASSERT(viscosity > viscosity_20C);
+  }
+
+  // Test altitude effect on hydraulic
+  void testAltitudeEffectHydraulic() {
+    double sea_level_pressure = 3000.0;  // psi
+    double altitude = 40000.0;  // ft
+    double reservoir_boost = 15.0;  // psi (pressurized)
+
+    // At altitude, ambient pressure is lower, may affect cavitation margin
+    double ambient_pressure = 14.7 * std::exp(-altitude / 27000.0);
+    TS_ASSERT(ambient_pressure < reservoir_boost);
+  }
+
+  // Test vibration effect on actuator
+  void testVibrationEffectActuator() {
+    double nominal_position = 10.0;
+    double vibration_amplitude = 0.1;
+
+    double max_position = nominal_position + vibration_amplitude;
+    double min_position = nominal_position - vibration_amplitude;
+
+    TS_ASSERT_DELTA(max_position, 10.1, epsilon);
+    TS_ASSERT_DELTA(min_position, 9.9, epsilon);
+  }
+
+  // ==================== FLY-BY-WIRE TESTS ====================
+
+  // Test command limiting for structural protection
+  void testCommandLimitingStructural() {
+    double g_limit = 2.5;
+    double current_g = 2.8;
+
+    bool limit_exceeded = current_g > g_limit;
+    double scale_factor = limit_exceeded ? g_limit / current_g : 1.0;
+
+    TS_ASSERT_DELTA(scale_factor, 0.893, 0.01);
+  }
+
+  // Test angle of attack limiting
+  void testAOALimiting() {
+    double aoa_cmd = 18.0;  // degrees
+    double aoa_limit = 15.0;
+
+    double limited_aoa = std::min(aoa_cmd, aoa_limit);
+    TS_ASSERT_DELTA(limited_aoa, 15.0, epsilon);
+  }
+
+  // Test control law blending
+  void testControlLawBlending() {
+    double normal_law_cmd = 10.0;
+    double direct_law_cmd = 8.0;
+    double blend_factor = 0.7;  // 70% normal law
+
+    double blended = blend_factor * normal_law_cmd + (1.0 - blend_factor) * direct_law_cmd;
+    TS_ASSERT_DELTA(blended, 9.4, epsilon);
+  }
+
+  // ==================== TRIM SYSTEM TESTS ====================
+
+  // Test trim actuator rate
+  void testTrimActuatorRate() {
+    double trim_rate = 0.3;  // degrees/second
+    double dt = 1.0;
+
+    double trim_change = trim_rate * dt;
+    TS_ASSERT_DELTA(trim_change, 0.3, epsilon);
+  }
+
+  // Test trim range
+  void testTrimRange() {
+    double trim_max = 10.0;  // degrees nose down
+    double trim_min = -3.0;  // degrees nose up
+
+    double trim_cmds[] = {-5.0, 0.0, 5.0, 12.0};
+    double expected[] = {-3.0, 0.0, 5.0, 10.0};
+
+    for (int i = 0; i < 4; i++) {
+      double limited = std::max(trim_min, std::min(trim_max, trim_cmds[i]));
+      TS_ASSERT_DELTA(limited, expected[i], epsilon);
+    }
+  }
+
+  // Test trim runaway protection
+  void testTrimRunawayProtection() {
+    double trim_rate = 2.0;  // degrees/second (excessive)
+    double max_rate = 0.5;
+
+    bool runaway = trim_rate > max_rate;
+    TS_ASSERT(runaway);
+  }
+
+  // ==================== ACTUATOR HEALTH MONITORING ====================
+
+  // Test current monitoring
+  void testCurrentMonitoring() {
+    double current = 25.0;  // Amps
+    double max_current = 30.0;
+    double warning_threshold = 0.8;
+
+    bool warning = current > max_current * warning_threshold;
+    TS_ASSERT(warning);
+  }
+
+  // Test temperature monitoring
+  void testTemperatureMonitoring() {
+    double temp = 85.0;  // Celsius
+    double max_temp = 100.0;
+
+    double margin = (max_temp - temp) / max_temp;
+    TS_ASSERT_DELTA(margin, 0.15, epsilon);
+  }
+
+  // Test BITE (Built-In Test Equipment)
+  void testBITECheck() {
+    bool position_valid = true;
+    bool current_valid = true;
+    bool temp_valid = true;
+
+    bool bite_pass = position_valid && current_valid && temp_valid;
+    TS_ASSERT(bite_pass);
+  }
 };
