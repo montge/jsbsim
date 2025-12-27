@@ -828,4 +828,418 @@ public:
         int expected_default = FGPropagate::eAdamsBashforth4;
         TS_ASSERT_EQUALS(expected_default, 5);
     }
+
+    // =========================================================================
+    // Midpoint Method Tests (4 tests)
+    // =========================================================================
+
+    void testMidpointMethodExponential() {
+        // Midpoint (RK2): k = f(t + h/2, y + h/2 * f(t,y))
+        //                 y_{n+1} = y_n + h * k
+        double t = 0.0, y = 1.0, h = 0.1;
+        double k1 = exponential_growth(t, y);
+        double k = exponential_growth(t + h/2.0, y + h/2.0 * k1);
+        double y_next = y + h * k;
+
+        // Should be second-order accurate
+        TS_ASSERT_DELTA(y_next, exp(h), 5e-4);
+    }
+
+    void testMidpointVsEuler() {
+        // Midpoint should be more accurate than Euler
+        double t = 0.0, y = 1.0, h = 0.2;
+
+        // Euler
+        double y_euler = y + h * exponential_growth(t, y);
+
+        // Midpoint
+        double k1 = exponential_growth(t, y);
+        double k = exponential_growth(t + h/2.0, y + h/2.0 * k1);
+        double y_midpoint = y + h * k;
+
+        double exact = exp(h);
+        TS_ASSERT(fabs(y_midpoint - exact) < fabs(y_euler - exact));
+    }
+
+    void testMidpointSecondOrder() {
+        // Error should scale as O(h^2) - test with multi-step integration
+        auto midpoint_integrate = [](double t0, double y0, double t_end, double h) {
+            double t = t0, y = y0;
+            while (t < t_end - h/2.0) {
+                double k1 = exponential_growth(t, y);
+                double k = exponential_growth(t + h/2.0, y + h/2.0 * k1);
+                y = y + h * k;
+                t += h;
+            }
+            return y;
+        };
+
+        double h1 = 0.1, h2 = 0.05;
+        double y1 = midpoint_integrate(0.0, 1.0, 1.0, h1);
+        double y2 = midpoint_integrate(0.0, 1.0, 1.0, h2);
+
+        double exact = exp(1.0);
+        double error1 = fabs(y1 - exact);
+        double error2 = fabs(y2 - exact);
+
+        double ratio = error1 / error2;
+        TS_ASSERT(ratio > 2.5 && ratio < 6.0);  // Should be ~4 for second-order
+    }
+
+    void testMidpointDecay() {
+        // Test with decay equation
+        double t = 0.0, y = 1.0, h = 0.1;
+        double k1 = exponential_decay(t, y);
+        double k = exponential_decay(t + h/2.0, y + h/2.0 * k1);
+        double y_next = y + h * k;
+
+        TS_ASSERT_DELTA(y_next, exp(-h), 5e-4);
+    }
+
+    // =========================================================================
+    // Heun's Method Tests (4 tests)
+    // =========================================================================
+
+    void testHeunsMethodExponential() {
+        // Heun's method: y_{n+1} = y_n + h/2 * (f(t,y) + f(t+h, y + h*f(t,y)))
+        double t = 0.0, y = 1.0, h = 0.1;
+        double k1 = exponential_growth(t, y);
+        double y_pred = y + h * k1;
+        double k2 = exponential_growth(t + h, y_pred);
+        double y_next = y + 0.5 * h * (k1 + k2);
+
+        TS_ASSERT_DELTA(y_next, exp(h), 5e-4);
+    }
+
+    void testHeunsVsMidpoint() {
+        // Both should give similar accuracy for smooth problems
+        double t = 0.0, y = 1.0, h = 0.1;
+
+        // Heun's
+        double k1_h = exponential_growth(t, y);
+        double y_pred = y + h * k1_h;
+        double k2_h = exponential_growth(t + h, y_pred);
+        double y_heun = y + 0.5 * h * (k1_h + k2_h);
+
+        // Midpoint
+        double k1_m = exponential_growth(t, y);
+        double k_m = exponential_growth(t + h/2.0, y + h/2.0 * k1_m);
+        double y_mid = y + h * k_m;
+
+        double exact = exp(h);
+        TS_ASSERT_DELTA(fabs(y_heun - exact), fabs(y_mid - exact), 1e-5);
+    }
+
+    void testHeunsIntegration() {
+        // Integrate over longer time
+        double t = 0.0, y = 1.0, h = 0.05;
+        double t_end = 1.0;
+
+        while (t < t_end - h/2.0) {
+            double k1 = exponential_growth(t, y);
+            double y_pred = y + h * k1;
+            double k2 = exponential_growth(t + h, y_pred);
+            y = y + 0.5 * h * (k1 + k2);
+            t += h;
+        }
+
+        TS_ASSERT_DELTA(y, exp(1.0), 2e-3);
+    }
+
+    void testHeunsHarmonic() {
+        double t = 0.0, y = 0.0, h = 0.01;
+        double t_end = M_PI / 2.0;
+
+        while (t < t_end - h/2.0) {
+            double k1 = harmonic_ode(t, y);
+            double y_pred = y + h * k1;
+            double k2 = harmonic_ode(t + h, y_pred);
+            y = y + 0.5 * h * (k1 + k2);
+            t += h;
+        }
+
+        TS_ASSERT_DELTA(y, 1.0, 1e-4);
+    }
+
+    // =========================================================================
+    // Step Size Selection Tests (4 tests)
+    // =========================================================================
+
+    void testOptimalStepSizeRK4() {
+        // RK4 with various step sizes
+        RK4Integrator rk4;
+        double h_values[] = {0.5, 0.25, 0.125, 0.0625};
+        double prev_error = 1.0;
+
+        for (double h : h_values) {
+            RK4Integrator rk;
+            double y = integrate(rk, 0.0, 1.0, 1.0, h, exponential_growth);
+            double error = fabs(y - exp(1.0));
+            TS_ASSERT(error < prev_error);
+            prev_error = error;
+        }
+    }
+
+    void testStepSizeDoubling() {
+        // Doubling step size should quadruple error for second-order
+        TrapezoidalIntegrator trap1, trap2;
+        double h1 = 0.025, h2 = 0.05;
+
+        double y1 = integrate(trap1, 0.0, 1.0, 1.0, h1, exponential_growth);
+        double y2 = integrate(trap2, 0.0, 1.0, 1.0, h2, exponential_growth);
+
+        double exact = exp(1.0);
+        double error1 = fabs(y1 - exact);
+        double error2 = fabs(y2 - exact);
+
+        double ratio = error2 / error1;
+        TS_ASSERT(ratio > 3.0 && ratio < 5.0);  // Should be ~4
+    }
+
+    void testMinimumStepSize() {
+        // Very small step size should give very accurate results
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1.0, 1.0, 0.001, exponential_growth);
+        TS_ASSERT_DELTA(y, exp(1.0), 1e-10);
+    }
+
+    void testStepSizeEfficency() {
+        // RK4 with larger step should beat Euler with smaller step
+        EulerIntegrator euler;
+        RK4Integrator rk4;
+
+        double y_euler = integrate(euler, 0.0, 1.0, 1.0, 0.01, exponential_growth);
+        double y_rk4 = integrate(rk4, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+
+        double exact = exp(1.0);
+        TS_ASSERT(fabs(y_rk4 - exact) < fabs(y_euler - exact));
+    }
+
+    // =========================================================================
+    // Vector Integration Tests (5 tests)
+    // =========================================================================
+
+    void testVectorIntegrationBasic() {
+        // Integrate 3D vector with constant derivative
+        FGColumnVector3 y(1.0, 2.0, 3.0);
+        FGColumnVector3 dydt(1.0, 1.0, 1.0);
+        double h = 0.1;
+
+        FGColumnVector3 y_next = y + h * dydt;
+
+        TS_ASSERT_DELTA(y_next(1), 1.1, epsilon);
+        TS_ASSERT_DELTA(y_next(2), 2.1, epsilon);
+        TS_ASSERT_DELTA(y_next(3), 3.1, epsilon);
+    }
+
+    void testVectorIntegrationMagnitude() {
+        // Integrate radial vector
+        FGColumnVector3 r(1.0, 0.0, 0.0);
+        FGColumnVector3 v(0.1, 0.0, 0.0);
+        double h = 1.0;
+
+        FGColumnVector3 r_next = r + h * v;
+        TS_ASSERT_DELTA(r_next.Magnitude(), 1.1, epsilon);
+    }
+
+    void testVectorIntegrationRotation() {
+        // Circular motion approximation
+        FGColumnVector3 r(1.0, 0.0, 0.0);
+        double omega = 1.0;  // rad/s
+        double h = 0.01;
+
+        // Integrate for quarter rotation
+        for (int i = 0; i < (int)(M_PI/2.0 / (omega * h)); i++) {
+            FGColumnVector3 v(-omega * r(2), omega * r(1), 0.0);
+            r = r + h * v;
+        }
+
+        // Should be at (0, 1, 0) approximately
+        TS_ASSERT_DELTA(r.Magnitude(), 1.0, 0.02);  // Radius preserved
+    }
+
+    void testVectorDecay() {
+        // Each component decays independently
+        FGColumnVector3 y(1.0, 2.0, 3.0);
+        double lambda = -0.1;
+        double h = 0.1;
+
+        for (int i = 0; i < 10; i++) {
+            y = y + h * (lambda * y);
+        }
+
+        // Each component should decay
+        TS_ASSERT(y(1) < 1.0 && y(1) > 0.0);
+        TS_ASSERT(y(2) < 2.0 && y(2) > 0.0);
+        TS_ASSERT(y(3) < 3.0 && y(3) > 0.0);
+    }
+
+    void testVectorRK4Step() {
+        // RK4-like step for vector
+        FGColumnVector3 y(1.0, 0.0, 0.0);
+        double h = 0.1;
+
+        auto f = [](const FGColumnVector3& y) {
+            return FGColumnVector3(y(1), y(1), y(1));  // dy/dt = y[0]
+        };
+
+        FGColumnVector3 k1 = f(y);
+        FGColumnVector3 k2 = f(y + 0.5*h*k1);
+        FGColumnVector3 k3 = f(y + 0.5*h*k2);
+        FGColumnVector3 k4 = f(y + h*k3);
+        FGColumnVector3 y_next = y + (h/6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
+
+        TS_ASSERT_DELTA(y_next(1), exp(h), 1e-5);
+    }
+
+    // =========================================================================
+    // Additional Euler Tests (3 tests)
+    // =========================================================================
+
+    void testEulerZeroDerivative() {
+        // Zero derivative should give constant solution
+        EulerIntegrator euler;
+        double y = 5.0;
+        for (int i = 0; i < 100; i++) {
+            y = euler.step(i * 0.1, y, 0.1, [](double, double) { return 0.0; });
+        }
+        TS_ASSERT_DELTA(y, 5.0, epsilon);
+    }
+
+    void testEulerNegativeTime() {
+        // Integration backward in time
+        EulerIntegrator euler;
+        double y = exp(1.0);
+        double h = -0.01;
+        double t = 1.0;
+
+        while (t > 0.01) {
+            y = y + h * exponential_growth(t, y);
+            t += h;
+        }
+
+        TS_ASSERT_DELTA(y, 1.0, 0.05);
+    }
+
+    void testEulerLargeInitialValue() {
+        // Large initial value shouldn't cause overflow
+        EulerIntegrator euler;
+        double y = 1e6;
+        y = euler.step(0.0, y, 0.01, exponential_decay);
+
+        TS_ASSERT(std::isfinite(y));
+        TS_ASSERT(y < 1e6);
+        TS_ASSERT(y > 0.0);
+    }
+
+    // =========================================================================
+    // Additional RK4 Tests (3 tests)
+    // =========================================================================
+
+    void testRK4ZeroStepSize() {
+        // Zero step size should return same value
+        RK4Integrator rk4;
+        double y = rk4.step(0.0, 1.0, 0.0, exponential_growth);
+        TS_ASSERT_DELTA(y, 1.0, epsilon);
+    }
+
+    void testRK4VerySmallStep() {
+        // Very small step size
+        RK4Integrator rk4;
+        double y = rk4.step(0.0, 1.0, 1e-10, exponential_growth);
+        TS_ASSERT_DELTA(y, 1.0 + 1e-10, 1e-15);
+    }
+
+    void testRK4LongIntegration() {
+        // Long integration with RK4
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1.0, 5.0, 0.05, exponential_growth);
+        TS_ASSERT_DELTA(y, exp(5.0), 1e-3);
+    }
+
+    // =========================================================================
+    // Additional Adams-Bashforth Tests (4 tests)
+    // =========================================================================
+
+    void testAB2ResetCapability() {
+        AB2Integrator ab2;
+
+        // First integration
+        double y = integrate(ab2, 0.0, 1.0, 0.5, 0.01, exponential_growth);
+        TS_ASSERT_DELTA(y, exp(0.5), 1e-3);
+
+        // Reset and integrate again
+        ab2.reset();
+        y = integrate(ab2, 0.0, 1.0, 0.5, 0.01, exponential_decay);
+        TS_ASSERT_DELTA(y, exp(-0.5), 1e-3);
+    }
+
+    void testAB4LongIntegration() {
+        AB4Integrator ab4;
+        double y = integrate(ab4, 0.0, 1.0, 3.0, 0.01, exponential_growth);
+        TS_ASSERT_DELTA(y, exp(3.0), 1e-3);
+    }
+
+    void testAB3Harmonic() {
+        AB3Integrator ab3;
+        double y = integrate(ab3, 0.0, 0.0, M_PI, 0.01, harmonic_ode);
+        TS_ASSERT_DELTA(y, 0.0, 5e-3);
+    }
+
+    void testABMethodsComparison() {
+        // Higher-order AB should be more accurate
+        AB2Integrator ab2;
+        AB3Integrator ab3;
+        AB4Integrator ab4;
+        double h = 0.02;
+
+        double y2 = integrate(ab2, 0.0, 1.0, 1.0, h, exponential_growth);
+        double y3 = integrate(ab3, 0.0, 1.0, 1.0, h, exponential_growth);
+        double y4 = integrate(ab4, 0.0, 1.0, 1.0, h, exponential_growth);
+
+        double exact = exp(1.0);
+        double e2 = fabs(y2 - exact);
+        double e3 = fabs(y3 - exact);
+        double e4 = fabs(y4 - exact);
+
+        TS_ASSERT(e4 <= e3 || fabs(e4 - e3) < 1e-4);
+        TS_ASSERT(e3 <= e2 || fabs(e3 - e2) < 1e-3);
+    }
+
+    // =========================================================================
+    // Numerical Stability Edge Cases (4 tests)
+    // =========================================================================
+
+    void testSmallValueIntegration() {
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1e-10, 1.0, 0.1, exponential_growth);
+        TS_ASSERT_DELTA(y, 1e-10 * exp(1.0), 1e-12);
+    }
+
+    void testLargeValueIntegration() {
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1e10, 1.0, 0.1, exponential_decay);
+        TS_ASSERT_DELTA(y, 1e10 * exp(-1.0), 1e8);
+    }
+
+    void testIntegrationWithNearZeroDerivative() {
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1.0, 10.0, 0.1, exponential_decay);
+
+        // After long decay, should be very small but positive
+        TS_ASSERT(y > 0.0);
+        TS_ASSERT(y < 1e-3);
+    }
+
+    void testIntegrationPreservesSign() {
+        // Positive initial value with negative derivative
+        RK4Integrator rk4;
+        double t = 0.0, y = 1.0, h = 0.1;
+
+        for (int i = 0; i < 20; i++) {
+            y = rk4.step(t, y, h, exponential_decay);
+            TS_ASSERT(y > 0.0);  // Should never go negative
+            t += h;
+        }
+    }
 };
