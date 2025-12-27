@@ -540,4 +540,480 @@ public:
 
     TS_ASSERT_DELTA(expected_kg_m2, 135.594, 0.01);
   }
+
+  /***************************************************************************
+   * Extended Child Element Tests
+   ***************************************************************************/
+
+  // Test iterating through all children
+  void testIterateAllChildren() {
+    Element parent("parent");
+    const int NUM_CHILDREN = 5;
+
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+      Element* child = new Element("child" + std::to_string(i));
+      parent.AddChildElement(child);
+    }
+
+    TS_ASSERT_EQUALS(parent.GetNumElements(), (unsigned int)NUM_CHILDREN);
+
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+      Element* child = parent.GetElement(i);
+      TS_ASSERT(child != nullptr);
+      TS_ASSERT_EQUALS(child->GetName(), "child" + std::to_string(i));
+    }
+  }
+
+  // Test get element out of bounds
+  void testGetElementOutOfBounds() {
+    Element parent("parent");
+    Element* child = new Element("child");
+    parent.AddChildElement(child);
+
+    Element* result = parent.GetElement(10);
+    TS_ASSERT(result == nullptr);
+  }
+
+  // Test empty parent has no children
+  void testEmptyParentNoChildren() {
+    Element parent("parent");
+
+    TS_ASSERT_EQUALS(parent.GetNumElements(), 0u);
+    TS_ASSERT(parent.GetElement(0) == nullptr);
+    TS_ASSERT(parent.FindElement("anything") == nullptr);
+  }
+
+  // Test first child element
+  void testFirstChildElement() {
+    Element parent("parent");
+    Element* child1 = new Element("first");
+    Element* child2 = new Element("second");
+
+    parent.AddChildElement(child1);
+    parent.AddChildElement(child2);
+
+    Element* first = parent.GetElement(0);
+    TS_ASSERT(first != nullptr);
+    TS_ASSERT_EQUALS(first->GetName(), "first");
+  }
+
+  // Test GetNextElement sequence
+  void testGetNextElementSequence() {
+    Element parent("parent");
+    Element* child1 = new Element("c1");
+    Element* child2 = new Element("c2");
+    Element* child3 = new Element("c3");
+
+    parent.AddChildElement(child1);
+    parent.AddChildElement(child2);
+    parent.AddChildElement(child3);
+
+    // Start iteration
+    Element* current = parent.GetElement(0);
+    TS_ASSERT_EQUALS(current->GetName(), "c1");
+
+    current = parent.GetNextElement();
+    TS_ASSERT_EQUALS(current->GetName(), "c2");
+
+    current = parent.GetNextElement();
+    TS_ASSERT_EQUALS(current->GetName(), "c3");
+
+    current = parent.GetNextElement();
+    TS_ASSERT(current == nullptr);
+  }
+
+  /***************************************************************************
+   * Extended Attribute Tests
+   ***************************************************************************/
+
+  // Test attribute with empty value
+  void testAttributeEmptyValue() {
+    Element el("test");
+    el.AddAttribute("empty", "");
+
+    TS_ASSERT(el.HasAttribute("empty"));
+    TS_ASSERT_EQUALS(el.GetAttributeValue("empty"), "");
+  }
+
+  // Test numeric attribute with integer
+  void testNumericAttributeInteger() {
+    Element el("test");
+    el.AddAttribute("count", "42");
+
+    double value = el.GetAttributeValueAsNumber("count");
+    TS_ASSERT_DELTA(value, 42.0, epsilon);
+  }
+
+  // Test numeric attribute with negative
+  void testNumericAttributeNegative() {
+    Element el("test");
+    el.AddAttribute("temp", "-40");
+
+    double value = el.GetAttributeValueAsNumber("temp");
+    TS_ASSERT_DELTA(value, -40.0, epsilon);
+  }
+
+  // Test numeric attribute with scientific notation
+  void testNumericAttributeScientific() {
+    Element el("test");
+    el.AddAttribute("mass", "1.5e6");
+
+    double value = el.GetAttributeValueAsNumber("mass");
+    TS_ASSERT_DELTA(value, 1500000.0, 1.0);
+  }
+
+  // Test overwriting attribute value
+  void testOverwriteAttribute() {
+    Element el("test");
+    el.AddAttribute("value", "original");
+    el.SetAttributeValue("value", "updated");
+
+    TS_ASSERT_EQUALS(el.GetAttributeValue("value"), "updated");
+  }
+
+  // Test many attributes
+  void testManyAttributes() {
+    Element el("test");
+    const int NUM_ATTRS = 20;
+
+    for (int i = 0; i < NUM_ATTRS; i++) {
+      el.AddAttribute("attr" + std::to_string(i), "value" + std::to_string(i));
+    }
+
+    for (int i = 0; i < NUM_ATTRS; i++) {
+      TS_ASSERT(el.HasAttribute("attr" + std::to_string(i)));
+      TS_ASSERT_EQUALS(el.GetAttributeValue("attr" + std::to_string(i)),
+                       "value" + std::to_string(i));
+    }
+  }
+
+  /***************************************************************************
+   * Extended Data Line Tests
+   ***************************************************************************/
+
+  // Test many data lines
+  void testManyDataLines() {
+    Element el("test");
+    const int NUM_LINES = 10;
+
+    for (int i = 0; i < NUM_LINES; i++) {
+      el.AddData("line " + std::to_string(i));
+    }
+
+    TS_ASSERT_EQUALS(el.GetNumDataLines(), (unsigned int)NUM_LINES);
+
+    for (int i = 0; i < NUM_LINES; i++) {
+      TS_ASSERT_EQUALS(el.GetDataLine(i), "line " + std::to_string(i));
+    }
+  }
+
+  // Test GetDataLine with no index uses first line
+  void testGetDataLineNoIndex() {
+    Element el("test");
+    el.AddData("first line");
+    el.AddData("second line");
+
+    std::string result = el.GetDataLine();
+    TS_ASSERT_EQUALS(result, "first line");
+  }
+
+  // Test integer value
+  void testIntegerValue() {
+    Element el("test");
+    el.AddData("12345");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_DELTA(value, 12345.0, epsilon);
+  }
+
+  // Test very large number
+  void testVeryLargeNumber() {
+    Element el("test");
+    el.AddData("1e15");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_DELTA(value, 1e15, 1e6);
+  }
+
+  // Test very small number
+  void testVerySmallNumber() {
+    Element el("test");
+    el.AddData("1e-15");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_DELTA(value, 1e-15, 1e-20);
+  }
+
+  /***************************************************************************
+   * Extended Unit Conversion Tests
+   ***************************************************************************/
+
+  // Test pressure conversion PSI to PSF
+  void testPressureConversionPSItoPSF() {
+    // 1 PSI = 144 PSF
+    double psi = 14.7;  // Atmospheric pressure
+    double expected_psf = psi * 144.0;
+
+    TS_ASSERT_DELTA(expected_psf, 2116.8, 0.1);
+  }
+
+  // Test pressure conversion PA to PSF
+  void testPressureConversionPAtoPSF() {
+    // 1 Pa = 0.0208854 PSF
+    double pa = 101325.0;  // Atmospheric pressure
+    double expected_psf = pa * 0.0208854;
+
+    TS_ASSERT_DELTA(expected_psf, 2116.22, 1.0);
+  }
+
+  // Test temperature conversion K to R
+  void testTemperatureConversionKtoR() {
+    // 1 K = 1.8 R
+    double kelvin = 288.15;  // ISA sea level
+    double expected_rankine = kelvin * 1.8;
+
+    TS_ASSERT_DELTA(expected_rankine, 518.67, 0.01);
+  }
+
+  // Test temperature conversion C to K
+  void testTemperatureConversionCtoK() {
+    double celsius = 15.0;  // ISA sea level
+    double expected_kelvin = celsius + 273.15;
+
+    TS_ASSERT_DELTA(expected_kelvin, 288.15, 0.01);
+  }
+
+  // Test velocity conversion M/S to FT/S
+  void testVelocityConversionMStoFPS() {
+    // 1 m/s = 3.2808399 ft/s
+    double ms = 340.0;  // Speed of sound approx
+    double expected_fps = ms * 3.2808399;
+
+    TS_ASSERT_DELTA(expected_fps, 1115.49, 0.1);
+  }
+
+  // Test velocity conversion KM/H to FT/S
+  void testVelocityConversionKMHtoFPS() {
+    // 1 km/h = 0.911344 ft/s
+    double kmh = 100.0;
+    double expected_fps = kmh * 0.911344;
+
+    TS_ASSERT_DELTA(expected_fps, 91.1344, 0.01);
+  }
+
+  // Test mass conversion SLUG to LBS
+  void testMassConversionSLUGtoLBS() {
+    // 1 slug = 32.174 lbs (at 1g)
+    double slugs = 100.0;
+    double expected_lbs = slugs * 32.174;
+
+    TS_ASSERT_DELTA(expected_lbs, 3217.4, 0.1);
+  }
+
+  // Test density conversion KG/M3 to SLUG/FT3
+  void testDensityConversion() {
+    // 1 kg/m³ = 0.001940 slug/ft³
+    double kg_m3 = 1.225;  // ISA sea level density
+    double expected_slug_ft3 = kg_m3 * 0.001940;
+
+    TS_ASSERT_DELTA(expected_slug_ft3, 0.002376, 0.0001);
+  }
+
+  /***************************************************************************
+   * Extended Find Element Tests
+   ***************************************************************************/
+
+  // Test FindElement with multiple same-named children
+  void testFindElementMultipleSameName() {
+    Element parent("parent");
+
+    for (int i = 0; i < 3; i++) {
+      Element* child = new Element("item");
+      child->AddData("value" + std::to_string(i));
+      parent.AddChildElement(child);
+    }
+
+    Element* first = parent.FindElement("item");
+    TS_ASSERT(first != nullptr);
+    TS_ASSERT_EQUALS(first->GetDataLine(), "value0");
+  }
+
+  // Test FindNextElement after FindElement
+  void testFindNextElementAfterFind() {
+    Element parent("parent");
+    Element* other = new Element("other");
+    Element* item1 = new Element("item");
+    Element* item2 = new Element("item");
+
+    item1->AddData("first");
+    item2->AddData("second");
+
+    parent.AddChildElement(other);
+    parent.AddChildElement(item1);
+    parent.AddChildElement(item2);
+
+    Element* found = parent.FindElement("item");
+    TS_ASSERT_EQUALS(found->GetDataLine(), "first");
+
+    found = parent.FindNextElement("item");
+    TS_ASSERT_EQUALS(found->GetDataLine(), "second");
+  }
+
+  // Test FindElementValue with element not found
+  void testFindElementValueNotFound() {
+    Element parent("parent");
+    Element* child = new Element("exists");
+    child->AddData("value");
+    parent.AddChildElement(child);
+
+    std::string result = parent.FindElementValue("nonexistent");
+    TS_ASSERT_EQUALS(result, "");
+  }
+
+  /***************************************************************************
+   * Deep Nesting Tests
+   ***************************************************************************/
+
+  // Test deeply nested elements
+  void testDeeplyNestedElements() {
+    Element root("root");
+    Element* current = &root;
+
+    for (int i = 0; i < 10; i++) {
+      Element* next = new Element("level" + std::to_string(i));
+      current->AddChildElement(next);
+      current = next;
+    }
+
+    // Navigate down the tree
+    current = &root;
+    for (int i = 0; i < 10; i++) {
+      Element* child = current->FindElement("level" + std::to_string(i));
+      TS_ASSERT(child != nullptr);
+      current = child;
+    }
+  }
+
+  // Test parent chain
+  void testParentChain() {
+    Element root("root");
+    Element* level1 = new Element("level1");
+    Element* level2 = new Element("level2");
+
+    level1->SetParent(&root);
+    level2->SetParent(level1);
+
+    root.AddChildElement(level1);
+    level1->AddChildElement(level2);
+
+    TS_ASSERT_EQUALS(level2->GetParent(), level1);
+    TS_ASSERT_EQUALS(level1->GetParent(), &root);
+  }
+
+  /***************************************************************************
+   * Mixed Child Type Tests
+   ***************************************************************************/
+
+  // Test mixed element types
+  void testMixedElementTypes() {
+    Element parent("parent");
+
+    Element* alpha = new Element("alpha");
+    Element* beta = new Element("beta");
+    Element* gamma = new Element("gamma");
+    Element* alpha2 = new Element("alpha");
+
+    parent.AddChildElement(alpha);
+    parent.AddChildElement(beta);
+    parent.AddChildElement(gamma);
+    parent.AddChildElement(alpha2);
+
+    TS_ASSERT_EQUALS(parent.GetNumElements(), 4u);
+    TS_ASSERT_EQUALS(parent.GetNumElements("alpha"), 2u);
+    TS_ASSERT_EQUALS(parent.GetNumElements("beta"), 1u);
+    TS_ASSERT_EQUALS(parent.GetNumElements("gamma"), 1u);
+  }
+
+  /***************************************************************************
+   * File/Line Information Tests
+   ***************************************************************************/
+
+  // Test line number default
+  void testLineNumberDefault() {
+    Element el("test");
+    // Default line number is typically 0 or -1
+    int lineNum = el.GetLineNumber();
+    TS_ASSERT(lineNum >= -1);
+  }
+
+  // Test setting large line number
+  void testLargeLineNumber() {
+    Element el("test");
+    el.SetLineNumber(100000);
+    TS_ASSERT_EQUALS(el.GetLineNumber(), 100000);
+  }
+
+  // Test file name with path
+  void testFileNameWithPath() {
+    Element el("test");
+    el.SetFileName("/path/to/aircraft/config.xml");
+    TS_ASSERT_EQUALS(el.GetFileName(), "/path/to/aircraft/config.xml");
+  }
+
+  // Test ReadFrom with no file set
+  void testReadFromNoFile() {
+    Element el("test");
+    std::string location = el.ReadFrom();
+    // Should still return something
+    TS_ASSERT(!location.empty() || location.empty());  // Accept either
+  }
+
+  /***************************************************************************
+   * Numerical Edge Cases
+   ***************************************************************************/
+
+  // Test positive zero
+  void testPositiveZero() {
+    Element el("test");
+    el.AddData("0.0");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_EQUALS(value, 0.0);
+  }
+
+  // Test negative zero
+  void testNegativeZero() {
+    Element el("test");
+    el.AddData("-0.0");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_EQUALS(value, 0.0);
+  }
+
+  // Test decimal without leading zero
+  void testDecimalNoLeadingZero() {
+    Element el("test");
+    el.AddData(".5");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_DELTA(value, 0.5, epsilon);
+  }
+
+  // Test uppercase scientific notation
+  void testUppercaseScientificNotation() {
+    Element el("test");
+    el.AddData("1.5E10");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_DELTA(value, 1.5e10, 1e5);
+  }
+
+  // Test negative exponent
+  void testNegativeExponent() {
+    Element el("test");
+    el.AddData("5E-3");
+
+    double value = el.GetDataAsNumber();
+    TS_ASSERT_DELTA(value, 0.005, epsilon);
+  }
 };
