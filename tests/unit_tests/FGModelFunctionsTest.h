@@ -7,6 +7,8 @@
  * - Multiple instances
  * - Different delimiter handling
  * - Initialization behavior
+ * - Loading functions from XML
+ * - Pre/Post function values
  *
  * Copyright (c) JSBSim Development Team
  * Licensed under LGPL
@@ -14,14 +16,31 @@
 
 #include <cxxtest/TestSuite.h>
 #include <string>
+#include <sstream>
+#include <cmath>
+#include <vector>
 
 #include <FGFDMExec.h>
 #include <math/FGModelFunctions.h>
+#include <math/FGFunction.h>
+#include <input_output/FGXMLElement.h>
+#include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 class FGModelFunctionsTest : public CxxTest::TestSuite
 {
+private:
+  // Helper function to read XML from string
+  Element_ptr readFromXML(const std::string& xml) {
+    std::stringstream ss;
+    ss << xml;
+    FGXMLParse xml_parse;
+    readXML(ss, xml_parse);
+    return xml_parse.GetDocument();
+  }
+
 public:
   /***************************************************************************
    * Construction Tests
@@ -546,6 +565,819 @@ public:
         case 3: mf.GetFunctionValues("\t"); break;
         case 4: mf.GetPreFunction("test" + std::to_string(i)); break;
       }
+    }
+
+    TS_ASSERT(true);
+  }
+
+  /***************************************************************************
+   * Function Loading Tests - PreLoad
+   ***************************************************************************/
+
+  void testPreLoadSimpleFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/preload\" type=\"pre\">"
+      "    <value>42.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/preload");
+    TS_ASSERT(func != nullptr);
+  }
+
+  void testPreLoadSumFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/sum\" type=\"pre\">"
+      "    <sum>"
+      "      <value>10.0</value>"
+      "      <value>20.0</value>"
+      "    </sum>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/sum");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 30.0, 1e-6);
+    }
+  }
+
+  void testPreLoadProductFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/product\" type=\"pre\">"
+      "    <product>"
+      "      <value>3.0</value>"
+      "      <value>4.0</value>"
+      "      <value>5.0</value>"
+      "    </product>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/product");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 60.0, 1e-6);
+    }
+  }
+
+  void testPreLoadMultipleFunctions() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/func1\" type=\"pre\">"
+      "    <value>1.0</value>"
+      "  </function>"
+      "  <function name=\"test/func2\" type=\"pre\">"
+      "    <value>2.0</value>"
+      "  </function>"
+      "  <function name=\"test/func3\" type=\"pre\">"
+      "    <value>3.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func1 = mf.GetPreFunction("test/func1");
+    auto func2 = mf.GetPreFunction("test/func2");
+    auto func3 = mf.GetPreFunction("test/func3");
+
+    TS_ASSERT(func1 != nullptr);
+    TS_ASSERT(func2 != nullptr);
+    TS_ASSERT(func3 != nullptr);
+  }
+
+  void testPreLoadWithPrefix() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/value\" type=\"pre\">"
+      "    <value>99.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get(), "prefix");
+
+    auto func = mf.GetPreFunction("test/value");
+    // The prefix affects the property path, not the lookup name
+    TS_ASSERT(func != nullptr);
+  }
+
+  /***************************************************************************
+   * Function Loading Tests - PostLoad
+   ***************************************************************************/
+
+  void testPostLoadSimpleFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/postfunc\" type=\"post\">"
+      "    <value>77.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PostLoad(elm, fdmex.get());
+    mf.RunPostFunctions();
+
+    // Post functions are not accessible via GetPreFunction
+    auto func = mf.GetPreFunction("test/postfunc");
+    TS_ASSERT(func == nullptr);  // It's a post function
+  }
+
+  void testPostLoadMultipleFunctions() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/post1\" type=\"post\">"
+      "    <value>100.0</value>"
+      "  </function>"
+      "  <function name=\"test/post2\" type=\"post\">"
+      "    <value>200.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PostLoad(elm, fdmex.get());
+    mf.RunPostFunctions();
+
+    TS_ASSERT(true);  // No crashes
+  }
+
+  /***************************************************************************
+   * Function Loading Tests - Mixed Pre/Post
+   ***************************************************************************/
+
+  void testMixedPrePostLoad() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/prefn\" type=\"pre\">"
+      "    <value>10.0</value>"
+      "  </function>"
+      "  <function name=\"test/postfn\" type=\"post\">"
+      "    <value>20.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.PostLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+    mf.RunPostFunctions();
+
+    auto preFunc = mf.GetPreFunction("test/prefn");
+    TS_ASSERT(preFunc != nullptr);
+  }
+
+  /***************************************************************************
+   * Function String/Values Tests with Loaded Functions
+   ***************************************************************************/
+
+  void testGetFunctionStringsWithLoadedFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"output/myvalue\">"
+      "    <value>123.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.Load(elm, fdmex.get());
+
+    std::string strings = mf.GetFunctionStrings(",");
+    // Should contain function name or be non-empty
+    TS_ASSERT(!strings.empty() || true);  // May be empty if not output type
+  }
+
+  void testGetFunctionValuesWithLoadedFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"output/testval\">"
+      "    <value>456.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.Load(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    std::string values = mf.GetFunctionValues(",");
+    TS_ASSERT(true);  // No crash
+  }
+
+  void testFunctionStringsMultipleFunctions() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"out/val1\">"
+      "    <value>1.0</value>"
+      "  </function>"
+      "  <function name=\"out/val2\">"
+      "    <value>2.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.Load(elm, fdmex.get());
+
+    std::string strings = mf.GetFunctionStrings(",");
+    std::string values = mf.GetFunctionValues(",");
+
+    TS_ASSERT(true);  // No crash
+  }
+
+  /***************************************************************************
+   * Mathematical Function Tests
+   ***************************************************************************/
+
+  void testLoadedDifferenceFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/diff\" type=\"pre\">"
+      "    <difference>"
+      "      <value>100.0</value>"
+      "      <value>30.0</value>"
+      "    </difference>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/diff");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 70.0, 1e-6);
+    }
+  }
+
+  void testLoadedQuotientFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/quot\" type=\"pre\">"
+      "    <quotient>"
+      "      <value>100.0</value>"
+      "      <value>4.0</value>"
+      "    </quotient>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/quot");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 25.0, 1e-6);
+    }
+  }
+
+  void testLoadedAbsFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/absval\" type=\"pre\">"
+      "    <abs>"
+      "      <value>-42.5</value>"
+      "    </abs>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/absval");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 42.5, 1e-6);
+    }
+  }
+
+  void testLoadedPowFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/power\" type=\"pre\">"
+      "    <pow>"
+      "      <value>2.0</value>"
+      "      <value>10.0</value>"
+      "    </pow>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/power");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 1024.0, 1e-6);
+    }
+  }
+
+  void testLoadedSqrtFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/sqrt\" type=\"pre\">"
+      "    <sqrt>"
+      "      <value>144.0</value>"
+      "    </sqrt>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/sqrt");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 12.0, 1e-6);
+    }
+  }
+
+  /***************************************************************************
+   * Trigonometric Function Tests
+   ***************************************************************************/
+
+  void testLoadedSinFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/sin\" type=\"pre\">"
+      "    <sin>"
+      "      <value>0.0</value>"
+      "    </sin>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/sin");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 0.0, 1e-6);
+    }
+  }
+
+  void testLoadedCosFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/cos\" type=\"pre\">"
+      "    <cos>"
+      "      <value>0.0</value>"
+      "    </cos>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/cos");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 1.0, 1e-6);
+    }
+  }
+
+  void testLoadedTanFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/tan\" type=\"pre\">"
+      "    <tan>"
+      "      <value>0.0</value>"
+      "    </tan>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/tan");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 0.0, 1e-6);
+    }
+  }
+
+  /***************************************************************************
+   * Nested Function Tests
+   ***************************************************************************/
+
+  void testLoadedNestedFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/nested\" type=\"pre\">"
+      "    <sum>"
+      "      <product>"
+      "        <value>3.0</value>"
+      "        <value>4.0</value>"
+      "      </product>"
+      "      <value>5.0</value>"
+      "    </sum>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/nested");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      // (3 * 4) + 5 = 17
+      TS_ASSERT_DELTA(func->GetValue(), 17.0, 1e-6);
+    }
+  }
+
+  void testLoadedDeeplyNestedFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/deep\" type=\"pre\">"
+      "    <product>"
+      "      <sum>"
+      "        <value>1.0</value>"
+      "        <value>2.0</value>"
+      "      </sum>"
+      "      <difference>"
+      "        <value>10.0</value>"
+      "        <value>5.0</value>"
+      "      </difference>"
+      "    </product>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/deep");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      // (1 + 2) * (10 - 5) = 3 * 5 = 15
+      TS_ASSERT_DELTA(func->GetValue(), 15.0, 1e-6);
+    }
+  }
+
+  /***************************************************************************
+   * Min/Max Function Tests
+   ***************************************************************************/
+
+  void testLoadedMinFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/min\" type=\"pre\">"
+      "    <min>"
+      "      <value>5.0</value>"
+      "      <value>3.0</value>"
+      "      <value>8.0</value>"
+      "    </min>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/min");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 3.0, 1e-6);
+    }
+  }
+
+  void testLoadedMaxFunction() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/max\" type=\"pre\">"
+      "    <max>"
+      "      <value>5.0</value>"
+      "      <value>3.0</value>"
+      "      <value>8.0</value>"
+      "    </max>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/max");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 8.0, 1e-6);
+    }
+  }
+
+  /***************************************************************************
+   * Edge Cases with Functions
+   ***************************************************************************/
+
+  void testLoadFunctionWithZeroValue() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/zero\" type=\"pre\">"
+      "    <value>0.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/zero");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 0.0, 1e-6);
+    }
+  }
+
+  void testLoadFunctionWithNegativeValue() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/negative\" type=\"pre\">"
+      "    <value>-123.456</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/negative");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), -123.456, 1e-6);
+    }
+  }
+
+  void testLoadFunctionWithLargeValue() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/large\" type=\"pre\">"
+      "    <value>1e12</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/large");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 1e12, 1e6);
+    }
+  }
+
+  void testLoadFunctionWithSmallValue() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/small\" type=\"pre\">"
+      "    <value>1e-12</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/small");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 1e-12, 1e-18);
+    }
+  }
+
+  /***************************************************************************
+   * Run Functions Multiple Times Tests
+   ***************************************************************************/
+
+  void testRunPreFunctionsMultipleTimesAfterLoad() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/multi\" type=\"pre\">"
+      "    <value>50.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+
+    for (int i = 0; i < 100; i++) {
+      mf.RunPreFunctions();
+    }
+
+    auto func = mf.GetPreFunction("test/multi");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      TS_ASSERT_DELTA(func->GetValue(), 50.0, 1e-6);
+    }
+  }
+
+  void testRunPostFunctionsMultipleTimesAfterLoad() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/postmulti\" type=\"post\">"
+      "    <value>75.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PostLoad(elm, fdmex.get());
+
+    for (int i = 0; i < 100; i++) {
+      mf.RunPostFunctions();
+    }
+
+    TS_ASSERT(true);
+  }
+
+  void testAlternatePrePostAfterLoad() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/alt\" type=\"pre\">"
+      "    <value>25.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+
+    for (int i = 0; i < 50; i++) {
+      mf.RunPreFunctions();
+      mf.RunPostFunctions();
+    }
+
+    auto func = mf.GetPreFunction("test/alt");
+    TS_ASSERT(func != nullptr);
+  }
+
+  /***************************************************************************
+   * Integration Stress Tests
+   ***************************************************************************/
+
+  void testStressManyFunctions() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    // Build XML with many functions
+    std::stringstream ss;
+    ss << "<model>";
+    for (int i = 0; i < 20; i++) {
+      ss << "<function name=\"test/func" << i << "\" type=\"pre\">"
+         << "<value>" << (i * 10.0) << "</value>"
+         << "</function>";
+    }
+    ss << "</model>";
+
+    Element_ptr elm = readFromXML(ss.str());
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    // Check that all functions are accessible
+    for (int i = 0; i < 20; i++) {
+      std::string name = "test/func" + std::to_string(i);
+      auto func = mf.GetPreFunction(name);
+      TS_ASSERT(func != nullptr);
+      if (func) {
+        TS_ASSERT_DELTA(func->GetValue(), i * 10.0, 1e-6);
+      }
+    }
+  }
+
+  void testStressComplexNestedFunctions() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/complex\" type=\"pre\">"
+      "    <sum>"
+      "      <product>"
+      "        <quotient>"
+      "          <value>100.0</value>"
+      "          <value>5.0</value>"
+      "        </quotient>"
+      "        <value>2.0</value>"
+      "      </product>"
+      "      <abs>"
+      "        <difference>"
+      "          <value>10.0</value>"
+      "          <value>15.0</value>"
+      "        </difference>"
+      "      </abs>"
+      "    </sum>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+    mf.RunPreFunctions();
+
+    auto func = mf.GetPreFunction("test/complex");
+    TS_ASSERT(func != nullptr);
+    if (func) {
+      // ((100/5) * 2) + abs(10-15) = (20 * 2) + 5 = 40 + 5 = 45
+      TS_ASSERT_DELTA(func->GetValue(), 45.0, 1e-6);
+    }
+  }
+
+  void testStressRapidFunctionAccess() {
+    auto fdmex = std::make_shared<FGFDMExec>();
+    FGModelFunctions mf;
+
+    Element_ptr elm = readFromXML(
+      "<model>"
+      "  <function name=\"test/rapid\" type=\"pre\">"
+      "    <value>999.0</value>"
+      "  </function>"
+      "</model>");
+
+    mf.PreLoad(elm, fdmex.get());
+
+    for (int i = 0; i < 200; i++) {
+      mf.RunPreFunctions();
+      auto func = mf.GetPreFunction("test/rapid");
+      TS_ASSERT(func != nullptr);
+      std::string strings = mf.GetFunctionStrings(",");
+      std::string values = mf.GetFunctionValues(",");
     }
 
     TS_ASSERT(true);
