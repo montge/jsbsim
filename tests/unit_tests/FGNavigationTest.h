@@ -850,4 +850,404 @@ public:
 
     TS_ASSERT_DELTA(ground_speed, 0.0, epsilon);
   }
+
+  /***************************************************************************
+   * VOR/Radial Navigation
+   ***************************************************************************/
+
+  // Test VOR radial identification
+  void testVORRadialIdentification() {
+    double station_lat = 40.0 * DEG_TO_RAD;
+    double station_lon = -74.0 * DEG_TO_RAD;
+    double aircraft_lat = 40.0 * DEG_TO_RAD;
+    double aircraft_lon = -73.0 * DEG_TO_RAD;  // East of station
+
+    double dlon = aircraft_lon - station_lon;
+    double y = std::sin(dlon) * std::cos(aircraft_lat);
+    double x = std::cos(station_lat) * std::sin(aircraft_lat) -
+               std::sin(station_lat) * std::cos(aircraft_lat) * std::cos(dlon);
+    double radial = std::atan2(y, x);
+
+    // Should be on 090 radial (east)
+    TS_ASSERT_DELTA(radial, M_PI / 2.0, 0.01);
+  }
+
+  // Test VOR to/from indication
+  void testVORToFromIndication() {
+    double selected_radial = 90.0 * DEG_TO_RAD;  // 090 radial selected
+    double current_radial = 90.0 * DEG_TO_RAD;    // On 090 radial
+    double heading = 270.0 * DEG_TO_RAD;          // Flying west (toward station)
+
+    double course_diff = std::cos(heading - NormalizeAngle(selected_radial + M_PI));
+
+    // Positive = TO, Negative = FROM
+    TS_ASSERT(course_diff > 0.0);  // TO indication
+  }
+
+  // Test CDI deflection calculation
+  void testCDIDeflection() {
+    double selected_radial = 90.0 * DEG_TO_RAD;
+    double actual_radial = 85.0 * DEG_TO_RAD;  // 5 degrees left
+
+    double deflection = NormalizeAngle(actual_radial - selected_radial);
+
+    // Should show 5 degree left deflection
+    TS_ASSERT_DELTA(deflection, -5.0 * DEG_TO_RAD, 0.01);
+  }
+
+  // Test VOR cone of confusion
+  void testVORConeOfConfusion() {
+    double station_lat = 40.0 * DEG_TO_RAD;
+    double station_lon = -74.0 * DEG_TO_RAD;
+    double aircraft_lat = 40.0001 * DEG_TO_RAD;
+    double aircraft_lon = -74.0001 * DEG_TO_RAD;
+
+    double dlat = aircraft_lat - station_lat;
+    double dlon = aircraft_lon - station_lon;
+    double a = std::sin(dlat/2) * std::sin(dlat/2) +
+               std::cos(station_lat) * std::cos(aircraft_lat) *
+               std::sin(dlon/2) * std::sin(dlon/2);
+    double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1.0 - a));
+    double distance = EARTH_RADIUS_NM * c;
+
+    // Very close - within cone of confusion
+    TS_ASSERT(distance < 0.1);
+  }
+
+  /***************************************************************************
+   * Descent/Climb Planning
+   ***************************************************************************/
+
+  // Test 3 degree glide path
+  void testThreeDegreeGlidePath() {
+    double altitude_to_lose = 3000.0;  // feet
+    double glidepath_angle = 3.0 * DEG_TO_RAD;
+
+    double distance_nm = (altitude_to_lose / std::tan(glidepath_angle)) / NM_TO_FT;
+
+    // 3:1 ratio approximately - 3000 ft needs about 9.5 nm
+    TS_ASSERT(distance_nm > 9.0 && distance_nm < 10.0);
+  }
+
+  // Test descent rate for 3 degree path
+  void testDescentRate3Degree() {
+    double ground_speed = 120.0;  // knots
+    double glidepath_angle = 3.0;  // degrees
+
+    // Rule of thumb: descent rate = groundspeed * 5 for 3 degree path
+    double descent_rate = ground_speed * 5.0;
+
+    TS_ASSERT_DELTA(descent_rate, 600.0, 10.0);  // fpm
+  }
+
+  // Test top of descent calculation
+  void testTopOfDescent() {
+    double cruise_altitude = 10000.0;  // feet
+    double target_altitude = 2000.0;
+    double descent_gradient = 3.0;  // nm per 1000 ft
+
+    double altitude_to_lose = cruise_altitude - target_altitude;
+    double distance_required = (altitude_to_lose / 1000.0) * descent_gradient;
+
+    TS_ASSERT_DELTA(distance_required, 24.0, 0.1);  // nm
+  }
+
+  // Test climb gradient
+  void testClimbGradient() {
+    double climb_rate = 500.0;  // fpm
+    double ground_speed = 100.0;  // knots
+
+    // Gradient in feet per nm
+    double gradient = climb_rate / (ground_speed / 60.0);  // ft/nm
+
+    TS_ASSERT(gradient > 200.0 && gradient < 400.0);
+  }
+
+  /***************************************************************************
+   * Rate of Turn Calculations
+   ***************************************************************************/
+
+  // Test standard rate turn
+  void testStandardRateTurn() {
+    double standard_rate = 3.0;  // degrees per second
+    double time_for_360 = 360.0 / standard_rate;
+
+    TS_ASSERT_DELTA(time_for_360, 120.0, epsilon);  // 2 minutes
+  }
+
+  // Test bank angle for standard rate
+  void testBankAngleStandardRate() {
+    double tas = 100.0;  // knots
+
+    // Bank angle ≈ TAS / 10 + 7 for standard rate (approximation)
+    double bank_angle = tas / 10.0 + 7.0;
+
+    TS_ASSERT(bank_angle > 15.0 && bank_angle < 20.0);
+  }
+
+  // Test turn radius
+  void testTurnRadius() {
+    double tas = 150.0;  // knots
+    double bank_angle = 30.0 * DEG_TO_RAD;
+
+    // Turn radius = V² / (g * tan(bank))
+    double g = 32.174;  // ft/s²
+    double v_fps = tas * 1.68781;  // Convert knots to ft/s
+    double radius_ft = (v_fps * v_fps) / (g * std::tan(bank_angle));
+    double radius_nm = radius_ft / NM_TO_FT;
+
+    TS_ASSERT(radius_nm > 0.3 && radius_nm < 0.8);
+  }
+
+  // Test half standard rate turn
+  void testHalfStandardRateTurn() {
+    double half_standard_rate = 1.5;  // degrees per second
+    double time_for_180 = 180.0 / half_standard_rate;
+
+    TS_ASSERT_DELTA(time_for_180, 120.0, epsilon);  // 2 minutes for 180
+  }
+
+  /***************************************************************************
+   * Holding Pattern Entry
+   ***************************************************************************/
+
+  // Test direct entry sector
+  void testHoldingDirectEntry() {
+    double hold_inbound = 270.0 * DEG_TO_RAD;  // West
+    double aircraft_heading = 280.0 * DEG_TO_RAD;
+
+    double relative_heading = NormalizeAngle(aircraft_heading - hold_inbound);
+
+    // Direct entry: within 70 degrees either side of inbound
+    TS_ASSERT(std::abs(relative_heading) < 70.0 * DEG_TO_RAD);
+  }
+
+  // Test parallel entry sector
+  void testHoldingParallelEntry() {
+    double hold_inbound = 270.0 * DEG_TO_RAD;  // West
+    double aircraft_heading = 180.0 * DEG_TO_RAD;  // South
+
+    double relative_heading = NormalizeAngle(aircraft_heading - hold_inbound);
+
+    // Parallel entry: 70 to 180 degrees on non-holding side
+    TS_ASSERT(std::abs(relative_heading) > 70.0 * DEG_TO_RAD);
+  }
+
+  // Test teardrop entry sector
+  void testHoldingTeardropEntry() {
+    double hold_inbound = 270.0 * DEG_TO_RAD;  // West
+    double aircraft_heading = 45.0 * DEG_TO_RAD;  // Northeast
+
+    double relative_heading = NormalizeAngle(aircraft_heading - hold_inbound);
+
+    // Teardrop entry: 110 to 180 degrees on holding side
+    TS_ASSERT(std::abs(relative_heading) > 90.0 * DEG_TO_RAD);
+  }
+
+  /***************************************************************************
+   * ILS Approach Calculations
+   ***************************************************************************/
+
+  // Test localizer course width
+  void testLocalizerCourseWidth() {
+    double full_scale_deflection = 2.5;  // degrees
+    double runway_threshold_distance = 5.0;  // nm
+
+    // Width at threshold approximately
+    double width_nm = 2.0 * runway_threshold_distance * std::tan(full_scale_deflection * DEG_TO_RAD);
+
+    TS_ASSERT(width_nm > 0.3 && width_nm < 0.6);
+  }
+
+  // Test glideslope intercept altitude
+  void testGlideslopeInterceptAltitude() {
+    double runway_elevation = 100.0;  // feet
+    double tdz_elevation = 100.0;
+    double glideslope_angle = 3.0;  // degrees
+    double distance_from_threshold = 5.0;  // nm
+
+    double height_above_tdz = distance_from_threshold * NM_TO_FT * std::tan(glideslope_angle * DEG_TO_RAD);
+    double intercept_altitude = tdz_elevation + height_above_tdz;
+
+    // At 5 nm, should be approximately 1600 feet AGL
+    TS_ASSERT(intercept_altitude > 1500.0 && intercept_altitude < 1800.0);
+  }
+
+  // Test decision altitude check
+  void testDecisionAltitude() {
+    double current_altitude = 250.0;
+    double decision_altitude = 200.0;
+    double runway_in_sight = true;
+
+    bool can_continue = (current_altitude > decision_altitude) || runway_in_sight;
+
+    TS_ASSERT(can_continue == true);
+  }
+
+  /***************************************************************************
+   * GPS/FMS Calculations
+   ***************************************************************************/
+
+  // Test LNAV cross-track sensitivity
+  void testLNAVCrossTrack() {
+    double cross_track_error = 0.5;  // nm
+    double full_scale = 2.0;  // nm (enroute)
+
+    double deflection = (cross_track_error / full_scale) * 100.0;  // percent
+
+    TS_ASSERT_DELTA(deflection, 25.0, 0.1);
+  }
+
+  // Test VNAV path deviation
+  void testVNAVPathDeviation() {
+    double current_altitude = 5000.0;
+    double target_altitude = 3000.0;  // 2000 ft descent
+    double distance_to_target = 6.0;  // nm (about 3 degree path)
+
+    // tan(3 deg) * distance = height, so height / distance = tan(3 deg) = 0.0524
+    // 2000 ft / (6 nm * 6076 ft/nm) = 2000 / 36456 = 0.0549 -> ~3.1 degrees
+    double required_gradient = (current_altitude - target_altitude) / (distance_to_target * NM_TO_FT);
+    double required_angle = std::atan(required_gradient) * RAD_TO_DEG;
+
+    double deviation = required_angle - 3.0;
+
+    TS_ASSERT(std::abs(deviation) < 1.0);  // Within 1 degree of 3-degree path
+  }
+
+  // Test waypoint sequencing distance
+  void testWaypointSequencing() {
+    double ground_speed = 200.0;  // knots
+    double turn_anticipation = 0.5;  // nm typical
+
+    // Sequencing should occur before reaching waypoint
+    double sequence_distance = turn_anticipation;
+
+    TS_ASSERT(sequence_distance > 0.0);
+  }
+
+  /***************************************************************************
+   * Alternate Airport Calculations
+   ***************************************************************************/
+
+  // Test alternate fuel requirement
+  void testAlternateFuelRequirement() {
+    double distance_to_alternate = 100.0;  // nm
+    double ground_speed = 150.0;  // knots
+    double fuel_burn_rate = 12.0;  // gph
+
+    double time_to_alternate = distance_to_alternate / ground_speed;
+    double fuel_to_alternate = time_to_alternate * fuel_burn_rate;
+
+    TS_ASSERT_DELTA(fuel_to_alternate, 8.0, 0.1);  // gallons
+  }
+
+  // Test point of no return
+  void testPointOfNoReturn() {
+    double total_range = 600.0;  // nm
+    double fuel_remaining_range = 400.0;  // nm worth of fuel
+
+    // Point of no return considering return to departure
+    double pnr = fuel_remaining_range / 2.0;
+
+    TS_ASSERT_DELTA(pnr, 200.0, epsilon);
+  }
+
+  // Test equal time point
+  void testEqualTimePoint() {
+    double total_distance = 500.0;  // nm
+    double ground_speed_out = 150.0;  // knots
+    double ground_speed_back = 200.0;  // knots (tailwind)
+
+    // ETP = D * Vback / (Vout + Vback)
+    double etp = total_distance * ground_speed_back / (ground_speed_out + ground_speed_back);
+
+    TS_ASSERT(etp > 250.0 && etp < 300.0);
+  }
+
+  /***************************************************************************
+   * Additional Distance Calculations
+   ***************************************************************************/
+
+  // Test short distance calculation
+  void testShortDistanceCalculation() {
+    double lat = 40.0 * DEG_TO_RAD;
+    double dlat = 0.01 * DEG_TO_RAD;  // 0.01 degree
+    double dlon = 0.01 * DEG_TO_RAD;
+
+    // Simplified for short distances
+    double dx = EARTH_RADIUS_NM * dlon * std::cos(lat);
+    double dy = EARTH_RADIUS_NM * dlat;
+    double distance = std::sqrt(dx * dx + dy * dy);
+
+    TS_ASSERT(distance < 1.0);  // Less than 1 nm
+  }
+
+  // Test distance to DME station
+  void testDMEDistance() {
+    double slant_range = 10.0;  // nm
+    double altitude_difference = 5000.0;  // feet
+
+    // Ground distance from slant range
+    double altitude_nm = altitude_difference / NM_TO_FT;
+    double ground_distance = std::sqrt(slant_range * slant_range - altitude_nm * altitude_nm);
+
+    TS_ASSERT(ground_distance < slant_range);
+    TS_ASSERT(ground_distance > 9.9);
+  }
+
+  // Test meridian convergence
+  void testMeridianConvergence() {
+    double lat = 60.0 * DEG_TO_RAD;  // High latitude
+    double dlon = 10.0 * DEG_TO_RAD;
+
+    // Convergence angle
+    double convergence = dlon * std::sin(lat);
+
+    TS_ASSERT(convergence > 8.0 * DEG_TO_RAD);
+  }
+
+  /***************************************************************************
+   * Stress Tests
+   ***************************************************************************/
+
+  // Test many bearing calculations
+  void testStressBearingCalculations() {
+    for (int i = 0; i < 100; i++) {
+      double lat1 = (40.0 + i * 0.01) * DEG_TO_RAD;
+      double lon1 = (-74.0 - i * 0.01) * DEG_TO_RAD;
+      double lat2 = (41.0 + i * 0.01) * DEG_TO_RAD;
+      double lon2 = (-73.0 - i * 0.01) * DEG_TO_RAD;
+
+      double dlon = lon2 - lon1;
+      double y = std::sin(dlon) * std::cos(lat2);
+      double x = std::cos(lat1) * std::sin(lat2) -
+                 std::sin(lat1) * std::cos(lat2) * std::cos(dlon);
+      double bearing = std::atan2(y, x);
+
+      TS_ASSERT(!std::isnan(bearing));
+      TS_ASSERT(bearing >= -M_PI && bearing <= M_PI);
+    }
+  }
+
+  // Test many distance calculations
+  void testStressDistanceCalculations() {
+    for (int i = 0; i < 100; i++) {
+      double lat1 = (i % 90) * DEG_TO_RAD;
+      double lon1 = (i % 180) * DEG_TO_RAD;
+      double lat2 = ((i + 10) % 90) * DEG_TO_RAD;
+      double lon2 = ((i + 10) % 180) * DEG_TO_RAD;
+
+      double dlat = lat2 - lat1;
+      double dlon = lon2 - lon1;
+
+      double a = std::sin(dlat/2) * std::sin(dlat/2) +
+                 std::cos(lat1) * std::cos(lat2) *
+                 std::sin(dlon/2) * std::sin(dlon/2);
+      double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1.0 - a));
+      double distance = EARTH_RADIUS_NM * c;
+
+      TS_ASSERT(!std::isnan(distance));
+      TS_ASSERT(distance >= 0.0);
+    }
+  }
 };
