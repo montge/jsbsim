@@ -1,6 +1,8 @@
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+#include <memory>
+#include <vector>
 
 #include <FGFDMExec.h>
 #include <models/FGModel.h>
@@ -8,6 +10,12 @@
 #include <models/FGAtmosphere.h>
 #include <models/FGAuxiliary.h>
 #include <models/FGInertial.h>
+#include <models/FGPropagate.h>
+#include <models/FGMassBalance.h>
+#include <models/FGAerodynamics.h>
+#include <models/FGGroundReactions.h>
+#include <models/FGAccelerations.h>
+#include <models/FGFCS.h>
 
 using namespace JSBSim;
 
@@ -691,5 +699,614 @@ public:
       fdmex.GetAuxiliary()->Run(false);
     }
     TS_ASSERT(true);
+  }
+
+  /***************************************************************************
+   * FGPropagate Model Tests
+   ***************************************************************************/
+
+  void testFGPropagateExists() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+  }
+
+  void testFGPropagateGetExec() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate->GetExec() == &fdmex);
+  }
+
+  void testFGPropagateGetName() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(!propagate->GetName().empty());
+  }
+
+  void testFGPropagateInitModel() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate->InitModel());
+  }
+
+  void testFGPropagateRun() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT_EQUALS(propagate->Run(false), false);
+    TS_ASSERT_EQUALS(propagate->Run(true), false);
+  }
+
+  void testFGPropagateSetRate() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+    propagate->SetRate(3);
+    TS_ASSERT_EQUALS(propagate->GetRate(), 3u);
+  }
+
+  /***************************************************************************
+   * FGMassBalance Model Tests
+   ***************************************************************************/
+
+  void testFGMassBalanceExists() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+    TS_ASSERT(massBalance != nullptr);
+  }
+
+  void testFGMassBalanceGetExec() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+    TS_ASSERT(massBalance->GetExec() == &fdmex);
+  }
+
+  void testFGMassBalanceGetName() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+    TS_ASSERT(!massBalance->GetName().empty());
+  }
+
+  void testFGMassBalanceInitModel() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+    TS_ASSERT(massBalance->InitModel());
+  }
+
+  void testFGMassBalanceRun() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+    TS_ASSERT_EQUALS(massBalance->Run(false), false);
+  }
+
+  void testFGMassBalanceSetRate() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+    massBalance->SetRate(5);
+    TS_ASSERT_EQUALS(massBalance->GetRate(), 5u);
+  }
+
+  /***************************************************************************
+   * FGAerodynamics Model Tests
+   ***************************************************************************/
+
+  void testFGAerodynamicsExists() {
+    FGFDMExec fdmex;
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+  }
+
+  void testFGAerodynamicsGetExec() {
+    FGFDMExec fdmex;
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero->GetExec() == &fdmex);
+  }
+
+  void testFGAerodynamicsGetName() {
+    FGFDMExec fdmex;
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(!aero->GetName().empty());
+  }
+
+  // Note: FGAerodynamics::InitModel() and Run() require an aircraft to be loaded
+  // Testing only basic operations (GetExec, GetName, SetRate) here
+
+  void testFGAerodynamicsSetRate() {
+    FGFDMExec fdmex;
+    auto aero = fdmex.GetAerodynamics();
+    aero->SetRate(4);
+    TS_ASSERT_EQUALS(aero->GetRate(), 4u);
+  }
+
+  /***************************************************************************
+   * FGGroundReactions Model Tests
+   ***************************************************************************/
+
+  void testFGGroundReactionsExists() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(groundReactions != nullptr);
+  }
+
+  void testFGGroundReactionsGetExec() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(groundReactions->GetExec() == &fdmex);
+  }
+
+  void testFGGroundReactionsGetName() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(!groundReactions->GetName().empty());
+  }
+
+  void testFGGroundReactionsInitModel() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(groundReactions->InitModel());
+  }
+
+  void testFGGroundReactionsRun() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT_EQUALS(groundReactions->Run(false), false);
+  }
+
+  void testFGGroundReactionsSetRate() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->SetRate(6);
+    TS_ASSERT_EQUALS(groundReactions->GetRate(), 6u);
+  }
+
+  /***************************************************************************
+   * FGAccelerations Model Tests
+   ***************************************************************************/
+
+  void testFGAccelerationsExists() {
+    FGFDMExec fdmex;
+    auto accelerations = fdmex.GetAccelerations();
+    TS_ASSERT(accelerations != nullptr);
+  }
+
+  void testFGAccelerationsGetExec() {
+    FGFDMExec fdmex;
+    auto accelerations = fdmex.GetAccelerations();
+    TS_ASSERT(accelerations->GetExec() == &fdmex);
+  }
+
+  void testFGAccelerationsGetName() {
+    FGFDMExec fdmex;
+    auto accelerations = fdmex.GetAccelerations();
+    TS_ASSERT(!accelerations->GetName().empty());
+  }
+
+  void testFGAccelerationsInitModel() {
+    FGFDMExec fdmex;
+    auto accelerations = fdmex.GetAccelerations();
+    TS_ASSERT(accelerations->InitModel());
+  }
+
+  void testFGAccelerationsRun() {
+    FGFDMExec fdmex;
+    auto accelerations = fdmex.GetAccelerations();
+    TS_ASSERT_EQUALS(accelerations->Run(false), false);
+  }
+
+  void testFGAccelerationsSetRate() {
+    FGFDMExec fdmex;
+    auto accelerations = fdmex.GetAccelerations();
+    accelerations->SetRate(2);
+    TS_ASSERT_EQUALS(accelerations->GetRate(), 2u);
+  }
+
+  /***************************************************************************
+   * FGFCS Model Tests
+   ***************************************************************************/
+
+  void testFGFCSExists() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+  }
+
+  void testFGFCSGetExec() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs->GetExec() == &fdmex);
+  }
+
+  void testFGFCSGetName() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(!fcs->GetName().empty());
+  }
+
+  void testFGFCSInitModel() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs->InitModel());
+  }
+
+  void testFGFCSRun() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT_EQUALS(fcs->Run(false), false);
+  }
+
+  void testFGFCSSetRate() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+    fcs->SetRate(8);
+    TS_ASSERT_EQUALS(fcs->GetRate(), 8u);
+  }
+
+  /***************************************************************************
+   * All Extended Models Tests
+   ***************************************************************************/
+
+  void testAllExtendedModelsExist() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT(fdmex.GetPropagate() != nullptr);
+    TS_ASSERT(fdmex.GetMassBalance() != nullptr);
+    TS_ASSERT(fdmex.GetAerodynamics() != nullptr);
+    TS_ASSERT(fdmex.GetGroundReactions() != nullptr);
+    TS_ASSERT(fdmex.GetAccelerations() != nullptr);
+    TS_ASSERT(fdmex.GetFCS() != nullptr);
+  }
+
+  void testAllExtendedModelsHaveExec() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT(fdmex.GetPropagate()->GetExec() == &fdmex);
+    TS_ASSERT(fdmex.GetMassBalance()->GetExec() == &fdmex);
+    TS_ASSERT(fdmex.GetAerodynamics()->GetExec() == &fdmex);
+    TS_ASSERT(fdmex.GetGroundReactions()->GetExec() == &fdmex);
+    TS_ASSERT(fdmex.GetAccelerations()->GetExec() == &fdmex);
+    TS_ASSERT(fdmex.GetFCS()->GetExec() == &fdmex);
+  }
+
+  void testAllExtendedModelsHaveNames() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT(!fdmex.GetPropagate()->GetName().empty());
+    TS_ASSERT(!fdmex.GetMassBalance()->GetName().empty());
+    TS_ASSERT(!fdmex.GetAerodynamics()->GetName().empty());
+    TS_ASSERT(!fdmex.GetGroundReactions()->GetName().empty());
+    TS_ASSERT(!fdmex.GetAccelerations()->GetName().empty());
+    TS_ASSERT(!fdmex.GetFCS()->GetName().empty());
+  }
+
+  void testAllExtendedModelsInitModel() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT(fdmex.GetPropagate()->InitModel());
+    TS_ASSERT(fdmex.GetMassBalance()->InitModel());
+    // Note: FGAerodynamics::InitModel() requires aircraft to be loaded
+    TS_ASSERT(fdmex.GetGroundReactions()->InitModel());
+    TS_ASSERT(fdmex.GetAccelerations()->InitModel());
+    TS_ASSERT(fdmex.GetFCS()->InitModel());
+  }
+
+  void testAllExtendedModelsRun() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->Run(false), false);
+    // Note: FGAerodynamics::Run() requires aircraft to be loaded
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->Run(false), false);
+  }
+
+  void testAllExtendedModelsIndependentRates() {
+    FGFDMExec fdmex;
+
+    fdmex.GetPropagate()->SetRate(1);
+    fdmex.GetMassBalance()->SetRate(2);
+    fdmex.GetAerodynamics()->SetRate(3);
+    fdmex.GetGroundReactions()->SetRate(4);
+    fdmex.GetAccelerations()->SetRate(5);
+    fdmex.GetFCS()->SetRate(6);
+
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->GetRate(), 1u);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->GetRate(), 2u);
+    TS_ASSERT_EQUALS(fdmex.GetAerodynamics()->GetRate(), 3u);
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->GetRate(), 4u);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->GetRate(), 5u);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->GetRate(), 6u);
+  }
+
+  /***************************************************************************
+   * Model Uniqueness Tests
+   ***************************************************************************/
+
+  void testExtendedModelNamesUnique() {
+    FGFDMExec fdmex;
+
+    std::string propagateName = fdmex.GetPropagate()->GetName();
+    std::string massBalanceName = fdmex.GetMassBalance()->GetName();
+    std::string aeroName = fdmex.GetAerodynamics()->GetName();
+    std::string groundName = fdmex.GetGroundReactions()->GetName();
+    std::string accelName = fdmex.GetAccelerations()->GetName();
+    std::string fcsName = fdmex.GetFCS()->GetName();
+
+    TS_ASSERT_DIFFERS(propagateName, massBalanceName);
+    TS_ASSERT_DIFFERS(propagateName, aeroName);
+    TS_ASSERT_DIFFERS(propagateName, groundName);
+    TS_ASSERT_DIFFERS(propagateName, accelName);
+    TS_ASSERT_DIFFERS(propagateName, fcsName);
+    TS_ASSERT_DIFFERS(massBalanceName, aeroName);
+    TS_ASSERT_DIFFERS(massBalanceName, groundName);
+    TS_ASSERT_DIFFERS(aeroName, groundName);
+    TS_ASSERT_DIFFERS(accelName, fcsName);
+  }
+
+  void testAllModelNamesUniqueComplete() {
+    FGFDMExec fdmex;
+
+    std::vector<std::string> names;
+    names.push_back(fdmex.GetAircraft()->GetName());
+    names.push_back(fdmex.GetAtmosphere()->GetName());
+    names.push_back(fdmex.GetInertial()->GetName());
+    names.push_back(fdmex.GetAuxiliary()->GetName());
+    names.push_back(fdmex.GetPropagate()->GetName());
+    names.push_back(fdmex.GetMassBalance()->GetName());
+    names.push_back(fdmex.GetAerodynamics()->GetName());
+    names.push_back(fdmex.GetGroundReactions()->GetName());
+    names.push_back(fdmex.GetAccelerations()->GetName());
+    names.push_back(fdmex.GetFCS()->GetName());
+
+    // Check all pairs are different
+    for (size_t i = 0; i < names.size(); i++) {
+      for (size_t j = i + 1; j < names.size(); j++) {
+        TS_ASSERT_DIFFERS(names[i], names[j]);
+      }
+    }
+  }
+
+  /***************************************************************************
+   * Complete System Run Tests
+   ***************************************************************************/
+
+  void testCompleteSystemRun() {
+    FGFDMExec fdmex;
+
+    // Run models that don't require aircraft to be loaded
+    TS_ASSERT_EQUALS(fdmex.GetAtmosphere()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetInertial()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->Run(false), false);
+    // Note: FGAerodynamics::Run() requires aircraft to be loaded
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetAircraft()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetAuxiliary()->Run(false), false);
+  }
+
+  void testCompleteSystemMultipleRuns() {
+    FGFDMExec fdmex;
+
+    for (int cycle = 0; cycle < 10; cycle++) {
+      fdmex.GetAtmosphere()->Run(false);
+      fdmex.GetPropagate()->Run(false);
+      fdmex.GetMassBalance()->Run(false);
+      // Note: FGAerodynamics::Run() requires aircraft to be loaded
+      fdmex.GetFCS()->Run(false);
+      fdmex.GetGroundReactions()->Run(false);
+      fdmex.GetAccelerations()->Run(false);
+      fdmex.GetAircraft()->Run(false);
+      fdmex.GetAuxiliary()->Run(false);
+    }
+    TS_ASSERT(true);
+  }
+
+  void testCompleteSystemInitialize() {
+    FGFDMExec fdmex;
+
+    // Initialize models that don't require aircraft to be loaded
+    TS_ASSERT(fdmex.GetAtmosphere()->InitModel());
+    TS_ASSERT(fdmex.GetInertial()->InitModel());
+    TS_ASSERT(fdmex.GetPropagate()->InitModel());
+    TS_ASSERT(fdmex.GetMassBalance()->InitModel());
+    // Note: FGAerodynamics::InitModel() requires aircraft to be loaded
+    TS_ASSERT(fdmex.GetFCS()->InitModel());
+    TS_ASSERT(fdmex.GetGroundReactions()->InitModel());
+    TS_ASSERT(fdmex.GetAccelerations()->InitModel());
+    TS_ASSERT(fdmex.GetAircraft()->InitModel());
+    TS_ASSERT(fdmex.GetAuxiliary()->InitModel());
+  }
+
+  /***************************************************************************
+   * Extended Stress Tests
+   ***************************************************************************/
+
+  void testExtendedModelsStress() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 20; i++) {
+      fdmex.GetPropagate()->SetRate(i);
+      fdmex.GetMassBalance()->SetRate(i + 1);
+      fdmex.GetAerodynamics()->SetRate(i + 2);
+      fdmex.GetGroundReactions()->SetRate(i + 3);
+      fdmex.GetAccelerations()->SetRate(i + 4);
+      fdmex.GetFCS()->SetRate(i + 5);
+
+      fdmex.GetPropagate()->Run(false);
+      fdmex.GetMassBalance()->Run(false);
+      // Note: FGAerodynamics::Run() requires aircraft to be loaded
+      fdmex.GetGroundReactions()->Run(false);
+      fdmex.GetAccelerations()->Run(false);
+      fdmex.GetFCS()->Run(false);
+    }
+    TS_ASSERT(true);
+  }
+
+  void testRapidModelSwitching() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 50; i++) {
+      switch (i % 5) {  // Skip FGAerodynamics which requires loaded aircraft
+        case 0: fdmex.GetPropagate()->Run(false); break;
+        case 1: fdmex.GetMassBalance()->Run(false); break;
+        case 2: fdmex.GetGroundReactions()->Run(false); break;
+        case 3: fdmex.GetAccelerations()->Run(false); break;
+        case 4: fdmex.GetFCS()->Run(false); break;
+      }
+    }
+    TS_ASSERT(true);
+  }
+
+  void testManyModelInitCycles() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 10; i++) {
+      TS_ASSERT(fdmex.GetPropagate()->InitModel());
+      TS_ASSERT(fdmex.GetMassBalance()->InitModel());
+      // Note: FGAerodynamics::InitModel() requires aircraft to be loaded
+      TS_ASSERT(fdmex.GetGroundReactions()->InitModel());
+      TS_ASSERT(fdmex.GetAccelerations()->InitModel());
+      TS_ASSERT(fdmex.GetFCS()->InitModel());
+    }
+  }
+
+  /***************************************************************************
+   * Model Consistency Tests
+   ***************************************************************************/
+
+  void testModelExecConsistencyAfterOperations() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    FGFDMExec* exec1 = propagate->GetExec();
+    propagate->SetRate(10);
+    FGFDMExec* exec2 = propagate->GetExec();
+    propagate->Run(false);
+    FGFDMExec* exec3 = propagate->GetExec();
+    propagate->InitModel();
+    FGFDMExec* exec4 = propagate->GetExec();
+
+    TS_ASSERT_EQUALS(exec1, exec2);
+    TS_ASSERT_EQUALS(exec2, exec3);
+    TS_ASSERT_EQUALS(exec3, exec4);
+    TS_ASSERT_EQUALS(exec1, &fdmex);
+  }
+
+  void testModelNameConsistencyAfterOperations() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    std::string name1 = propagate->GetName();
+    propagate->SetRate(5);
+    std::string name2 = propagate->GetName();
+    propagate->Run(false);
+    std::string name3 = propagate->GetName();
+    propagate->InitModel();
+    std::string name4 = propagate->GetName();
+
+    TS_ASSERT_EQUALS(name1, name2);
+    TS_ASSERT_EQUALS(name2, name3);
+    TS_ASSERT_EQUALS(name3, name4);
+  }
+
+  void testMultipleFDMExecModelIndependence() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto prop1 = fdmex1.GetPropagate();
+    auto prop2 = fdmex2.GetPropagate();
+
+    prop1->SetRate(1);
+    prop2->SetRate(100);
+
+    TS_ASSERT_EQUALS(prop1->GetRate(), 1u);
+    TS_ASSERT_EQUALS(prop2->GetRate(), 100u);
+
+    TS_ASSERT(prop1->GetExec() == &fdmex1);
+    TS_ASSERT(prop2->GetExec() == &fdmex2);
+    TS_ASSERT(prop1->GetExec() != prop2->GetExec());
+  }
+
+  /***************************************************************************
+   * Holding State Tests
+   ***************************************************************************/
+
+  void testAllExtendedModelsRunHolding() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->Run(true), false);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->Run(true), false);
+    // Note: FGAerodynamics::Run() requires aircraft to be loaded
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->Run(true), false);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->Run(true), false);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->Run(true), false);
+  }
+
+  void testAlternatingHoldingAllModels() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 10; i++) {
+      bool holding = (i % 2 == 0);
+      fdmex.GetPropagate()->Run(holding);
+      fdmex.GetMassBalance()->Run(holding);
+      // Note: FGAerodynamics::Run() requires aircraft to be loaded
+      fdmex.GetGroundReactions()->Run(holding);
+      fdmex.GetAccelerations()->Run(holding);
+      fdmex.GetFCS()->Run(holding);
+    }
+    TS_ASSERT(true);
+  }
+
+  /***************************************************************************
+   * Rate Boundary Tests for Extended Models
+   ***************************************************************************/
+
+  void testExtendedModelMaxRate() {
+    FGFDMExec fdmex;
+    unsigned int maxRate = std::numeric_limits<unsigned int>::max();
+
+    fdmex.GetPropagate()->SetRate(maxRate);
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->GetRate(), maxRate);
+
+    fdmex.GetMassBalance()->SetRate(maxRate);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->GetRate(), maxRate);
+  }
+
+  void testExtendedModelRateZero() {
+    FGFDMExec fdmex;
+
+    fdmex.GetPropagate()->SetRate(0);
+    fdmex.GetMassBalance()->SetRate(0);
+    fdmex.GetAerodynamics()->SetRate(0);
+    fdmex.GetGroundReactions()->SetRate(0);
+    fdmex.GetAccelerations()->SetRate(0);
+    fdmex.GetFCS()->SetRate(0);
+
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->GetRate(), 0u);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->GetRate(), 0u);
+    TS_ASSERT_EQUALS(fdmex.GetAerodynamics()->GetRate(), 0u);
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->GetRate(), 0u);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->GetRate(), 0u);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->GetRate(), 0u);
+  }
+
+  void testRateSequenceAllModels() {
+    FGFDMExec fdmex;
+
+    for (unsigned int rate = 0; rate < 10; rate++) {
+      fdmex.GetPropagate()->SetRate(rate);
+      fdmex.GetMassBalance()->SetRate(rate);
+      fdmex.GetAerodynamics()->SetRate(rate);
+      fdmex.GetGroundReactions()->SetRate(rate);
+      fdmex.GetAccelerations()->SetRate(rate);
+      fdmex.GetFCS()->SetRate(rate);
+
+      TS_ASSERT_EQUALS(fdmex.GetPropagate()->GetRate(), rate);
+      TS_ASSERT_EQUALS(fdmex.GetMassBalance()->GetRate(), rate);
+      TS_ASSERT_EQUALS(fdmex.GetAerodynamics()->GetRate(), rate);
+      TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->GetRate(), rate);
+      TS_ASSERT_EQUALS(fdmex.GetAccelerations()->GetRate(), rate);
+      TS_ASSERT_EQUALS(fdmex.GetFCS()->GetRate(), rate);
+    }
   }
 };
