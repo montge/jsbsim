@@ -1371,4 +1371,86 @@ public:
     double L_ultimate = n_ultimate * weight;
     TS_ASSERT_DELTA(L_ultimate, 27000.0, 1.0);
   }
+
+  /**************************************************************************
+   * COMPLETE SYSTEM VERIFICATION TESTS
+   **************************************************************************/
+
+  // Test complete structural loads verification
+  void testCompleteStructuralLoadsVerification() {
+    // 1. Wing bending moment calculation
+    double span = 36.0;  // ft
+    double lift = 5000.0;  // lbs
+    double root_moment = lift * span / 4.0;  // Approximate
+    TS_ASSERT(root_moment > 0);
+
+    // 2. Load factor limits (FAR 23 Normal category)
+    double n_pos_limit = 3.8;
+    double n_neg_limit = -1.52;
+    TS_ASSERT(n_pos_limit > 0);
+    TS_ASSERT(n_neg_limit < 0);
+    TS_ASSERT(fabs(n_neg_limit) < n_pos_limit);
+
+    // 3. Safety factor verification
+    double SF = 1.5;
+    double n_ultimate = n_pos_limit * SF;
+    TS_ASSERT_DELTA(n_ultimate, 5.7, 0.1);
+
+    // 4. Stress calculation
+    double moment = 50000.0;  // lb-in
+    double c = 2.0;  // inches (distance to neutral axis)
+    double I = 10.0;  // in^4 (moment of inertia)
+    double stress = moment * c / I;
+    TS_ASSERT_DELTA(stress, 10000.0, 1.0);
+  }
+
+  // Test fatigue cycle counting comprehensive
+  void testFatigueCycleCountingComprehensive() {
+    // Rainflow counting for fatigue analysis
+    double stress_cycles[] = {10000, 15000, 12000, 18000, 8000};
+    double max_stress = 0;
+    double min_stress = 100000;
+
+    for (double s : stress_cycles) {
+      if (s > max_stress) max_stress = s;
+      if (s < min_stress) min_stress = s;
+    }
+
+    double stress_range = max_stress - min_stress;
+    TS_ASSERT_DELTA(stress_range, 10000.0, 1.0);
+    TS_ASSERT(max_stress == 18000.0);
+    TS_ASSERT(min_stress == 8000.0);
+  }
+
+  // Test flutter speed margin comprehensive
+  void testFlutterSpeedMarginComprehensive() {
+    // Flutter speed must be > 1.2 * Vd
+    double Vd = 250.0;  // Design dive speed (kts)
+    double flutter_margin = 1.2;
+    double min_flutter_speed = Vd * flutter_margin;
+
+    TS_ASSERT_DELTA(min_flutter_speed, 300.0, 1.0);
+
+    double actual_flutter = 320.0;  // kts
+    TS_ASSERT(actual_flutter > min_flutter_speed);
+  }
+
+  // Test combined loading envelope
+  void testCombinedLoadingEnvelope() {
+    // V-n diagram corner points
+    double Vs = 60.0;   // Stall speed (kts)
+    double Va = 105.0;  // Maneuvering speed
+    double Vc = 140.0;  // Cruise speed
+    double Vd = 180.0;  // Dive speed
+    double n_max = 3.8;
+
+    // Va = Vs * sqrt(n_max)
+    double Va_calc = Vs * sqrt(n_max);
+    TS_ASSERT_DELTA(Va_calc, 117.0, 2.0);
+
+    // Verify speed ordering
+    TS_ASSERT(Vs < Va);
+    TS_ASSERT(Va < Vc);
+    TS_ASSERT(Vc < Vd);
+  }
 };

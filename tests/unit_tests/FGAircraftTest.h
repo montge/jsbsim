@@ -1658,4 +1658,118 @@ public:
     TS_ASSERT_DELTA(forces(2), sideForce, epsilon);
     TS_ASSERT_DELTA(moments(3), yawMoment, epsilon);
   }
+
+  /***************************************************************************
+   * Complete System Verification Tests
+   ***************************************************************************/
+
+  // Test complete aircraft force/moment summation
+  void testCompleteAircraftForceMomentSummation() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // Set all force/moment components
+    aircraft->in.AeroForce = FGColumnVector3(100.0, 50.0, 200.0);
+    aircraft->in.PropForce = FGColumnVector3(500.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, -100.0);
+    aircraft->in.ExternalForce = FGColumnVector3(10.0, 5.0, 15.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->in.AeroMoment = FGColumnVector3(1000.0, 2000.0, 500.0);
+    aircraft->in.PropMoment = FGColumnVector3(100.0, 0.0, -50.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(20.0, 30.0, 40.0);
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 forces = aircraft->GetForces();
+    FGColumnVector3 moments = aircraft->GetMoments();
+
+    // Verify summation
+    TS_ASSERT_DELTA(forces(1), 610.0, epsilon);  // 100+500+0+10
+    TS_ASSERT_DELTA(forces(2), 55.0, epsilon);   // 50+0+0+5
+    TS_ASSERT_DELTA(forces(3), 115.0, epsilon);  // 200+0-100+15
+
+    TS_ASSERT_DELTA(moments(1), 1120.0, epsilon);  // 1000+100+0+20
+    TS_ASSERT_DELTA(moments(2), 2030.0, epsilon);  // 2000+0+0+30
+    TS_ASSERT_DELTA(moments(3), 490.0, epsilon);   // 500-50+0+40
+  }
+
+  // Test aircraft with multiple force sources
+  void testAircraftMultipleForceSources() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // All zero except aero
+    aircraft->in.AeroForce = FGColumnVector3(1000.0, 0.0, -5000.0);
+    aircraft->in.PropForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.AeroMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.PropMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 forces = aircraft->GetForces();
+    TS_ASSERT_DELTA(forces(1), 1000.0, epsilon);
+    TS_ASSERT_DELTA(forces(3), -5000.0, epsilon);
+  }
+
+  // Test aircraft instance independence
+  void testAircraftInstanceIndependence() {
+    FGFDMExec fdmex1, fdmex2;
+    auto aircraft1 = fdmex1.GetAircraft();
+    auto aircraft2 = fdmex2.GetAircraft();
+
+    // Set different forces
+    aircraft1->in.AeroForce = FGColumnVector3(1000.0, 0.0, 0.0);
+    aircraft2->in.AeroForce = FGColumnVector3(2000.0, 0.0, 0.0);
+
+    // Zero other inputs
+    aircraft1->in.PropForce = aircraft1->in.GroundForce = aircraft1->in.ExternalForce = aircraft1->in.BuoyantForce = FGColumnVector3();
+    aircraft1->in.AeroMoment = aircraft1->in.PropMoment = aircraft1->in.GroundMoment = aircraft1->in.ExternalMoment = aircraft1->in.BuoyantMoment = FGColumnVector3();
+    aircraft2->in.PropForce = aircraft2->in.GroundForce = aircraft2->in.ExternalForce = aircraft2->in.BuoyantForce = FGColumnVector3();
+    aircraft2->in.AeroMoment = aircraft2->in.PropMoment = aircraft2->in.GroundMoment = aircraft2->in.ExternalMoment = aircraft2->in.BuoyantMoment = FGColumnVector3();
+
+    aircraft1->Run(false);
+    aircraft2->Run(false);
+
+    TS_ASSERT_DELTA(aircraft1->GetForces()(1), 1000.0, epsilon);
+    TS_ASSERT_DELTA(aircraft2->GetForces()(1), 2000.0, epsilon);
+  }
+
+  // Test aircraft zero force state
+  void testAircraftZeroForceState() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // All zeros
+    aircraft->in.AeroForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.PropForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.AeroMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.PropMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 forces = aircraft->GetForces();
+    FGColumnVector3 moments = aircraft->GetMoments();
+
+    TS_ASSERT_DELTA(forces(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(3), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments(3), 0.0, epsilon);
+  }
 };

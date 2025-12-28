@@ -1875,4 +1875,95 @@ public:
     TS_ASSERT_EQUALS(ic.GetSpeedSet(), setvc);
     TS_ASSERT_DELTA(ic.GetVcalibratedKtsIC(), 189.0, 1.0);
   }
+
+  /***************************************************************************
+   * Section 26: Complete System Verification Tests
+   ***************************************************************************/
+
+  void testCompleteInitialConditionVerification() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // 1. Set complete flight condition
+    ic.SetLatitudeDegIC(37.6213);
+    ic.SetLongitudeDegIC(-122.3790);
+    ic.SetAltitudeASLFtIC(3000.0);
+    ic.SetVtrueKtsIC(120.0);
+    ic.SetPhiDegIC(0.0);
+    ic.SetThetaDegIC(5.0);
+    ic.SetPsiDegIC(270.0);
+
+    // 2. Verify all values
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 37.6213, 0.001);
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), -122.3790, 0.001);
+    TS_ASSERT_DELTA(ic.GetAltitudeASLFtIC(), 3000.0, 1.0);
+    TS_ASSERT_DELTA(ic.GetVtrueKtsIC(), 120.0, 1.0);
+    TS_ASSERT_DELTA(ic.GetPhiDegIC(), 0.0, 0.1);
+    TS_ASSERT_DELTA(ic.GetThetaDegIC(), 5.0, 0.1);
+    TS_ASSERT_DELTA(ic.GetPsiDegIC(), 270.0, 0.1);
+
+    // 3. Verify derived values
+    TS_ASSERT(ic.GetVtrueKtsIC() > 0);
+    TS_ASSERT(ic.GetAltitudeASLFtIC() >= 0);
+  }
+
+  void testInitialConditionConsistency() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set altitude and speed
+    ic.SetAltitudeASLFtIC(20000.0);
+    ic.SetMachIC(0.75);
+
+    // True airspeed should be computable
+    double Vt = ic.GetVtrueKtsIC();
+    TS_ASSERT(Vt > 0);
+
+    // At 20000 ft, TAS should be higher than indicated for same Mach
+    TS_ASSERT(Vt > 200.0);
+    TS_ASSERT(Vt < 600.0);
+  }
+
+  void testMultipleInitialConditionInstances() {
+    FGFDMExec fdmex1, fdmex2;
+    FGInitialCondition ic1(&fdmex1);
+    FGInitialCondition ic2(&fdmex2);
+
+    // Set different conditions
+    ic1.SetAltitudeASLFtIC(5000.0);
+    ic2.SetAltitudeASLFtIC(15000.0);
+
+    ic1.SetVtrueKtsIC(150.0);
+    ic2.SetVtrueKtsIC(250.0);
+
+    // Verify independence
+    TS_ASSERT_DELTA(ic1.GetAltitudeASLFtIC(), 5000.0, 1.0);
+    TS_ASSERT_DELTA(ic2.GetAltitudeASLFtIC(), 15000.0, 1.0);
+    TS_ASSERT_DELTA(ic1.GetVtrueKtsIC(), 150.0, 1.0);
+    TS_ASSERT_DELTA(ic2.GetVtrueKtsIC(), 250.0, 1.0);
+  }
+
+  void testInitialConditionReset() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set values
+    ic.SetLatitudeDegIC(45.0);
+    ic.SetLongitudeDegIC(-90.0);
+    ic.SetAltitudeASLFtIC(10000.0);
+    ic.SetVtrueKtsIC(200.0);
+
+    // Verify
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 45.0, 0.1);
+
+    // Set new values (simulate reset)
+    ic.SetLatitudeDegIC(0.0);
+    ic.SetLongitudeDegIC(0.0);
+    ic.SetAltitudeASLFtIC(0.0);
+
+    // Verify new values
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 0.0, 0.1);
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), 0.0, 0.1);
+    TS_ASSERT_DELTA(ic.GetAltitudeASLFtIC(), 0.0, 1.0);
+  }
 };

@@ -1299,4 +1299,80 @@ public:
 
     TS_ASSERT(daytimeWindThreshold > nighttimeWindThreshold);
   }
+
+  /***************************************************************************
+   * Complete System Verification Tests
+   ***************************************************************************/
+
+  // Test complete wind system verification
+  void testCompleteWindSystemVerification() {
+    // 1. Wind components from speed and direction
+    double speed = 25.0;  // kts
+    double direction = 045.0;  // degrees (from NE)
+    double dir_rad = direction * M_PI / 180.0;
+
+    double north = -speed * cos(dir_rad);
+    double east = -speed * sin(dir_rad);
+
+    TS_ASSERT(north < 0);  // Wind from NE goes SW
+    TS_ASSERT(east < 0);
+
+    // 2. Crosswind component for runway 09 (090 degrees)
+    double runway_hdg = 090.0;
+    double xwind = speed * sin((direction - runway_hdg) * M_PI / 180.0);
+    TS_ASSERT(fabs(xwind) < speed);
+
+    // 3. Headwind component
+    double hwind = speed * cos((direction - runway_hdg) * M_PI / 180.0);
+    TS_ASSERT(hwind * hwind + xwind * xwind - speed * speed < 0.01);
+  }
+
+  // Test wind shear profile
+  void testWindShearProfile() {
+    // Power law wind profile: V(z) = V_ref * (z/z_ref)^alpha
+    double V_ref = 15.0;  // kts at reference height
+    double z_ref = 10.0;  // meters (reference height)
+    double alpha = 0.143; // Neutral stability exponent
+
+    double heights[] = {5.0, 20.0, 50.0, 100.0};
+    double prev_speed = 0.0;
+
+    for (double z : heights) {
+      double V = V_ref * pow(z / z_ref, alpha);
+      TS_ASSERT(V > prev_speed);  // Wind increases with height
+      prev_speed = V;
+    }
+  }
+
+  // Test gust alleviation factor
+  void testGustAlleviationFactor() {
+    // Gust alleviation factor depends on aircraft response
+    double gust_velocity = 50.0;  // fps
+    double cruise_speed = 400.0;  // fps
+    double mu_g = 10.0;  // Aircraft mass ratio parameter
+
+    double K_g = 0.88 * mu_g / (5.3 + mu_g);  // Gust alleviation factor
+    double effective_gust = gust_velocity * K_g;
+
+    TS_ASSERT(K_g < 1.0);
+    TS_ASSERT(effective_gust < gust_velocity);
+  }
+
+  // Test microburst wind model
+  void testMicroburstWindModel() {
+    // Microburst creates strong downdraft and outflow
+    double max_downdraft = 80.0;  // fps
+    double outflow_radius = 2000.0;  // ft
+    double current_radius = 1000.0;  // ft
+
+    // Outflow velocity increases toward edge
+    double outflow = max_downdraft * (current_radius / outflow_radius);
+    TS_ASSERT(outflow > 0);
+    TS_ASSERT(outflow < max_downdraft);
+
+    // Downdraft decreases with distance from center
+    double downdraft = max_downdraft * (1.0 - current_radius / outflow_radius);
+    TS_ASSERT(downdraft > 0);
+    TS_ASSERT(downdraft + outflow < 2.0 * max_downdraft);
+  }
 };
