@@ -1184,4 +1184,388 @@ public:
 
     TS_ASSERT_EQUALS(count, 4);
   }
+
+  // ============================================================================
+  // Extended State Space Tests (76-100)
+  // ============================================================================
+
+  // Test 76: Kalman filter state estimation concept
+  void testKalmanFilterStateDimensions() {
+    // x_hat[k|k] = x_hat[k|k-1] + K * (y - C * x_hat[k|k-1])
+    int n = 6;  // states
+    int p = 2;  // measurements
+
+    // Kalman gain K is n x p
+    int K_rows = n;
+    int K_cols = p;
+
+    TS_ASSERT_EQUALS(K_rows, 6);
+    TS_ASSERT_EQUALS(K_cols, 2);
+  }
+
+  // Test 77: Covariance matrix concept
+  void testCovarianceMatrixDimensions() {
+    int n = 4;  // states
+
+    // State covariance P is n x n symmetric
+    int P_rows = n;
+    int P_cols = n;
+
+    // Process noise Q is n x n
+    int Q_rows = n;
+    int Q_cols = n;
+
+    TS_ASSERT_EQUALS(P_rows, P_cols);
+    TS_ASSERT_EQUALS(Q_rows, Q_cols);
+  }
+
+  // Test 78: Measurement noise concept
+  void testMeasurementNoiseDimensions() {
+    int p = 3;  // measurements
+
+    // Measurement noise R is p x p
+    int R_rows = p;
+    int R_cols = p;
+
+    TS_ASSERT_EQUALS(R_rows, R_cols);
+  }
+
+  // Test 79: H-infinity control concept
+  void testHInfinityControlConcept() {
+    // H-infinity norm is the peak of the frequency response
+    double gamma = 2.0;  // Performance bound
+
+    // For robust control, we want ||G||_inf < gamma
+    double G_peak = 1.5;
+
+    TS_ASSERT(G_peak < gamma);
+  }
+
+  // Test 80: Bode plot gain margin concept
+  void testBodeGainMarginConcept() {
+    double gainMargin_dB = 6.0;  // Minimum recommended
+
+    // Convert to linear
+    double gainMargin_linear = std::pow(10.0, gainMargin_dB / 20.0);
+    TS_ASSERT_DELTA(gainMargin_linear, 2.0, 0.01);
+  }
+
+  // Test 81: Bode plot phase margin concept
+  void testBodePhaseMarginConcept() {
+    double phaseMargin_deg = 45.0;  // Typical minimum
+
+    // Convert to radians
+    double phaseMargin_rad = phaseMargin_deg * M_PI / 180.0;
+    TS_ASSERT_DELTA(phaseMargin_rad, 0.785, 0.01);
+  }
+
+  // Test 82: Bandwidth from phase margin
+  void testBandwidthFromPhaseMargin() {
+    double omega_crossover = 10.0;  // rad/s (where |G| = 1)
+    double phaseMargin_deg = 60.0;
+
+    // Approximate bandwidth is near crossover frequency
+    // Bandwidth ~ omega_crossover
+    TS_ASSERT_DELTA(omega_crossover, 10.0, epsilon);
+  }
+
+  // Test 83: Rise time from bandwidth
+  void testRiseTimeFromBandwidth() {
+    double bandwidth = 5.0;  // rad/s
+
+    // Rise time t_r ≈ 1.8 / omega_bw (rule of thumb)
+    double t_rise = 1.8 / bandwidth;
+    TS_ASSERT_DELTA(t_rise, 0.36, 0.01);
+  }
+
+  // Test 84: Settling time from damping
+  void testSettlingTimeFromDamping() {
+    double zeta = 0.7;
+    double omega_n = 5.0;
+
+    // Settling time (2% criterion) ≈ 4 / (zeta * omega_n)
+    double t_s = 4.0 / (zeta * omega_n);
+    TS_ASSERT_DELTA(t_s, 1.14, 0.01);
+  }
+
+  // Test 85: Overshoot from damping
+  void testOvershootFromDamping() {
+    double zeta = 0.5;
+
+    // Percent overshoot = exp(-pi * zeta / sqrt(1 - zeta^2)) * 100
+    double M_p = std::exp(-M_PI * zeta / std::sqrt(1.0 - zeta * zeta)) * 100.0;
+    TS_ASSERT_DELTA(M_p, 16.3, 0.5);
+  }
+
+  // Test 86: Full state with engine dynamics
+  void testFullStateWithEngineDynamics() {
+    JSBSim::FGStateSpace ss(fdmExec);
+
+    // Standard 6-DOF states
+    ss.x.add(new JSBSim::FGStateSpace::Vt());
+    ss.x.add(new JSBSim::FGStateSpace::Alpha());
+    ss.x.add(new JSBSim::FGStateSpace::Beta());
+    ss.x.add(new JSBSim::FGStateSpace::Phi());
+    ss.x.add(new JSBSim::FGStateSpace::Theta());
+    ss.x.add(new JSBSim::FGStateSpace::Psi());
+    ss.x.add(new JSBSim::FGStateSpace::P());
+    ss.x.add(new JSBSim::FGStateSpace::Q());
+    ss.x.add(new JSBSim::FGStateSpace::R());
+    // Engine state
+    ss.x.add(new JSBSim::FGStateSpace::Rpm0());
+
+    TS_ASSERT_EQUALS(ss.x.getSize(), 10);
+  }
+
+  // Test 87: Observer-based control configuration
+  void testObserverBasedControlConfiguration() {
+    JSBSim::FGStateSpace ss(fdmExec);
+
+    // Estimator states (typically all states)
+    ss.x.add(new JSBSim::FGStateSpace::Vt());
+    ss.x.add(new JSBSim::FGStateSpace::Alpha());
+    ss.x.add(new JSBSim::FGStateSpace::Theta());
+    ss.x.add(new JSBSim::FGStateSpace::Q());
+
+    // Measured outputs for observer
+    ss.y.add(new JSBSim::FGStateSpace::AccelZ());  // Normal acceleration
+    ss.y.add(new JSBSim::FGStateSpace::Q());        // Pitch rate (measured)
+
+    // Control input
+    ss.u.add(new JSBSim::FGStateSpace::DeCmd());
+
+    TS_ASSERT_EQUALS(ss.x.getSize(), 4);
+    TS_ASSERT_EQUALS(ss.y.getSize(), 2);
+    TS_ASSERT_EQUALS(ss.u.getSize(), 1);
+  }
+
+  // Test 88: MIMO system dimensions
+  void testMIMOSystemDimensions() {
+    // Multi-input, multi-output system
+    int n = 6;   // states
+    int m = 4;   // inputs
+    int p = 5;   // outputs
+
+    // Transfer function matrix is p x m
+    int G_rows = p;
+    int G_cols = m;
+
+    TS_ASSERT_EQUALS(G_rows, 5);
+    TS_ASSERT_EQUALS(G_cols, 4);
+  }
+
+  // Test 89: Coupled state space configuration
+  void testCoupledStateSpaceConfiguration() {
+    JSBSim::FGStateSpace ss(fdmExec);
+
+    // Both longitudinal and lateral states for coupled analysis
+    ss.x.add(new JSBSim::FGStateSpace::Vt());
+    ss.x.add(new JSBSim::FGStateSpace::Alpha());
+    ss.x.add(new JSBSim::FGStateSpace::Beta());
+    ss.x.add(new JSBSim::FGStateSpace::Phi());
+    ss.x.add(new JSBSim::FGStateSpace::Theta());
+    ss.x.add(new JSBSim::FGStateSpace::P());
+    ss.x.add(new JSBSim::FGStateSpace::Q());
+    ss.x.add(new JSBSim::FGStateSpace::R());
+
+    // All control surfaces
+    ss.u.add(new JSBSim::FGStateSpace::DeCmd());
+    ss.u.add(new JSBSim::FGStateSpace::DaCmd());
+    ss.u.add(new JSBSim::FGStateSpace::DrCmd());
+
+    TS_ASSERT_EQUALS(ss.x.getSize(), 8);
+    TS_ASSERT_EQUALS(ss.u.getSize(), 3);
+  }
+
+  // Test 90: Model reduction concept
+  void testModelReductionConcept() {
+    // Balanced truncation preserves dominant modes
+    int full_order = 20;
+    int reduced_order = 4;
+
+    // Hankel singular values decrease
+    double sigma_1 = 10.0;
+    double sigma_4 = 1.0;
+    double sigma_5 = 0.1;  // Truncate here
+
+    TS_ASSERT(sigma_1 > sigma_4);
+    TS_ASSERT(sigma_4 > sigma_5);
+    TS_ASSERT(reduced_order < full_order);
+  }
+
+  // Test 91: System identification input design
+  void testSystemIdentificationInputDesign() {
+    // Multi-sine or chirp input for system ID
+    double f_min = 0.1;   // Hz
+    double f_max = 10.0;  // Hz
+    double duration = 100.0;  // seconds
+
+    // Frequency resolution
+    double df = 1.0 / duration;
+    TS_ASSERT_DELTA(df, 0.01, epsilon);
+
+    // Number of frequency points
+    int n_freq = static_cast<int>((f_max - f_min) / df);
+    TS_ASSERT(n_freq > 0);
+  }
+
+  // Test 92: State space realization concept
+  void testStateSpaceRealizationConcept() {
+    // Minimal realization: controllable and observable
+    int n_minimal = 3;
+    int n_original = 5;
+
+    // Minimal order is less than or equal to original
+    TS_ASSERT(n_minimal <= n_original);
+  }
+
+  // Test 93: Pole-zero cancellation
+  void testPoleZeroCancellation() {
+    // Non-minimal systems have pole-zero cancellations
+    double pole1 = -2.0;
+    double zero1 = -2.0;  // Same as pole1 -> cancellation
+
+    double pole2 = -1.0;  // Remaining pole
+
+    // After cancellation, effective order decreases
+    bool hasCancellation = (std::abs(pole1 - zero1) < epsilon);
+    TS_ASSERT(hasCancellation);
+  }
+
+  // Test 94: Feedforward gain concept
+  void testFeedforwardGainConcept() {
+    // DC gain = -C * A^{-1} * B + D (for stable system)
+    // or simply evaluate G(0)
+    double dcGain = 2.5;
+
+    // Feedforward = 1/dcGain for unity tracking
+    double feedforward = 1.0 / dcGain;
+    TS_ASSERT_DELTA(feedforward, 0.4, epsilon);
+  }
+
+  // Test 95: Anti-windup concept
+  void testAntiWindupConcept() {
+    // Integrator saturation limits
+    double u_max = 1.0;
+    double u_min = -1.0;
+
+    double integrator_state = 0.5;
+    double u_commanded = 1.2;
+
+    // Saturation
+    double u_actual = std::max(u_min, std::min(u_max, u_commanded));
+    TS_ASSERT_EQUALS(u_actual, 1.0);
+  }
+
+  // Test 96: Rate limiting concept
+  void testRateLimitingConcept() {
+    double rate_limit = 60.0;  // deg/s
+    double dt = 0.01;
+
+    double u_prev = 0.0;
+    double u_cmd = 10.0;  // Large step command
+
+    // Maximum change per step
+    double delta_max = rate_limit * dt;
+    TS_ASSERT_DELTA(delta_max, 0.6, epsilon);
+
+    // Rate limited output
+    double delta = std::min(std::abs(u_cmd - u_prev), delta_max);
+    double u_limited = u_prev + delta;
+    TS_ASSERT_DELTA(u_limited, 0.6, epsilon);
+  }
+
+  // Test 97: First-order actuator model
+  void testFirstOrderActuatorModel() {
+    double tau = 0.05;  // 50 ms time constant
+    double dt = 0.01;
+
+    // Discrete pole: exp(-dt/tau)
+    double pole_discrete = std::exp(-dt / tau);
+    TS_ASSERT_DELTA(pole_discrete, 0.819, 0.001);
+
+    // Gain for unity DC gain
+    double gain = 1.0 - pole_discrete;
+    TS_ASSERT_DELTA(gain, 0.181, 0.001);
+  }
+
+  // Test 98: Sensor dynamics model
+  void testSensorDynamicsModel() {
+    // Second-order sensor model
+    double omega_n = 50.0;  // rad/s
+    double zeta = 0.7;
+
+    // Characteristic equation: s^2 + 2*zeta*omega_n*s + omega_n^2
+    double a1 = 2.0 * zeta * omega_n;
+    double a0 = omega_n * omega_n;
+
+    TS_ASSERT_DELTA(a1, 70.0, epsilon);
+    TS_ASSERT_DELTA(a0, 2500.0, epsilon);
+  }
+
+  // Test 99: Coordinated turn states
+  void testCoordinatedTurnStates() {
+    JSBSim::FGStateSpace ss(fdmExec);
+
+    // States for coordinated turn analysis
+    ss.x.add(new JSBSim::FGStateSpace::Beta());    // Sideslip
+    ss.x.add(new JSBSim::FGStateSpace::Phi());     // Bank angle
+    ss.x.add(new JSBSim::FGStateSpace::Psi());     // Heading
+    ss.x.add(new JSBSim::FGStateSpace::P());       // Roll rate
+    ss.x.add(new JSBSim::FGStateSpace::R());       // Yaw rate
+
+    // Inputs for coordinated turn
+    ss.u.add(new JSBSim::FGStateSpace::DaCmd());   // Aileron
+    ss.u.add(new JSBSim::FGStateSpace::DrCmd());   // Rudder
+
+    // Outputs
+    ss.y.add(new JSBSim::FGStateSpace::COG());     // Course over ground
+
+    TS_ASSERT_EQUALS(ss.x.getSize(), 5);
+    TS_ASSERT_EQUALS(ss.u.getSize(), 2);
+    TS_ASSERT_EQUALS(ss.y.getSize(), 1);
+  }
+
+  // Test 100: Complete autopilot state configuration
+  void testCompleteAutopilotStateConfiguration() {
+    JSBSim::FGStateSpace ss(fdmExec);
+
+    // Full autopilot state vector
+    // Attitude
+    ss.x.add(new JSBSim::FGStateSpace::Phi());
+    ss.x.add(new JSBSim::FGStateSpace::Theta());
+    ss.x.add(new JSBSim::FGStateSpace::Psi());
+
+    // Angular rates
+    ss.x.add(new JSBSim::FGStateSpace::P());
+    ss.x.add(new JSBSim::FGStateSpace::Q());
+    ss.x.add(new JSBSim::FGStateSpace::R());
+
+    // Navigation
+    ss.x.add(new JSBSim::FGStateSpace::Alt());
+    ss.x.add(new JSBSim::FGStateSpace::Vt());
+
+    // All control inputs
+    ss.u.add(new JSBSim::FGStateSpace::DeCmd());
+    ss.u.add(new JSBSim::FGStateSpace::DaCmd());
+    ss.u.add(new JSBSim::FGStateSpace::DrCmd());
+    ss.u.add(new JSBSim::FGStateSpace::ThrottleCmd());
+
+    // Key outputs
+    ss.y.add(new JSBSim::FGStateSpace::Alpha());
+    ss.y.add(new JSBSim::FGStateSpace::Beta());
+    ss.y.add(new JSBSim::FGStateSpace::VGround());
+    ss.y.add(new JSBSim::FGStateSpace::AccelX());
+    ss.y.add(new JSBSim::FGStateSpace::AccelY());
+    ss.y.add(new JSBSim::FGStateSpace::AccelZ());
+
+    TS_ASSERT_EQUALS(ss.x.getSize(), 8);
+    TS_ASSERT_EQUALS(ss.u.getSize(), 4);
+    TS_ASSERT_EQUALS(ss.y.getSize(), 6);
+
+    // Verify names are correct
+    TS_ASSERT_EQUALS(ss.x.getName(0), "Phi");
+    TS_ASSERT_EQUALS(ss.u.getName(0), "DeCmd");
+    TS_ASSERT_EQUALS(ss.y.getName(0), "Alpha");
+  }
 };

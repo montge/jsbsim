@@ -1037,3 +1037,441 @@ public:
     TS_ASSERT_EQUALS(property.GetFullyQualifiedName(), "/lifecycle/test");
   }
 };
+
+/*******************************************************************************
+ * Extended FGPropertyValue Tests (25 new tests: 76-100)
+ ******************************************************************************/
+
+class FGPropertyValueExtendedTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Rapid Value Change Tests
+   ***************************************************************************/
+
+  // Test 76: High frequency value updates
+  void testHighFrequencyUpdates() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("rapid", true);
+    FGPropertyValue property(node);
+
+    for (int i = 0; i < 1000; i++) {
+      double val = std::sin(static_cast<double>(i) * 0.01);
+      property.SetValue(val);
+      TS_ASSERT_DELTA(property.GetValue(), val, 1e-15);
+    }
+  }
+
+  // Test 77: Oscillating value pattern
+  void testOscillatingValuePattern() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("oscillate", true);
+    FGPropertyValue property(node);
+
+    for (int i = 0; i < 100; i++) {
+      double val = std::sin(static_cast<double>(i) * 0.1) * 1000.0;
+      node->setDoubleValue(val);
+      TS_ASSERT_DELTA(property.GetValue(), val, 1e-10);
+    }
+  }
+
+  // Test 78: Sawtooth value pattern
+  void testSawtoothValuePattern() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("sawtooth", true);
+    FGPropertyValue property(node);
+
+    for (int cycle = 0; cycle < 10; cycle++) {
+      for (int i = 0; i < 100; i++) {
+        double val = static_cast<double>(i) / 100.0;
+        property.SetValue(val);
+        TS_ASSERT_DELTA(property.GetValue(), val, 1e-15);
+      }
+    }
+  }
+
+  /***************************************************************************
+   * Signed Property Advanced Tests
+   ***************************************************************************/
+
+  // Test 79: Signed property with oscillating source
+  void testSignedPropertyOscillating() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue signedProp("-osc", pm, nullptr);
+
+    auto node = pm->GetNode("osc", true);
+    for (int i = 0; i < 50; i++) {
+      double val = std::sin(static_cast<double>(i) * 0.2) * 100.0;
+      node->setDoubleValue(val);
+      TS_ASSERT_DELTA(signedProp.GetValue(), -val, 1e-10);
+    }
+  }
+
+  // Test 80: Multiple signed properties same source
+  void testMultipleSignedPropertiesSameSource() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue signed1("-shared", pm, nullptr);
+    FGPropertyValue signed2("-shared", pm, nullptr);
+    FGPropertyValue unsigned1("shared", pm, nullptr);
+
+    auto node = pm->GetNode("shared", true);
+    node->setDoubleValue(42.0);
+
+    TS_ASSERT_EQUALS(signed1.GetValue(), -42.0);
+    TS_ASSERT_EQUALS(signed2.GetValue(), -42.0);
+    TS_ASSERT_EQUALS(unsigned1.GetValue(), 42.0);
+  }
+
+  // Test 81: Signed property with epsilon value
+  void testSignedPropertyEpsilon() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("-eps", pm, nullptr);
+
+    auto node = pm->GetNode("eps", true);
+    double eps = std::numeric_limits<double>::epsilon();
+    node->setDoubleValue(eps);
+    TS_ASSERT_DELTA(property.GetValue(), -eps, 1e-30);
+  }
+
+  /***************************************************************************
+   * Property Node Hierarchy Tests
+   ***************************************************************************/
+
+  // Test 82: Sibling properties in same parent
+  void testSiblingPropertiesSameParent() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node_a = root.getNode("parent/child_a", true);
+    SGPropertyNode_ptr node_b = root.getNode("parent/child_b", true);
+    FGPropertyValue prop_a(node_a);
+    FGPropertyValue prop_b(node_b);
+
+    node_a->setDoubleValue(100.0);
+    node_b->setDoubleValue(200.0);
+
+    TS_ASSERT_EQUALS(prop_a.GetValue(), 100.0);
+    TS_ASSERT_EQUALS(prop_b.GetValue(), 200.0);
+
+    // Verify independence
+    prop_a.SetValue(150.0);
+    TS_ASSERT_EQUALS(prop_b.GetValue(), 200.0);
+  }
+
+  // Test 83: Properties at different tree levels
+  void testPropertiesDifferentLevels() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node_shallow = root.getNode("shallow", true);
+    SGPropertyNode_ptr node_deep = root.getNode("a/b/c/d/deep", true);
+    FGPropertyValue prop_shallow(node_shallow);
+    FGPropertyValue prop_deep(node_deep);
+
+    prop_shallow.SetValue(1.0);
+    prop_deep.SetValue(2.0);
+
+    TS_ASSERT_EQUALS(prop_shallow.GetName(), "shallow");
+    TS_ASSERT_EQUALS(prop_deep.GetName(), "deep");
+    TS_ASSERT_EQUALS(prop_shallow.GetValue(), 1.0);
+    TS_ASSERT_EQUALS(prop_deep.GetValue(), 2.0);
+  }
+
+  // Test 84: Array indexed properties with values
+  void testArrayIndexedPropertiesWithValues() {
+    SGPropertyNode root;
+    std::vector<FGPropertyValue*> properties;
+
+    for (int i = 0; i < 5; i++) {
+      SGPropertyNode_ptr node = root.getNode("array", i, true);
+      node->setDoubleValue(static_cast<double>(i * 100));
+      properties.push_back(new FGPropertyValue(node));
+    }
+
+    for (int i = 0; i < 5; i++) {
+      TS_ASSERT_EQUALS(properties[i]->GetValue(), static_cast<double>(i * 100));
+      delete properties[i];
+    }
+  }
+
+  /***************************************************************************
+   * SetNode Edge Cases
+   ***************************************************************************/
+
+  // Test 85: SetNode from late-bound to resolved
+  void testSetNodeFromLateBoundToResolved() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("unresolved", pm, nullptr);
+
+    TS_ASSERT(property.IsLateBound());
+
+    SGPropertyNode_ptr resolved = pm->GetNode("resolved", true);
+    resolved->setDoubleValue(99.0);
+
+    property.SetNode(resolved);
+    TS_ASSERT(!property.IsLateBound());
+    TS_ASSERT_EQUALS(property.GetValue(), 99.0);
+  }
+
+  // Test 86: SetNode back and forth
+  void testSetNodeBackAndForth() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node_a = root.getNode("a", true);
+    SGPropertyNode_ptr node_b = root.getNode("b", true);
+    FGPropertyValue property(node_a);
+
+    node_a->setDoubleValue(1.0);
+    node_b->setDoubleValue(2.0);
+
+    for (int i = 0; i < 10; i++) {
+      property.SetNode(node_b);
+      TS_ASSERT_EQUALS(property.GetValue(), 2.0);
+
+      property.SetNode(node_a);
+      TS_ASSERT_EQUALS(property.GetValue(), 1.0);
+    }
+  }
+
+  // Test 87: SetNode preserves property functionality
+  void testSetNodePreservesPropertyFunctionality() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr old_node = root.getNode("old", true);
+    SGPropertyNode_ptr new_node = root.getNode("new", true);
+    FGPropertyValue property(old_node);
+
+    property.SetValue(100.0);
+    TS_ASSERT_EQUALS(old_node->getDoubleValue(), 100.0);
+
+    property.SetNode(new_node);
+    property.SetValue(200.0);
+    TS_ASSERT_EQUALS(new_node->getDoubleValue(), 200.0);
+    TS_ASSERT_EQUALS(old_node->getDoubleValue(), 100.0);  // Old node unchanged
+  }
+
+  /***************************************************************************
+   * Special Value Combinations
+   ***************************************************************************/
+
+  // Test 88: Subnormal values
+  void testSubnormalValues() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("subnormal", true);
+    FGPropertyValue property(node);
+
+    double subnormal = std::numeric_limits<double>::denorm_min();
+    property.SetValue(subnormal);
+    TS_ASSERT_EQUALS(property.GetValue(), subnormal);
+
+    property.SetValue(-subnormal);
+    TS_ASSERT_EQUALS(property.GetValue(), -subnormal);
+  }
+
+  // Test 89: Quiet NaN vs signaling NaN (if distinguishable)
+  void testQuietNaN() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("qnan", true);
+    FGPropertyValue property(node);
+
+    double qnan = std::numeric_limits<double>::quiet_NaN();
+    property.SetValue(qnan);
+    TS_ASSERT(std::isnan(property.GetValue()));
+  }
+
+  // Test 90: Lowest negative double
+  void testLowestNegativeDouble() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("lowest", true);
+    FGPropertyValue property(node);
+
+    double lowest = std::numeric_limits<double>::lowest();
+    property.SetValue(lowest);
+    TS_ASSERT_EQUALS(property.GetValue(), lowest);
+  }
+
+  // Test 91: Near-zero values with different signs
+  void testNearZeroSignedValues() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("nearzero", true);
+    FGPropertyValue property(node);
+
+    double tiny_pos = 1e-300;
+    double tiny_neg = -1e-300;
+
+    property.SetValue(tiny_pos);
+    TS_ASSERT(property.GetValue() > 0.0);
+
+    property.SetValue(tiny_neg);
+    TS_ASSERT(property.GetValue() < 0.0);
+  }
+
+  /***************************************************************************
+   * Late Binding Advanced Tests
+   ***************************************************************************/
+
+  // Test 92: Late binding with property created after multiple access attempts
+  void testLateBoundMultipleAccessAttempts() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGPropertyValue property("delayed", pm, nullptr);
+
+    // Multiple access attempts should all throw
+    for (int i = 0; i < 3; i++) {
+      TS_ASSERT_THROWS(property.GetValue(), BaseException&);
+    }
+
+    // Create property and verify it binds
+    auto node = pm->GetNode("delayed", true);
+    node->setDoubleValue(42.0);
+    TS_ASSERT_EQUALS(property.GetValue(), 42.0);
+    TS_ASSERT(!property.IsLateBound());
+  }
+
+  // Test 93: Late bound property with very long path
+  void testLateBoundVeryLongPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    std::string long_path = "level1/level2/level3/level4/level5/level6/level7/level8/prop";
+    FGPropertyValue property(long_path, pm, nullptr);
+
+    TS_ASSERT(property.IsLateBound());
+
+    auto node = pm->GetNode(long_path, true);
+    node->setDoubleValue(12345.0);
+
+    TS_ASSERT_EQUALS(property.GetValue(), 12345.0);
+    TS_ASSERT(!property.IsLateBound());
+  }
+
+  // Test 94: Late bound signed with very long path
+  void testLateBoundSignedVeryLongPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    std::string long_path = "a/b/c/d/e/f/g/h/i/j";
+    FGPropertyValue property("-" + long_path, pm, nullptr);
+
+    auto node = pm->GetNode(long_path, true);
+    node->setDoubleValue(500.0);
+
+    TS_ASSERT_EQUALS(property.GetValue(), -500.0);
+  }
+
+  /***************************************************************************
+   * Property Attribute Tests
+   ***************************************************************************/
+
+  // Test 95: Read-only property behavior
+  void testReadOnlyPropertyBehavior() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    SGPropertyNode_ptr node = pm->GetNode("readonly", true);
+    node->setDoubleValue(100.0);
+    node->setAttribute(SGPropertyNode::WRITE, false);
+
+    FGPropertyValue property(node);
+    TS_ASSERT(property.IsConstant());
+    TS_ASSERT_EQUALS(property.GetValue(), 100.0);
+  }
+
+  // Test 96: Property with multiple attribute changes
+  void testMultipleAttributeChanges() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    SGPropertyNode_ptr node = pm->GetNode("attrs", true);
+    FGPropertyValue property(node);
+
+    double currentValue = 50.0;
+    node->setDoubleValue(currentValue);
+
+    // Toggle attributes
+    for (int i = 0; i < 5; i++) {
+      node->setAttribute(SGPropertyNode::WRITE, false);
+      TS_ASSERT(property.IsConstant());
+      TS_ASSERT_EQUALS(property.GetValue(), currentValue);
+
+      node->setAttribute(SGPropertyNode::WRITE, true);
+      TS_ASSERT(!property.IsConstant());
+      currentValue = 50.0 + i + 1;
+      property.SetValue(currentValue);
+    }
+  }
+
+  /***************************************************************************
+   * Value Consistency Tests
+   ***************************************************************************/
+
+  // Test 97: Consistent reads under no modification
+  void testConsistentReadsNoModification() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("consistent", true);
+    node->setDoubleValue(3.14159265358979);
+    FGPropertyValue property(node);
+
+    for (int i = 0; i < 1000; i++) {
+      TS_ASSERT_EQUALS(property.GetValue(), 3.14159265358979);
+    }
+  }
+
+  // Test 98: Value transition boundary
+  void testValueTransitionBoundary() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("transition", true);
+    FGPropertyValue property(node);
+
+    // Test transition from negative to positive
+    property.SetValue(-0.001);
+    TS_ASSERT(property.GetValue() < 0.0);
+
+    property.SetValue(0.0);
+    TS_ASSERT_EQUALS(property.GetValue(), 0.0);
+
+    property.SetValue(0.001);
+    TS_ASSERT(property.GetValue() > 0.0);
+  }
+
+  // Test 99: Large magnitude transitions
+  void testLargeMagnitudeTransitions() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("magnitude", true);
+    FGPropertyValue property(node);
+
+    double large = 1e100;
+    double small = 1e-100;
+
+    property.SetValue(large);
+    TS_ASSERT_EQUALS(property.GetValue(), large);
+
+    property.SetValue(small);
+    TS_ASSERT_DELTA(property.GetValue(), small, 1e-115);
+
+    property.SetValue(-large);
+    TS_ASSERT_EQUALS(property.GetValue(), -large);
+
+    property.SetValue(-small);
+    TS_ASSERT_DELTA(property.GetValue(), -small, 1e-115);
+  }
+
+  // Test 100: Property value stress test
+  void testPropertyValueStressTest() {
+    SGPropertyNode root;
+    SGPropertyNode_ptr node = root.getNode("stress", true);
+    FGPropertyValue property(node);
+
+    // Rapid alternation between special values
+    double values[] = {
+      0.0, 1.0, -1.0,
+      std::numeric_limits<double>::max(),
+      std::numeric_limits<double>::lowest(),
+      std::numeric_limits<double>::min(),
+      std::numeric_limits<double>::epsilon(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity()
+    };
+
+    for (int cycle = 0; cycle < 100; cycle++) {
+      for (double val : values) {
+        property.SetValue(val);
+        if (std::isfinite(val)) {
+          TS_ASSERT_EQUALS(property.GetValue(), val);
+        } else if (std::isinf(val)) {
+          TS_ASSERT(std::isinf(property.GetValue()));
+          if (val > 0) {
+            TS_ASSERT(property.GetValue() > 0);
+          } else {
+            TS_ASSERT(property.GetValue() < 0);
+          }
+        }
+      }
+    }
+  }
+};

@@ -899,4 +899,244 @@ public:
     node->setDoubleValue(99.9);
     TS_ASSERT_EQUALS(x.GetValue(), 99.9);
   }
+
+  /***************************************************************************
+   * Extended Tests (76-100)
+   ***************************************************************************/
+
+  void testConstantEpsilon() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("2.220446049250313e-16", pm, nullptr);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_DELTA(x.GetValue(), std::numeric_limits<double>::epsilon(), 1e-30);
+  }
+
+  void testConstantMinPositive() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("2.2250738585072014e-308", pm, nullptr);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT(x.GetValue() > 0.0);
+  }
+
+  void testPropertyRapidChanges() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("rapid", true);
+    FGParameterValue x("rapid", pm, nullptr);
+    for (int i = 0; i < 1000; i++) {
+      double val = std::sin(static_cast<double>(i) * 0.01);
+      node->setDoubleValue(val);
+      TS_ASSERT_DELTA(x.GetValue(), val, 1e-15);
+    }
+  }
+
+  void testSignedPropertyWithScientificPath() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("aero/coefficient1e2", true);
+    FGParameterValue x("-aero/coefficient1e2", pm, nullptr);
+    node->setDoubleValue(50.0);
+    TS_ASSERT_EQUALS(x.GetValue(), -50.0);
+  }
+
+  void testXMLPropertyWithSign() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("gamma", true);
+    Element_ptr elm = readFromXML("<dummy>-gamma</dummy>");
+    FGParameterValue x(elm, pm);
+    node->setDoubleValue(1.4);
+    TS_ASSERT_EQUALS(x.GetValue(), -1.4);
+  }
+
+  void testLateBoundMultipleResolve() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x1("shared/val", pm, nullptr);
+    FGParameterValue x2("shared/val", pm, nullptr);
+    TS_ASSERT(x1.IsLateBound());
+    TS_ASSERT(x2.IsLateBound());
+    auto node = pm->GetNode("shared/val", true);
+    node->setDoubleValue(42.0);
+    TS_ASSERT_EQUALS(x1.GetValue(), 42.0);
+    TS_ASSERT_EQUALS(x2.GetValue(), 42.0);
+    TS_ASSERT(!x1.IsLateBound());
+    TS_ASSERT(!x2.IsLateBound());
+  }
+
+  void testConstantNegativeZero() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("-0.0", pm, nullptr);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 0.0);
+  }
+
+  void testPropertyAlternatingSign() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("alt", true);
+    FGParameterValue x("-alt", pm, nullptr);
+    for (int i = 0; i < 10; i++) {
+      double val = (i % 2 == 0) ? 100.0 : -100.0;
+      node->setDoubleValue(val);
+      TS_ASSERT_EQUALS(x.GetValue(), -val);
+    }
+  }
+
+  void testXMLScientificNegativeExponent() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>5.67e-8</dummy>");
+    FGParameterValue x(elm, pm);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_DELTA(x.GetValue(), 5.67e-8, 1e-15);
+  }
+
+  void testPropertySubsequentAccess() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("subseq", true);
+    FGParameterValue x("subseq", pm, nullptr);
+    node->setDoubleValue(1.0);
+    for (int i = 0; i < 100; i++) {
+      TS_ASSERT_EQUALS(x.GetValue(), 1.0);
+    }
+  }
+
+  void testGetNameForConstantWithManyDigits() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("123.456789012345", pm, nullptr);
+    TS_ASSERT(x.GetName().find("constant") != std::string::npos);
+  }
+
+  void testSignedPropertyInfinityNegation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("inf_test", true);
+    FGParameterValue x("-inf_test", pm, nullptr);
+    node->setDoubleValue(-std::numeric_limits<double>::infinity());
+    TS_ASSERT_EQUALS(x.GetValue(), std::numeric_limits<double>::infinity());
+  }
+
+  void testMultiplePropertyManagers() {
+    auto pm1 = std::make_shared<FGPropertyManager>();
+    auto pm2 = std::make_shared<FGPropertyManager>();
+    auto pm3 = std::make_shared<FGPropertyManager>();
+    pm1->GetNode("x", true)->setDoubleValue(1.0);
+    pm2->GetNode("x", true)->setDoubleValue(2.0);
+    pm3->GetNode("x", true)->setDoubleValue(3.0);
+    FGParameterValue p1("x", pm1, nullptr);
+    FGParameterValue p2("x", pm2, nullptr);
+    FGParameterValue p3("x", pm3, nullptr);
+    TS_ASSERT_EQUALS(p1.GetValue(), 1.0);
+    TS_ASSERT_EQUALS(p2.GetValue(), 2.0);
+    TS_ASSERT_EQUALS(p3.GetValue(), 3.0);
+  }
+
+  void testConstantLargeNegative() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("-1.7976931348623157e+308", pm, nullptr);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT(x.GetValue() < -1e307);
+  }
+
+  void testPropertyNameWithNumbers() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("prop123/value456", true);
+    FGParameterValue x("prop123/value456", pm, nullptr);
+    node->setDoubleValue(789.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 789.0);
+  }
+
+  void testXMLLateBoundNested() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>deep/nested/path/value</dummy>");
+    FGParameterValue x(elm, pm);
+    TS_ASSERT(x.IsLateBound());
+    auto node = pm->GetNode("deep/nested/path/value", true);
+    node->setDoubleValue(999.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 999.0);
+    TS_ASSERT(!x.IsLateBound());
+  }
+
+  void testPropertyDenormalized() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("denorm", true);
+    FGParameterValue x("denorm", pm, nullptr);
+    double denorm = std::numeric_limits<double>::denorm_min();
+    node->setDoubleValue(denorm);
+    TS_ASSERT_EQUALS(x.GetValue(), denorm);
+  }
+
+  void testConstantPiApproximation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("3.141592653589793", pm, nullptr);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_DELTA(x.GetValue(), M_PI, 1e-15);
+  }
+
+  void testSignedLateBoundResolution() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue x("-future/prop", pm, nullptr);
+    TS_ASSERT(x.IsLateBound());
+    auto node = pm->GetNode("future/prop", true);
+    node->setDoubleValue(25.0);
+    TS_ASSERT_EQUALS(x.GetValue(), -25.0);
+    TS_ASSERT(!x.IsLateBound());
+  }
+
+  void testMultipleConstantsIndependent() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    FGParameterValue c1("100.0", pm, nullptr);
+    FGParameterValue c2("200.0", pm, nullptr);
+    FGParameterValue c3("300.0", pm, nullptr);
+    TS_ASSERT_EQUALS(c1.GetValue(), 100.0);
+    TS_ASSERT_EQUALS(c2.GetValue(), 200.0);
+    TS_ASSERT_EQUALS(c3.GetValue(), 300.0);
+  }
+
+  void testPropertyValueBoundaryPositive() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("boundary", true);
+    FGParameterValue x("boundary", pm, nullptr);
+    node->setDoubleValue(std::numeric_limits<double>::max());
+    TS_ASSERT_EQUALS(x.GetValue(), std::numeric_limits<double>::max());
+  }
+
+  void testPropertyValueBoundaryNegative() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("boundary_neg", true);
+    FGParameterValue x("boundary_neg", pm, nullptr);
+    node->setDoubleValue(std::numeric_limits<double>::lowest());
+    TS_ASSERT_EQUALS(x.GetValue(), std::numeric_limits<double>::lowest());
+  }
+
+  void testXMLConstantWithSpaces() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    Element_ptr elm = readFromXML("<dummy>  123.456  </dummy>");
+    FGParameterValue x(elm, pm);
+    TS_ASSERT(x.IsConstant());
+    TS_ASSERT_EQUALS(x.GetValue(), 123.456);
+  }
+
+  void testPropertyPathWithArrayIndex() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("array[0]/value", true);
+    FGParameterValue x("array[0]/value", pm, nullptr);
+    node->setDoubleValue(42.0);
+    TS_ASSERT_EQUALS(x.GetValue(), 42.0);
+  }
+
+  void testCompleteParameterValueStressTest() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Create various types of FGParameterValue
+    FGParameterValue constant("3.14159", pm, nullptr);
+    TS_ASSERT(constant.IsConstant());
+    TS_ASSERT_DELTA(constant.GetValue(), 3.14159, 1e-10);
+
+    auto node = pm->GetNode("stress/test", true);
+    FGParameterValue property("stress/test", pm, nullptr);
+    FGParameterValue signedProp("-stress/test", pm, nullptr);
+
+    // Stress test with many value changes
+    for (int i = 0; i < 100; i++) {
+      double val = std::sin(i * 0.1) * 100.0;
+      node->setDoubleValue(val);
+      TS_ASSERT_DELTA(property.GetValue(), val, 1e-10);
+      TS_ASSERT_DELTA(signedProp.GetValue(), -val, 1e-10);
+    }
+  }
 };
