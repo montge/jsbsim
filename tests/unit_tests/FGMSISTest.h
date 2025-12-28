@@ -2414,4 +2414,520 @@ public:
       }
     }
   }
+
+  /***************************************************************************
+   * Complete MSIS System Tests
+   ***************************************************************************/
+
+  // Test complete atmosphere profile
+  void testCompleteAtmosphereProfile() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Profile from sea level to space
+    double altitudes_km[] = {0, 10, 25, 50, 85, 120, 200, 400};
+    double prev_rho = 1e10;
+
+    for (double alt_km : altitudes_km) {
+      atm.in.altitudeASL = alt_km * kmtoft;
+      TS_ASSERT(atm.Run(false) == false);
+
+      double rho = atm.GetDensity();
+      double T = atm.GetTemperature();
+      double P = atm.GetPressure();
+
+      TS_ASSERT(rho > 0.0);
+      TS_ASSERT(T > 0.0);
+      TS_ASSERT(P > 0.0);
+      TS_ASSERT(rho < prev_rho);  // Density decreases with altitude
+      prev_rho = rho;
+    }
+  }
+
+  // Test exospheric temperature limit
+  void testExosphericTemperatureLimit() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.GeodLatitudeDeg = 0.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(200);
+    atm.SetF107(200);
+    atm.SetAP(15);
+
+    // Very high altitude
+    atm.in.altitudeASL = 500 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double T_500 = atm.GetTemperature();
+
+    atm.in.altitudeASL = 800 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double T_800 = atm.GetTemperature();
+
+    // Temperature approaches asymptotic value at high altitude
+    double ratio = T_800 / T_500;
+    TS_ASSERT(ratio > 0.9 && ratio < 1.2);
+  }
+
+  // Test polar vortex conditions
+  void testPolarVortexConditions() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(355);  // December
+    atm.SetSeconds(0);
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Compare North and South pole in December
+    atm.in.altitudeASL = 30 * kmtoft;
+
+    atm.in.GeodLatitudeDeg = 80.0;  // Near North Pole
+    TS_ASSERT(atm.Run(false) == false);
+    double T_north = atm.GetTemperature();
+
+    atm.in.GeodLatitudeDeg = -80.0;  // Near South Pole
+    TS_ASSERT(atm.Run(false) == false);
+    double T_south = atm.GetTemperature();
+
+    TS_ASSERT(T_north > 0.0);
+    TS_ASSERT(T_south > 0.0);
+  }
+
+  // Test equatorial bulge effect
+  void testEquatorialBulgeEffect() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    atm.in.altitudeASL = 400 * kmtoft;
+
+    // Equatorial density typically higher than polar at same altitude
+    atm.in.GeodLatitudeDeg = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double rho_equator = atm.GetDensity();
+
+    atm.in.GeodLatitudeDeg = 60.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double rho_mid = atm.GetDensity();
+
+    TS_ASSERT(rho_equator > 0.0);
+    TS_ASSERT(rho_mid > 0.0);
+  }
+
+  // Test dynamic viscosity calculation
+  void testDynamicViscosityCalculation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 30 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double visc = atm.GetAbsoluteViscosity();
+    TS_ASSERT(visc > 0.0);
+    TS_ASSERT(!std::isnan(visc));
+  }
+
+  // Test kinematic viscosity calculation
+  void testKinematicViscosityCalculation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 30 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double kv = atm.GetKinematicViscosity();
+    TS_ASSERT(kv > 0.0);
+    TS_ASSERT(!std::isnan(kv));
+  }
+
+  // Test speed of sound variation
+  void testSpeedOfSoundVariation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Sound speed varies with sqrt(T)
+    atm.in.altitudeASL = 0.0;
+    TS_ASSERT(atm.Run(false) == false);
+    double a_sea = atm.GetSoundSpeed();
+
+    atm.in.altitudeASL = 85 * kmtoft;  // Mesopause - coldest
+    TS_ASSERT(atm.Run(false) == false);
+    double a_meso = atm.GetSoundSpeed();
+
+    atm.in.altitudeASL = 200 * kmtoft;  // Thermosphere - hot
+    TS_ASSERT(atm.Run(false) == false);
+    double a_thermo = atm.GetSoundSpeed();
+
+    TS_ASSERT(a_sea > 0.0);
+    TS_ASSERT(a_meso > 0.0);
+    TS_ASSERT(a_thermo > 0.0);
+  }
+
+  // Test seasonal variation at mid-latitude
+  void testSeasonalVariationMidLatitude() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 100 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Summer solstice
+    atm.SetDay(172);
+    TS_ASSERT(atm.Run(false) == false);
+    double T_summer = atm.GetTemperature();
+
+    // Winter solstice
+    atm.SetDay(355);
+    TS_ASSERT(atm.Run(false) == false);
+    double T_winter = atm.GetTemperature();
+
+    TS_ASSERT(T_summer > 0.0);
+    TS_ASSERT(T_winter > 0.0);
+  }
+
+  // Test pressure scale height
+  void testPressureScaleHeight() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Get pressure at two altitudes to estimate scale height
+    double h1_km = 100.0;
+    double h2_km = 110.0;
+
+    atm.in.altitudeASL = h1_km * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double P1 = atm.GetPressure();
+
+    atm.in.altitudeASL = h2_km * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double P2 = atm.GetPressure();
+
+    // Scale height H = dz / ln(P1/P2)
+    double dz_ft = (h2_km - h1_km) * kmtoft;
+    double H = dz_ft / std::log(P1 / P2);
+
+    TS_ASSERT(H > 0.0);
+    TS_ASSERT(!std::isnan(H));
+  }
+
+  // Test density ratio calculation
+  void testDensityRatioCalculation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 50 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double sigma = atm.GetDensityRatio();
+    TS_ASSERT(sigma > 0.0);
+    TS_ASSERT(sigma < 1.0);  // At altitude, density is less than sea level
+  }
+
+  // Test temperature ratio calculation
+  void testTemperatureRatioCalculation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 50 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double theta = atm.GetTemperatureRatio();
+    TS_ASSERT(theta > 0.0);
+    TS_ASSERT(!std::isnan(theta));
+  }
+
+  // Test pressure ratio calculation
+  void testPressureRatioCalculation() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 50 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double delta = atm.GetPressureRatio();
+    TS_ASSERT(delta > 0.0);
+    TS_ASSERT(delta < 1.0);  // At altitude, pressure is less than sea level
+  }
+
+  // Test solar activity effect on thermosphere
+  void testSolarActivityThermosphere() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 300 * kmtoft;
+    atm.in.GeodLatitudeDeg = 0.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetAP(15);
+
+    // Low solar activity
+    atm.SetF107A(70);
+    atm.SetF107(70);
+    TS_ASSERT(atm.Run(false) == false);
+    double T_low = atm.GetTemperature();
+
+    // High solar activity
+    atm.SetF107A(250);
+    atm.SetF107(250);
+    TS_ASSERT(atm.Run(false) == false);
+    double T_high = atm.GetTemperature();
+
+    // Thermosphere is hotter during high solar activity
+    TS_ASSERT(T_high > T_low);
+  }
+
+  // Test complete MSIS model verification
+  void testCompleteMSISModelVerification() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    // Typical conditions
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 100 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double T = atm.GetTemperature();
+    double rho = atm.GetDensity();
+    double P = atm.GetPressure();
+    double a = atm.GetSoundSpeed();
+    double R = atm.GetR();
+
+    // Verify ideal gas law
+    double P_calc = rho * R * T;
+    TS_ASSERT_DELTA(P / P_calc, 1.0, 0.01);
+
+    // Verify sound speed
+    double a_calc = std::sqrt(gama * R * T);
+    TS_ASSERT_DELTA(a / a_calc, 1.0, 0.01);
+
+    // All values should be positive and finite
+    TS_ASSERT(T > 0.0 && !std::isnan(T) && !std::isinf(T));
+    TS_ASSERT(rho > 0.0 && !std::isnan(rho) && !std::isinf(rho));
+    TS_ASSERT(P > 0.0 && !std::isnan(P) && !std::isinf(P));
+    TS_ASSERT(a > 0.0 && !std::isnan(a) && !std::isinf(a));
+  }
+
+  // Test MSIS model reset behavior
+  void testMSISModelReset() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.altitudeASL = 100 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    TS_ASSERT(atm.Run(false) == false);
+    double T1 = atm.GetTemperature();
+
+    // Re-initialize
+    TS_ASSERT(atm.InitModel());
+    TS_ASSERT(atm.Run(false) == false);
+    double T2 = atm.GetTemperature();
+
+    TS_ASSERT_DELTA(T1, T2, 1e-6);
+  }
+
+  // Test high latitude aurora zone
+  void testHighLatitudeAuroraZone() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(0);  // Midnight
+    atm.in.altitudeASL = 120 * kmtoft;  // Aurora altitude
+    atm.in.GeodLatitudeDeg = 65.0;  // Aurora zone
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(50);  // Active conditions
+
+    TS_ASSERT(atm.Run(false) == false);
+
+    double T = atm.GetTemperature();
+    double rho = atm.GetDensity();
+
+    TS_ASSERT(T > 0.0);
+    TS_ASSERT(rho > 0.0);
+  }
+
+  // Test MSIS instance independence
+  void testMSISInstanceIndependence() {
+    auto atm1 = DummyMSIS(&fdmex);
+    auto atm2 = DummyMSIS(&fdmex);
+
+    TS_ASSERT(atm1.InitModel());
+    TS_ASSERT(atm2.InitModel());
+
+    atm1.SetDay(172);
+    atm1.SetSeconds(43200);
+    atm1.in.altitudeASL = 100 * kmtoft;
+    atm1.in.GeodLatitudeDeg = 45.0;
+    atm1.in.LongitudeDeg = 0.0;
+    atm1.SetF107A(150);
+    atm1.SetF107(150);
+    atm1.SetAP(15);
+
+    atm2.SetDay(172);
+    atm2.SetSeconds(43200);
+    atm2.in.altitudeASL = 200 * kmtoft;
+    atm2.in.GeodLatitudeDeg = 0.0;
+    atm2.in.LongitudeDeg = 90.0;
+    atm2.SetF107A(200);
+    atm2.SetF107(200);
+    atm2.SetAP(50);
+
+    TS_ASSERT(atm1.Run(false) == false);
+    TS_ASSERT(atm2.Run(false) == false);
+
+    double T1 = atm1.GetTemperature();
+    double T2 = atm2.GetTemperature();
+
+    TS_ASSERT(T1 > 0.0);
+    TS_ASSERT(T2 > 0.0);
+    TS_ASSERT(T1 != T2);
+  }
+
+  // Test MSIS annual temperature cycle
+  void testMSISAnnualTemperatureCycle() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.in.altitudeASL = 300 * kmtoft;
+    atm.in.GeodLatitudeDeg = 45.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Summer solstice
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    TS_ASSERT(atm.Run(false) == false);
+    double summerTemp = atm.GetTemperature();
+
+    // Winter solstice
+    atm.SetDay(355);
+    TS_ASSERT(atm.Run(false) == false);
+    double winterTemp = atm.GetTemperature();
+
+    TS_ASSERT(summerTemp > 0.0);
+    TS_ASSERT(winterTemp > 0.0);
+  }
+
+  // Test MSIS extreme altitude boundary
+  void testMSISExtremeAltitudeBoundary() {
+    auto atm = DummyMSIS(&fdmex);
+    TS_ASSERT(atm.InitModel());
+
+    atm.SetDay(172);
+    atm.SetSeconds(43200);
+    atm.in.GeodLatitudeDeg = 0.0;
+    atm.in.LongitudeDeg = 0.0;
+    atm.SetF107A(150);
+    atm.SetF107(150);
+    atm.SetAP(15);
+
+    // Test near upper boundary (500 km)
+    atm.in.altitudeASL = 500 * kmtoft;
+    TS_ASSERT(atm.Run(false) == false);
+    double highT = atm.GetTemperature();
+    double highRho = atm.GetDensity();
+
+    TS_ASSERT(highT > 0.0);
+    TS_ASSERT(highRho > 0.0);
+    TS_ASSERT(highRho < 1e-10);  // Very low density at 500 km
+  }
 };

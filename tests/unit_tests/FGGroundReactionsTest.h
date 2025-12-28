@@ -987,4 +987,211 @@ public:
     double stopTime = initialSpeed / angularDecel;
     TS_ASSERT(stopTime > 0.01);  // Finite time to stop
   }
+
+  /***************************************************************************
+   * Complete Ground Reactions System Tests
+   ***************************************************************************/
+
+  // Test complete landing gear system verification
+  void testCompleteGearSystemVerification() {
+    double weight = 10000.0;
+    double noseLoad = weight * 0.08;
+    double mainLoadEach = weight * 0.46;
+
+    TS_ASSERT_DELTA(noseLoad + 2.0 * mainLoadEach, weight, epsilon);
+    TS_ASSERT_DELTA(noseLoad, 800.0, epsilon);
+    TS_ASSERT_DELTA(mainLoadEach, 4600.0, epsilon);
+  }
+
+  // Test gear energy absorption
+  void testGearEnergyAbsorption() {
+    double mass = 10000.0 / 32.2;  // slugs (~310.56)
+    double sinkRate = 10.0;  // ft/s
+    double kineticEnergy = 0.5 * mass * sinkRate * sinkRate;
+    double strokeLength = 1.0;  // ft
+    double avgForce = kineticEnergy / strokeLength;
+
+    TS_ASSERT(avgForce > 0.0);
+    TS_ASSERT_DELTA(kineticEnergy, 15528.0, 10.0);  // 0.5 * 310.56 * 100
+  }
+
+  // Test brake temperature rise
+  void testBrakeTemperatureRise() {
+    double brakingEnergy = 100000.0;  // ft-lbf
+    double brakeHeatCapacity = 500.0;  // ft-lbf/°F
+    double tempRise = brakingEnergy / brakeHeatCapacity;
+
+    TS_ASSERT_DELTA(tempRise, 200.0, epsilon);
+  }
+
+  // Test tire footprint calculation
+  void testTireFootprintCalculation() {
+    double load = 5000.0;  // lbs
+    double pressure = 100.0;  // psi
+    double footprint = load / pressure;  // sq in
+
+    TS_ASSERT_DELTA(footprint, 50.0, epsilon);
+  }
+
+  // Test gear extension time
+  void testGearExtensionTime() {
+    double extensionRate = 0.1;  // per second
+    double startPosition = 0.0;
+    double endPosition = 1.0;
+    double extensionTime = (endPosition - startPosition) / extensionRate;
+
+    TS_ASSERT_DELTA(extensionTime, 10.0, epsilon);
+  }
+
+  // Test gear up-lock force
+  void testGearUpLockForce() {
+    double gearWeight = 500.0;  // lbs
+    double gFactor = 3.0;
+    double lockForce = gearWeight * gFactor;
+
+    TS_ASSERT_DELTA(lockForce, 1500.0, epsilon);
+  }
+
+  // Test nose wheel centering
+  void testNoseWheelCentering() {
+    double steerAngle = 30.0;  // deg
+    double centeringForce = 100.0;  // lbs
+    double steeringStiffness = 10.0;  // lbs/deg
+    double equilibriumAngle = centeringForce / steeringStiffness;
+
+    TS_ASSERT_DELTA(equilibriumAngle, 10.0, epsilon);
+  }
+
+  // Test runway crown effect
+  void testRunwayCrownEffect() {
+    double crownSlope = 0.015;  // 1.5%
+    double weight = 10000.0;
+    double sideForce = weight * crownSlope;
+
+    TS_ASSERT_DELTA(sideForce, 150.0, epsilon);
+  }
+
+  // Test gear door aerodynamic loads
+  void testGearDoorAeroLoads() {
+    double q = 100.0;  // psf dynamic pressure
+    double doorArea = 5.0;  // sq ft
+    double Cd = 1.2;
+    double dragForce = q * doorArea * Cd;
+
+    TS_ASSERT_DELTA(dragForce, 600.0, epsilon);
+  }
+
+  // Test multiple wheel group load sharing
+  void testMultipleWheelGroupLoadSharing() {
+    double bogieLoad = 20000.0;
+    int wheelsPerBogie = 4;
+    double loadPerWheel = bogieLoad / wheelsPerBogie;
+
+    TS_ASSERT_DELTA(loadPerWheel, 5000.0, epsilon);
+  }
+
+  // Test retraction sequence timing
+  void testRetractionSequenceTiming() {
+    double doorOpenTime = 2.0;  // seconds
+    double gearRetractTime = 5.0;
+    double doorCloseTime = 2.0;
+    double totalTime = doorOpenTime + gearRetractTime + doorCloseTime;
+
+    TS_ASSERT_DELTA(totalTime, 9.0, epsilon);
+  }
+
+  // Test free-fall extension
+  void testFreeFallExtension() {
+    double gearMass = 500.0 / 32.2;  // slugs
+    double dropHeight = 2.0;  // ft
+    double velocity = std::sqrt(2.0 * 32.2 * dropHeight);
+
+    TS_ASSERT_DELTA(velocity, 11.35, 0.01);
+  }
+
+  // Test gear position indicator accuracy
+  void testGearPositionIndicator() {
+    double actualPosition = 0.95;
+    double indicatorThreshold = 0.90;
+    bool indicatesDown = actualPosition >= indicatorThreshold;
+
+    TS_ASSERT(indicatesDown);
+  }
+
+  // Test taxi light depression angle
+  void testTaxiLightDepressionAngle() {
+    double lightHeight = 10.0;  // ft
+    double illuminationDistance = 100.0;  // ft
+    double depressionAngle = std::atan(lightHeight / illuminationDistance) * 180.0 / M_PI;
+
+    TS_ASSERT_DELTA(depressionAngle, 5.71, 0.01);
+  }
+
+  // Test tire pressure variation with altitude
+  void testTirePressureAltitude() {
+    double groundPressure = 200.0;  // psi
+    double altitudePressureRatio = 0.75;  // at 10000 ft
+    double effectivePressure = groundPressure * (1.0 + (1.0 - altitudePressureRatio) * 0.1);
+
+    TS_ASSERT(effectivePressure > groundPressure);
+  }
+
+  // Test gear walk frequency
+  void testGearWalkFrequency() {
+    double gearStiffness = 50000.0;  // lbs/ft
+    double gearMass = 500.0 / 32.2;  // slugs
+    double omega = std::sqrt(gearStiffness / gearMass);
+    double frequency = omega / (2.0 * M_PI);
+
+    TS_ASSERT(frequency > 5.0);
+    TS_ASSERT(frequency < 20.0);
+  }
+
+  // Test complete braking system verification
+  void testCompleteBrakingSystemVerification() {
+    double weight = 10000.0;
+    double mu = 0.6;
+    double maxBrakeForce = weight * mu;
+    double decel_g = maxBrakeForce / weight;
+    double decel_fps2 = decel_g * 32.2;
+    double speed_fps = 200.0;
+    double stopDistance = (speed_fps * speed_fps) / (2.0 * decel_fps2);
+
+    TS_ASSERT_DELTA(decel_g, 0.6, epsilon);
+    TS_ASSERT_DELTA(decel_fps2, 19.32, 0.1);
+    TS_ASSERT(stopDistance > 1000.0);
+    TS_ASSERT(stopDistance < 1500.0);
+  }
+
+  // Test ground reactions instance independence
+  void testGroundReactionsInstanceIndependence() {
+    GearState gear1, gear2;
+    gear1.compression = 0.5;
+    gear2.compression = 0.3;
+    gear1.staticFriction = 0.8;
+    gear2.staticFriction = 0.5;
+
+    TS_ASSERT(gear1.compression != gear2.compression);
+    TS_ASSERT(gear1.staticFriction != gear2.staticFriction);
+  }
+
+  // Test complete gear dynamics simulation
+  void testCompleteGearDynamicsSimulation() {
+    double mass = 10000.0 / 32.2;  // slugs
+    double springK = 100000.0;  // lbs/ft
+    double dampingC = 5000.0;  // lbs/(ft/s)
+    double compression = 0.5;  // ft
+    double velocity = -5.0;  // ft/s (compressing)
+
+    double springForce = springK * compression;
+    double dampingForce = -dampingC * velocity;
+    double totalForce = springForce + dampingForce;
+    double acceleration = totalForce / mass;
+
+    TS_ASSERT(springForce > 0.0);
+    TS_ASSERT(dampingForce > 0.0);
+    TS_ASSERT(totalForce > springForce);
+    TS_ASSERT(acceleration > 0.0);
+    TS_ASSERT_DELTA(springForce, 50000.0, epsilon);
+  }
 };

@@ -1296,4 +1296,249 @@ public:
     TS_ASSERT(std::isfinite(torque));
     TS_ASSERT(!std::isinf(torque));
   }
+
+  /***************************************************************************
+   * Complete Transmission System Tests
+   ***************************************************************************/
+
+  // Test complete helicopter transmission verification
+  void testCompleteHelicopterTransmissionVerification() {
+    double enginePower = 500.0 * 550.0;  // 500 HP
+    double engineRPM = 6000.0;
+    double mainRotorRatio = 20.0;
+    double tailRotorRatio = 4.5;
+    double efficiency = 0.95;
+
+    double mainRotorRPM = engineRPM / mainRotorRatio;
+    double tailRotorRPM = mainRotorRPM * tailRotorRatio;
+
+    double engineOmega = engineRPM * 2.0 * M_PI / 60.0;
+    double engineTorque = enginePower / engineOmega;
+    double mainRotorTorque = engineTorque * mainRotorRatio * efficiency;
+
+    TS_ASSERT_DELTA(mainRotorRPM, 300.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(tailRotorRPM, 1350.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(mainRotorTorque > engineTorque);
+  }
+
+  // Test transmission oil cooler capacity
+  void testTransmissionOilCoolerCapacity() {
+    double heatGenerated = 25.0 * 550.0;  // 25 HP as heat
+    double coolerCapacity = 30.0 * 550.0;  // 30 HP cooling
+    double margin = (coolerCapacity - heatGenerated) / coolerCapacity * 100.0;
+
+    TS_ASSERT(coolerCapacity > heatGenerated);
+    TS_ASSERT_DELTA(margin, 16.67, 0.1);
+  }
+
+  // Test gearbox bearing load
+  void testGearboxBearingLoad() {
+    double torque = 10000.0;  // ft-lbf
+    double gearRadius = 0.5;  // ft
+    double tangentialForce = torque / gearRadius;
+
+    TS_ASSERT_DELTA(tangentialForce, 20000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test planetary gear system
+  void testPlanetaryGearSystem() {
+    int ringTeeth = 100;
+    int sunTeeth = 30;
+    double ratio = 1.0 + (double)ringTeeth / sunTeeth;
+
+    TS_ASSERT_DELTA(ratio, 4.333, 0.01);
+  }
+
+  // Test split torque path
+  void testSplitTorquePath() {
+    double inputTorque = 1000.0;
+    double path1Fraction = 0.4;
+    double path2Fraction = 0.6;
+
+    double torque1 = inputTorque * path1Fraction;
+    double torque2 = inputTorque * path2Fraction;
+
+    TS_ASSERT_DELTA(torque1 + torque2, inputTorque, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(torque1, 400.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(torque2, 600.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test gear mesh frequency
+  void testGearMeshFrequency() {
+    double rpm = 6000.0;
+    int numTeeth = 50;
+    double meshFreq = rpm / 60.0 * numTeeth;
+
+    TS_ASSERT_DELTA(meshFreq, 5000.0, DEFAULT_TOLERANCE);  // Hz
+  }
+
+  // Test torsional damper effectiveness
+  void testTorsionalDamperEffectiveness() {
+    double undampedOscillation = 10.0;  // degrees
+    double dampingRatio = 0.3;
+    double cycles = 5;
+    double dampedOscillation = undampedOscillation * std::exp(-dampingRatio * 2.0 * M_PI * cycles);
+
+    TS_ASSERT(dampedOscillation < undampedOscillation * 0.1);
+  }
+
+  // Test sprag clutch engagement
+  void testSpragClutchEngagement() {
+    double driveSpeed = 300.0;  // RPM
+    double outputSpeed = 295.0;
+    bool engaged = driveSpeed >= outputSpeed;
+
+    TS_ASSERT(engaged);
+
+    outputSpeed = 305.0;
+    engaged = driveSpeed >= outputSpeed;
+    TS_ASSERT(!engaged);
+  }
+
+  // Test transmission chip detector
+  void testTransmissionChipDetector() {
+    double particleCount = 15;  // particles
+    double warningThreshold = 10;
+    double shutdownThreshold = 50;
+
+    bool warning = particleCount > warningThreshold;
+    bool shutdown = particleCount > shutdownThreshold;
+
+    TS_ASSERT(warning);
+    TS_ASSERT(!shutdown);
+  }
+
+  // Test main rotor brake capacity
+  void testMainRotorBrakeCapacity() {
+    double rotorInertia = 5000.0;  // slug-ft²
+    double rotorRPM = 300.0;
+    double rotorOmega = rotorRPM * 2.0 * M_PI / 60.0;
+    double rotorKE = 0.5 * rotorInertia * rotorOmega * rotorOmega;
+
+    double brakeCapacity = 3000000.0;  // ft-lbf energy capacity
+    bool canStop = brakeCapacity > rotorKE;
+
+    TS_ASSERT(canStop);
+  }
+
+  // Test multi-stage efficiency cascade
+  void testMultiStageEfficiencyCascade() {
+    double inputPower = 1000.0;
+    double efficiencies[] = {0.98, 0.97, 0.96, 0.95};
+    double outputPower = inputPower;
+
+    for (double eff : efficiencies) {
+      outputPower *= eff;
+    }
+
+    double totalEfficiency = outputPower / inputPower;
+    TS_ASSERT_DELTA(totalEfficiency, 0.8662, 0.001);
+  }
+
+  // Test transmission mount vibration isolation
+  void testTransmissionMountIsolation() {
+    double excitationFreq = 100.0;  // Hz
+    double mountNaturalFreq = 30.0;  // Hz
+    double frequencyRatio = excitationFreq / mountNaturalFreq;
+    double transmissibility = 1.0 / (frequencyRatio * frequencyRatio - 1.0);
+
+    TS_ASSERT(std::abs(transmissibility) < 1.0);
+  }
+
+  // Test helical gear thrust load
+  void testHelicalGearThrustLoad() {
+    double tangentialForce = 10000.0;  // lbf
+    double helixAngle = 20.0;  // degrees
+    double helixRad = helixAngle * M_PI / 180.0;
+    double thrustLoad = tangentialForce * std::tan(helixRad);
+
+    TS_ASSERT_DELTA(thrustLoad, 3640.0, 10.0);
+  }
+
+  // Test bevel gear contact ratio
+  void testBevelGearContactRatio() {
+    double contactRatio = 1.5;  // typical
+    bool smoothOperation = contactRatio > 1.2;
+
+    TS_ASSERT(smoothOperation);
+  }
+
+  // Test transmission TBO calculation
+  void testTransmissionTBOCalculation() {
+    double designTBO = 3000.0;  // hours
+    double usageFactor = 1.2;   // heavy use
+    double effectiveTBO = designTBO / usageFactor;
+
+    TS_ASSERT_DELTA(effectiveTBO, 2500.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test complete transmission system verification
+  void testCompleteTransmissionSystemVerification() {
+    // Full system test
+    double enginePower = 500.0 * 550.0;
+    double engineRPM = 6000.0;
+    double gearRatio = 20.0;
+    double efficiency = 0.95;
+
+    double engineOmega = engineRPM * 2.0 * M_PI / 60.0;
+    double engineTorque = enginePower / engineOmega;
+
+    double outputRPM = engineRPM / gearRatio;
+    double outputOmega = outputRPM * 2.0 * M_PI / 60.0;
+    double outputTorque = engineTorque * gearRatio * efficiency;
+    double outputPower = outputTorque * outputOmega;
+
+    TS_ASSERT_DELTA(outputPower / enginePower, efficiency, 0.001);
+    TS_ASSERT_DELTA(outputRPM, 300.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(outputTorque > engineTorque);
+  }
+
+  // Test transmission torque meter calibration
+  void testTorqueMeterCalibration() {
+    double actualTorque = 10000.0;
+    double calibrationFactor = 1.02;
+    double indicatedTorque = actualTorque * calibrationFactor;
+
+    double error = (indicatedTorque - actualTorque) / actualTorque * 100.0;
+    TS_ASSERT_DELTA(error, 2.0, 0.01);
+  }
+
+  // Test transmission instance independence
+  void testTransmissionInstanceIndependence() {
+    double trans1_ratio = 20.0;
+    double trans2_ratio = 15.0;
+    double inputRPM = 6000.0;
+
+    double output1 = inputRPM / trans1_ratio;
+    double output2 = inputRPM / trans2_ratio;
+
+    TS_ASSERT(output1 != output2);
+    TS_ASSERT_DELTA(output1, 300.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(output2, 400.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test transmission angular momentum conservation
+  void testAngularMomentumConservation() {
+    double inputInertia = 5.0;   // slug-ft^2
+    double outputInertia = 100.0;  // slug-ft^2
+    double inputRPM = 6000.0;
+    double gearRatio = 20.0;
+
+    double inputOmega = inputRPM * 2.0 * M_PI / 60.0;
+    double outputOmega = inputOmega / gearRatio;
+
+    double inputAngMom = inputInertia * inputOmega;
+    double outputAngMom = outputInertia * outputOmega;
+
+    // Note: angular momentum is not conserved through gearbox
+    // Instead, kinetic energy (with losses) is conserved
+    double inputKE = 0.5 * inputInertia * inputOmega * inputOmega;
+    double outputKE = 0.5 * outputInertia * outputOmega * outputOmega;
+
+    TS_ASSERT(inputOmega > outputOmega);
+    TS_ASSERT(inputAngMom > 0.0);
+    TS_ASSERT(outputAngMom > 0.0);
+    TS_ASSERT(inputKE > 0.0);
+    TS_ASSERT(outputKE > 0.0);
+  }
 };

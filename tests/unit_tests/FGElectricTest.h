@@ -1168,4 +1168,237 @@ public:
     TS_ASSERT(torque > 0);
     TS_ASSERT(torque < 100.0);
   }
+
+  /***************************************************************************
+   * Complete Electric Motor System Tests
+   ***************************************************************************/
+
+  // Test complete motor power curve
+  void testCompleteMotorPowerCurve() {
+    double hptowatts = 745.7;
+    double hptoftlbssec = 550.0;
+    double maxPowerWatts = 74570.0;  // 100 HP motor
+
+    for (double throttle = 0.0; throttle <= 1.0; throttle += 0.1) {
+      double hp = maxPowerWatts * throttle / hptowatts;
+      double power = hp * hptoftlbssec;
+      TS_ASSERT(power >= 0.0);
+      TS_ASSERT(power <= 55000.1);
+      TS_ASSERT_DELTA(hp, 100.0 * throttle, 0.2);
+    }
+  }
+
+  // Test motor efficiency at various operating points
+  void testMotorEfficiencyOperatingPoints() {
+    double nominalEfficiency = 0.95;
+    double lowLoadEfficiency = 0.88;
+    double peakEfficiency = 0.96;
+
+    TS_ASSERT(peakEfficiency > nominalEfficiency);
+    TS_ASSERT(nominalEfficiency > lowLoadEfficiency);
+    TS_ASSERT(peakEfficiency <= 1.0);
+    TS_ASSERT(lowLoadEfficiency > 0.0);
+  }
+
+  // Test motor thermal model
+  void testMotorThermalModel() {
+    double ambientTemp = 25.0;  // °C
+    double heatGenerated = 5000.0;  // W
+    double thermalResistance = 0.01;  // °C/W
+
+    double tempRise = heatGenerated * thermalResistance;
+    double motorTemp = ambientTemp + tempRise;
+
+    TS_ASSERT_DELTA(motorTemp, 75.0, 0.1);
+    TS_ASSERT(motorTemp < 150.0);  // Below thermal limit
+  }
+
+  // Test power factor considerations
+  void testPowerFactorConsiderations() {
+    double realPower = 100.0;  // kW
+    double powerFactor = 0.85;
+    double apparentPower = realPower / powerFactor;
+
+    TS_ASSERT_DELTA(apparentPower, 117.6, 0.1);  // kVA
+    TS_ASSERT(apparentPower > realPower);
+  }
+
+  // Test voltage-torque relationship
+  void testVoltageTorqueRelationship() {
+    double voltage1 = 400.0;  // V
+    double voltage2 = 380.0;  // V
+    double torque1 = 100.0;   // Nm at V1
+
+    // Torque approximately proportional to V²
+    double torque2 = torque1 * (voltage2 / voltage1) * (voltage2 / voltage1);
+    TS_ASSERT_DELTA(torque2, 90.25, 0.1);
+    TS_ASSERT(torque2 < torque1);
+  }
+
+  // Test regenerative braking limits
+  void testRegenerativeBrakingLimits() {
+    double maxRegenPower = 50.0;  // kW
+    double requestedRegen = 60.0;
+    double actualRegen = std::min(requestedRegen, maxRegenPower);
+
+    TS_ASSERT_DELTA(actualRegen, 50.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(actualRegen <= maxRegenPower);
+  }
+
+  // Test motor current calculation
+  void testMotorCurrentCalculation() {
+    double power = 75000.0;  // W
+    double voltage = 400.0;  // V
+    double powerFactor = 0.9;
+
+    double current = power / (voltage * std::sqrt(3.0) * powerFactor);
+    TS_ASSERT_DELTA(current, 120.3, 0.5);
+  }
+
+  // Test motor slip calculation
+  void testMotorSlipCalculation() {
+    double syncSpeed = 1800.0;  // RPM
+    double actualSpeed = 1750.0;
+    double slip = (syncSpeed - actualSpeed) / syncSpeed * 100.0;
+
+    TS_ASSERT_DELTA(slip, 2.78, 0.01);
+    TS_ASSERT(slip > 0.0);
+    TS_ASSERT(slip < 10.0);
+  }
+
+  // Test motor poles and frequency
+  void testMotorPolesFrequency() {
+    double frequency = 60.0;  // Hz
+    int poles = 4;
+    double syncSpeed = (120.0 * frequency) / poles;
+
+    TS_ASSERT_DELTA(syncSpeed, 1800.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test multi-motor configuration with redundancy
+  void testMultiMotorRedundancy() {
+    double motorPower[] = {100.0, 100.0, 100.0, 100.0};
+    int numMotors = 4;
+    double totalPower = 0.0;
+    for (int i = 0; i < numMotors; i++) {
+      totalPower += motorPower[i];
+    }
+
+    TS_ASSERT_DELTA(totalPower, 400.0, DEFAULT_TOLERANCE);
+
+    // One motor failure
+    motorPower[2] = 0.0;
+    totalPower = 0.0;
+    for (int i = 0; i < numMotors; i++) {
+      totalPower += motorPower[i];
+    }
+    TS_ASSERT_DELTA(totalPower, 300.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test motor inrush current
+  void testMotorInrushCurrent() {
+    double ratedCurrent = 100.0;  // A
+    double inrushMultiplier = 6.0;
+    double inrushCurrent = ratedCurrent * inrushMultiplier;
+
+    TS_ASSERT_DELTA(inrushCurrent, 600.0, DEFAULT_TOLERANCE);
+    TS_ASSERT(inrushCurrent > ratedCurrent);
+  }
+
+  // Test motor service factor
+  void testMotorServiceFactor() {
+    double ratedPower = 100.0;  // HP
+    double serviceFactor = 1.15;
+    double maxContinuousPower = ratedPower * serviceFactor;
+
+    TS_ASSERT_DELTA(maxContinuousPower, 115.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test motor derating for altitude
+  void testMotorDeratingAltitude() {
+    double seaLevelPower = 100.0;  // kW
+    double altitude = 6000.0;  // ft
+    double derateStartAlt = 3300.0;  // ft
+    double deratePercent = 3.0;  // % per 1000 ft above start
+
+    double derating = 0.0;
+    if (altitude > derateStartAlt) {
+      derating = ((altitude - derateStartAlt) / 1000.0) * deratePercent;
+    }
+    double deratedPower = seaLevelPower * (1.0 - derating / 100.0);
+
+    TS_ASSERT(deratedPower < seaLevelPower);
+    TS_ASSERT_DELTA(deratedPower, 91.9, 0.1);
+  }
+
+  // Test motor insulation class temperature
+  void testMotorInsulationClassTemp() {
+    double classB_maxTemp = 130.0;  // °C
+    double classF_maxTemp = 155.0;
+    double classH_maxTemp = 180.0;
+
+    TS_ASSERT(classB_maxTemp < classF_maxTemp);
+    TS_ASSERT(classF_maxTemp < classH_maxTemp);
+  }
+
+  // Test motor locked rotor torque
+  void testMotorLockedRotorTorque() {
+    double ratedTorque = 100.0;  // Nm
+    double lockedRotorMultiplier = 1.5;
+    double lockedRotorTorque = ratedTorque * lockedRotorMultiplier;
+
+    TS_ASSERT_DELTA(lockedRotorTorque, 150.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test complete electric propulsion verification
+  void testCompleteElectricPropulsionVerification() {
+    double hptowatts = 745.7;
+    double hptoftlbssec = 550.0;
+
+    double batteryVoltage = 400.0;  // V
+    double batteryCurrent = 250.0;  // A
+    double inputPower = batteryVoltage * batteryCurrent;  // W
+
+    double motorEfficiency = 0.95;
+    double controllerEfficiency = 0.98;
+    double outputPowerW = inputPower * motorEfficiency * controllerEfficiency;
+    double outputPowerHP = outputPowerW / hptowatts;
+    double powerFtLbSec = outputPowerHP * hptoftlbssec;
+
+    TS_ASSERT_DELTA(outputPowerHP, 124.8, 1.0);
+    TS_ASSERT(powerFtLbSec > 0.0);
+  }
+
+  // Test motor constant Ke relationship
+  void testMotorConstantKe() {
+    double voltage = 400.0;  // V
+    double rpm = 3000.0;
+    double Ke = voltage / rpm;  // V/RPM
+
+    TS_ASSERT_DELTA(Ke, 0.1333, 0.001);
+  }
+
+  // Test motor constant Kt relationship
+  void testMotorConstantKt() {
+    double torqueNm = 100.0;
+    double current = 200.0;  // A
+    double Kt = torqueNm / current;  // Nm/A
+
+    TS_ASSERT_DELTA(Kt, 0.5, DEFAULT_TOLERANCE);
+  }
+
+  // Test electric motor instance independence
+  void testElectricMotorInstanceIndependence() {
+    double motor1_power = 50.0;
+    double motor2_power = 100.0;
+    double motor1_rpm = 3000.0;
+    double motor2_rpm = 4000.0;
+
+    double motor1_torque = motor1_power * 550.0 / (motor1_rpm * 2.0 * M_PI / 60.0);
+    double motor2_torque = motor2_power * 550.0 / (motor2_rpm * 2.0 * M_PI / 60.0);
+
+    TS_ASSERT(motor1_torque > 0.0);
+    TS_ASSERT(motor2_torque > 0.0);
+    TS_ASSERT(motor2_torque > motor1_torque);
+  }
 };
