@@ -1242,4 +1242,384 @@ public:
             t += h;
         }
     }
+
+    // =========================================================================
+    // Multi-Instance Independence Tests (80-83)
+    // =========================================================================
+
+    void testMultipleIntegratorsIndependent() {
+        EulerIntegrator euler1, euler2;
+        TrapezoidalIntegrator trap1, trap2;
+
+        // Run different integrations
+        double y1 = integrate(euler1, 0.0, 1.0, 0.5, 0.01, exponential_growth);
+        double y2 = integrate(euler2, 0.0, 2.0, 0.5, 0.01, exponential_decay);
+
+        // Results should be different
+        TS_ASSERT(fabs(y1 - y2) > 0.1);
+
+        // Same with trapezoidal
+        double y3 = integrate(trap1, 0.0, 1.0, 0.5, 0.01, exponential_growth);
+        double y4 = integrate(trap2, 0.0, 2.0, 0.5, 0.01, exponential_decay);
+        TS_ASSERT(fabs(y3 - y4) > 0.1);
+    }
+
+    void testConcurrentIntegrations() {
+        RK4Integrator rk4_1, rk4_2, rk4_3;
+
+        // Run three independent integrations
+        double y1 = integrate(rk4_1, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+        double y2 = integrate(rk4_2, 0.0, 1.0, 1.0, 0.1, exponential_decay);
+        double y3 = integrate(rk4_3, 0.0, 0.0, 1.0, 0.1, linear_ode);
+
+        TS_ASSERT_DELTA(y1, exp(1.0), 1e-5);
+        TS_ASSERT_DELTA(y2, exp(-1.0), 1e-6);
+        TS_ASSERT_DELTA(y3, 1.0, 1e-6);  // integral of 2t from 0 to 1 = t^2
+    }
+
+    void testABIntegratorsIndependent() {
+        AB2Integrator ab2_1, ab2_2;
+        AB3Integrator ab3_1, ab3_2;
+
+        double y1 = integrate(ab2_1, 0.0, 1.0, 0.5, 0.01, exponential_growth);
+        double y2 = integrate(ab2_2, 0.0, 2.0, 0.5, 0.01, exponential_growth);
+
+        TS_ASSERT(fabs(y1 - y2) > 0.1);  // Different initial conditions
+
+        double y3 = integrate(ab3_1, 0.0, 1.0, 0.5, 0.05, exponential_decay);
+        double y4 = integrate(ab3_2, 0.0, 1.0, 0.5, 0.05, exponential_growth);
+
+        TS_ASSERT(y3 < 1.0);  // decay
+        TS_ASSERT(y4 > 1.0);  // growth
+    }
+
+    void testAllMethodsIndependent() {
+        EulerIntegrator euler;
+        TrapezoidalIntegrator trap;
+        RK4Integrator rk4;
+        AB4Integrator ab4;
+
+        // All integrating same problem should give similar (not identical) results
+        double h = 0.05;
+        double y_euler = integrate(euler, 0.0, 1.0, 1.0, h, exponential_growth);
+        double y_trap = integrate(trap, 0.0, 1.0, 1.0, h, exponential_growth);
+        double y_rk4 = integrate(rk4, 0.0, 1.0, 1.0, h, exponential_growth);
+        double y_ab4 = integrate(ab4, 0.0, 1.0, 1.0, h, exponential_growth);
+
+        double exact = exp(1.0);
+
+        // All should be positive and in reasonable range
+        TS_ASSERT(y_euler > 2.0 && y_euler < 3.0);
+        TS_ASSERT(y_trap > 2.0 && y_trap < 3.0);
+        TS_ASSERT(y_rk4 > 2.0 && y_rk4 < 3.0);
+        TS_ASSERT(y_ab4 > 2.0 && y_ab4 < 3.0);
+    }
+
+    // =========================================================================
+    // State Consistency Tests (84-87)
+    // =========================================================================
+
+    void testRepeatedIntegrationsConsistent() {
+        RK4Integrator rk4_1, rk4_2;
+
+        // Same integration twice should give same result
+        double y1 = integrate(rk4_1, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+        double y2 = integrate(rk4_2, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+
+        TS_ASSERT_DELTA(y1, y2, epsilon);
+    }
+
+    void testStepSizeConsistency() {
+        RK4Integrator rk4;
+
+        // Two half-time integrations should equal one full-time integration
+        double y_half1 = integrate(rk4, 0.0, 1.0, 0.5, 0.05, exponential_growth);
+        RK4Integrator rk4_2;
+        double y_half2 = integrate(rk4_2, 0.5, y_half1, 1.0, 0.05, exponential_growth);
+
+        RK4Integrator rk4_full;
+        double y_full = integrate(rk4_full, 0.0, 1.0, 1.0, 0.05, exponential_growth);
+
+        TS_ASSERT_DELTA(y_half2, y_full, 1e-4);
+    }
+
+    void testIntegrationPathIndependence() {
+        // Different step sizes should converge to same answer
+        RK4Integrator rk4_fine, rk4_medium, rk4_coarse;
+
+        double y_fine = integrate(rk4_fine, 0.0, 1.0, 1.0, 0.01, exponential_growth);
+        double y_medium = integrate(rk4_medium, 0.0, 1.0, 1.0, 0.05, exponential_growth);
+        double y_coarse = integrate(rk4_coarse, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+
+        // All should converge toward exp(1.0)
+        double exact = exp(1.0);
+        TS_ASSERT_DELTA(y_fine, exact, 1e-6);
+        TS_ASSERT_DELTA(y_medium, exact, 1e-4);
+        TS_ASSERT_DELTA(y_coarse, exact, 1e-3);
+    }
+
+    void testIntermediateValuesMonotonic() {
+        RK4Integrator rk4;
+        double t = 0.0, y = 1.0, h = 0.1;
+        double prev_y = y;
+
+        // For exponential growth, y should always increase
+        for (int i = 0; i < 10; i++) {
+            y = rk4.step(t, y, h, exponential_growth);
+            TS_ASSERT(y > prev_y);
+            prev_y = y;
+            t += h;
+        }
+    }
+
+    // =========================================================================
+    // Edge Cases and Boundary Tests (88-91)
+    // =========================================================================
+
+    void testZeroTimeIntegration() {
+        RK4Integrator rk4;
+        // Integration over zero time should return initial value
+        double y = integrate(rk4, 0.0, 5.0, 0.0, 0.1, exponential_growth);
+        TS_ASSERT_DELTA(y, 5.0, epsilon);
+    }
+
+    void testVeryShortTimeIntegration() {
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1.0, 0.001, 0.0001, exponential_growth);
+        TS_ASSERT_DELTA(y, exp(0.001), 1e-10);
+    }
+
+    void testLargeTimeIntegration() {
+        // Long integration should remain stable
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1.0, 20.0, 0.1, exponential_decay);
+
+        // After t=20, y should be very small but positive
+        TS_ASSERT(y > 0.0);
+        TS_ASSERT(y < 1e-7);
+        TS_ASSERT_DELTA(y, exp(-20.0), 1e-8);
+    }
+
+    void testBoundaryConditionSensitivity() {
+        // Small changes in initial condition should produce small changes in result
+        RK4Integrator rk4_1, rk4_2;
+
+        double y1 = integrate(rk4_1, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+        double y2 = integrate(rk4_2, 0.0, 1.001, 1.0, 0.1, exponential_growth);
+
+        // Results should differ by approximately e * 0.001
+        double diff = fabs(y2 - y1);
+        TS_ASSERT_DELTA(diff, exp(1.0) * 0.001, 1e-4);
+    }
+
+    // =========================================================================
+    // Stress Tests (92-95)
+    // =========================================================================
+
+    void testManyIntegrationCycles() {
+        // Run many integrations without leaking resources
+        for (int i = 0; i < 100; i++) {
+            RK4Integrator rk4;
+            double y = integrate(rk4, 0.0, 1.0, 0.5, 0.05, exponential_growth);
+            TS_ASSERT_DELTA(y, exp(0.5), 1e-4);
+        }
+    }
+
+    void testRapidMethodSwitching() {
+        // Rapidly switch between integration methods
+        for (int i = 0; i < 50; i++) {
+            double y;
+            if (i % 4 == 0) {
+                EulerIntegrator euler;
+                y = integrate(euler, 0.0, 1.0, 0.1, 0.01, exponential_growth);
+            } else if (i % 4 == 1) {
+                TrapezoidalIntegrator trap;
+                y = integrate(trap, 0.0, 1.0, 0.1, 0.01, exponential_growth);
+            } else if (i % 4 == 2) {
+                RK4Integrator rk4;
+                y = integrate(rk4, 0.0, 1.0, 0.1, 0.01, exponential_growth);
+            } else {
+                AB2Integrator ab2;
+                y = integrate(ab2, 0.0, 1.0, 0.1, 0.01, exponential_growth);
+            }
+            TS_ASSERT(y > 1.0 && y < 1.2);
+        }
+    }
+
+    void testLongTermAccuracy() {
+        // RK4 should maintain accuracy over long integrations
+        RK4Integrator rk4;
+        double y = integrate(rk4, 0.0, 1.0, 10.0, 0.01, exponential_growth);
+
+        TS_ASSERT_DELTA(y, exp(10.0), exp(10.0) * 1e-4);  // Relative error
+    }
+
+    void testStressABMethods() {
+        // AB methods under stress
+        for (int i = 0; i < 50; i++) {
+            AB2Integrator ab2;
+            AB3Integrator ab3;
+            AB4Integrator ab4;
+
+            double y2 = integrate(ab2, 0.0, 1.0, 0.5, 0.01, exponential_growth);
+            double y3 = integrate(ab3, 0.0, 1.0, 0.5, 0.05, exponential_growth);
+            double y4 = integrate(ab4, 0.0, 1.0, 0.5, 0.05, exponential_growth);
+
+            TS_ASSERT_DELTA(y2, exp(0.5), 1e-2);
+            TS_ASSERT_DELTA(y3, exp(0.5), 1e-3);
+            TS_ASSERT_DELTA(y4, exp(0.5), 1e-3);
+        }
+    }
+
+    // =========================================================================
+    // Complete System Verification Tests (96-100)
+    // =========================================================================
+
+    void testCompleteEulerMethodVerification() {
+        EulerIntegrator euler;
+
+        // 1. Test exponential growth
+        double y1 = integrate(euler, 0.0, 1.0, 1.0, 0.01, exponential_growth);
+        TS_ASSERT_DELTA(y1, exp(1.0), 0.02);
+
+        // 2. Test exponential decay
+        double y2 = integrate(euler, 0.0, 1.0, 1.0, 0.01, exponential_decay);
+        TS_ASSERT_DELTA(y2, exp(-1.0), 0.02);
+
+        // 3. Test linear ODE
+        EulerIntegrator euler2;
+        double y3 = integrate(euler2, 0.0, 0.0, 1.0, 0.01, linear_ode);
+        TS_ASSERT_DELTA(y3, 1.0, 0.02);
+
+        // 4. Verify first-order accuracy
+        EulerIntegrator euler3, euler4;
+        double err_h1 = fabs(integrate(euler3, 0.0, 1.0, 1.0, 0.1, exponential_growth) - exp(1.0));
+        double err_h2 = fabs(integrate(euler4, 0.0, 1.0, 1.0, 0.05, exponential_growth) - exp(1.0));
+        TS_ASSERT(err_h1 > 1.5 * err_h2);
+    }
+
+    void testCompleteRK4MethodVerification() {
+        RK4Integrator rk4;
+
+        // 1. Exponential growth with high accuracy
+        double y1 = integrate(rk4, 0.0, 1.0, 1.0, 0.1, exponential_growth);
+        TS_ASSERT_DELTA(y1, exp(1.0), 1e-5);
+
+        // 2. Exponential decay
+        RK4Integrator rk4_2;
+        double y2 = integrate(rk4_2, 0.0, 1.0, 1.0, 0.1, exponential_decay);
+        TS_ASSERT_DELTA(y2, exp(-1.0), 1e-6);
+
+        // 3. Harmonic ODE
+        RK4Integrator rk4_3;
+        double y3 = integrate(rk4_3, 0.0, 0.0, M_PI/2.0, 0.01, harmonic_ode);
+        TS_ASSERT_DELTA(y3, 1.0, 1e-4);
+
+        // 4. Verify fourth-order accuracy
+        RK4Integrator rk4_h1, rk4_h2;
+        double err_h1 = fabs(integrate(rk4_h1, 0.0, 1.0, 1.0, 0.2, exponential_growth) - exp(1.0));
+        double err_h2 = fabs(integrate(rk4_h2, 0.0, 1.0, 1.0, 0.1, exponential_growth) - exp(1.0));
+        TS_ASSERT(err_h1 > 10.0 * err_h2);  // Should be ~16x for fourth-order
+    }
+
+    void testCompleteABMethodsVerification() {
+        // 1. AB2 accuracy
+        AB2Integrator ab2;
+        double y2 = integrate(ab2, 0.0, 1.0, 1.0, 0.01, exponential_growth);
+        TS_ASSERT_DELTA(y2, exp(1.0), 1e-3);
+
+        // 2. AB3 accuracy
+        AB3Integrator ab3;
+        double y3 = integrate(ab3, 0.0, 1.0, 1.0, 0.05, exponential_growth);
+        TS_ASSERT_DELTA(y3, exp(1.0), 2e-4);
+
+        // 3. AB4 accuracy
+        AB4Integrator ab4;
+        double y4 = integrate(ab4, 0.0, 1.0, 1.0, 0.05, exponential_growth);
+        TS_ASSERT_DELTA(y4, exp(1.0), 1e-4);
+
+        // 4. Order comparison
+        double exact = exp(1.0);
+        double e2 = fabs(y2 - exact);
+        double e3 = fabs(y3 - exact);
+        double e4 = fabs(y4 - exact);
+
+        TS_ASSERT(e4 <= e3 + 1e-5);
+        TS_ASSERT(e3 <= e2 + 1e-4);
+    }
+
+    void testCompleteQuaternionIntegrationVerification() {
+        FGQuaternion q(0.0, 0.0, 0.0);
+
+        // 1. Verify initial quaternion is unit
+        TS_ASSERT_DELTA(q.Magnitude(), 1.0, epsilon);
+
+        // 2. Integrate with constant angular velocity
+        FGColumnVector3 omega(0.0, 0.0, 1.0);  // 1 rad/s around Z
+        double h = 0.01;
+        int steps = 100;
+
+        for (int i = 0; i < steps; i++) {
+            FGQuaternion qDot = q.GetQDot(omega);
+            q = q + h * qDot;
+            q.Normalize();
+        }
+
+        // 3. Verify unit quaternion preserved
+        TS_ASSERT_DELTA(q.Magnitude(), 1.0, 1e-8);
+
+        // 4. Verify rotation is approximately correct (1 rad)
+        FGColumnVector3 euler = q.GetEuler();
+        TS_ASSERT_DELTA(euler(3), 1.0, 0.1);
+
+        // 5. Verify transformation matrix is orthogonal
+        FGMatrix33 T = q.GetT();
+        FGMatrix33 TT = T.Transposed();
+        FGMatrix33 product = T * TT;
+        TS_ASSERT_MATRIX_IS_IDENTITY(product);
+    }
+
+    void testCompleteIntegrationSystemVerification() {
+        // 1. Test all methods on same problem
+        EulerIntegrator euler;
+        TrapezoidalIntegrator trap;
+        RK4Integrator rk4;
+        AB4Integrator ab4;
+
+        double exact = exp(0.5);
+        double h = 0.02;
+
+        double y_euler = integrate(euler, 0.0, 1.0, 0.5, h, exponential_growth);
+        double y_trap = integrate(trap, 0.0, 1.0, 0.5, h, exponential_growth);
+        double y_rk4 = integrate(rk4, 0.0, 1.0, 0.5, h, exponential_growth);
+        double y_ab4 = integrate(ab4, 0.0, 1.0, 0.5, h, exponential_growth);
+
+        // 2. All should be positive
+        TS_ASSERT(y_euler > 0.0);
+        TS_ASSERT(y_trap > 0.0);
+        TS_ASSERT(y_rk4 > 0.0);
+        TS_ASSERT(y_ab4 > 0.0);
+
+        // 3. RK4 should be most accurate
+        double err_euler = fabs(y_euler - exact);
+        double err_trap = fabs(y_trap - exact);
+        double err_rk4 = fabs(y_rk4 - exact);
+        double err_ab4 = fabs(y_ab4 - exact);
+
+        TS_ASSERT(err_rk4 < err_trap);
+        TS_ASSERT(err_trap < err_euler);
+
+        // 4. All methods converge to correct answer
+        TS_ASSERT_DELTA(y_euler, exact, 0.01);
+        TS_ASSERT_DELTA(y_trap, exact, 0.001);
+        TS_ASSERT_DELTA(y_rk4, exact, 1e-5);
+        TS_ASSERT_DELTA(y_ab4, exact, 1e-4);
+
+        // 5. Verify stability - none should blow up
+        RK4Integrator rk4_long;
+        double y_long = integrate(rk4_long, 0.0, 1.0, 10.0, 0.1, exponential_decay);
+        TS_ASSERT(std::isfinite(y_long));
+        TS_ASSERT(y_long > 0.0);
+        TS_ASSERT(y_long < 1.0);
+    }
 };
