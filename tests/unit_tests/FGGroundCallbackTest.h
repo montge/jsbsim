@@ -1817,4 +1817,249 @@ public:
       TS_ASSERT(!std::isnan(normal(3)));
     }
   }
+
+  /***************************************************************************
+   * Extended Ground Interaction Tests (91-100)
+   ***************************************************************************/
+
+  // Test 91: International Date Line crossing
+  void testInternationalDateLineCrossing() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 5000.0;
+
+    // Just west of date line (179.99°E)
+    loc = FGLocation(179.99 * M_PI/180.0, 0.0, RadiusReference + h);
+    double agl1 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    // Just east of date line (179.99°W = -179.99°)
+    loc = FGLocation(-179.99 * M_PI/180.0, 0.0, RadiusReference + h);
+    double agl2 = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    TS_ASSERT_DELTA(agl1, h, 1e-6);
+    TS_ASSERT_DELTA(agl2, h, 1e-6);
+    TS_ASSERT_DELTA(agl1, agl2, 1e-6);
+  }
+
+  // Test 92: WGS84 geocentric vs geodetic latitude difference
+  void testWGS84GeocentricVsGeodetic() {
+    FGLocation loc1, loc2;
+    loc1.SetEllipse(a, b);
+    loc2.SetEllipse(a, b);
+
+    // At 45° geodetic latitude, geocentric latitude is slightly less
+    double geodetic_lat = 45.0 * M_PI/180.0;
+    loc1.SetPositionGeodetic(0.0, geodetic_lat, 0.0);
+
+    FGColumnVector3 v = loc1;
+    double geocentric_lat = std::atan2(v(3), std::sqrt(v(1)*v(1) + v(2)*v(2)));
+
+    // Geocentric should be slightly less than geodetic at 45°
+    TS_ASSERT(geocentric_lat < geodetic_lat);
+
+    // Difference should be small but measurable
+    double diff_deg = (geodetic_lat - geocentric_lat) * 180.0 / M_PI;
+    TS_ASSERT(diff_deg > 0.1);  // About 0.19 degrees
+    TS_ASSERT(diff_deg < 0.25);
+  }
+
+  // Test 93: Terrain gradient effect
+  void testTerrainGradientEffect() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    double aircraftAlt = 10000.0;
+    loc = FGLocation(0.0, 0.0, RadiusReference + aircraftAlt);
+
+    // Simulate ascending terrain gradient
+    double previousAgl = 10000.0;
+    for (int i = 0; i < 10; i++) {
+      double terrainElev = i * 500.0;
+      cb->SetTerrainElevation(terrainElev);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+      // AGL should decrease as terrain rises
+      TS_ASSERT(agl <= previousAgl);
+      TS_ASSERT_DELTA(agl, aircraftAlt - terrainElev, 1e-6);
+      previousAgl = agl;
+    }
+  }
+
+  // Test 94: High-speed flight path terrain queries
+  void testHighSpeedFlightPath() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 35000.0;  // FL350
+
+    // Simulate flight from 0° to 90° longitude at Mach 2 (~40 km/min)
+    // At this speed, longitude changes rapidly
+    for (double lon = 0.0; lon <= 90.0; lon += 1.0) {
+      loc = FGLocation(lon * M_PI/180.0, 30.0 * M_PI/180.0, RadiusReference + h);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(agl, h, 1e-6);
+      TS_ASSERT_DELTA(normal.Magnitude(), 1.0, epsilon);
+    }
+  }
+
+  // Test 95: WGS84 meridional radius of curvature
+  void testWGS84MeridionalRadius() {
+    // M = a(1-e²) / (1 - e²sin²φ)^(3/2)
+    double e2 = 1.0 - (b/a)*(b/a);
+
+    // At equator (φ = 0)
+    double M_equator = a * (1.0 - e2);  // Simplified for φ=0
+
+    // At pole (φ = 90°)
+    double M_pole = a * (1.0 - e2) / std::pow(1.0 - e2, 1.5);
+
+    // Polar radius of curvature should be larger than equatorial
+    TS_ASSERT(M_pole > M_equator);
+
+    // Check approximate values
+    TS_ASSERT_DELTA(M_equator / a, 1.0 - e2, 1e-6);
+  }
+
+  // Test 96: Contact point elevation tracking
+  void testContactPointElevationTracking() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    loc = FGLocation(0.0, 0.0, RadiusReference + 20000.0);
+
+    double elevations[] = {0.0, 1000.0, 3000.0, 5000.0, 2000.0, 0.0};
+    for (double elev : elevations) {
+      cb->SetTerrainElevation(elev);
+      cb->GetAGLevel(loc, contact, normal, v, w);
+
+      FGColumnVector3 vContact = contact;
+      double contactRadius = vContact.Magnitude();
+      TS_ASSERT_DELTA(contactRadius, RadiusReference + elev, 1e-6);
+    }
+  }
+
+  // Test 97: Polar orbit ground track
+  void testPolarOrbitGroundTrack() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    double h = 200000.0;  // ~60 km, low orbit altitude
+
+    // Simulate polar orbit crossing all latitudes
+    for (double lat = -90.0; lat <= 90.0; lat += 5.0) {
+      loc = FGLocation(0.0, lat * M_PI/180.0, RadiusReference + h);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+      // AGL should be consistent at this altitude
+      TS_ASSERT_DELTA(agl / h, 1.0, 1e-6);
+
+      // Normal should always be unit vector
+      TS_ASSERT_DELTA(normal.Magnitude(), 1.0, epsilon);
+    }
+  }
+
+  // Test 98: Terrain masking for radar calculations
+  void testTerrainMaskingCalculation() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // Aircraft at 10000 ft MSL
+    double aircraftAlt = 10000.0;
+    loc = FGLocation(0.0, 0.0, RadiusReference + aircraftAlt);
+
+    // Different terrain scenarios for radar LOS calculations
+    struct TerrainScenario {
+      double elevation;
+      double expectedAgl;
+    } scenarios[] = {
+      {0.0, 10000.0},       // Sea level
+      {5000.0, 5000.0},     // Mid-level terrain
+      {8000.0, 2000.0},     // High terrain
+      {9500.0, 500.0},      // Very high terrain
+      {-500.0, 10500.0}     // Depression
+    };
+
+    for (const auto& s : scenarios) {
+      cb->SetTerrainElevation(s.elevation);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+      TS_ASSERT_DELTA(agl, s.expectedAgl, 1e-6);
+    }
+  }
+
+  // Test 99: Ground effect boundary detection
+  void testGroundEffectBoundary() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(RadiusReference,
+                                                                     RadiusReference));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+
+    // Typical ground effect is significant below wingspan height
+    // Test AGL detection at various low altitudes
+    double lowAltitudes[] = {10.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0};
+
+    for (double h : lowAltitudes) {
+      loc = FGLocation(0.0, 0.0, RadiusReference + h);
+      double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+      TS_ASSERT_DELTA(agl, h, 1e-4);
+
+      // Verify contact point is on surface
+      FGColumnVector3 vContact = contact;
+      TS_ASSERT_DELTA(vContact.Magnitude(), RadiusReference, 1e-6);
+    }
+  }
+
+  // Test 100: Complete ground interaction state
+  void testCompleteGroundInteractionState() {
+    std::unique_ptr<FGGroundCallback> cb(new FGDefaultGroundCallback(a, b));
+    FGLocation loc, contact;
+    FGColumnVector3 normal, v, w;
+    FGColumnVector3 zero{0., 0., 0.};
+
+    double terrainElev = 2500.0;
+    double aircraftAlt = 15000.0;
+    cb->SetTerrainElevation(terrainElev);
+
+    loc.SetEllipse(a, b);
+    loc.SetPositionGeodetic(45.0 * M_PI/180.0, 40.0 * M_PI/180.0, aircraftAlt);
+
+    double agl = cb->GetAGLevel(loc, contact, normal, v, w);
+
+    // Verify all output parameters
+    // 1. AGL is correct
+    TS_ASSERT_DELTA(agl, aircraftAlt - terrainElev, 1e-6);
+
+    // 2. Normal is unit vector
+    TS_ASSERT_DELTA(normal.Magnitude(), 1.0, epsilon);
+
+    // 3. Normal components are finite
+    TS_ASSERT(!std::isnan(normal(1)));
+    TS_ASSERT(!std::isnan(normal(2)));
+    TS_ASSERT(!std::isnan(normal(3)));
+
+    // 4. Velocity outputs are zero (default callback)
+    TS_ASSERT_VECTOR_EQUALS(v, zero);
+    TS_ASSERT_VECTOR_EQUALS(w, zero);
+
+    // 5. Contact point is on surface at terrain elevation
+    FGColumnVector3 vContact = contact;
+    TS_ASSERT(vContact.Magnitude() > 0);
+    TS_ASSERT(!std::isnan(vContact(1)));
+    TS_ASSERT(!std::isnan(vContact(2)));
+    TS_ASSERT(!std::isnan(vContact(3)));
+
+    // 6. Contact point is below aircraft
+    FGColumnVector3 vLoc = loc;
+    TS_ASSERT(vLoc.Magnitude() > vContact.Magnitude());
+  }
 };

@@ -1045,4 +1045,352 @@ public:
 
     TS_ASSERT(cgWithTrim > cgWithoutTrim);  // Trim moves CG aft
   }
+
+  /***************************************************************************
+   * Extended Fuel Tank Tests (76-100)
+   ***************************************************************************/
+
+  // Test 76: Fuel collector tank operation
+  void testCollectorTankOperation() {
+    TankState mainTank, collectorTank;
+    mainTank.contents = 5000.0;
+    collectorTank.contents = 50.0;
+    collectorTank.capacity = 100.0;
+
+    // Collector keeps feeding engine from main tank
+    double collectorFillRate = 100.0;  // lbs/min
+    double engineDraw = 80.0;  // lbs/min
+    double dt = 0.5;  // minutes
+
+    double netChange = (collectorFillRate - engineDraw) * dt;
+    double newCollector = std::min(collectorTank.contents + netChange, collectorTank.capacity);
+
+    TS_ASSERT_DELTA(newCollector, 60.0, epsilon);
+  }
+
+  // Test 77: Negative G fuel supply interruption
+  void testNegativeGFuelSupply() {
+    double normalGLoad = 1.0;
+    double negativeGLoad = -0.5;
+
+    // During negative G, fuel may lift off pickup
+    bool fuelPickupSubmerged = negativeGLoad > -0.3;
+    TS_ASSERT(!fuelPickupSubmerged);  // Pickup uncovered at -0.5G
+  }
+
+  // Test 78: Fuel surge tank overflow
+  void testSurgeTankOverflow() {
+    double mainTankPressure = 5.0;  // psi
+    double surgeTankCapacity = 50.0;  // gallons
+    double overflowRate = mainTankPressure * 2.0;  // gal/min per psi
+
+    double overflowVolume = overflowRate * 1.0;  // 1 minute
+    bool surgeTankOverflows = overflowVolume > surgeTankCapacity;
+
+    TS_ASSERT(!surgeTankOverflows);  // Should not overflow in 1 min
+  }
+
+  // Test 79: Fuel float valve operation
+  void testFloatValveOperation() {
+    double tankLevel = 95.0;  // percent full
+    double floatValveCloseLevel = 98.0;  // percent
+    double floatValveOpenLevel = 92.0;   // percent
+
+    bool valveOpen = tankLevel < floatValveCloseLevel;
+    TS_ASSERT(valveOpen);
+
+    tankLevel = 99.0;
+    valveOpen = tankLevel < floatValveCloseLevel;
+    TS_ASSERT(!valveOpen);
+  }
+
+  // Test 80: Fuel quantity vs temperature correction
+  void testQuantityTemperatureCorrection() {
+    double indicatedQuantityLbs = 1000.0;
+    double fuelTempC = 30.0;
+    double refTempC = 15.0;
+    double thermalExpansion = 0.00099;  // per °C for Jet-A
+
+    double volumeCorrection = 1.0 + thermalExpansion * (fuelTempC - refTempC);
+    double correctedMass = indicatedQuantityLbs / volumeCorrection;
+
+    // Warmer fuel = less mass in same volume
+    TS_ASSERT(correctedMass < indicatedQuantityLbs);
+    TS_ASSERT_DELTA(correctedMass, 985.3, 1.0);
+  }
+
+  // Test 81: Fuel manifold pressure distribution
+  void testManifoldPressureDistribution() {
+    double boostPumpPressure = 20.0;  // psi
+    double lineLoss = 2.0;  // psi loss in lines
+    double manifoldPressure = boostPumpPressure - lineLoss;
+
+    // Each engine feed from manifold
+    double engineFeedPressure = manifoldPressure - 1.0;  // Branch loss
+    TS_ASSERT_DELTA(engineFeedPressure, 17.0, epsilon);
+  }
+
+  // Test 82: Fuel tank baffle effectiveness
+  void testBaffleEffectiveness() {
+    double unbaffledSlosh = 1.0;  // ft
+    double baffleReduction = 0.7;  // 70% reduction
+
+    double baffledSlosh = unbaffledSlosh * (1.0 - baffleReduction);
+    TS_ASSERT_DELTA(baffledSlosh, 0.3, epsilon);
+  }
+
+  // Test 83: Fuel tank inerting (nitrogen)
+  void testTankInerting() {
+    double oxygenPercent = 21.0;  // Initial atmosphere
+    double nitrogenFlowRate = 100.0;  // cu ft/hr
+    double ullageVolume = 50.0;  // cu ft
+    double flushTime = 1.0;  // hours
+
+    // Exponential dilution
+    double finalOxygen = oxygenPercent * std::exp(-nitrogenFlowRate * flushTime / ullageVolume);
+    TS_ASSERT(finalOxygen < 12.0);  // Below flammability limit
+  }
+
+  // Test 84: Fuel spray pattern in tank
+  void testFuelSprayPattern() {
+    double inletVelocity = 10.0;  // ft/s
+    double nozzleAngle = 30.0 * M_PI / 180.0;  // radians
+    double dropletSpread = inletVelocity * std::sin(nozzleAngle);
+
+    TS_ASSERT_DELTA(dropletSpread, 5.0, 0.1);  // ft/s lateral
+  }
+
+  // Test 85: Fuel aeration effects
+  void testFuelAeration() {
+    double normalDensity = 6.02;  // lbs/gal
+    double airEntrainment = 0.02;  // 2% air by volume
+    double effectiveDensity = normalDensity * (1.0 - airEntrainment);
+
+    TS_ASSERT_DELTA(effectiveDensity, 5.90, 0.01);
+    TS_ASSERT(effectiveDensity < normalDensity);
+  }
+
+  // Test 86: Multi-point refueling
+  void testMultiPointRefueling() {
+    TankState tanks[4];
+    double refuelRatePerPoint = 100.0;  // gal/min
+    int activePoints = 3;
+
+    double totalRefuelRate = refuelRatePerPoint * activePoints;
+    TS_ASSERT_DELTA(totalRefuelRate, 300.0, epsilon);
+  }
+
+  // Test 87: Fuel temperature rise from pump work
+  void testPumpHeatingEffect() {
+    double fuelFlow = 500.0;  // lbs/hr
+    double pumpPower = 2.0;   // hp
+    double specificHeat = 0.5;  // BTU/(lb·°F)
+
+    double heatInput = pumpPower * 2545.0;  // BTU/hr (1 hp = 2545 BTU/hr)
+    double tempRise = heatInput / (fuelFlow * specificHeat);
+
+    TS_ASSERT(tempRise > 0);
+    TS_ASSERT_DELTA(tempRise, 20.36, 0.1);  // °F rise
+  }
+
+  // Test 88: Fuel flash point safety margin
+  void testFlashPointSafetyMargin() {
+    double fuelTemp = 320.0;  // K
+    double jetAFlashPoint = 311.0;  // K (~38°C)
+    double safetyMargin = jetAFlashPoint - fuelTemp;
+
+    bool unsafe = safetyMargin < 0;
+    TS_ASSERT(unsafe);  // Operating above flash point in closed tank
+  }
+
+  // Test 89: Fuel system purge sequence
+  void testFuelPurgeSequence() {
+    double lineVolume = 5.0;  // gallons
+    double purgeFlowRate = 10.0;  // gal/min
+    double volumeExchanges = 3.0;  // Number of complete volume exchanges
+
+    double purgeTime = (lineVolume * volumeExchanges) / purgeFlowRate;
+    TS_ASSERT_DELTA(purgeTime, 1.5, epsilon);  // minutes
+  }
+
+  // Test 90: Fuel filter differential pressure
+  void testFilterDifferentialPressure() {
+    double cleanFilterDp = 2.0;  // psi
+    double cloggedFilterDp = 8.0;  // psi
+    double bypassThreshold = 6.0;  // psi
+
+    bool bypassOpen = cloggedFilterDp > bypassThreshold;
+    TS_ASSERT(bypassOpen);
+  }
+
+  // Test 91: Fuel heater capacity
+  void testFuelHeaterCapacity() {
+    double fuelFlow = 400.0;  // lbs/hr
+    double tempRiseRequired = 20.0;  // °F
+    double specificHeat = 0.5;  // BTU/(lb·°F)
+
+    double heaterPower = fuelFlow * specificHeat * tempRiseRequired;  // BTU/hr
+    double heaterKW = heaterPower / 3412.0;  // 1 kW = 3412 BTU/hr
+
+    TS_ASSERT_DELTA(heaterKW, 1.17, 0.1);
+  }
+
+  // Test 92: Fuel tank structural loading
+  void testTankStructuralLoading() {
+    double fuelMass = 5000.0;  // lbs
+    double loadFactor = 2.5;   // g
+    double tankSupportArea = 50.0;  // sq ft
+
+    double pressure = (fuelMass * loadFactor) / (tankSupportArea * 144.0);  // psi
+    TS_ASSERT_DELTA(pressure, 1.74, 0.01);
+  }
+
+  // Test 93: Fuel tank expansion joint
+  void testTankExpansionJoint() {
+    double tankLength = 10.0;  // ft
+    double tempChange = 100.0;  // °F
+    double thermalCoeff = 6.5e-6;  // per °F for aluminum
+
+    double expansion = tankLength * thermalCoeff * tempChange * 12.0;  // inches
+    TS_ASSERT_DELTA(expansion, 0.078, 0.001);
+  }
+
+  // Test 94: Fuel system time constant
+  void testFuelSystemTimeConstant() {
+    double tankVolume = 100.0;  // gallons
+    double flowRate = 10.0;  // gal/min
+    double timeConstant = tankVolume / flowRate;
+
+    TS_ASSERT_DELTA(timeConstant, 10.0, epsilon);  // minutes
+  }
+
+  // Test 95: Fuel scavenge pump operation
+  void testScavengePumpOperation() {
+    TankState collector;
+    collector.contents = 80.0;
+    collector.capacity = 100.0;
+
+    double scavengeRate = 120.0;  // lbs/min (faster than engine consumption)
+    double engineRate = 80.0;    // lbs/min
+
+    // Net accumulation in collector
+    double netRate = scavengeRate - engineRate;
+    TS_ASSERT_DELTA(netRate, 40.0, epsilon);  // lbs/min surplus
+  }
+
+  // Test 96: Fuel system MTBF calculation
+  void testFuelSystemMTBF() {
+    double pumpMTBF = 5000.0;  // hours
+    double valveMTBF = 10000.0;  // hours
+    double sensorMTBF = 8000.0;  // hours
+
+    // System MTBF (series reliability)
+    double systemMTBF = 1.0 / (1.0/pumpMTBF + 1.0/valveMTBF + 1.0/sensorMTBF);
+    TS_ASSERT_DELTA(systemMTBF, 2353.0, 100.0);
+  }
+
+  // Test 97: Fuel consumption at different power settings
+  void testFuelConsumptionVsPower() {
+    double idleFuelFlow = 200.0;   // lbs/hr
+    double cruiseFuelFlow = 600.0;  // lbs/hr
+    double maxFuelFlow = 1500.0;    // lbs/hr
+
+    double cruiseToIdleRatio = cruiseFuelFlow / idleFuelFlow;
+    double maxToCruiseRatio = maxFuelFlow / cruiseFuelFlow;
+
+    TS_ASSERT_DELTA(cruiseToIdleRatio, 3.0, epsilon);
+    TS_ASSERT_DELTA(maxToCruiseRatio, 2.5, epsilon);
+  }
+
+  // Test 98: Fuel remaining at waypoint
+  void testFuelRemainingAtWaypoint() {
+    double initialFuel = 8000.0;  // lbs
+    double distanceToWaypoint = 300.0;  // nm
+    double groundSpeed = 400.0;  // knots
+    double fuelFlow = 2000.0;  // lbs/hr
+
+    double flightTime = distanceToWaypoint / groundSpeed;  // hours
+    double fuelBurned = fuelFlow * flightTime;
+    double fuelRemaining = initialFuel - fuelBurned;
+
+    TS_ASSERT_DELTA(fuelRemaining, 6500.0, epsilon);
+  }
+
+  // Test 99: Fuel transfer pump capacity verification
+  void testTransferPumpCapacity() {
+    TankState source, destination;
+    source.contents = 2000.0;
+    destination.contents = 500.0;
+    destination.capacity = 3000.0;
+
+    double transferRate = 200.0;  // lbs/min
+    double transferTime = 10.0;   // minutes
+
+    double amountToTransfer = transferRate * transferTime;
+    double availableFromSource = source.contents - source.unusable;
+    double roomInDest = destination.capacity - destination.contents;
+
+    double actualTransfer = std::min(std::min(amountToTransfer, availableFromSource), roomInDest);
+    TS_ASSERT_DELTA(actualTransfer, 1995.0, epsilon);  // Source limited by unusable fuel
+  }
+
+  // Test 100: Complete fuel system state verification
+  void testCompleteFuelSystemState() {
+    // Multi-tank aircraft fuel system
+    TankState leftWing, rightWing, centerTank, trimTank;
+
+    leftWing.contents = 2000.0;
+    leftWing.capacity = 3000.0;
+    leftWing.x = 10.0;
+    leftWing.y = -15.0;
+
+    rightWing.contents = 2000.0;
+    rightWing.capacity = 3000.0;
+    rightWing.x = 10.0;
+    rightWing.y = 15.0;
+
+    centerTank.contents = 4000.0;
+    centerTank.capacity = 5000.0;
+    centerTank.x = 12.0;
+    centerTank.y = 0.0;
+
+    trimTank.contents = 500.0;
+    trimTank.capacity = 1000.0;
+    trimTank.x = 40.0;
+    trimTank.y = 0.0;
+
+    // Calculate total fuel
+    double totalFuel = leftWing.contents + rightWing.contents +
+                       centerTank.contents + trimTank.contents;
+    TS_ASSERT_DELTA(totalFuel, 8500.0, epsilon);
+
+    // Calculate overall CG
+    double momentX = leftWing.contents * leftWing.x +
+                     rightWing.contents * rightWing.x +
+                     centerTank.contents * centerTank.x +
+                     trimTank.contents * trimTank.x;
+    double cgX = momentX / totalFuel;
+
+    double momentY = leftWing.contents * leftWing.y +
+                     rightWing.contents * rightWing.y +
+                     centerTank.contents * centerTank.y +
+                     trimTank.contents * trimTank.y;
+    double cgY = momentY / totalFuel;
+
+    // Verify balanced laterally
+    TS_ASSERT_DELTA(cgY, 0.0, epsilon);
+
+    // Verify CG is in expected range
+    TS_ASSERT(cgX > 10.0);
+    TS_ASSERT(cgX < 15.0);
+
+    // Verify total capacity
+    double totalCapacity = leftWing.capacity + rightWing.capacity +
+                           centerTank.capacity + trimTank.capacity;
+    TS_ASSERT_DELTA(totalCapacity, 12000.0, epsilon);
+
+    // Verify fill percentage
+    double fillPercent = (totalFuel / totalCapacity) * 100.0;
+    TS_ASSERT_DELTA(fillPercent, 70.83, 0.1);
+  }
 };

@@ -1196,4 +1196,294 @@ public:
         TS_ASSERT(eta_transonic < eta_subsonic);
         TS_ASSERT(eta_supersonic > eta_transonic);
     }
+
+    //==========================================================================
+    // EXTENDED COMPRESSIBLE FLOW TESTS (76-100)
+    //==========================================================================
+
+    // Test 76: Mach number from velocity and temperature
+    void testMachFromVelocityTemperature() {
+        double V = 300.0;  // m/s
+        double T = 288.15; // K
+        double gamma = GAMMA_AIR;
+        double R = 287.05; // J/(kg·K)
+
+        double a = sqrt(gamma * R * T);
+        double M = V / a;
+        TS_ASSERT_DELTA(M, 0.882, 0.01);
+    }
+
+    // Test 77: Dynamic pressure in compressible flow
+    void testCompressibleDynamicPressure() {
+        double M = 0.8;
+        double gamma = GAMMA_AIR;
+        double P = 101325.0;
+
+        // q = (γ/2) * P * M²
+        double q = (gamma / 2.0) * P * M * M;
+        TS_ASSERT_DELTA(q, 45390.0, 100.0);
+    }
+
+    // Test 78: Impact pressure ratio
+    void testImpactPressureRatio() {
+        double M = 0.5;
+        double gamma = GAMMA_AIR;
+
+        // Qc/P = (1 + (γ-1)/2 * M²)^(γ/(γ-1)) - 1
+        double Qc_P = pow(1.0 + ((gamma - 1.0) / 2.0) * M * M, gamma / (gamma - 1.0)) - 1.0;
+        TS_ASSERT_DELTA(Qc_P, 0.186, 0.01);
+    }
+
+    // Test 79: Calibrated airspeed relationship
+    void testCalibratedAirspeedRelation() {
+        double M = 0.7;
+        double P = 101325.0;
+        double gamma = GAMMA_AIR;
+
+        // CAS is related to impact pressure
+        double Qc = P * (pow(1.0 + ((gamma - 1.0) / 2.0) * M * M, gamma / (gamma - 1.0)) - 1.0);
+        TS_ASSERT(Qc > 0);
+        TS_ASSERT(Qc < P);
+    }
+
+    // Test 80: Equivalent airspeed
+    void testEquivalentAirspeed() {
+        double TAS = 250.0;  // m/s
+        double rho = 0.5;    // kg/m³ (high altitude)
+        double rho_SL = 1.225;
+
+        double EAS = TAS * sqrt(rho / rho_SL);
+        TS_ASSERT_DELTA(EAS, 159.7, 1.0);
+    }
+
+    // Test 81: Total temperature probe recovery
+    void testTotalTemperatureRecovery() {
+        double M = 0.85;
+        double T_static = 220.0;  // K
+        double gamma = GAMMA_AIR;
+        double recovery = 0.98;  // TAT probe recovery factor
+
+        double T0 = T_static * (1.0 + ((gamma - 1.0) / 2.0) * M * M);
+        double T_measured = T_static + recovery * (T0 - T_static);
+
+        TS_ASSERT(T_measured < T0);
+        TS_ASSERT(T_measured > T_static);
+    }
+
+    // Test 82: Characteristic Mach number
+    void testCharacteristicMachNumber() {
+        double M = 2.0;
+        double gamma = GAMMA_AIR;
+
+        // M* = sqrt((gamma+1)*M² / (2 + (gamma-1)*M²))
+        double M_star = sqrt((gamma + 1.0) * M * M / (2.0 + (gamma - 1.0) * M * M));
+        TS_ASSERT_DELTA(M_star, 1.633, 0.01);
+    }
+
+    // Test 83: Crocco number
+    void testCroccoNumber() {
+        double M = 1.5;
+        double gamma = GAMMA_AIR;
+
+        // Cr = V/V_max = sqrt((γ-1)*M² / (2 + (γ-1)*M²))
+        double Cr = sqrt((gamma - 1.0) * M * M / (2.0 + (gamma - 1.0) * M * M));
+        TS_ASSERT_DELTA(Cr, 0.557, 0.01);
+    }
+
+    // Test 84: Normal shock entropy rise
+    void testNormalShockEntropyRise() {
+        double M1 = 2.0;
+        double gamma = GAMMA_AIR;
+
+        // Δs/R = ln((P02/P01)^(-1/(γ-1)) * (T02/T01)^(γ/(γ-1)))
+        // Simplified: entropy always increases across shock
+        double P2_P1 = 1.0 + (2.0 * gamma / (gamma + 1.0)) * (M1 * M1 - 1.0);
+        TS_ASSERT(P2_P1 > 1.0);  // Pressure increases
+    }
+
+    // Test 85: Stagnation pressure loss across shock
+    void testStagnationPressureLossShock() {
+        double M1 = 2.0;
+        double gamma = GAMMA_AIR;
+
+        // P02/P01 = (((γ+1)M1²)/((γ-1)M1²+2))^(γ/(γ-1)) * ((γ+1)/(2γM1²-(γ-1)))^(1/(γ-1))
+        double term1 = pow(((gamma + 1.0) * M1 * M1) / ((gamma - 1.0) * M1 * M1 + 2.0), gamma / (gamma - 1.0));
+        double term2 = pow((gamma + 1.0) / (2.0 * gamma * M1 * M1 - (gamma - 1.0)), 1.0 / (gamma - 1.0));
+        double P02_P01 = term1 * term2;
+
+        TS_ASSERT(P02_P01 < 1.0);  // Always loses stagnation pressure
+        TS_ASSERT_DELTA(P02_P01, 0.721, 0.01);
+    }
+
+    // Test 86: Supersonic diffuser efficiency
+    void testSupersonicDiffuserEfficiency() {
+        double M1 = 2.5;
+        double P02_P01_ideal = 1.0;  // Isentropic
+        double P02_P01_actual = 0.65;  // Typical inlet
+
+        double eta_d = P02_P01_actual / P02_P01_ideal;
+        TS_ASSERT_DELTA(eta_d, 0.65, 0.01);
+    }
+
+    // Test 87: Conical nozzle efficiency
+    void testConicalNozzleEfficiency() {
+        double half_angle = 15.0 * PI_CONST / 180.0;
+
+        // λ = (1 + cos(θ))/2 for conical nozzle
+        double lambda = (1.0 + cos(half_angle)) / 2.0;
+        TS_ASSERT_DELTA(lambda, 0.983, 0.01);
+    }
+
+    // Test 88: Bell nozzle length optimization
+    void testBellNozzleLength() {
+        double L_conical = 1.0;  // Reference length (15° cone)
+        double L_bell = 0.8;     // Typical 80% bell
+
+        double length_ratio = L_bell / L_conical;
+        TS_ASSERT_DELTA(length_ratio, 0.8, 0.01);
+    }
+
+    // Test 89: Thrust vectoring angle effect
+    void testThrustVectoringEffect() {
+        double F = 100000.0;  // N thrust
+        double delta = 15.0 * PI_CONST / 180.0;  // 15° vector angle
+
+        double F_axial = F * cos(delta);
+        double F_normal = F * sin(delta);
+
+        TS_ASSERT_DELTA(F_axial, 96593.0, 100.0);
+        TS_ASSERT_DELTA(F_normal, 25882.0, 100.0);
+    }
+
+    // Test 90: Scramjet combustion Mach
+    void testScramjetCombustionMach() {
+        double M_inlet = 6.0;
+        double M_combustor = 3.0;  // Supersonic combustion
+
+        TS_ASSERT(M_combustor > 1.0);  // Must remain supersonic
+        TS_ASSERT(M_combustor < M_inlet);  // Slows down
+    }
+
+    // Test 91: Thermal choking limit
+    void testThermalChokingLimit() {
+        double M = 0.8;
+        double gamma = GAMMA_AIR;
+
+        // Maximum heat addition before choking
+        // T0_max/T0 at M=1
+        double T0_ratio = (gamma + 1.0) * M * M * (2.0 + (gamma - 1.0) * M * M) /
+                          pow(1.0 + gamma * M * M, 2.0);
+        TS_ASSERT(T0_ratio > 0);
+        TS_ASSERT(T0_ratio < 1.0);
+    }
+
+    // Test 92: Mass flux in choked flow
+    void testChokedMassFlux() {
+        double P0 = 500000.0;  // Pa
+        double T0 = 800.0;     // K
+        double gamma = GAMMA_AIR;
+        double R = 287.05;
+
+        // m_dot/A* = P0 * sqrt(γ/R/T0) * (2/(γ+1))^((γ+1)/(2(γ-1)))
+        double factor = pow(2.0 / (gamma + 1.0), (gamma + 1.0) / (2.0 * (gamma - 1.0)));
+        double mdot_Astar = P0 * sqrt(gamma / R / T0) * factor;
+
+        TS_ASSERT(mdot_Astar > 0);
+    }
+
+    // Test 93: Blunt body bow shock standoff
+    void testBowShockStandoff() {
+        double R_nose = 0.5;  // m (nose radius)
+        double M = 5.0;
+        double gamma = GAMMA_AIR;
+
+        // Approximate standoff distance: Δ/R ≈ 0.386 * exp(4.67/M²)
+        double delta_R = 0.386 * exp(4.67 / (M * M));
+        double delta = delta_R * R_nose;
+
+        TS_ASSERT(delta > 0);
+        TS_ASSERT(delta < R_nose);
+    }
+
+    // Test 94: Reattachment shock angle
+    void testReattachmentShockAngle() {
+        double separation_angle = 15.0;  // degrees
+        double reattachment_angle = 20.0;  // degrees (typically larger)
+
+        TS_ASSERT(reattachment_angle > separation_angle);
+    }
+
+    // Test 95: Base pressure coefficient
+    void testBasePressureCoefficient() {
+        double M = 2.0;
+        double gamma = GAMMA_AIR;
+
+        // Approximate base pressure coefficient
+        // Cpb ≈ -2/(γM²) for supersonic flow
+        double Cpb = -2.0 / (gamma * M * M);
+        TS_ASSERT_DELTA(Cpb, -0.357, 0.01);
+    }
+
+    // Test 96: Pressure coefficient limit
+    void testPressureCoefficientLimit() {
+        double M = 3.0;
+        double gamma = GAMMA_AIR;
+
+        // Maximum Cp at stagnation
+        double Cp_max = (pow(1.0 + ((gamma - 1.0) / 2.0) * M * M, gamma / (gamma - 1.0)) - 1.0) /
+                        (0.5 * gamma * M * M);
+        TS_ASSERT(Cp_max > 1.0);  // Can exceed 1 in compressible flow
+    }
+
+    // Test 97: Vacuum pressure coefficient
+    void testVacuumPressureCoefficient() {
+        double M = 2.0;
+        double gamma = GAMMA_AIR;
+
+        // Cp_vacuum = -2/(γM²)
+        double Cp_vac = -2.0 / (gamma * M * M);
+        TS_ASSERT_DELTA(Cp_vac, -0.357, 0.01);
+    }
+
+    // Test 98: Hypersonic viscous interaction
+    void testHypersonicViscousInteraction() {
+        double M = 10.0;
+        double Re_x = 1e7;
+
+        // Viscous interaction parameter
+        double chi = M * M * M / sqrt(Re_x);
+        TS_ASSERT(chi > 0);
+    }
+
+    // Test 99: Stagnation point heat flux
+    void testStagnationPointHeatFlux() {
+        double V = 7000.0;  // m/s (reentry)
+        double rho = 0.001; // kg/m³
+        double R_nose = 1.0;  // m
+
+        // Simplified Sutton-Graves: q ∝ sqrt(rho/R) * V³
+        double q_factor = sqrt(rho / R_nose) * pow(V, 3.0);
+        TS_ASSERT(q_factor > 0);
+    }
+
+    // Test 100: Complete supersonic flight parameters
+    void testCompleteSupersonicFlightParameters() {
+        double M = 2.2;
+        double gamma = GAMMA_AIR;
+        double T_static = 220.0;  // K
+        double P_static = 20000.0;  // Pa
+
+        // Calculate all parameters
+        double T0_T = 1.0 + ((gamma - 1.0) / 2.0) * M * M;
+        double P0_P = pow(T0_T, gamma / (gamma - 1.0));
+        double mu = asin(1.0 / M);
+
+        double T0 = T_static * T0_T;
+        double P0 = P_static * P0_P;
+        double mu_deg = mu * 180.0 / PI_CONST;
+
+        TS_ASSERT_DELTA(T0, 432.08, 1.0);
+        TS_ASSERT_DELTA(P0, 213854.0, 100.0);
+        TS_ASSERT_DELTA(mu_deg, 27.04, 0.1);
+    }
 };

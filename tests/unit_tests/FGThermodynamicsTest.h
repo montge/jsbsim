@@ -1068,4 +1068,353 @@ public:
         double T_20km = T_alt;  // Still 216.65 K
         TS_ASSERT_DELTA(T_20km, 216.65, 0.5);
     }
+
+    //==========================================================================
+    // EXTENDED THERMODYNAMICS TESTS (76-100)
+    //==========================================================================
+
+    // Test 76: Scramjet combustion temperature
+    void testScramjetCombustionTemp() {
+        double T_inlet = 1500.0;    // K (high due to compression)
+        double f = 0.04;            // Fuel-air ratio
+        double LHV = ThermoConstants::FUEL_HEATING_VALUE;
+        double cp = ThermoConstants::CP_AIR;
+        double eta_b = 0.90;        // Lower efficiency for supersonic combustion
+
+        double delta_T = (f * eta_b * LHV) / ((1.0 + f) * cp);
+        double T_exit = T_inlet + delta_T;
+
+        TS_ASSERT(T_exit > T_inlet);
+        TS_ASSERT_DELTA(T_exit, 2994.0, 50.0);  // K
+    }
+
+    // Test 77: Scramjet thrust from momentum change
+    void testScramjetMomentumThrust() {
+        double mdot_air = 20.0;     // kg/s
+        double V_inlet = 2000.0;    // m/s
+        double V_exit = 2500.0;     // m/s
+        double f = 0.04;            // Fuel-air ratio
+
+        double mdot_exit = mdot_air * (1.0 + f);
+        double thrust = mdot_exit * V_exit - mdot_air * V_inlet;
+
+        TS_ASSERT(thrust > 0);
+        TS_ASSERT_DELTA(thrust, 12000.0, 500.0);  // N
+    }
+
+    // Test 78: Regenerative cooling heat transfer
+    void testRegenerativeCooling() {
+        double Q_wall = 5.0e6;      // W/m² (heat flux)
+        double A = 0.5;             // m² (cooled area)
+        double mdot_fuel = 2.0;     // kg/s
+        double cp_fuel = 2000.0;    // J/(kg·K) for hydrocarbon fuel
+
+        double Q_total = Q_wall * A;
+        double delta_T_fuel = Q_total / (mdot_fuel * cp_fuel);
+
+        TS_ASSERT_DELTA(delta_T_fuel, 625.0, 10.0);  // K fuel temperature rise
+    }
+
+    // Test 79: Turbojet specific impulse
+    void testTurbojetSpecificImpulse() {
+        double thrust = 50000.0;    // N
+        double mdot_f = 1.0;        // kg/s
+        double g0 = 9.81;           // m/s²
+
+        double Isp = thrust / (mdot_f * g0);
+        TS_ASSERT_DELTA(Isp, 5097.0, 10.0);  // seconds
+    }
+
+    // Test 80: Rocket engine specific impulse comparison
+    void testRocketSpecificImpulse() {
+        // Hydrogen-oxygen rocket
+        double Ve = 4000.0;         // m/s (exhaust velocity)
+        double g0 = 9.81;
+
+        double Isp = Ve / g0;
+        TS_ASSERT_DELTA(Isp, 408.0, 1.0);  // seconds
+
+        // Compare to typical turbojet
+        double Isp_turbojet = 5000.0;
+        TS_ASSERT(Isp_turbojet > Isp);  // Turbojet has higher Isp
+    }
+
+    // Test 81: Detonation wave temperature ratio
+    void testDetonationTemperatureRatio() {
+        // Chapman-Jouguet detonation
+        double gamma = ThermoConstants::GAMMA;
+        double M_CJ = 5.0;  // Typical CJ Mach number
+
+        // Simplified temperature ratio
+        double T_ratio = (2.0 * gamma * M_CJ * M_CJ - (gamma - 1.0)) *
+                         ((gamma - 1.0) * M_CJ * M_CJ + 2.0) /
+                         ((gamma + 1.0) * (gamma + 1.0) * M_CJ * M_CJ);
+
+        TS_ASSERT(T_ratio > 1.0);
+        TS_ASSERT(T_ratio > 5.0);  // Significant temperature rise
+    }
+
+    // Test 82: Pulse detonation engine cycle frequency
+    void testPDECycleFrequency() {
+        double tube_length = 1.0;   // m
+        double fill_velocity = 100.0;  // m/s
+        double det_velocity = 2000.0;  // m/s
+
+        double t_fill = tube_length / fill_velocity;
+        double t_det = tube_length / det_velocity;
+        double t_blowdown = 2.0 * tube_length / 400.0;  // Rough estimate
+
+        double t_cycle = t_fill + t_det + t_blowdown;
+        double frequency = 1.0 / t_cycle;
+
+        TS_ASSERT(frequency > 50);  // > 50 Hz typical
+        TS_ASSERT(frequency < 200);
+    }
+
+    // Test 83: Bleed air extraction effect
+    void testBleedAirExtraction() {
+        double mdot_core = 50.0;    // kg/s
+        double bleed_fraction = 0.05;  // 5% bleed
+        double W_specific = 500000.0;  // J/kg (compressor work)
+
+        double mdot_bleed = mdot_core * bleed_fraction;
+        double W_lost = mdot_bleed * W_specific;
+
+        TS_ASSERT_DELTA(mdot_bleed, 2.5, 0.1);
+        TS_ASSERT_DELTA(W_lost, 1.25e6, 1000.0);  // W
+    }
+
+    // Test 84: Variable geometry inlet performance
+    void testVariableGeometryInlet() {
+        double gamma = ThermoConstants::GAMMA;
+
+        // Design Mach number
+        double M_design = 2.5;
+        double A_ratio_design = (1.0 / M_design) *
+            pow((2.0 / (gamma + 1.0)) * (1.0 + ((gamma - 1.0) / 2.0) * M_design * M_design),
+                (gamma + 1.0) / (2.0 * (gamma - 1.0)));
+
+        // Off-design at M = 2.0
+        double M_actual = 2.0;
+        double A_ratio_actual = (1.0 / M_actual) *
+            pow((2.0 / (gamma + 1.0)) * (1.0 + ((gamma - 1.0) / 2.0) * M_actual * M_actual),
+                (gamma + 1.0) / (2.0 * (gamma - 1.0)));
+
+        TS_ASSERT(A_ratio_design > A_ratio_actual);
+    }
+
+    // Test 85: Thrust reverser efficiency
+    void testThrustReverserEfficiency() {
+        double thrust_forward = 100000.0;  // N
+        double reverser_efficiency = 0.40;  // Typical cascade reverser
+
+        double thrust_reverse = thrust_forward * reverser_efficiency;
+        TS_ASSERT_DELTA(thrust_reverse, 40000.0, 100.0);
+    }
+
+    // Test 86: Engine face distortion index
+    void testDistortionIndex() {
+        double P_avg = 100000.0;    // Pa (average total pressure)
+        double P_min = 92000.0;     // Pa (minimum in sector)
+        double q = 50000.0;         // Pa (dynamic pressure)
+
+        double DC60 = (P_avg - P_min) / q;
+        TS_ASSERT_DELTA(DC60, 0.16, 0.01);
+
+        // Typical limit is DC60 < 0.25
+        TS_ASSERT(DC60 < 0.25);
+    }
+
+    // Test 87: Combustor liner temperature
+    void testCombustorLinerTemp() {
+        double T_gas = 2000.0;      // K (flame temperature)
+        double T_coolant = 700.0;   // K (cooling air)
+        double cooling_effectiveness = 0.65;
+
+        double T_liner = T_gas - cooling_effectiveness * (T_gas - T_coolant);
+        TS_ASSERT_DELTA(T_liner, 1155.0, 10.0);  // K
+        TS_ASSERT(T_liner < 1200.0);  // Below material limit
+    }
+
+    // Test 88: Lean blowout limit
+    void testLeanBlowoutLimit() {
+        double f_stoich = 0.068;    // Stoichiometric fuel-air ratio
+        double phi_lbo = 0.5;       // Lean blowout equivalence ratio
+
+        double f_lbo = phi_lbo * f_stoich;
+        TS_ASSERT_DELTA(f_lbo, 0.034, 0.001);
+    }
+
+    // Test 89: Rich blowout limit
+    void testRichBlowoutLimit() {
+        double f_stoich = 0.068;
+        double phi_rbo = 1.6;       // Rich blowout equivalence ratio
+
+        double f_rbo = phi_rbo * f_stoich;
+        TS_ASSERT_DELTA(f_rbo, 0.109, 0.001);
+    }
+
+    // Test 90: Compressor surge margin
+    void testCompressorSurgeMargin() {
+        double PR_surge = 28.0;     // Pressure ratio at surge
+        double PR_operating = 25.0; // Operating pressure ratio
+
+        double surge_margin = (PR_surge - PR_operating) / PR_operating * 100.0;
+        TS_ASSERT_DELTA(surge_margin, 12.0, 0.5);  // percent
+
+        // Minimum margin is typically 10-15%
+        TS_ASSERT(surge_margin > 10.0);
+    }
+
+    // Test 91: Turbine inlet temperature trend monitoring
+    void testTITTrendMonitoring() {
+        double TIT_baseline = 1450.0;   // K
+        double TIT_current = 1470.0;    // K
+        double tolerance = 25.0;         // K
+
+        double delta_TIT = TIT_current - TIT_baseline;
+        bool within_limits = std::abs(delta_TIT) < tolerance;
+
+        TS_ASSERT(within_limits);
+        TS_ASSERT_DELTA(delta_TIT, 20.0, 0.1);
+    }
+
+    // Test 92: Engine pressure ratio
+    void testEnginePressureRatio() {
+        double P02 = 100000.0;      // Pa (compressor inlet total pressure)
+        double P05 = 180000.0;      // Pa (turbine exit total pressure)
+
+        double EPR = P05 / P02;
+        TS_ASSERT_DELTA(EPR, 1.8, 0.01);
+    }
+
+    // Test 93: N1 and N2 speed relationship
+    void testSpoolSpeedRelationship() {
+        double N1_percent = 85.0;   // Low pressure spool
+        double N2_percent = 95.0;   // High pressure spool
+
+        // At high power, N2 leads N1
+        TS_ASSERT(N2_percent > N1_percent);
+
+        double ratio = N2_percent / N1_percent;
+        TS_ASSERT_DELTA(ratio, 1.118, 0.01);
+    }
+
+    // Test 94: Exhaust gas temperature limit
+    void testEGTLimit() {
+        double EGT_measured = 920.0;    // K
+        double EGT_limit = 950.0;       // K (red line)
+        double EGT_caution = 900.0;     // K (amber line)
+
+        bool below_limit = EGT_measured < EGT_limit;
+        bool in_caution = EGT_measured > EGT_caution;
+
+        TS_ASSERT(below_limit);
+        TS_ASSERT(in_caution);
+    }
+
+    // Test 95: Fuel flow to thrust ratio
+    void testFuelFlowThrustRatio() {
+        double thrust = 100000.0;   // N
+        double fuel_flow = 2.5;     // kg/s
+
+        double ratio = fuel_flow / thrust * 1e6;  // mg/N/s
+        double TSFC = fuel_flow / thrust * 3600.0;  // kg/(N·hr)
+
+        TS_ASSERT_DELTA(TSFC, 0.09, 0.01);
+    }
+
+    // Test 96: Idle fuel flow
+    void testIdleFuelFlow() {
+        double idle_fuel_flow = 0.15;   // kg/s
+        double max_fuel_flow = 3.0;     // kg/s
+
+        double idle_percentage = idle_fuel_flow / max_fuel_flow * 100.0;
+        TS_ASSERT_DELTA(idle_percentage, 5.0, 0.5);
+    }
+
+    // Test 97: Acceleration fuel schedule
+    void testAccelerationFuelSchedule() {
+        double N2_current = 70.0;       // percent
+        double N2_target = 95.0;        // percent
+        double accel_rate = 10.0;       // percent per second
+
+        double accel_time = (N2_target - N2_current) / accel_rate;
+        TS_ASSERT_DELTA(accel_time, 2.5, 0.1);  // seconds
+    }
+
+    // Test 98: Deceleration fuel schedule
+    void testDecelerationFuelSchedule() {
+        double N2_current = 95.0;
+        double N2_target = 60.0;
+        double decel_rate = 8.0;        // percent per second (slower than accel)
+
+        double decel_time = (N2_current - N2_target) / decel_rate;
+        TS_ASSERT_DELTA(decel_time, 4.375, 0.1);  // seconds
+    }
+
+    // Test 99: Core exhaust enthalpy
+    void testCoreExhaustEnthalpy() {
+        double T_exhaust = 800.0;   // K
+        double cp = ThermoConstants::CP_AIR;
+        double V_exhaust = 400.0;   // m/s
+
+        double h_static = cp * T_exhaust;
+        double h_total = h_static + 0.5 * V_exhaust * V_exhaust;
+
+        TS_ASSERT_DELTA(h_static, 804000.0, 100.0);
+        TS_ASSERT_DELTA(h_total, 884000.0, 100.0);
+    }
+
+    // Test 100: Complete thermodynamic cycle summary
+    void testCompleteCycleSummary() {
+        double gamma = ThermoConstants::GAMMA;
+        double cp = ThermoConstants::CP_AIR;
+        double R = ThermoConstants::R_AIR;
+
+        // Station 2 (compressor inlet)
+        double T02 = 288.15;
+        double P02 = 101325.0;
+
+        // Station 3 (compressor exit)
+        double PR_c = 30.0;
+        double eta_c = 0.88;
+        double T03s = T02 * pow(PR_c, (gamma - 1.0) / gamma);
+        double T03 = T02 + (T03s - T02) / eta_c;
+        double P03 = P02 * PR_c;
+
+        // Station 4 (turbine inlet)
+        double T04 = 1600.0;
+        double P04 = P03 * 0.96;  // 4% combustor loss
+
+        // Station 5 (turbine exit - power to drive compressor)
+        double W_c = cp * (T03 - T02);
+        double eta_t = 0.90;
+        double T05 = T04 - W_c / (cp * eta_t);
+        double P05_P04 = pow(T05 / T04, gamma / (gamma - 1.0));
+        double P05 = P04 * P05_P04 / eta_t;
+
+        // Verify all temperatures are physically reasonable
+        TS_ASSERT(T03 > T02);  // Compression heats
+        TS_ASSERT(T04 > T03);  // Combustion heats
+        TS_ASSERT(T05 < T04);  // Expansion cools
+        TS_ASSERT(T05 > T02);  // Still hot after turbine
+
+        // Verify all pressures are physically reasonable
+        TS_ASSERT(P03 > P02);  // Compression raises pressure
+        TS_ASSERT(P04 < P03);  // Combustor pressure loss
+        TS_ASSERT(P05 < P04);  // Turbine drops pressure
+
+        // Verify efficiency bounds
+        TS_ASSERT(T03s <= T03);  // Ideal is less than actual for compression
+        TS_ASSERT(W_c > 0);       // Compressor requires work
+
+        // Calculate thermal efficiency
+        double Q_in = cp * (T04 - T03);
+        double W_net = cp * ((T04 - T05) - (T03 - T02));
+        double eta_thermal = W_net / Q_in;
+
+        TS_ASSERT(eta_thermal > 0);
+        TS_ASSERT(eta_thermal < 1);
+    }
 };
