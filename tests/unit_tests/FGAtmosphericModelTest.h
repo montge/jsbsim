@@ -1000,3 +1000,374 @@ public:
     TS_ASSERT_DELTA(tv, 289.9, 0.1);
   }
 };
+
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+CLASS DOCUMENTATION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+/** Extended test suite for advanced atmospheric calculations
+ */
+
+class FGAtmosphericModelExtendedTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Temperature Inversion and Stability Tests
+   ***************************************************************************/
+
+  // Test 76: Temperature inversion layer detection
+  void testTemperatureInversion() {
+    // Normal: temperature decreases with altitude
+    // Inversion: temperature increases with altitude
+    double temp_low = 280.0;   // K at lower altitude
+    double temp_high = 285.0;  // K at higher altitude (inversion)
+
+    // Inversion exists when temp increases with altitude
+    bool inversion = temp_high > temp_low;
+    TS_ASSERT(inversion);
+
+    double inversion_strength = temp_high - temp_low;
+    TS_ASSERT_DELTA(inversion_strength, 5.0, epsilon);
+  }
+
+  // Test 77: Atmospheric stability (Brunt-Väisälä frequency)
+  void testBruntVaisalaFrequency() {
+    // N = sqrt((g/theta) * d(theta)/dz)
+    double g = GRAVITY_SI;
+    double theta = 300.0;  // Potential temperature K
+    double dtheta_dz = 0.003;  // K/m (stable atmosphere)
+
+    double N_squared = (g / theta) * dtheta_dz;
+    double N = std::sqrt(N_squared);  // Brunt-Väisälä frequency
+
+    TS_ASSERT(N > 0.0);  // Positive = stable
+    TS_ASSERT_DELTA(N, 0.01, 0.001);
+  }
+
+  // Test 78: Potential temperature calculation
+  void testPotentialTemperature() {
+    // theta = T * (p0/p)^(R/cp)
+    double temp = 250.0;  // K at altitude
+    double pressure = 50000.0;  // Pa
+    double R_over_cp = GAS_CONSTANT_AIR / 1005.0;  // ~0.286
+
+    double theta = temp * std::pow(ISA_SEA_LEVEL_PRESSURE / pressure, R_over_cp);
+
+    TS_ASSERT(theta > temp);  // Potential temp > actual temp at altitude
+    TS_ASSERT_DELTA(theta, 305.9, 0.5);
+  }
+
+  // Test 79: Lapse rate vs adiabatic lapse rate
+  void testLapseRateComparison() {
+    // Dry adiabatic lapse rate ~9.8 K/km
+    double dry_adiabatic = -9.8 / 1000.0;  // K/m
+
+    // ISA lapse rate is less steep (atmosphere is stable)
+    TS_ASSERT(ISA_LAPSE_RATE > dry_adiabatic);  // Less negative
+    TS_ASSERT_DELTA(ISA_LAPSE_RATE, -0.0065, epsilon);
+  }
+
+  /***************************************************************************
+   * Icing Condition Tests
+   ***************************************************************************/
+
+  // Test 80: Icing temperature range
+  void testIcingTemperatureRange() {
+    // Icing typically occurs between 0°C and -20°C
+    double temp_upper = 273.15;  // 0°C
+    double temp_lower = 253.15;  // -20°C
+
+    double test_temp = 263.15;  // -10°C - in icing range
+
+    bool in_icing_range = (test_temp <= temp_upper) && (test_temp >= temp_lower);
+    TS_ASSERT(in_icing_range);
+  }
+
+  // Test 81: Supercooled water droplet region
+  void testSupercooledWater() {
+    // Supercooled large droplets (SLD) can exist below 0°C
+    double temp = 263.15;  // -10°C
+    double temp_celsius = temp - 273.15;
+
+    // SLD freezes on contact with aircraft
+    bool supercooled = temp_celsius < 0.0;
+    TS_ASSERT(supercooled);
+  }
+
+  /***************************************************************************
+   * Contrail Formation Tests
+   ***************************************************************************/
+
+  // Test 82: Contrail formation (Schmidt-Appleman criterion)
+  void testContrailFormation() {
+    // Contrails form when exhaust mixes with cold, humid air
+    double ambient_temp = 220.0;  // K (-53°C typical at cruise)
+    double threshold_temp = 233.0;  // K approximate threshold
+
+    // Contrails likely when ambient temp < threshold
+    bool contrails_likely = ambient_temp < threshold_temp;
+    TS_ASSERT(contrails_likely);
+  }
+
+  // Test 83: Contrail persistence (humidity dependent)
+  void testContrailPersistence() {
+    // Persistent contrails form in ice-supersaturated air
+    double relative_humidity_ice = 1.1;  // 110% RH with respect to ice
+
+    bool persistent = relative_humidity_ice > 1.0;
+    TS_ASSERT(persistent);
+  }
+
+  /***************************************************************************
+   * Wind and Shear Tests
+   ***************************************************************************/
+
+  // Test 84: Wind shear calculation
+  void testWindShear() {
+    double wind_upper = 50.0;  // m/s at upper level
+    double wind_lower = 20.0;  // m/s at lower level
+    double altitude_diff = 1000.0;  // m
+
+    double wind_shear = (wind_upper - wind_lower) / altitude_diff;  // per second
+
+    TS_ASSERT_DELTA(wind_shear, 0.03, 0.001);
+  }
+
+  // Test 85: Jet stream core speed
+  void testJetStreamCore() {
+    // Typical jet stream speeds
+    double jet_core_speed = 75.0;  // m/s (~150 kt)
+    double jet_width = 200000.0;   // m (200 km width)
+    double jet_depth = 3000.0;     // m
+
+    TS_ASSERT(jet_core_speed > 25.0);  // Definition: > 25 m/s
+    TS_ASSERT_DELTA(jet_core_speed, 75.0, epsilon);
+  }
+
+  // Test 86: Thermal wind equation
+  void testThermalWind() {
+    // Thermal wind is proportional to horizontal temperature gradient
+    double delta_T = 10.0;  // K temperature difference
+    double delta_x = 500000.0;  // m (500 km)
+    double temp_gradient = delta_T / delta_x;
+
+    // f = 2 * Omega * sin(lat) ~ 1e-4 at mid-latitudes
+    double f = 1.0e-4;
+
+    // Thermal wind shear: dV/dz ~ (g/f*T) * dT/dx
+    double g = GRAVITY_SI;
+    double T = 250.0;  // Mean temp
+    double thermal_wind_shear = (g / (f * T)) * temp_gradient;
+
+    TS_ASSERT(thermal_wind_shear > 0.0);
+  }
+
+  /***************************************************************************
+   * Isentropic Flow Relations
+   ***************************************************************************/
+
+  // Test 87: Isentropic pressure ratio
+  void testIsentropicPressureRatio() {
+    double mach = 0.8;
+    double gamma = GAMMA_AIR;
+
+    // P0/P = (1 + (gamma-1)/2 * M^2)^(gamma/(gamma-1))
+    double pressure_ratio = std::pow(1.0 + 0.5 * (gamma - 1.0) * mach * mach,
+                                     gamma / (gamma - 1.0));
+
+    TS_ASSERT_DELTA(pressure_ratio, 1.524, 0.001);
+  }
+
+  // Test 88: Isentropic temperature ratio
+  void testIsentropicTemperatureRatio() {
+    double mach = 0.8;
+    double gamma = GAMMA_AIR;
+
+    // T0/T = 1 + (gamma-1)/2 * M^2
+    double temp_ratio = 1.0 + 0.5 * (gamma - 1.0) * mach * mach;
+
+    TS_ASSERT_DELTA(temp_ratio, 1.128, 0.001);
+  }
+
+  // Test 89: Isentropic density ratio
+  void testIsentropicDensityRatio() {
+    double mach = 0.8;
+    double gamma = GAMMA_AIR;
+
+    // rho0/rho = (1 + (gamma-1)/2 * M^2)^(1/(gamma-1))
+    double density_ratio = std::pow(1.0 + 0.5 * (gamma - 1.0) * mach * mach,
+                                    1.0 / (gamma - 1.0));
+
+    TS_ASSERT_DELTA(density_ratio, 1.351, 0.001);
+  }
+
+  /***************************************************************************
+   * High-Speed Aerodynamic Heating Tests
+   ***************************************************************************/
+
+  // Test 90: Stagnation temperature at supersonic speed
+  void testStagnationTemperatureSupersonic() {
+    double mach = 2.0;
+    double static_temp = 216.65;  // K at tropopause
+
+    double T0 = static_temp * (1.0 + 0.5 * (GAMMA_AIR - 1.0) * mach * mach);
+
+    TS_ASSERT_DELTA(T0, 390.0, 1.0);  // Significant heating at M=2
+  }
+
+  // Test 91: Skin friction heating
+  void testSkinFrictionHeating() {
+    double mach = 0.85;
+    double recovery_factor = 0.9;  // For turbulent boundary layer
+    double static_temp = 220.0;
+
+    double total_temp = static_temp * (1.0 + 0.5 * (GAMMA_AIR - 1.0) * mach * mach);
+    double adiabatic_wall_temp = static_temp + recovery_factor * (total_temp - static_temp);
+
+    TS_ASSERT(adiabatic_wall_temp > static_temp);
+    TS_ASSERT(adiabatic_wall_temp < total_temp);
+  }
+
+  /***************************************************************************
+   * Flight Planning Atmospheric Tests
+   ***************************************************************************/
+
+  // Test 92: Standard temperature at various flight levels
+  void testStandardTempFlightLevels() {
+    // FL100 = 10000 ft = 3048 m
+    double alt_fl100 = 3048.0;
+    double temp_fl100 = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * alt_fl100;
+    TS_ASSERT_DELTA(temp_fl100, 268.3, 0.5);
+
+    // FL250 = 25000 ft = 7620 m
+    double alt_fl250 = 7620.0;
+    double temp_fl250 = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * alt_fl250;
+    TS_ASSERT_DELTA(temp_fl250, 238.6, 0.5);
+  }
+
+  // Test 93: ICAO standard atmosphere verification
+  void testICAOStandardAtmosphere() {
+    // Verify standard values at key altitudes
+    // At 5000m: T = 255.65 K
+    double temp_5k = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * 5000.0;
+    TS_ASSERT_DELTA(temp_5k, 255.65, 0.01);
+
+    // At 10000m: T = 223.15 K
+    double temp_10k = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * 10000.0;
+    TS_ASSERT_DELTA(temp_10k, 223.15, 0.01);
+  }
+
+  // Test 94: True altitude correction
+  void testTrueAltitudeCorrection() {
+    // True altitude = indicated + correction for temperature deviation
+    double indicated_alt = 10000.0;  // ft
+    double isa_dev = 10.0;  // ISA+10
+
+    // Correction factor: ~4 ft per degree per 1000 ft
+    double correction = (4.0 * isa_dev * indicated_alt) / 1000.0;
+    double true_alt = indicated_alt + correction;
+
+    TS_ASSERT(true_alt > indicated_alt);
+    TS_ASSERT_DELTA(true_alt, 10400.0, 10.0);
+  }
+
+  /***************************************************************************
+   * Atmospheric Composition Tests
+   ***************************************************************************/
+
+  // Test 95: Oxygen partial pressure at altitude
+  void testOxygenPartialPressure() {
+    double altitude = 8000.0;  // m
+    double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
+    double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
+    double pressure = ISA_SEA_LEVEL_PRESSURE * std::pow(temp / ISA_SEA_LEVEL_TEMP_K, exponent);
+
+    // Oxygen is 21% of air
+    double O2_fraction = 0.21;
+    double O2_partial = pressure * O2_fraction;
+
+    // At sea level, O2 partial pressure ~21.3 kPa
+    double O2_sea_level = ISA_SEA_LEVEL_PRESSURE * O2_fraction;
+
+    TS_ASSERT(O2_partial < O2_sea_level);
+    TS_ASSERT_DELTA(O2_sea_level, 21278.0, 10.0);
+  }
+
+  // Test 96: Cabin altitude from cabin pressure
+  void testCabinAltitude() {
+    // Aircraft pressurized to equivalent of 8000 ft = 2438 m
+    double cabin_pressure = 75250.0;  // Pa (~752.5 hPa)
+
+    // Calculate equivalent altitude
+    double pressure_ratio = cabin_pressure / ISA_SEA_LEVEL_PRESSURE;
+    double exponent = (ISA_LAPSE_RATE * GAS_CONSTANT_AIR) / (-GRAVITY_SI);
+    double temp_ratio = std::pow(pressure_ratio, exponent);
+    double cabin_altitude = (ISA_SEA_LEVEL_TEMP_K * (temp_ratio - 1.0)) / ISA_LAPSE_RATE;
+
+    TS_ASSERT_DELTA(cabin_altitude, 2438.0, 50.0);
+  }
+
+  /***************************************************************************
+   * Turbulence Intensity Tests
+   ***************************************************************************/
+
+  // Test 97: Turbulence intensity classification
+  void testTurbulenceIntensity() {
+    // Light: < 0.5 g
+    // Moderate: 0.5-1.0 g
+    // Severe: > 1.0 g
+    double acceleration = 0.7;  // g
+
+    bool light = acceleration < 0.5;
+    bool moderate = (acceleration >= 0.5) && (acceleration <= 1.0);
+    bool severe = acceleration > 1.0;
+
+    TS_ASSERT(!light);
+    TS_ASSERT(moderate);
+    TS_ASSERT(!severe);
+  }
+
+  // Test 98: Convective available potential energy (CAPE)
+  void testCAPE() {
+    // CAPE indicates thunderstorm potential
+    // CAPE > 2500 J/kg = severe thunderstorm potential
+    double cape = 3000.0;  // J/kg
+
+    bool severe_potential = cape > 2500.0;
+    TS_ASSERT(severe_potential);
+
+    // Estimated updraft velocity: W = sqrt(2 * CAPE)
+    double max_updraft = std::sqrt(2.0 * cape);
+    TS_ASSERT_DELTA(max_updraft, 77.5, 0.5);  // m/s
+  }
+
+  /***************************************************************************
+   * Atmospheric Boundary Layer Tests
+   ***************************************************************************/
+
+  // Test 99: Planetary boundary layer height
+  void testPBLHeight() {
+    // Daytime convective boundary layer ~1-2 km
+    double pbl_height = 1500.0;  // m typical daytime
+
+    // At night, stable boundary layer is much thinner
+    double sbl_height = 200.0;  // m
+
+    TS_ASSERT(pbl_height > sbl_height);
+    TS_ASSERT(pbl_height > 1000.0);
+  }
+
+  // Test 100: Wind profile power law
+  void testWindProfilePowerLaw() {
+    // Wind speed increases with height: V(z) = V_ref * (z/z_ref)^alpha
+    double v_ref = 10.0;  // m/s at reference height
+    double z_ref = 10.0;  // m reference height
+    double z = 100.0;     // m height of interest
+    double alpha = 0.14;  // Power law exponent (neutral conditions)
+
+    double v_z = v_ref * std::pow(z / z_ref, alpha);
+
+    TS_ASSERT(v_z > v_ref);
+    TS_ASSERT_DELTA(v_z, 13.8, 0.1);
+  }
+};

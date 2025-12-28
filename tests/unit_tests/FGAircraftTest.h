@@ -1351,4 +1351,311 @@ public:
     FGColumnVector3 moments = aircraft->GetMoments();
     TS_ASSERT_DELTA(moments(1), 0.0, epsilon);  // Roll balanced
   }
+
+  /***************************************************************************
+   * Power Loading Tests
+   ***************************************************************************/
+
+  // Test power loading calculation
+  void testPowerLoadingCalculation() {
+    double weight = 3000.0;      // lbs
+    double power = 180.0;        // HP
+
+    double powerLoading = weight / power;  // lbs/HP
+
+    TS_ASSERT_DELTA(powerLoading, 16.67, 0.1);
+  }
+
+  // Test thrust-to-weight ratio
+  void testThrustToWeightRatio() {
+    double thrust = 2000.0;   // lbs
+    double weight = 3000.0;   // lbs
+
+    double TW_ratio = thrust / weight;
+
+    TS_ASSERT_DELTA(TW_ratio, 0.667, 0.01);
+    TS_ASSERT(TW_ratio < 1.0);  // Subsonic transport
+  }
+
+  // Test high-performance T/W ratio
+  void testHighPerformanceTWRatio() {
+    double thrust = 35000.0;  // lbs (fighter with afterburner)
+    double weight = 30000.0;  // lbs
+
+    double TW_ratio = thrust / weight;
+
+    TS_ASSERT(TW_ratio > 1.0);  // Can accelerate vertically
+  }
+
+  /***************************************************************************
+   * Inertia Tests
+   ***************************************************************************/
+
+  // Test moment of inertia ratios
+  void testInertiaRatios() {
+    double Ixx = 5000.0;   // slug-ft^2 (roll)
+    double Iyy = 15000.0;  // slug-ft^2 (pitch)
+    double Izz = 18000.0;  // slug-ft^2 (yaw)
+
+    // Typical aircraft: Iyy > Ixx, Izz > Iyy
+    TS_ASSERT(Iyy > Ixx);
+    TS_ASSERT(Izz > Ixx);
+  }
+
+  // Test product of inertia effect
+  void testProductOfInertia() {
+    double Ixz = 1000.0;   // slug-ft^2 (coupling between roll and yaw)
+
+    // Non-zero product of inertia creates coupling
+    TS_ASSERT(Ixz != 0.0);
+  }
+
+  /***************************************************************************
+   * Stall Speed Tests
+   ***************************************************************************/
+
+  // Test stall speed calculation
+  void testStallSpeedCalculation() {
+    double weight = 3000.0;   // lbs
+    double rho = 0.002377;    // slug/ft^3
+    double S = 174.0;         // sq ft
+    double CL_max = 1.6;
+
+    double V_stall = std::sqrt((2.0 * weight) / (rho * S * CL_max));
+
+    TS_ASSERT_DELTA(V_stall, 95.5, 1.0);  // ft/s
+  }
+
+  // Test stall speed at altitude
+  void testStallSpeedAtAltitude() {
+    double weight = 3000.0;
+    double rho_sl = 0.002377;
+    double rho_alt = 0.0018;  // ~8000 ft
+    double S = 174.0;
+    double CL_max = 1.6;
+
+    double V_stall_sl = std::sqrt((2.0 * weight) / (rho_sl * S * CL_max));
+    double V_stall_alt = std::sqrt((2.0 * weight) / (rho_alt * S * CL_max));
+
+    // Stall speed increases at altitude
+    TS_ASSERT(V_stall_alt > V_stall_sl);
+  }
+
+  // Test stall speed ratio
+  void testStallSpeedRatio() {
+    double rho_sl = 0.002377;
+    double rho_alt = 0.0018;
+
+    double sigma = rho_alt / rho_sl;
+    double V_ratio = 1.0 / std::sqrt(sigma);
+
+    // V_alt / V_sl = 1 / sqrt(sigma)
+    TS_ASSERT(V_ratio > 1.0);
+  }
+
+  /***************************************************************************
+   * Roll Rate Tests
+   ***************************************************************************/
+
+  // Test steady roll rate
+  void testSteadyRollRate() {
+    double Cl_da = 0.15;  // Roll moment coefficient per aileron deflection
+    double Cl_p = -0.4;   // Roll damping coefficient
+    double delta_a = 0.2; // Aileron deflection (rad)
+
+    // Steady roll rate: p = -Cl_da / Cl_p * delta_a * (2V/b)
+    // Simplified: p_hat = -Cl_da * delta_a / Cl_p
+    double p_hat = -Cl_da * delta_a / Cl_p;
+
+    TS_ASSERT(p_hat > 0);  // Positive roll rate for positive aileron
+    TS_ASSERT_DELTA(p_hat, 0.075, 0.01);
+  }
+
+  // Test roll time constant
+  void testRollTimeConstant() {
+    double Ixx = 5000.0;   // slug-ft^2
+    double q = 50.0;       // psf
+    double S = 174.0;      // sq ft
+    double b = 36.0;       // ft
+    double Cl_p = -0.4;
+
+    double Lp = Cl_p * q * S * b * b / (2.0 * Ixx);
+    double tau_r = -1.0 / Lp;
+
+    TS_ASSERT(tau_r > 0);  // Positive time constant
+    TS_ASSERT(tau_r < 2.0);  // Fast roll response
+  }
+
+  /***************************************************************************
+   * Yaw Rate Tests
+   ***************************************************************************/
+
+  // Test steady yaw rate in turn
+  void testSteadyYawRateInTurn() {
+    double V = 200.0;      // ft/s
+    double phi = 30.0 * M_PI / 180.0;  // 30 deg bank
+    double g = 32.174;     // ft/s^2
+
+    double r = g * std::tan(phi) / V;
+
+    TS_ASSERT(r > 0);  // Positive yaw rate for right turn
+    TS_ASSERT_DELTA(r, 0.0928, 0.01);  // rad/s
+  }
+
+  // Test turn radius
+  void testTurnRadiusCalculation() {
+    double V = 200.0;      // ft/s
+    double phi = 45.0 * M_PI / 180.0;  // 45 deg bank
+    double g = 32.174;
+
+    double R = V * V / (g * std::tan(phi));
+
+    TS_ASSERT(R > 0);
+    TS_ASSERT_DELTA(R, 1243.5, 10.0);  // ft
+  }
+
+  /***************************************************************************
+   * Climb Performance Tests
+   ***************************************************************************/
+
+  // Test rate of climb
+  void testRateOfClimbCalculation() {
+    double thrust = 500.0;   // lbs
+    double drag = 350.0;     // lbs
+    double weight = 3000.0;  // lbs
+    double V = 150.0;        // ft/s
+
+    double excess_power = (thrust - drag) * V;
+    double RoC = excess_power / weight;
+
+    TS_ASSERT(RoC > 0);  // Climbing
+    TS_ASSERT_DELTA(RoC, 7.5, 0.1);  // ft/s
+  }
+
+  // Test climb angle
+  void testClimbAngleCalculation() {
+    double thrust = 500.0;
+    double drag = 350.0;
+    double weight = 3000.0;
+
+    double gamma = std::asin((thrust - drag) / weight);
+
+    TS_ASSERT(gamma > 0);
+    TS_ASSERT_DELTA(gamma * 180.0 / M_PI, 2.87, 0.1);  // degrees
+  }
+
+  /***************************************************************************
+   * Glide Performance Tests
+   ***************************************************************************/
+
+  // Test glide ratio
+  void testGlideRatioCalculation() {
+    double CL = 0.6;
+    double CD = 0.04;
+
+    double L_D = CL / CD;
+
+    TS_ASSERT_DELTA(L_D, 15.0, epsilon);
+  }
+
+  // Test glide range
+  void testGlideRangeCalculation() {
+    double altitude = 10000.0;  // ft
+    double L_D = 12.0;
+
+    double range = altitude * L_D;
+
+    TS_ASSERT_DELTA(range, 120000.0, epsilon);  // ft
+  }
+
+  // Test glide angle
+  void testGlideAngleCalculation() {
+    double L_D = 15.0;
+
+    double gamma = std::atan(1.0 / L_D);
+
+    TS_ASSERT_DELTA(gamma * 180.0 / M_PI, 3.81, 0.1);  // degrees
+  }
+
+  /***************************************************************************
+   * Speed Conversion Tests
+   ***************************************************************************/
+
+  // Test TAS to EAS conversion
+  void testTAStoEAS() {
+    double TAS = 300.0;   // ft/s
+    double sigma = 0.75;  // Density ratio at altitude
+
+    double EAS = TAS * std::sqrt(sigma);
+
+    TS_ASSERT_DELTA(EAS, 259.8, 1.0);
+  }
+
+  // Test CAS to TAS at altitude
+  void testCAStoTAS() {
+    double CAS = 200.0;   // ft/s
+    double sigma = 0.8;
+
+    // Simplified: TAS = CAS / sqrt(sigma)
+    double TAS = CAS / std::sqrt(sigma);
+
+    TS_ASSERT(TAS > CAS);  // TAS > CAS at altitude
+    TS_ASSERT_DELTA(TAS, 223.6, 1.0);
+  }
+
+  /***************************************************************************
+   * Extended Force Tests
+   ***************************************************************************/
+
+  // Test multi-engine asymmetric thrust
+  void testAsymmetricThrust() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // Left engine out, right engine running
+    // Creates yawing moment (nose left)
+    aircraft->in.PropForce = FGColumnVector3(500.0, 100.0, 0.0);  // Off-center thrust
+    aircraft->in.PropMoment = FGColumnVector3(0.0, 0.0, -200.0); // Yaw moment
+    aircraft->in.AeroForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.AeroMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 moments = aircraft->GetMoments();
+    TS_ASSERT(moments(3) < 0);  // Yawing left
+  }
+
+  // Test crosswind landing forces
+  void testCrosswindForces() {
+    FGFDMExec fdmex;
+    auto aircraft = fdmex.GetAircraft();
+
+    // Crosswind creates side force and yaw moment
+    double sideForce = 300.0;
+    double yawMoment = 150.0;
+
+    aircraft->in.AeroForce = FGColumnVector3(0.0, sideForce, 0.0);
+    aircraft->in.AeroMoment = FGColumnVector3(0.0, 0.0, yawMoment);
+    aircraft->in.PropForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantForce = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.PropMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.GroundMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.ExternalMoment = FGColumnVector3(0.0, 0.0, 0.0);
+    aircraft->in.BuoyantMoment = FGColumnVector3(0.0, 0.0, 0.0);
+
+    aircraft->Run(false);
+
+    FGColumnVector3 forces = aircraft->GetForces();
+    FGColumnVector3 moments = aircraft->GetMoments();
+    TS_ASSERT_DELTA(forces(2), sideForce, epsilon);
+    TS_ASSERT_DELTA(moments(3), yawMoment, epsilon);
+  }
 };

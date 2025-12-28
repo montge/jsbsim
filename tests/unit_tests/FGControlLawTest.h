@@ -1219,4 +1219,403 @@ public:
     }
 };
 
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ * Extended Control Law Tests (25 new tests)
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+class FGControlLawExtendedTest : public CxxTest::TestSuite
+{
+public:
+    //===========================================================================
+    // Advanced PID and Gain Scheduling Tests
+    //===========================================================================
+
+    // Test 76: PID with derivative filter
+    void testPIDWithDerivativeFilter() {
+        // Derivative term with first-order filter to reduce noise
+        double error = 2.0;
+        double prev_error = 1.8;
+        double dt = 0.01;
+        double tau_d = 0.1;  // Derivative filter time constant
+
+        double raw_derivative = (error - prev_error) / dt;
+
+        // Apply filter: d_filtered = (1 - alpha) * d_prev + alpha * d_raw
+        double alpha = dt / (tau_d + dt);
+        double prev_filtered = 15.0;
+        double filtered_derivative = (1.0 - alpha) * prev_filtered + alpha * raw_derivative;
+
+        TS_ASSERT(filtered_derivative < raw_derivative);  // Filtering reduces spikes
+    }
+
+    // Test 77: Multi-point gain schedule
+    void testMultiPointGainSchedule() {
+        // 3-point interpolation: 100 kts -> 1.0, 200 kts -> 0.6, 300 kts -> 0.4
+        double speed = 250.0;
+
+        double gain;
+        if (speed <= 200.0) {
+            gain = ScheduledGain::GetGain(speed, 100.0, 1.0, 200.0, 0.6);
+        } else {
+            gain = ScheduledGain::GetGain(speed, 200.0, 0.6, 300.0, 0.4);
+        }
+
+        TS_ASSERT_DELTA(gain, 0.5, EPSILON);
+    }
+
+    // Test 78: Gain scheduling with dynamic pressure
+    void testDynamicPressureGainSchedule() {
+        // q_bar = 0.5 * rho * V^2
+        double rho = 0.002377;  // slug/ft^3
+        double V = 400.0;       // ft/s
+        double q_bar = 0.5 * rho * V * V;
+
+        // Gain inversely proportional to q_bar
+        double K_ref = 1.0;
+        double q_ref = 100.0;
+        double K = K_ref * q_ref / q_bar;
+
+        TS_ASSERT(K < K_ref);  // Gain decreases with dynamic pressure
+        TS_ASSERT_DELTA(q_bar, 190.16, 0.1);
+    }
+
+    //===========================================================================
+    // Flight Phase Control Laws
+    //===========================================================================
+
+    // Test 79: Takeoff rotation law
+    void testTakeoffRotationLaw() {
+        double V_r = 150.0;     // Rotation speed kts
+        double V_current = 155.0;
+        double pitch_target = 10.0 * DEG_TO_RAD;
+
+        // Initiate rotation when V > V_r
+        bool rotate = V_current > V_r;
+        double pitch_cmd = rotate ? pitch_target : 0.0;
+
+        TS_ASSERT_EQUALS(rotate, true);
+        TS_ASSERT_DELTA(pitch_cmd, pitch_target, EPSILON);
+    }
+
+    // Test 80: Ground effect compensation
+    void testGroundEffectCompensation() {
+        double altitude_agl = 20.0;  // ft
+        double wingspan = 100.0;     // ft
+
+        // Ground effect factor: increases lift as h/b decreases
+        double h_b = altitude_agl / wingspan;
+        double ground_effect_factor = 1.0 + 0.1 / (h_b + 0.1);
+
+        TS_ASSERT(ground_effect_factor > 1.0);
+        TS_ASSERT_DELTA(ground_effect_factor, 1.333, 0.01);
+    }
+
+    // Test 81: Approach speed compensation
+    void testApproachSpeedCompensation() {
+        double weight = 150000.0;    // lbs
+        double weight_ref = 120000.0;
+        double V_ref = 130.0;        // kts
+
+        // Approach speed scales with sqrt of weight ratio
+        double V_app = V_ref * std::sqrt(weight / weight_ref);
+
+        TS_ASSERT(V_app > V_ref);
+        TS_ASSERT_DELTA(V_app, 145.3, 0.5);
+    }
+
+    // Test 82: Crosswind landing crab/decrab
+    void testCrosswindDecrab() {
+        double heading_wind = 45.0 * DEG_TO_RAD;  // Relative wind angle
+        double crosswind = 20.0;  // kts
+        double groundspeed = 130.0;
+
+        // Crab angle for crosswind
+        double crab_angle = std::asin(crosswind * std::sin(heading_wind) / groundspeed);
+
+        // Decrab required at touchdown
+        TS_ASSERT(crab_angle > 0);
+    }
+
+    //===========================================================================
+    // Engine Failure Control Laws
+    //===========================================================================
+
+    // Test 83: Asymmetric thrust compensation
+    void testAsymmetricThrustCompensation() {
+        double thrust_left = 20000.0;   // lbs
+        double thrust_right = 0.0;      // Engine failure
+        double arm = 20.0;              // ft (engine to centerline)
+
+        double yaw_moment = (thrust_left - thrust_right) * arm;
+        double K_rudder = 0.00001;  // rudder effectiveness
+
+        double rudder_cmd = K_rudder * yaw_moment;
+
+        TS_ASSERT(rudder_cmd > 0);  // Rudder to oppose yaw
+        TS_ASSERT_DELTA(yaw_moment, 400000.0, 1.0);
+    }
+
+    // Test 84: Minimum control speed (Vmc)
+    void testMinimumControlSpeed() {
+        double thrust_asymmetric = 20000.0;
+        double arm = 20.0;
+        double rudder_power = 500.0;  // lb-ft per degree
+        double max_rudder = 25.0;     // degrees
+
+        double max_yaw_moment = rudder_power * max_rudder;
+        double asymmetric_moment = thrust_asymmetric * arm;
+
+        bool controllable = max_yaw_moment >= asymmetric_moment;
+
+        TS_ASSERT_EQUALS(controllable, false);  // Need more airspeed
+    }
+
+    // Test 85: Bank angle limit with engine out
+    void testEnginOutBankLimit() {
+        double bank_normal = 30.0;    // degrees
+        double bank_engine_out = 15.0; // degrees
+
+        bool engine_failed = true;
+        double bank_limit = engine_failed ? bank_engine_out : bank_normal;
+
+        TS_ASSERT_DELTA(bank_limit, 15.0, EPSILON);
+    }
+
+    //===========================================================================
+    // Turbulence Control Laws
+    //===========================================================================
+
+    // Test 86: Gust alleviation factor
+    void testGustAlleviationFactor() {
+        double gust_velocity = 15.0;  // ft/s vertical gust
+        double wing_loading = 80.0;   // lbs/ft^2
+        double V = 500.0;             // ft/s
+
+        // Load factor increment from gust
+        double rho = 0.002377;
+        double CLa = 5.0;  // lift curve slope per rad
+        double c_bar = 8.0;  // mean chord
+
+        double mu = 2.0 * wing_loading / (rho * c_bar * CLa * 32.2);
+        double Kg = 0.88 * mu / (5.3 + mu);  // Gust alleviation factor
+
+        TS_ASSERT(Kg > 0.0);
+        TS_ASSERT(Kg < 1.0);
+    }
+
+    // Test 87: Turbulence penetration speed
+    void testTurbulencePenetrationSpeed() {
+        double Va = 180.0;  // Maneuvering speed kts
+        double Vno = 200.0; // Max structural cruising speed
+
+        // Turbulence penetration between Va and Vno
+        double V_turb = (Va + Vno) / 2.0;
+
+        TS_ASSERT(V_turb > Va);
+        TS_ASSERT(V_turb < Vno);
+        TS_ASSERT_DELTA(V_turb, 190.0, EPSILON);
+    }
+
+    //===========================================================================
+    // Stability Margin Tests
+    //===========================================================================
+
+    // Test 88: Static margin calculation
+    void testStaticMarginCalculation() {
+        double x_np = 0.35;   // Neutral point MAC fraction
+        double x_cg = 0.28;   // CG MAC fraction
+
+        double static_margin = x_np - x_cg;
+
+        TS_ASSERT(static_margin > 0);  // Stable
+        TS_ASSERT_DELTA(static_margin, 0.07, EPSILON);
+    }
+
+    // Test 89: Pitch damping requirement
+    void testPitchDampingRequirement() {
+        // Minimum damping ratio for short period
+        double damping_ratio = 0.3;
+        double min_damping = 0.25;
+
+        bool adequate_damping = damping_ratio >= min_damping;
+
+        TS_ASSERT_EQUALS(adequate_damping, true);
+    }
+
+    // Test 90: Dutch roll damping
+    void testDutchRollDamping() {
+        double omega_d = 2.0;     // rad/s natural frequency
+        double zeta_d = 0.15;     // damping ratio
+
+        // Minimum product requirement: zeta * omega > 0.15
+        double product = zeta_d * omega_d;
+
+        TS_ASSERT(product > 0.15);
+        TS_ASSERT_DELTA(product, 0.3, EPSILON);
+    }
+
+    //===========================================================================
+    // Control Effectiveness Tests
+    //===========================================================================
+
+    // Test 91: Elevator effectiveness with Mach
+    void testElevatorEffectivenessWithMach() {
+        double mach = 0.85;
+        double effectiveness_ref = 1.0;
+
+        // Compressibility reduces effectiveness
+        double beta = std::sqrt(1.0 - mach * mach);
+        double effectiveness = effectiveness_ref * beta;
+
+        TS_ASSERT(effectiveness < effectiveness_ref);
+        TS_ASSERT_DELTA(effectiveness, 0.527, 0.01);
+    }
+
+    // Test 92: Aileron effectiveness at high alpha
+    void testAileronEffectivenessHighAlpha() {
+        double alpha = 18.0 * DEG_TO_RAD;
+        double alpha_stall = 15.0 * DEG_TO_RAD;
+        double effectiveness_ref = 1.0;
+
+        // Reduced effectiveness near stall
+        double reduction = 0.0;
+        if (alpha > alpha_stall) {
+            reduction = 0.5 * (alpha - alpha_stall) / DEG_TO_RAD;
+        }
+        double effectiveness = effectiveness_ref - reduction;
+        effectiveness = std::max(0.3, effectiveness);
+
+        TS_ASSERT(effectiveness < effectiveness_ref);
+    }
+
+    // Test 93: Control surface hinge moment
+    void testControlSurfaceHingeMoment() {
+        double Ch0 = 0.0;
+        double Cha = -0.5;  // Hinge moment due to alpha
+        double Chd = -0.3;  // Hinge moment due to deflection
+        double alpha = 5.0 * DEG_TO_RAD;
+        double delta = 10.0 * DEG_TO_RAD;
+
+        double Ch = Ch0 + Cha * alpha + Chd * delta;
+        double q_bar = 100.0;  // psf
+        double S_e = 20.0;     // ft^2
+        double c_e = 2.0;      // ft
+
+        double hinge_moment = q_bar * S_e * c_e * Ch;
+
+        TS_ASSERT(hinge_moment < 0);  // Restoring moment
+    }
+
+    //===========================================================================
+    // Multi-Axis Coupling Tests
+    //===========================================================================
+
+    // Test 94: Roll-yaw coupling
+    void testRollYawCoupling() {
+        double roll_rate = 0.2;  // rad/s
+        double V = 300.0;        // ft/s
+        double b = 80.0;         // wingspan ft
+
+        // Yaw rate induced by roll (adverse yaw)
+        double Cnp = -0.05;  // Yaw due to roll rate
+        double yaw_induced = Cnp * roll_rate * b / (2.0 * V);
+
+        TS_ASSERT(yaw_induced < 0);  // Adverse yaw
+    }
+
+    // Test 95: Pitch-roll coupling (inertia coupling)
+    void testPitchRollCoupling() {
+        double Ixx = 10000.0;  // Roll inertia
+        double Izz = 50000.0;  // Yaw inertia
+        double Iyy = 40000.0;  // Pitch inertia
+
+        double pitch_rate = 0.1;  // rad/s
+        double yaw_rate = 0.05;
+
+        // Roll moment from pitch-yaw coupling
+        // (Izz - Iyy) * p * r = (50000 - 40000) * 0.1 * 0.05 = 10000 * 0.005 = 50
+        double roll_moment = (Izz - Iyy) * pitch_rate * yaw_rate;
+
+        TS_ASSERT_DELTA(roll_moment, 50.0, EPSILON);
+    }
+
+    //===========================================================================
+    // Digital Control Implementation Tests
+    //===========================================================================
+
+    // Test 96: Sample rate effect on phase lag
+    void testSampleRatePhaselag() {
+        double omega = 10.0;  // rad/s signal frequency
+        double dt = 0.01;     // sample period
+
+        // Phase lag from sample/hold: theta = omega * dt / 2
+        double phase_lag = omega * dt / 2.0;
+
+        TS_ASSERT_DELTA(phase_lag, 0.05, EPSILON);  // rad
+    }
+
+    // Test 97: Quantization effect
+    void testQuantizationEffect() {
+        double input = 0.12345;
+        double resolution = 0.01;
+
+        double quantized = std::round(input / resolution) * resolution;
+
+        TS_ASSERT_DELTA(quantized, 0.12, EPSILON);
+    }
+
+    // Test 98: Computational delay compensation
+    void testComputationalDelayCompensation() {
+        double delay = 0.02;  // seconds
+        double omega = 5.0;   // rad/s
+
+        // Phase lag from delay
+        double phase_lag = omega * delay;
+
+        // Lead compensator to compensate
+        double phase_lead = omega * delay;  // Match the lag
+
+        double net_phase = phase_lag - phase_lead;
+
+        TS_ASSERT_DELTA(net_phase, 0.0, EPSILON);
+    }
+
+    //===========================================================================
+    // Auto-Throttle and Speed Control Tests
+    //===========================================================================
+
+    // Test 99: Speed hold with integral
+    void testSpeedHoldWithIntegral() {
+        SimplePID pid(0.1, 0.02, 0.0, 0.1);
+
+        double target_speed = 250.0;
+        double current_speed = 245.0;
+        double error = target_speed - current_speed;
+
+        double throttle_cmd = pid.Update(error);
+
+        TS_ASSERT(throttle_cmd > 0);  // Increase throttle
+    }
+
+    // Test 100: Idle descent speed control
+    void testIdleDescentSpeedControl() {
+        double target_speed = 280.0;
+        double current_speed = 300.0;
+        double idle_thrust = 0.1;  // normalized
+
+        // Speed high, throttle at idle
+        double throttle = idle_thrust;
+        double speed_error = target_speed - current_speed;
+
+        // Use speed brakes if needed
+        double speedbrake_cmd = 0.0;
+        if (speed_error < -10.0) {
+            speedbrake_cmd = 0.5;
+        }
+
+        TS_ASSERT_DELTA(throttle, idle_thrust, EPSILON);
+        TS_ASSERT_DELTA(speedbrake_cmd, 0.5, EPSILON);
+    }
+};
+
 #endif  // FGCONTROLLAWTEST_H
