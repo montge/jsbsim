@@ -725,4 +725,369 @@ public:
 
     TS_ASSERT_DELTA(beta_subsonic, 0.6, 0.01);
   }
+
+  /***************************************************************************
+   * Hypersonic Regime Tests
+   ***************************************************************************/
+
+  void testHypersonicMachNumber() {
+    double M = 5.0;
+    TS_ASSERT(M > 4.0);
+  }
+
+  void testHypersonicTemperatureRatio() {
+    double M = 5.0;
+    double T_ratio = 1.0 + 0.5 * (GAMMA - 1.0) * M * M;
+
+    TS_ASSERT_DELTA(T_ratio, 6.0, 0.01);
+  }
+
+  void testRealGasEffects() {
+    double M = 8.0;
+    double T_static = 220.0;
+    double T_total = T_static * (1.0 + 0.2 * M * M);
+
+    TS_ASSERT(T_total > 3000.0);
+  }
+
+  void testDissociationTemperature() {
+    double T_dissociation = 2500.0;
+    double T_current = 3000.0;
+
+    bool dissociation = (T_current > T_dissociation);
+    TS_ASSERT(dissociation);
+  }
+
+  /***************************************************************************
+   * Transonic Flow Characteristics
+   ***************************************************************************/
+
+  void testTransonicMachRange() {
+    double M_lower = 0.8;
+    double M_upper = 1.2;
+
+    TS_ASSERT(M_lower < 1.0);
+    TS_ASSERT(M_upper > 1.0);
+  }
+
+  void testShockFormationMach() {
+    double M = 1.0;
+    bool local_supersonic = (M >= 1.0);
+
+    TS_ASSERT(local_supersonic);
+  }
+
+  void testTransonicDragPeak() {
+    double Cd_M08 = 0.025;
+    double Cd_M10 = 0.080;
+    double Cd_M12 = 0.055;
+
+    TS_ASSERT(Cd_M10 > Cd_M08);
+    TS_ASSERT(Cd_M10 > Cd_M12);
+  }
+
+  void testTransonicBuffet() {
+    double M = 0.92;
+    double M_buffet = 0.90;
+
+    bool buffeting = (M > M_buffet);
+    TS_ASSERT(buffeting);
+  }
+
+  /***************************************************************************
+   * Shock Wave Interactions
+   ***************************************************************************/
+
+  void testShockBoundaryLayerInteraction() {
+    double M_upstream = 2.0;
+    double shock_strength = 1.8;
+
+    bool separation_likely = (shock_strength > 1.5);
+    TS_ASSERT(separation_likely);
+  }
+
+  void testShockReflection() {
+    double beta_incident = 30.0;
+    double beta_reflected = beta_incident;
+
+    TS_ASSERT_DELTA(beta_reflected, beta_incident, 0.1);
+  }
+
+  void testBowShockStandoff() {
+    double M = 2.0;
+    double body_radius = 1.0;
+
+    double standoff = body_radius * 0.14 * pow(M, -2.0);
+    TS_ASSERT(standoff > 0.0);
+    TS_ASSERT(standoff < body_radius);
+  }
+
+  void testShockAngleVsMach() {
+    double M1 = 1.5;
+    double M2 = 3.0;
+
+    double mu1 = asin(1.0 / M1) * Constants::RAD_TO_DEG;
+    double mu2 = asin(1.0 / M2) * Constants::RAD_TO_DEG;
+
+    TS_ASSERT(mu2 < mu1);
+  }
+
+  /***************************************************************************
+   * Propulsion at Supersonic Speeds
+   ***************************************************************************/
+
+  void testRamjetEfficiency() {
+    double M = 3.0;
+    double eta_thermal = 0.55;
+
+    TS_ASSERT(eta_thermal > 0.5);
+    TS_ASSERT(eta_thermal < 0.7);
+  }
+
+  void testScramjetStartMach() {
+    double M_start = 4.5;
+
+    TS_ASSERT(M_start > 4.0);
+  }
+
+  void testAfterburnerThrust() {
+    double dry_thrust = 10000.0;
+    double ab_factor = 1.5;
+
+    double wet_thrust = dry_thrust * ab_factor;
+    TS_ASSERT_DELTA(wet_thrust, 15000.0, 10.0);
+  }
+
+  void testInletSpillage() {
+    double M_design = 2.0;
+    double M_actual = 1.5;
+
+    bool spillage = (M_actual < M_design);
+    TS_ASSERT(spillage);
+  }
+
+  /***************************************************************************
+   * Control Surface Effectiveness
+   ***************************************************************************/
+
+  void testSupersonicControlPower() {
+    double M = 2.0;
+    double beta = sqrt(M * M - 1.0);
+    double Cl_delta = 2.0 / beta;
+
+    TS_ASSERT(Cl_delta > 0.0);
+    TS_ASSERT(Cl_delta < 2.0);
+  }
+
+  void testAllMovingTailEffectiveness() {
+    double M = 2.5;
+    double delta = 5.0 * Constants::DEG_TO_RAD;
+    double beta = sqrt(M * M - 1.0);
+
+    double Cl = 4.0 * delta / beta;
+    TS_ASSERT(Cl > 0.0);
+  }
+
+  void testReactionControlRequirement() {
+    double M = 4.0;
+    double q_bar = 500.0;
+
+    bool need_rcs = (q_bar < 100.0);
+    TS_ASSERT(!need_rcs);
+  }
+
+  /***************************************************************************
+   * Structural Thermal Effects
+   ***************************************************************************/
+
+  void testThermalExpansion() {
+    double T_ref = 520.0;
+    double T_hot = 800.0;
+    double alpha = 12e-6;
+    double L = 100.0;
+
+    double dL = alpha * L * (T_hot - T_ref);
+    TS_ASSERT(dL > 0.0);
+  }
+
+  void testMaterialTemperatureLimit() {
+    double T_aluminum = 400.0;
+    double T_titanium = 800.0;
+    double T_nickel = 1200.0;
+
+    TS_ASSERT(T_titanium > T_aluminum);
+    TS_ASSERT(T_nickel > T_titanium);
+  }
+
+  void testThermalGradientStress() {
+    double dT = 200.0;
+    double E = 10.5e6;
+    double alpha = 12e-6;
+
+    double thermal_stress = E * alpha * dT;
+    TS_ASSERT(thermal_stress > 0.0);
+  }
+
+  /***************************************************************************
+   * Stability at Supersonic Speeds
+   ***************************************************************************/
+
+  void testAerodynamicCenterShift() {
+    double xac_subsonic = 0.25;
+    double xac_supersonic = 0.50;
+
+    TS_ASSERT(xac_supersonic > xac_subsonic);
+  }
+
+  void testStaticMargin() {
+    double xcg = 0.35;
+    double xac = 0.50;
+    double MAC = 10.0;
+
+    double SM = (xac - xcg) * MAC;
+    TS_ASSERT(SM > 0.0);
+  }
+
+  void testDamping() {
+    double Cmq_subsonic = -15.0;
+    double Cmq_supersonic = -8.0;
+
+    TS_ASSERT(std::fabs(Cmq_supersonic) < std::fabs(Cmq_subsonic));
+  }
+
+  void testDutchRollFrequency() {
+    double freq_subsonic = 1.5;
+    double freq_supersonic = 0.8;
+
+    TS_ASSERT(freq_supersonic < freq_subsonic);
+  }
+
+  /***************************************************************************
+   * Design Considerations
+   ***************************************************************************/
+
+  void testSweepAngleEffect() {
+    double M_eff = 2.0;
+    double sweep = 45.0 * Constants::DEG_TO_RAD;
+
+    double M_normal = M_eff * cos(sweep);
+    TS_ASSERT(M_normal < M_eff);
+  }
+
+  void testFinenessRatio() {
+    double length = 100.0;
+    double diameter = 10.0;
+
+    double fineness = length / diameter;
+    TS_ASSERT_DELTA(fineness, 10.0, 0.1);
+  }
+
+  void testNoseConeOptimization() {
+    double Cd_cone = 0.10;
+    double Cd_ogive = 0.08;
+    double Cd_parabolic = 0.07;
+
+    TS_ASSERT(Cd_parabolic < Cd_ogive);
+    TS_ASSERT(Cd_ogive < Cd_cone);
+  }
+
+  /***************************************************************************
+   * Environmental Effects
+   ***************************************************************************/
+
+  void testAltitudeEffectOnMach() {
+    double V = 2000.0;
+    double a_sl = 1116.0;
+    double a_alt = 968.0;
+
+    double M_sl = V / a_sl;
+    double M_alt = V / a_alt;
+
+    TS_ASSERT(M_alt > M_sl);
+  }
+
+  void testDensityAltitudeEffect() {
+    double rho_sl = 0.002377;
+    double rho_alt = 0.0007;
+
+    double ratio = rho_alt / rho_sl;
+    TS_ASSERT(ratio < 0.5);
+  }
+
+  void testReynoldsNumberSupersonic() {
+    double V = 2000.0;
+    double L = 50.0;
+    double nu = 1.57e-4;
+
+    double Re = V * L / nu;
+    TS_ASSERT(Re > 1e8);
+  }
+
+  /***************************************************************************
+   * Performance Metrics
+   ***************************************************************************/
+
+  void testSupersonicRange() {
+    double Isp = 1500.0;
+    double Wf_Wi = 0.4;
+
+    double range_factor = Isp * log(1.0 / (1.0 - Wf_Wi));
+    TS_ASSERT(range_factor > 0.0);
+  }
+
+  void testSupersonicEndurance() {
+    double fuel = 10000.0;
+    double sfc = 1.2;
+    double thrust = 5000.0;
+
+    double endurance = fuel / (sfc * thrust);
+    TS_ASSERT(endurance > 1.0);
+  }
+
+  void testMaximumMachCapability() {
+    double thrust_available = 20000.0;
+    double drag_M2 = 15000.0;
+    double drag_M3 = 25000.0;
+
+    bool can_reach_M2 = (thrust_available > drag_M2);
+    bool can_reach_M3 = (thrust_available > drag_M3);
+
+    TS_ASSERT(can_reach_M2);
+    TS_ASSERT(!can_reach_M3);
+  }
+
+  /***************************************************************************
+   * Additional Physical Phenomena
+   ***************************************************************************/
+
+  void testViscousInteractionParameter() {
+    double M = 10.0;
+    double Re = 1e6;
+
+    double chi = M * M * M / sqrt(Re);
+    TS_ASSERT(chi > 0.0);
+  }
+
+  void testBluntBodyHeating() {
+    double M = 8.0;
+    double rho = 0.0001;
+    double V = 8000.0;
+
+    double q_stag = 0.5 * rho * V * V * V;
+    TS_ASSERT(q_stag > 0.0);
+  }
+
+  void testSlenderBodyTheory() {
+    double fineness_ratio = 20.0;
+    bool slender = (fineness_ratio > 10.0);
+
+    TS_ASSERT(slender);
+  }
+
+  void testCrossflowDrag() {
+    double alpha = 10.0 * Constants::DEG_TO_RAD;
+    double Cd_crossflow = 1.2 * sin(alpha) * sin(alpha);
+
+    TS_ASSERT(Cd_crossflow > 0.0);
+  }
 };

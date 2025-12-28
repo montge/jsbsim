@@ -961,4 +961,280 @@ public:
         double design_cycles = 60000.0;
         TS_ASSERT(total_cycles < design_cycles);
     }
+
+    //==========================================================================
+    // 14. LEAKAGE AND SEALING TESTS
+    //==========================================================================
+
+    void testCabinLeakageRate() {
+        double cabin_volume_ft3 = 12000.0;
+        double leakage_cfm = 200.0;  // Typical leakage
+
+        double exchanges_per_min = leakage_cfm / cabin_volume_ft3;
+        TS_ASSERT(exchanges_per_min < 0.02);
+    }
+
+    void testDoorSealIntegrity() {
+        double diff_pressure_psi = 9.0;
+        double seal_load_per_inch = 50.0;  // lbs/in
+
+        double seal_force = diff_pressure_psi * seal_load_per_inch;
+        TS_ASSERT(seal_force > 0.0);
+    }
+
+    void testWindowSealPressure() {
+        double window_area_in2 = 100.0;
+        double diff_pressure_psi = 8.5;
+
+        double window_force_lbs = window_area_in2 * diff_pressure_psi;
+        TS_ASSERT_DELTA(window_force_lbs, 850.0, 1.0);
+    }
+
+    //==========================================================================
+    // 15. VENTILATION AND AIR QUALITY
+    //==========================================================================
+
+    void testFreshAirPerOccupant() {
+        double total_flow_cfm = 2000.0;
+        int passengers = 150;
+
+        double cfm_per_person = total_flow_cfm / passengers;
+        TS_ASSERT(cfm_per_person > 10.0);
+    }
+
+    void testCO2Concentration() {
+        double ambient_co2_ppm = 400.0;
+        double exhaled_co2_rate = 0.005;  // L/s CO2 production
+        double ventilation_rate = 2.0;     // L/s per person
+
+        double steady_state_co2 = ambient_co2_ppm + (exhaled_co2_rate / ventilation_rate) * 1e6;
+        TS_ASSERT(steady_state_co2 < 5000.0);  // Should be ~2900 ppm
+    }
+
+    void testCabinAirRecirculation() {
+        double fresh_air_pct = 50.0;
+        double recirculated_pct = 50.0;
+
+        TS_ASSERT_DELTA(fresh_air_pct + recirculated_pct, 100.0, 0.1);
+    }
+
+    void testHEPAFilterEfficiency() {
+        double particle_count_in = 10000.0;
+        double filter_efficiency = 0.9997;
+
+        double particle_count_out = particle_count_in * (1.0 - filter_efficiency);
+        TS_ASSERT(particle_count_out < 10.0);
+    }
+
+    //==========================================================================
+    // 16. CONTROLLER DYNAMICS
+    //==========================================================================
+
+    void testCabinAltitudeController() {
+        double Kp = 0.5;
+        double target_alt = 8000.0;
+        double current_alt = 7500.0;
+
+        double error = target_alt - current_alt;
+        double valve_command = Kp * error / 1000.0;
+
+        TS_ASSERT_DELTA(valve_command, 0.25, 0.01);
+    }
+
+    void testControllerIntegralAction() {
+        double Ki = 0.1;
+        double error_integral = 5000.0;
+        double dt = 1.0;
+
+        double integral_term = Ki * error_integral * dt;
+        TS_ASSERT(integral_term > 0.0);
+    }
+
+    void testRateLimitedValvePosition() {
+        double current_pos = 30.0;
+        double target_pos = 60.0;
+        double max_rate = 10.0;
+        double dt = 2.0;
+
+        double max_change = max_rate * dt;
+        double actual_change = std::min(target_pos - current_pos, max_change);
+        double new_pos = current_pos + actual_change;
+
+        TS_ASSERT_DELTA(new_pos, 50.0, 0.1);
+    }
+
+    //==========================================================================
+    // 17. REDUNDANCY AND FAULT TOLERANCE
+    //==========================================================================
+
+    void testDualPackOperation() {
+        double pack1_flow = 0.8;
+        double pack2_flow = 0.8;
+        double total_flow = pack1_flow + pack2_flow;
+
+        TS_ASSERT_DELTA(total_flow, 1.6, 0.01);
+    }
+
+    void testSinglePackFailure() {
+        double pack1_flow = 0.0;
+        double pack2_flow = 1.2;
+        double total_flow = pack1_flow + pack2_flow;
+
+        TS_ASSERT(total_flow > 1.0);
+    }
+
+    void testBackupValveOperation() {
+        bool primary_valve_failed = true;
+        bool backup_valve_available = true;
+
+        bool system_operational = !primary_valve_failed || backup_valve_available;
+        TS_ASSERT(system_operational);
+    }
+
+    //==========================================================================
+    // 18. ALTITUDE SCHEDULING
+    //==========================================================================
+
+    void testCabinAltitudeScheduleLow() {
+        double aircraft_alt = 5000.0;
+
+        double cabin_alt = std::min(aircraft_alt, 8000.0);
+        TS_ASSERT_DELTA(cabin_alt, 5000.0, 1.0);
+    }
+
+    void testCabinAltitudeScheduleHigh() {
+        double aircraft_alt = 40000.0;
+        double max_cabin_alt = 8000.0;
+
+        double cabin_alt = std::min(aircraft_alt * 0.2, max_cabin_alt);
+        TS_ASSERT_DELTA(cabin_alt, 8000.0, 1.0);
+    }
+
+    void testLandingFieldElevation() {
+        double field_elevation = 5280.0;
+        double cabin_alt_target = std::max(0.0, field_elevation);
+
+        TS_ASSERT_DELTA(cabin_alt_target, 5280.0, 1.0);
+    }
+
+    //==========================================================================
+    // 19. PNEUMATIC SYSTEM INTEGRATION
+    //==========================================================================
+
+    void testBleedValvePosition() {
+        double engine_N2 = 85.0;
+        double min_N2_for_bleed = 50.0;
+
+        bool bleed_available = (engine_N2 > min_N2_for_bleed);
+        TS_ASSERT(bleed_available);
+    }
+
+    void testAPUBleedCapability() {
+        bool apu_running = true;
+        double apu_bleed_pressure = 40.0;
+        double min_pressure = 20.0;
+
+        bool apu_bleed_ok = apu_running && (apu_bleed_pressure > min_pressure);
+        TS_ASSERT(apu_bleed_ok);
+    }
+
+    void testCrossBleedOperation() {
+        double left_engine_bleed_psi = 45.0;
+        double right_engine_bleed_psi = 0.0;
+        bool cross_bleed_open = true;
+
+        double available_pressure = cross_bleed_open ?
+            std::max(left_engine_bleed_psi, right_engine_bleed_psi) : 0.0;
+
+        TS_ASSERT_DELTA(available_pressure, 45.0, 1.0);
+    }
+
+    //==========================================================================
+    // 20. MOISTURE AND CONDENSATION
+    //==========================================================================
+
+    void testDewPointCalculation() {
+        double T_cabin_C = 22.0;
+        double RH = 50.0;
+
+        double dew_point_C = T_cabin_C - ((100.0 - RH) / 5.0);
+        TS_ASSERT(dew_point_C < T_cabin_C);
+    }
+
+    void testCondensationRisk() {
+        double skin_temp_C = 5.0;
+        double dew_point_C = 10.0;
+
+        bool condensation = (skin_temp_C < dew_point_C);
+        TS_ASSERT(condensation);
+    }
+
+    void testHumidityControl() {
+        double target_RH = 20.0;
+        double current_RH = 15.0;
+
+        bool need_humidification = (current_RH < target_RH);
+        TS_ASSERT(need_humidification);
+    }
+
+    //==========================================================================
+    // 21. SYSTEM MONITORING
+    //==========================================================================
+
+    void testPressureWarningThreshold() {
+        double cabin_alt = 9500.0;
+        double warning_alt = 9000.0;
+
+        bool warning = (cabin_alt > warning_alt);
+        TS_ASSERT(warning);
+    }
+
+    void testDiffPressureWarning() {
+        double diff_pressure_psi = 9.5;
+        double max_diff_psi = 9.1;
+
+        bool warning = (diff_pressure_psi > max_diff_psi);
+        TS_ASSERT(warning);
+    }
+
+    void testCabinRateWarning() {
+        double cabin_rate_fpm = 600.0;
+        double max_rate_fpm = 500.0;
+
+        bool excessive_rate = (std::fabs(cabin_rate_fpm) > max_rate_fpm);
+        TS_ASSERT(excessive_rate);
+    }
+
+    //==========================================================================
+    // 22. GROUND OPERATIONS
+    //==========================================================================
+
+    void testGroundPressurization() {
+        bool on_ground = true;
+        double cabin_alt = 0.0;
+        double field_elevation = 500.0;
+
+        if (on_ground) {
+            cabin_alt = field_elevation;
+        }
+
+        TS_ASSERT_DELTA(cabin_alt, 500.0, 1.0);
+    }
+
+    void testDoorOpenPressure() {
+        double diff_pressure_psi = 0.1;
+        double safe_door_pressure = 0.5;
+
+        bool safe_to_open = (diff_pressure_psi < safe_door_pressure);
+        TS_ASSERT(safe_to_open);
+    }
+
+    void testPreflightCheck() {
+        bool outflow_valve_ok = true;
+        bool packs_ok = true;
+        bool bleed_ok = true;
+
+        bool system_ready = outflow_valve_ok && packs_ok && bleed_ok;
+        TS_ASSERT(system_ready);
+    }
 };

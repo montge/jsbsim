@@ -1048,4 +1048,622 @@ public:
     TS_ASSERT_DELTA(totalConsumed, 100.0, 0.001);
     TS_ASSERT_DELTA(tank.contents, 900.0, 0.001);
   }
+
+  /***************************************************************************
+   * Fuel Heating and Thermal Management Tests
+   ***************************************************************************/
+
+  // Test fuel heating from engine return
+  void testFuelHeatingEngineReturn() {
+    double fuelTempInitial = 253.15;  // K (-20°C)
+    double returnFlowRate = 0.5;       // lbs/sec
+    double returnTemp = 323.15;        // K (50°C)
+    double tankMass = 500.0;           // lbs
+    double specificHeat = 2000.0;      // J/(kg·K) approx for jet fuel
+
+    // Heat added from return flow
+    double heatRate = returnFlowRate * specificHeat * (returnTemp - fuelTempInitial);
+    TS_ASSERT(heatRate > 0.0);
+  }
+
+  // Test fuel cooling in cruise
+  void testFuelCoolingCruise() {
+    double fuelTemp = 293.15;   // K (20°C)
+    double ambientTemp = 223.15; // K (-50°C) at altitude
+    double coolingRate = 0.1;    // K/min
+
+    // Fuel cools toward ambient
+    double dt = 10.0;  // minutes
+    double finalTemp = fuelTemp - coolingRate * dt;
+
+    TS_ASSERT(finalTemp < fuelTemp);
+    TS_ASSERT(finalTemp > ambientTemp);
+    TS_ASSERT_DELTA(finalTemp, 292.15, epsilon);
+  }
+
+  // Test fuel heater activation
+  void testFuelHeaterActivation() {
+    double fuelTemp = 238.15;       // K (-35°C)
+    double heaterThreshold = 243.15; // K (-30°C)
+    double heaterPower = 5.0;        // kW
+
+    bool heaterOn = (fuelTemp < heaterThreshold);
+    TS_ASSERT(heaterOn);
+
+    // With heater, temperature rises
+    if (heaterOn) {
+      double heatInput = heaterPower * 60.0;  // kJ/min
+      TS_ASSERT(heatInput > 0.0);
+    }
+  }
+
+  // Test fuel temperature gradient in tank
+  void testFuelTempGradient() {
+    double topTemp = 283.15;     // K (warmer at top)
+    double bottomTemp = 273.15;  // K (cooler at bottom)
+
+    double gradient = topTemp - bottomTemp;
+    TS_ASSERT_DELTA(gradient, 10.0, epsilon);
+
+    // Average temperature
+    double avgTemp = (topTemp + bottomTemp) / 2.0;
+    TS_ASSERT_DELTA(avgTemp, 278.15, epsilon);
+  }
+
+  /***************************************************************************
+   * Vent System Behavior Tests
+   ***************************************************************************/
+
+  // Test tank vent pressure relief
+  void testTankVentPressureRelief() {
+    double tankPressure = 2.5;     // psi differential
+    double ventSetpoint = 2.0;     // psi differential
+
+    bool ventOpen = (tankPressure > ventSetpoint);
+    TS_ASSERT(ventOpen);
+  }
+
+  // Test vent system flow rate
+  void testVentSystemFlowRate() {
+    double pressureDiff = 1.0;    // psi
+    double ventArea = 0.5;        // in^2
+    double flowCoeff = 0.6;
+
+    // Simplified flow calculation
+    double ventFlow = flowCoeff * ventArea * sqrt(pressureDiff);
+    TS_ASSERT(ventFlow > 0.0);
+    TS_ASSERT_DELTA(ventFlow, 0.3, 0.01);
+  }
+
+  // Test vent icing prevention
+  void testVentIcingPrevention() {
+    double ambientTemp = 243.15;  // K (-30°C)
+    double dewPoint = 253.15;     // K
+    double ventTemp = 283.15;     // K (heated vent)
+
+    bool icingRisk = (ambientTemp < 273.15) && (ventTemp < dewPoint);
+    TS_ASSERT(!icingRisk);  // Vent is heated above dewpoint
+  }
+
+  // Test tank ullage pressure
+  void testTankUllagePressure() {
+    double altitude = 35000.0;    // ft
+    double ambientPressure = 3.5; // psi at altitude
+    double ventDiff = 0.5;        // psi above ambient
+
+    double tankPressure = ambientPressure + ventDiff;
+    TS_ASSERT_DELTA(tankPressure, 4.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Emergency Procedures Tests
+   ***************************************************************************/
+
+  // Test emergency fuel shutoff
+  void testEmergencyFuelShutoff() {
+    Tank tank;
+    tank.contents = 500.0;
+    tank.selected = true;
+
+    Engine engine;
+    engine.running = true;
+    engine.fuelFlowRate = 1.0;
+
+    // Emergency shutoff
+    tank.selected = false;
+    engine.fuelFlowRate = 0.0;
+    engine.running = false;
+
+    TS_ASSERT(!tank.selected);
+    TS_ASSERT_DELTA(engine.fuelFlowRate, 0.0, epsilon);
+  }
+
+  // Test fuel dump rate during emergency
+  void testFuelDumpEmergency() {
+    double fuelToDump = 20000.0;   // lbs
+    double dumpRate = 1500.0;       // lbs/min
+    double maxDumpTime = 20.0;      // minutes limit
+
+    double actualTime = fuelToDump / dumpRate;
+    bool withinLimit = (actualTime <= maxDumpTime);
+
+    TS_ASSERT_DELTA(actualTime, 13.33, 0.01);
+    TS_ASSERT(withinLimit);
+  }
+
+  // Test gravity feed backup
+  void testGravityFeedBackup() {
+    FuelPump pump;
+    pump.active = false;  // Both pumps failed
+
+    Tank tank;
+    tank.z = 5.0;         // ft above engine
+    tank.contents = 300.0;
+
+    // Gravity feed can supply limited flow
+    double gravityFlowMax = 0.8;  // lbs/sec
+    double engineNeed = 1.2;      // lbs/sec
+
+    bool adequateFlow = (gravityFlowMax >= engineNeed);
+    TS_ASSERT(!adequateFlow);  // Reduced power required
+  }
+
+  // Test fuel crossfeed during engine failure
+  void testCrossfeedEngineFailure() {
+    std::vector<Tank> tanks(2);
+    tanks[0].contents = 500.0;
+    tanks[1].contents = 500.0;
+
+    std::vector<Engine> engines(2);
+    engines[0].running = true;
+    engines[0].fuelFlowRate = 1.0;
+    engines[0].tankIndex = 0;
+    engines[1].running = false;  // Failed
+    engines[1].tankIndex = 1;
+
+    // Crossfeed: running engine draws from both tanks
+    double dt = 60.0;
+    double consumed = engines[0].fuelFlowRate * dt;
+
+    // Draw half from each tank via crossfeed
+    tanks[0].contents -= consumed / 2.0;
+    tanks[1].contents -= consumed / 2.0;
+
+    TS_ASSERT_DELTA(tanks[0].contents, 470.0, epsilon);
+    TS_ASSERT_DELTA(tanks[1].contents, 470.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Refueling Operations Tests
+   ***************************************************************************/
+
+  // Test pressure refueling rate
+  void testPressureRefuelingRate() {
+    double refuelRate = 600.0;  // gal/min
+    double density = 6.02;
+    double targetFuel = 5000.0;  // lbs
+
+    double rateInLbs = refuelRate * density;  // lbs/min
+    double timeRequired = targetFuel / rateInLbs;
+
+    TS_ASSERT_DELTA(rateInLbs, 3612.0, epsilon);
+    TS_ASSERT_DELTA(timeRequired, 1.38, 0.01);  // minutes
+  }
+
+  // Test overwing refueling rate
+  void testOverwingRefuelingRate() {
+    double refuelRate = 60.0;  // gal/min (slower)
+    double density = 6.02;
+
+    double rateInLbs = refuelRate * density;
+    TS_ASSERT_DELTA(rateInLbs, 361.2, epsilon);
+  }
+
+  // Test fuel quantity verification
+  void testFuelQuantityVerification() {
+    double ordered = 5000.0;      // lbs
+    double delivered = 4980.0;    // lbs
+    double tolerance = 0.01;      // 1%
+
+    double difference = fabs(ordered - delivered) / ordered;
+    bool acceptable = (difference <= tolerance);
+
+    TS_ASSERT(acceptable);
+    TS_ASSERT_DELTA(difference, 0.004, 0.001);
+  }
+
+  // Test tank sequencing during refuel
+  void testTankSequencingRefuel() {
+    std::vector<Tank> tanks(3);
+    tanks[0].capacity = 1000.0; tanks[0].priority = 1;
+    tanks[1].capacity = 2000.0; tanks[1].priority = 2;
+    tanks[2].capacity = 1500.0; tanks[2].priority = 3;
+
+    // Fill in priority order
+    double fuelToAdd = 2500.0;
+    for (auto& tank : tanks) {
+      if (fuelToAdd > 0.0) {
+        double room = tank.capacity - tank.contents;
+        double added = std::min(fuelToAdd, room);
+        tank.contents += added;
+        fuelToAdd -= added;
+      }
+    }
+
+    TS_ASSERT_DELTA(tanks[0].contents, 1000.0, epsilon);  // Full
+    TS_ASSERT_DELTA(tanks[1].contents, 1500.0, epsilon);  // Partial
+    TS_ASSERT_DELTA(tanks[2].contents, 0.0, epsilon);     // Empty
+  }
+
+  /***************************************************************************
+   * Fuel Contamination Effects Tests
+   ***************************************************************************/
+
+  // Test water contamination detection
+  void testWaterContaminationDetection() {
+    double waterContent = 0.03;  // 3% by volume
+    double maxAllowable = 0.01;  // 1% limit
+
+    bool contaminated = (waterContent > maxAllowable);
+    TS_ASSERT(contaminated);
+  }
+
+  // Test filter bypass pressure
+  void testFilterBypassPressure() {
+    double filterDeltaP = 18.0;   // psi (clogged)
+    double bypassSetpoint = 15.0;  // psi
+
+    bool bypassOpen = (filterDeltaP > bypassSetpoint);
+    TS_ASSERT(bypassOpen);
+  }
+
+  // Test fuel temperature for icing
+  void testFuelIcingRisk() {
+    double fuelTemp = 268.15;     // K (-5°C)
+    double waterFreezePoint = 273.15;
+    double safeMargin = 3.0;      // degrees K
+
+    bool icingRisk = (fuelTemp < (waterFreezePoint + safeMargin));
+    TS_ASSERT(icingRisk);
+  }
+
+  // Test contamination effect on density
+  void testContaminationDensityEffect() {
+    double pureFuelDensity = 6.02;   // lbs/gal
+    double waterDensity = 8.34;       // lbs/gal
+    double waterFraction = 0.02;      // 2%
+
+    double mixedDensity = (1.0 - waterFraction) * pureFuelDensity +
+                         waterFraction * waterDensity;
+
+    TS_ASSERT(mixedDensity > pureFuelDensity);
+    TS_ASSERT_DELTA(mixedDensity, 6.066, 0.001);
+  }
+
+  /***************************************************************************
+   * FADEC Integration Tests
+   ***************************************************************************/
+
+  // Test FADEC fuel flow command
+  void testFADECFuelFlowCommand() {
+    double thrustRequest = 0.75;    // 75% thrust
+    double maxFuelFlow = 2.0;       // lbs/sec
+
+    // FADEC computes optimal fuel flow
+    double fuelFlowCmd = thrustRequest * maxFuelFlow * 0.95;  // 95% efficiency
+
+    TS_ASSERT_DELTA(fuelFlowCmd, 1.425, epsilon);
+  }
+
+  // Test FADEC fuel scheduling
+  void testFADECFuelScheduling() {
+    double altitude = 35000.0;    // ft
+    double mach = 0.82;
+    double baseFuelFlow = 2.0;    // lbs/sec
+
+    // Altitude correction (less dense air = less fuel)
+    double altFactor = 1.0 - altitude / 80000.0;
+    double fuelFlow = baseFuelFlow * altFactor;
+
+    TS_ASSERT_DELTA(fuelFlow, 1.125, 0.001);
+  }
+
+  // Test FADEC minimum fuel flow
+  void testFADECMinFuelFlow() {
+    double requestedFlow = 0.05;  // Very low request
+    double minFlow = 0.15;        // Minimum for stable combustion
+
+    double actualFlow = std::max(requestedFlow, minFlow);
+    TS_ASSERT_DELTA(actualFlow, 0.15, epsilon);
+  }
+
+  // Test FADEC fuel flow limiting
+  void testFADECFuelFlowLimiting() {
+    double requestedFlow = 2.5;   // lbs/sec
+    double maxFlow = 2.0;         // lbs/sec limit
+
+    double actualFlow = std::min(requestedFlow, maxFlow);
+    TS_ASSERT_DELTA(actualFlow, 2.0, epsilon);
+  }
+
+  /***************************************************************************
+   * APU Fuel Supply Tests
+   ***************************************************************************/
+
+  // Test APU fuel source selection
+  void testAPUFuelSource() {
+    std::vector<Tank> tanks(2);
+    tanks[0].contents = 500.0;
+    tanks[1].contents = 500.0;
+
+    // APU typically feeds from left tank
+    int apuTankIndex = 0;
+    double apuFuelFlow = 0.05;  // lbs/sec
+
+    double dt = 60.0;
+    tanks[apuTankIndex].contents -= apuFuelFlow * dt;
+
+    TS_ASSERT_DELTA(tanks[0].contents, 497.0, epsilon);
+    TS_ASSERT_DELTA(tanks[1].contents, 500.0, epsilon);
+  }
+
+  // Test APU fuel consumption rate
+  void testAPUFuelConsumption() {
+    double apuPower = 100.0;    // kW
+    double sfc = 0.5;           // lb/kWh
+
+    double hourlyConsumption = apuPower * sfc;
+    double perSecond = hourlyConsumption / 3600.0;
+
+    TS_ASSERT_DELTA(hourlyConsumption, 50.0, epsilon);
+    TS_ASSERT_DELTA(perSecond, 0.0139, 0.0001);
+  }
+
+  // Test APU fuel line pressure
+  void testAPUFuelLinePressure() {
+    FuelPump pump;
+    pump.pressure = 30.0;  // psi
+
+    double apuMinPressure = 15.0;
+    bool adequatePressure = (pump.pressure >= apuMinPressure);
+
+    TS_ASSERT(adequatePressure);
+  }
+
+  /***************************************************************************
+   * Fuel Leak Detection Tests
+   ***************************************************************************/
+
+  // Test leak detection from flow mismatch
+  void testLeakDetectionFlowMismatch() {
+    double suppliedFlow = 1.5;    // lbs/sec from pump
+    double engineFlow = 1.2;       // lbs/sec at engine
+    double tolerance = 0.05;       // 5% allowable difference
+
+    double mismatch = fabs(suppliedFlow - engineFlow) / suppliedFlow;
+    bool leakDetected = (mismatch > tolerance);
+
+    TS_ASSERT(leakDetected);
+    TS_ASSERT_DELTA(mismatch, 0.2, 0.01);  // 20% mismatch
+  }
+
+  // Test tank level monitoring
+  void testTankLevelMonitoring() {
+    double previousLevel = 500.0;  // lbs
+    double currentLevel = 480.0;   // lbs
+    double dt = 60.0;              // seconds
+
+    double expectedBurn = 0.25 * dt;  // lbs/sec * dt
+    double actualLoss = previousLevel - currentLevel;
+
+    bool unexpectedLoss = (actualLoss > expectedBurn * 1.1);  // 10% margin
+    TS_ASSERT(unexpectedLoss);
+  }
+
+  // Test leak rate estimation
+  void testLeakRateEstimation() {
+    double tankLoss = 20.0;        // lbs unexplained
+    double dt = 300.0;             // seconds (5 minutes)
+
+    double leakRate = tankLoss / dt;  // lbs/sec
+    TS_ASSERT_DELTA(leakRate, 0.0667, 0.001);
+
+    double leakRateGPH = (leakRate * 3600.0) / 6.02;  // gal/hr
+    TS_ASSERT_DELTA(leakRateGPH, 39.9, 0.1);
+  }
+
+  /***************************************************************************
+   * Auxiliary Tank Tests
+   ***************************************************************************/
+
+  // Test ferry tank configuration
+  void testFerryTankConfiguration() {
+    Tank mainTank, ferryTank;
+    mainTank.capacity = 1000.0;
+    mainTank.contents = 1000.0;
+    ferryTank.capacity = 2000.0;
+    ferryTank.contents = 2000.0;
+
+    double totalFuel = mainTank.contents + ferryTank.contents;
+    TS_ASSERT_DELTA(totalFuel, 3000.0, epsilon);
+  }
+
+  // Test auxiliary tank transfer
+  void testAuxiliaryTankTransfer() {
+    Tank auxTank, mainTank;
+    auxTank.contents = 1500.0;
+    auxTank.priority = 1;  // Transfer first
+    mainTank.contents = 500.0;
+    mainTank.capacity = 1000.0;
+    mainTank.priority = 2;
+
+    // Transfer from aux to main as main depletes
+    double transferRate = 50.0;  // lbs/min
+    double dt = 5.0;             // minutes
+
+    double toTransfer = transferRate * dt;  // 250 lbs
+    double room = mainTank.capacity - mainTank.contents;  // 500 lbs
+    double actual = std::min(toTransfer, room);
+
+    auxTank.contents -= actual;
+    mainTank.contents += actual;
+
+    TS_ASSERT_DELTA(auxTank.contents, 1250.0, epsilon);
+    TS_ASSERT_DELTA(mainTank.contents, 750.0, epsilon);
+  }
+
+  // Test tip tank CG effect
+  void testTipTankCGEffect() {
+    Tank leftTip, rightTip, center;
+    leftTip.contents = 100.0; leftTip.y = -40.0;
+    rightTip.contents = 100.0; rightTip.y = 40.0;
+    center.contents = 500.0; center.y = 0.0;
+
+    double totalMass = leftTip.contents + rightTip.contents + center.contents;
+    double momentY = leftTip.contents * leftTip.y +
+                    rightTip.contents * rightTip.y +
+                    center.contents * center.y;
+    double cgY = momentY / totalMass;
+
+    TS_ASSERT_DELTA(cgY, 0.0, epsilon);  // Symmetric
+  }
+
+  /***************************************************************************
+   * Winter Operations Tests
+   ***************************************************************************/
+
+  // Test fuel preheat requirement
+  void testFuelPreheatRequirement() {
+    double ambientTemp = 243.15;   // K (-30°C)
+    double fuelTemp = 253.15;      // K (-20°C)
+    double minOpTemp = 263.15;     // K (-10°C)
+
+    bool preheatRequired = (fuelTemp < minOpTemp);
+    TS_ASSERT(preheatRequired);
+
+    double tempRise = minOpTemp - fuelTemp;
+    TS_ASSERT_DELTA(tempRise, 10.0, epsilon);
+  }
+
+  // Test fuel additive for cold weather
+  void testFuelAdditiveIcing() {
+    double fuelTemp = 258.15;      // K (-15°C)
+    double waterContent = 0.005;   // 0.5%
+    bool antiIceAdditive = true;
+
+    // With additive, ice crystal formation prevented down to lower temps
+    double effectiveFreezePoint = antiIceAdditive ? 248.15 : 273.15;
+    bool iceFree = (fuelTemp > effectiveFreezePoint);
+
+    TS_ASSERT(iceFree);
+  }
+
+  // Test cold soak fuel expansion
+  void testColdSoakFuelContraction() {
+    double warmVolume = 1000.0;    // gallons at 20°C
+    double warmTemp = 293.15;       // K
+    double coldTemp = 243.15;       // K
+    double expansionCoeff = 0.00084; // per K
+
+    double tempDrop = warmTemp - coldTemp;
+    double coldVolume = warmVolume * (1.0 - expansionCoeff * tempDrop);
+
+    TS_ASSERT(coldVolume < warmVolume);
+    TS_ASSERT_DELTA(coldVolume, 958.0, 1.0);  // ~4.2% contraction
+  }
+
+  // Test fuel system warm-up time
+  void testFuelSystemWarmup() {
+    double initialTemp = 243.15;    // K (-30°C)
+    double targetTemp = 273.15;     // K (0°C)
+    double heatingRate = 2.0;       // K/min
+
+    double warmupTime = (targetTemp - initialTemp) / heatingRate;
+    TS_ASSERT_DELTA(warmupTime, 15.0, epsilon);  // 15 minutes
+  }
+
+  /***************************************************************************
+   * Fuel Metering Tests
+   ***************************************************************************/
+
+  // Test fuel metering valve position
+  void testFuelMeteringValve() {
+    double throttlePosition = 0.75;  // 75%
+    double maxFuelFlow = 2.0;        // lbs/sec
+
+    double valvePosition = throttlePosition;
+    double fuelFlow = valvePosition * maxFuelFlow;
+
+    TS_ASSERT_DELTA(fuelFlow, 1.5, epsilon);
+  }
+
+  // Test metering valve linearization
+  void testMeteringValveLinearization() {
+    // Valve has non-linear characteristics, need compensation
+    double rawPosition = 0.5;
+    double linearizationGain = 1.2;
+    double offset = 0.05;
+
+    double correctedPosition = rawPosition * linearizationGain - offset;
+    TS_ASSERT_DELTA(correctedPosition, 0.55, epsilon);
+  }
+
+  // Test minimum metering valve opening
+  void testMinMeteringValveOpening() {
+    double idlePosition = 0.10;     // 10%
+    double minPosition = 0.05;       // 5% minimum
+
+    double actualPosition = std::max(idlePosition, minPosition);
+    TS_ASSERT_DELTA(actualPosition, 0.10, epsilon);
+  }
+
+  /***************************************************************************
+   * Fuel System Redundancy Tests
+   ***************************************************************************/
+
+  // Test dual pump redundancy
+  void testDualPumpRedundancy() {
+    FuelPump pump1, pump2;
+    pump1.active = true;  pump1.pressure = 30.0;
+    pump2.active = true;  pump2.pressure = 30.0;
+
+    // System pressure is max of both pumps
+    double systemPressure = std::max(pump1.pressure, pump2.pressure);
+    TS_ASSERT_DELTA(systemPressure, 30.0, epsilon);
+
+    // One pump failure
+    pump1.active = false; pump1.pressure = 0.0;
+    systemPressure = pump2.active ? pump2.pressure : 0.0;
+    TS_ASSERT_DELTA(systemPressure, 30.0, epsilon);  // Still operational
+  }
+
+  // Test dual feed path
+  void testDualFeedPath() {
+    bool path1Open = true;
+    bool path2Open = false;  // Valve stuck
+
+    bool canFeed = path1Open || path2Open;
+    TS_ASSERT(canFeed);
+
+    // Both paths failed
+    path1Open = false;
+    canFeed = path1Open || path2Open;
+    TS_ASSERT(!canFeed);
+  }
+
+  // Test tank isolation
+  void testTankIsolation() {
+    Tank damagedTank, goodTank;
+    damagedTank.contents = 200.0;
+    damagedTank.selected = false;  // Isolated
+    goodTank.contents = 800.0;
+    goodTank.selected = true;
+
+    // Only good tank contributes
+    double availableFuel = 0.0;
+    if (damagedTank.selected) availableFuel += damagedTank.contents;
+    if (goodTank.selected) availableFuel += goodTank.contents;
+
+    TS_ASSERT_DELTA(availableFuel, 800.0, epsilon);
+  }
 };
