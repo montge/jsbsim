@@ -1167,4 +1167,736 @@ public:
     TS_ASSERT(windowHyst(1.5));    // Stay in (above exit)
     TS_ASSERT(!windowHyst(0.5));   // Exit (below lowExit)
   }
+
+  /***************************************************************************
+   * Advanced State Machine Patterns (Tests 77-80)
+   ***************************************************************************/
+
+  // Test 77: Shift register behavior
+  void testShiftRegister() {
+    bool reg[4] = {false, false, false, false};
+
+    auto shift = [&](bool input) {
+      // Shift right, new input on left
+      for (int i = 3; i > 0; i--) {
+        reg[i] = reg[i-1];
+      }
+      reg[0] = input;
+    };
+
+    auto getOutput = [&]() { return reg[3]; };
+
+    shift(true);  // 1,0,0,0
+    TS_ASSERT(!getOutput());
+    shift(true);  // 1,1,0,0
+    TS_ASSERT(!getOutput());
+    shift(false); // 0,1,1,0
+    TS_ASSERT(!getOutput());
+    shift(true);  // 1,0,1,1
+    TS_ASSERT(getOutput());  // First true reaches output
+    shift(true);  // 1,1,0,1
+    TS_ASSERT(getOutput());
+    shift(true);  // 1,1,1,0
+    TS_ASSERT(!getOutput());  // False propagated
+  }
+
+  // Test 78: Sequencer with step advancement
+  void testSequencer() {
+    int step = 0;
+    const int maxSteps = 5;
+
+    auto advance = [&]() {
+      if (step < maxSteps) step++;
+      return step;
+    };
+
+    auto retreat = [&]() {
+      if (step > 0) step--;
+      return step;
+    };
+
+    auto reset = [&]() {
+      step = 0;
+      return step;
+    };
+
+    TS_ASSERT_EQUALS(advance(), 1);
+    TS_ASSERT_EQUALS(advance(), 2);
+    TS_ASSERT_EQUALS(advance(), 3);
+    TS_ASSERT_EQUALS(retreat(), 2);
+    TS_ASSERT_EQUALS(advance(), 3);
+    TS_ASSERT_EQUALS(advance(), 4);
+    TS_ASSERT_EQUALS(advance(), 5);
+    TS_ASSERT_EQUALS(advance(), 5);  // Can't exceed max
+    TS_ASSERT_EQUALS(reset(), 0);
+    TS_ASSERT_EQUALS(retreat(), 0);  // Can't go below 0
+  }
+
+  // Test 79: Ring counter
+  void testRingCounter() {
+    int state = 0;
+    const int numStates = 4;
+
+    auto tick = [&]() {
+      state = (state + 1) % numStates;
+      return state;
+    };
+
+    TS_ASSERT_EQUALS(tick(), 1);
+    TS_ASSERT_EQUALS(tick(), 2);
+    TS_ASSERT_EQUALS(tick(), 3);
+    TS_ASSERT_EQUALS(tick(), 0);  // Wraps around
+    TS_ASSERT_EQUALS(tick(), 1);
+    TS_ASSERT_EQUALS(tick(), 2);
+  }
+
+  // Test 80: Johnson counter (twisted ring)
+  void testJohnsonCounter() {
+    // 4-bit Johnson counter sequence: 0000,1000,1100,1110,1111,0111,0011,0001,0000...
+    int state = 0;
+
+    auto tick = [&]() {
+      // Shift left, invert MSB to LSB
+      bool msb = (state & 0x8) != 0;
+      state = ((state << 1) | (!msb ? 1 : 0)) & 0xF;
+      return state;
+    };
+
+    TS_ASSERT_EQUALS(tick(), 0x1);  // 0000 -> 0001
+    TS_ASSERT_EQUALS(tick(), 0x3);  // 0001 -> 0011
+    TS_ASSERT_EQUALS(tick(), 0x7);  // 0011 -> 0111
+    TS_ASSERT_EQUALS(tick(), 0xF);  // 0111 -> 1111
+    TS_ASSERT_EQUALS(tick(), 0xE);  // 1111 -> 1110
+    TS_ASSERT_EQUALS(tick(), 0xC);  // 1110 -> 1100
+    TS_ASSERT_EQUALS(tick(), 0x8);  // 1100 -> 1000
+    TS_ASSERT_EQUALS(tick(), 0x0);  // 1000 -> 0000
+    TS_ASSERT_EQUALS(tick(), 0x1);  // Back to start
+  }
+
+  /***************************************************************************
+   * Safety Interlock Logic (Tests 81-84)
+   ***************************************************************************/
+
+  // Test 81: Two-key arming system
+  void testTwoKeyArming() {
+    auto armed = [](bool key1, bool key2, bool masterSwitch) {
+      // Both keys AND master switch required
+      return key1 && key2 && masterSwitch;
+    };
+
+    TS_ASSERT(!armed(false, false, false));
+    TS_ASSERT(!armed(true, false, false));
+    TS_ASSERT(!armed(true, true, false));
+    TS_ASSERT(!armed(false, true, true));
+    TS_ASSERT(armed(true, true, true));
+  }
+
+  // Test 82: Dead man's switch
+  void testDeadMansSwitch() {
+    int releaseCount = 0;
+
+    auto checkSwitch = [&](bool pressed) {
+      if (!pressed) {
+        releaseCount++;
+      } else {
+        releaseCount = 0;
+      }
+      // Trigger if released for 3+ cycles
+      return releaseCount >= 3;
+    };
+
+    TS_ASSERT(!checkSwitch(true));   // Pressed
+    TS_ASSERT(!checkSwitch(true));   // Still pressed
+    TS_ASSERT(!checkSwitch(false));  // 1 release
+    TS_ASSERT(!checkSwitch(false));  // 2 releases
+    TS_ASSERT(checkSwitch(false));   // 3 releases - TRIGGER
+    TS_ASSERT(!checkSwitch(true));   // Reset
+    TS_ASSERT(!checkSwitch(false));  // 1 release
+  }
+
+  // Test 83: Permissive interlock chain
+  void testPermissiveInterlockChain() {
+    auto canOperate = [](bool permit1, bool permit2, bool permit3, bool permit4) {
+      // All permits must be granted in sequence
+      // permit1 enables permit2 check, etc.
+      if (!permit1) return false;
+      if (!permit2) return false;
+      if (!permit3) return false;
+      if (!permit4) return false;
+      return true;
+    };
+
+    TS_ASSERT(!canOperate(false, true, true, true));   // First permit missing
+    TS_ASSERT(!canOperate(true, false, true, true));   // Second permit missing
+    TS_ASSERT(!canOperate(true, true, false, true));   // Third permit missing
+    TS_ASSERT(!canOperate(true, true, true, false));   // Fourth permit missing
+    TS_ASSERT(canOperate(true, true, true, true));     // All permits granted
+  }
+
+  // Test 84: Safety lockout with timeout
+  void testSafetyLockoutTimeout() {
+    int lockoutTimer = 0;
+    bool lockedOut = false;
+
+    auto triggerLockout = [&](int duration) {
+      lockedOut = true;
+      lockoutTimer = duration;
+    };
+
+    auto tick = [&]() {
+      if (lockoutTimer > 0) {
+        lockoutTimer--;
+        if (lockoutTimer == 0) {
+          lockedOut = false;
+        }
+      }
+      return lockedOut;
+    };
+
+    TS_ASSERT(!tick());  // Not locked out initially
+    triggerLockout(3);
+    TS_ASSERT(tick());   // Locked out, 2 remaining
+    TS_ASSERT(tick());   // Locked out, 1 remaining
+    TS_ASSERT(!tick());  // Lockout expired
+    TS_ASSERT(!tick());  // Still clear
+  }
+
+  /***************************************************************************
+   * Complex Flight Control Scenarios (Tests 85-88)
+   ***************************************************************************/
+
+  // Test 85: Engine start sequence
+  void testEngineStartSequence() {
+    auto startSequenceStep = [](bool batteryOn, bool fuelOn, bool starterEngaged,
+                                 double n2Percent, bool ignition) -> int {
+      // Returns current step in start sequence
+      if (!batteryOn) return 0;                    // Need battery
+      if (!fuelOn) return 1;                       // Need fuel
+      if (!starterEngaged) return 2;               // Engage starter
+      if (n2Percent < 25.0) return 3;              // Motoring
+      if (!ignition) return 4;                     // Need ignition
+      if (n2Percent < 60.0) return 5;              // Light-off
+      return 6;                                     // Running
+    };
+
+    TS_ASSERT_EQUALS(startSequenceStep(false, false, false, 0.0, false), 0);
+    TS_ASSERT_EQUALS(startSequenceStep(true, false, false, 0.0, false), 1);
+    TS_ASSERT_EQUALS(startSequenceStep(true, true, false, 0.0, false), 2);
+    TS_ASSERT_EQUALS(startSequenceStep(true, true, true, 15.0, false), 3);
+    TS_ASSERT_EQUALS(startSequenceStep(true, true, true, 30.0, false), 4);
+    TS_ASSERT_EQUALS(startSequenceStep(true, true, true, 30.0, true), 5);
+    TS_ASSERT_EQUALS(startSequenceStep(true, true, true, 65.0, true), 6);
+  }
+
+  // Test 86: Bleed air routing
+  void testBleedAirRouting() {
+    auto bleedSource = [](bool eng1Avail, bool eng2Avail, bool apuAvail,
+                          int selectedSource) -> int {
+      // 0=none, 1=eng1, 2=eng2, 3=apu
+      // Priority: selected > eng1 > eng2 > apu
+      if (selectedSource == 1 && eng1Avail) return 1;
+      if (selectedSource == 2 && eng2Avail) return 2;
+      if (selectedSource == 3 && apuAvail) return 3;
+      // Auto selection
+      if (eng1Avail) return 1;
+      if (eng2Avail) return 2;
+      if (apuAvail) return 3;
+      return 0;
+    };
+
+    TS_ASSERT_EQUALS(bleedSource(true, true, true, 0), 1);   // Auto: eng1
+    TS_ASSERT_EQUALS(bleedSource(true, true, true, 2), 2);   // Manual: eng2
+    TS_ASSERT_EQUALS(bleedSource(false, true, true, 0), 2);  // Auto: eng2 (no eng1)
+    TS_ASSERT_EQUALS(bleedSource(false, false, true, 0), 3); // Auto: apu
+    TS_ASSERT_EQUALS(bleedSource(false, false, false, 0), 0);// None available
+    TS_ASSERT_EQUALS(bleedSource(true, true, true, 3), 3);   // Manual: apu
+  }
+
+  // Test 87: Environmental control system mode
+  void testECSModeSelection() {
+    auto ecsMode = [](double altitude, double cabinAlt, bool packFail,
+                      bool manualOverride, int manualMode) -> int {
+      // Modes: 0=off, 1=auto-low, 2=auto-high, 3=max, 4=manual
+      if (packFail) return 0;  // Pack failed
+      if (manualOverride) return manualMode;
+
+      double diffPress = altitude - cabinAlt;
+      if (altitude < 10000.0) return 1;        // Low altitude
+      if (diffPress > 8000.0) return 3;        // High differential
+      return 2;                                 // Normal high altitude
+    };
+
+    TS_ASSERT_EQUALS(ecsMode(5000.0, 5000.0, false, false, 0), 1);    // Low alt
+    TS_ASSERT_EQUALS(ecsMode(35000.0, 28000.0, false, false, 0), 2);  // Normal (diff=7000)
+    TS_ASSERT_EQUALS(ecsMode(40000.0, 8000.0, false, false, 0), 3);   // High diff (diff=32000)
+    TS_ASSERT_EQUALS(ecsMode(35000.0, 8000.0, true, false, 0), 0);    // Pack fail
+    TS_ASSERT_EQUALS(ecsMode(35000.0, 8000.0, false, true, 3), 3);    // Manual
+  }
+
+  // Test 88: Flight director mode transitions
+  void testFDModeTransitions() {
+    int currentMode = 0;  // 0=off, 1=TO, 2=CLB, 3=CRZ, 4=DES, 5=APP
+
+    auto transitionValid = [](int from, int to) {
+      // Valid transitions matrix
+      if (from == 0) return to == 1 || to == 5;  // OFF -> TO or APP
+      if (from == 1) return to == 2 || to == 0;  // TO -> CLB or OFF
+      if (from == 2) return to == 3 || to == 0;  // CLB -> CRZ or OFF
+      if (from == 3) return to == 4 || to == 0;  // CRZ -> DES or OFF
+      if (from == 4) return to == 5 || to == 0;  // DES -> APP or OFF
+      if (from == 5) return to == 0;              // APP -> OFF only
+      return false;
+    };
+
+    TS_ASSERT(transitionValid(0, 1));   // OFF -> TO
+    TS_ASSERT(transitionValid(1, 2));   // TO -> CLB
+    TS_ASSERT(!transitionValid(1, 3));  // TO -> CRZ invalid
+    TS_ASSERT(transitionValid(3, 4));   // CRZ -> DES
+    TS_ASSERT(!transitionValid(4, 2));  // DES -> CLB invalid
+    TS_ASSERT(transitionValid(4, 5));   // DES -> APP
+    TS_ASSERT(transitionValid(5, 0));   // APP -> OFF
+    TS_ASSERT(!transitionValid(5, 1));  // APP -> TO invalid
+  }
+
+  /***************************************************************************
+   * Signal Routing and Crossover (Tests 89-92)
+   ***************************************************************************/
+
+  // Test 89: Dual channel crossover
+  void testDualChannelCrossover() {
+    auto crossover = [](int mode, double chA, double chB) -> std::pair<double, double> {
+      // mode: 0=normal, 1=cross, 2=A-only, 3=B-only
+      switch (mode) {
+        case 0: return {chA, chB};       // Normal
+        case 1: return {chB, chA};       // Crossed
+        case 2: return {chA, chA};       // A to both
+        case 3: return {chB, chB};       // B to both
+        default: return {0.0, 0.0};
+      }
+    };
+
+    auto [outA0, outB0] = crossover(0, 10.0, 20.0);
+    TS_ASSERT_DELTA(outA0, 10.0, epsilon);
+    TS_ASSERT_DELTA(outB0, 20.0, epsilon);
+
+    auto [outA1, outB1] = crossover(1, 10.0, 20.0);
+    TS_ASSERT_DELTA(outA1, 20.0, epsilon);
+    TS_ASSERT_DELTA(outB1, 10.0, epsilon);
+
+    auto [outA2, outB2] = crossover(2, 10.0, 20.0);
+    TS_ASSERT_DELTA(outA2, 10.0, epsilon);
+    TS_ASSERT_DELTA(outB2, 10.0, epsilon);
+  }
+
+  // Test 90: Triple redundancy voting
+  void testTripleRedundancyVoting() {
+    auto tripleVote = [](double ch1, double ch2, double ch3, double tolerance) -> double {
+      // Mid-value selection with tolerance check
+      double diff12 = std::abs(ch1 - ch2);
+      double diff23 = std::abs(ch2 - ch3);
+      double diff13 = std::abs(ch1 - ch3);
+
+      // If all agree within tolerance, return average
+      if (diff12 < tolerance && diff23 < tolerance && diff13 < tolerance) {
+        return (ch1 + ch2 + ch3) / 3.0;
+      }
+
+      // Find the outlier and exclude it
+      if (diff12 < tolerance) return (ch1 + ch2) / 2.0;
+      if (diff23 < tolerance) return (ch2 + ch3) / 2.0;
+      if (diff13 < tolerance) return (ch1 + ch3) / 2.0;
+
+      // All disagree - return middle value
+      if (ch1 >= ch2 && ch1 <= ch3) return ch1;
+      if (ch1 >= ch3 && ch1 <= ch2) return ch1;
+      if (ch2 >= ch1 && ch2 <= ch3) return ch2;
+      if (ch2 >= ch3 && ch2 <= ch1) return ch2;
+      return ch3;
+    };
+
+    // All agree
+    TS_ASSERT_DELTA(tripleVote(10.0, 10.1, 9.9, 0.5), 10.0, 0.1);
+
+    // One outlier
+    TS_ASSERT_DELTA(tripleVote(10.0, 10.1, 50.0, 0.5), 10.05, 0.1);
+
+    // All disagree - mid value
+    TS_ASSERT_DELTA(tripleVote(5.0, 10.0, 15.0, 0.5), 10.0, epsilon);
+  }
+
+  // Test 91: Fail-operational switching
+  void testFailOperationalSwitching() {
+    auto failOpSelect = [](bool ch1Valid, double ch1, bool ch2Valid, double ch2,
+                           bool ch3Valid, double ch3) -> std::pair<double, int> {
+      // Returns value and number of valid channels
+      int validCount = (ch1Valid ? 1 : 0) + (ch2Valid ? 1 : 0) + (ch3Valid ? 1 : 0);
+
+      if (ch1Valid && ch2Valid && ch3Valid) {
+        return {(ch1 + ch2 + ch3) / 3.0, 3};
+      }
+      if (ch1Valid && ch2Valid) return {(ch1 + ch2) / 2.0, 2};
+      if (ch1Valid && ch3Valid) return {(ch1 + ch3) / 2.0, 2};
+      if (ch2Valid && ch3Valid) return {(ch2 + ch3) / 2.0, 2};
+      if (ch1Valid) return {ch1, 1};
+      if (ch2Valid) return {ch2, 1};
+      if (ch3Valid) return {ch3, 1};
+      return {0.0, 0};
+    };
+
+    auto [val3, cnt3] = failOpSelect(true, 10.0, true, 11.0, true, 12.0);
+    TS_ASSERT_DELTA(val3, 11.0, 0.1);
+    TS_ASSERT_EQUALS(cnt3, 3);
+
+    auto [val2, cnt2] = failOpSelect(true, 10.0, false, 11.0, true, 12.0);
+    TS_ASSERT_DELTA(val2, 11.0, 0.1);
+    TS_ASSERT_EQUALS(cnt2, 2);
+
+    auto [val1, cnt1] = failOpSelect(false, 10.0, false, 11.0, true, 12.0);
+    TS_ASSERT_DELTA(val1, 12.0, epsilon);
+    TS_ASSERT_EQUALS(cnt1, 1);
+
+    auto [val0, cnt0] = failOpSelect(false, 10.0, false, 11.0, false, 12.0);
+    TS_ASSERT_DELTA(val0, 0.0, epsilon);
+    TS_ASSERT_EQUALS(cnt0, 0);
+  }
+
+  // Test 92: Bus tie logic
+  void testBusTieLogic() {
+    auto busTieState = [](bool bus1Powered, bool bus2Powered, bool tieRequested,
+                          bool bus1Fault, bool bus2Fault) -> int {
+      // Returns: 0=open, 1=closed, 2=auto-closed (fault recovery)
+      if (bus1Fault && bus2Fault) return 0;  // Both faulty, isolate
+
+      if (bus1Fault && bus2Powered) return 2;  // Auto-close to power bus1
+      if (bus2Fault && bus1Powered) return 2;  // Auto-close to power bus2
+
+      if (tieRequested && bus1Powered && bus2Powered) return 1;  // Manual close
+
+      return 0;  // Default open
+    };
+
+    TS_ASSERT_EQUALS(busTieState(true, true, false, false, false), 0);   // Open
+    TS_ASSERT_EQUALS(busTieState(true, true, true, false, false), 1);    // Closed
+    TS_ASSERT_EQUALS(busTieState(false, true, false, true, false), 2);   // Auto
+    TS_ASSERT_EQUALS(busTieState(true, false, false, false, true), 2);   // Auto
+    TS_ASSERT_EQUALS(busTieState(false, false, true, true, true), 0);    // Both fault
+  }
+
+  /***************************************************************************
+   * Mode Transition Guards (Tests 93-96)
+   ***************************************************************************/
+
+  // Test 93: Guarded state machine
+  void testGuardedStateMachine() {
+    int state = 0;
+
+    auto transition = [&](int targetState, bool guard) -> bool {
+      if (!guard) return false;
+
+      // State-specific transition rules
+      switch (state) {
+        case 0: if (targetState == 1) { state = 1; return true; } break;
+        case 1: if (targetState == 2 || targetState == 0) { state = targetState; return true; } break;
+        case 2: if (targetState == 3 || targetState == 1) { state = targetState; return true; } break;
+        case 3: if (targetState == 0) { state = 0; return true; } break;
+      }
+      return false;
+    };
+
+    TS_ASSERT(transition(1, true));   // 0 -> 1
+    TS_ASSERT_EQUALS(state, 1);
+    TS_ASSERT(!transition(3, true));  // 1 -> 3 not allowed
+    TS_ASSERT(transition(2, true));   // 1 -> 2
+    TS_ASSERT(!transition(2, false)); // Guard prevents
+    TS_ASSERT(transition(3, true));   // 2 -> 3
+    TS_ASSERT(transition(0, true));   // 3 -> 0 (reset)
+  }
+
+  // Test 94: Transition with minimum dwell time
+  void testMinimumDwellTime() {
+    int state = 0;
+    int dwellCounter = 0;
+    const int minDwell = 5;
+
+    auto requestTransition = [&](int newState) -> bool {
+      if (dwellCounter < minDwell) {
+        return false;  // Must wait
+      }
+      if (newState != state) {
+        state = newState;
+        dwellCounter = 0;
+        return true;
+      }
+      return false;
+    };
+
+    auto tick = [&]() { dwellCounter++; };
+
+    TS_ASSERT(!requestTransition(1));  // dwell = 0
+    tick(); tick(); tick(); tick();
+    TS_ASSERT(!requestTransition(1));  // dwell = 4
+    tick();
+    TS_ASSERT(requestTransition(1));   // dwell = 5, OK
+    TS_ASSERT_EQUALS(dwellCounter, 0); // Reset
+    tick(); tick();
+    TS_ASSERT(!requestTransition(2));  // dwell = 2
+  }
+
+  // Test 95: Conditional mode with fallback
+  void testConditionalModeWithFallback() {
+    auto selectMode = [](int requestedMode, bool cond1, bool cond2, bool cond3) -> int {
+      // Mode 3 requires all conditions
+      // Mode 2 requires cond1 and cond2
+      // Mode 1 requires cond1
+      // Mode 0 always available
+
+      if (requestedMode == 3 && cond1 && cond2 && cond3) return 3;
+      if (requestedMode >= 2 && cond1 && cond2) return 2;
+      if (requestedMode >= 1 && cond1) return 1;
+      return 0;
+    };
+
+    TS_ASSERT_EQUALS(selectMode(3, true, true, true), 3);    // All met
+    TS_ASSERT_EQUALS(selectMode(3, true, true, false), 2);   // Fallback to 2
+    TS_ASSERT_EQUALS(selectMode(3, true, false, false), 1);  // Fallback to 1
+    TS_ASSERT_EQUALS(selectMode(3, false, false, false), 0); // Fallback to 0
+    TS_ASSERT_EQUALS(selectMode(2, true, true, false), 2);   // Exact mode 2
+    TS_ASSERT_EQUALS(selectMode(1, true, false, false), 1);  // Exact mode 1
+  }
+
+  // Test 96: Priority-based mode arbitration
+  void testPriorityModeArbitration() {
+    auto arbitrate = [](bool emergency, int emergencyMode,
+                        bool priority, int priorityMode,
+                        bool normal, int normalMode,
+                        int defaultMode) -> int {
+      if (emergency) return emergencyMode;
+      if (priority) return priorityMode;
+      if (normal) return normalMode;
+      return defaultMode;
+    };
+
+    TS_ASSERT_EQUALS(arbitrate(true, 99, true, 50, true, 10, 0), 99);   // Emergency
+    TS_ASSERT_EQUALS(arbitrate(false, 99, true, 50, true, 10, 0), 50);  // Priority
+    TS_ASSERT_EQUALS(arbitrate(false, 99, false, 50, true, 10, 0), 10); // Normal
+    TS_ASSERT_EQUALS(arbitrate(false, 99, false, 50, false, 10, 0), 0); // Default
+  }
+
+  /***************************************************************************
+   * Complete Switch System Tests (Tests 97-100)
+   ***************************************************************************/
+
+  // Test 97: Complete autopilot engage/disengage logic
+  void testCompleteAutopilotLogic() {
+    struct AutopilotState {
+      bool engaged = false;
+      bool fdOn = false;
+      int mode = 0;  // 0=off, 1=alt_hold, 2=hdg_hold, 3=nav
+    };
+
+    AutopilotState ap;
+
+    auto engage = [&](bool condition) {
+      if (condition && ap.fdOn && !ap.engaged) {
+        ap.engaged = true;
+        if (ap.mode == 0) ap.mode = 1;  // Default to alt_hold
+        return true;
+      }
+      return false;
+    };
+
+    auto disengage = [&]() {
+      ap.engaged = false;
+      return true;
+    };
+
+    auto setMode = [&](int mode) {
+      if (ap.fdOn) {
+        ap.mode = mode;
+        return true;
+      }
+      return false;
+    };
+
+    // Initial state
+    TS_ASSERT(!ap.engaged);
+    TS_ASSERT(!engage(true));  // FD not on
+
+    ap.fdOn = true;
+    TS_ASSERT(engage(true));
+    TS_ASSERT(ap.engaged);
+    TS_ASSERT_EQUALS(ap.mode, 1);
+
+    TS_ASSERT(setMode(3));
+    TS_ASSERT_EQUALS(ap.mode, 3);
+
+    disengage();
+    TS_ASSERT(!ap.engaged);
+  }
+
+  // Test 98: Complete landing gear state machine
+  void testCompleteLandingGearStateMachine() {
+    enum GearState { GEAR_DOWN, GEAR_TRANSIT_UP, GEAR_UP, GEAR_TRANSIT_DOWN };
+    GearState state = GEAR_DOWN;
+    int transitTimer = 0;
+    const int transitTime = 10;
+
+    auto command = [&](bool gearDown) {
+      if (gearDown && state == GEAR_UP) {
+        state = GEAR_TRANSIT_DOWN;
+        transitTimer = transitTime;
+      } else if (!gearDown && state == GEAR_DOWN) {
+        state = GEAR_TRANSIT_UP;
+        transitTimer = transitTime;
+      }
+    };
+
+    auto tick = [&]() {
+      if (transitTimer > 0) {
+        transitTimer--;
+        if (transitTimer == 0) {
+          if (state == GEAR_TRANSIT_UP) state = GEAR_UP;
+          else if (state == GEAR_TRANSIT_DOWN) state = GEAR_DOWN;
+        }
+      }
+      return state;
+    };
+
+    TS_ASSERT_EQUALS(tick(), GEAR_DOWN);  // Initial
+
+    command(false);  // Gear up command
+    TS_ASSERT_EQUALS(tick(), GEAR_TRANSIT_UP);
+
+    for (int i = 0; i < 9; i++) tick();  // Wait
+    TS_ASSERT_EQUALS(tick(), GEAR_UP);   // Transition complete
+
+    command(true);   // Gear down command
+    TS_ASSERT_EQUALS(tick(), GEAR_TRANSIT_DOWN);
+
+    for (int i = 0; i < 9; i++) tick();
+    TS_ASSERT_EQUALS(tick(), GEAR_DOWN);
+  }
+
+  // Test 99: Complete hydraulic system routing
+  void testCompleteHydraulicSystemRouting() {
+    struct HydSystem {
+      bool sys1Available = true;
+      bool sys2Available = true;
+      bool sys3Available = true;  // Backup
+      double sys1Pressure = 3000.0;
+      double sys2Pressure = 3000.0;
+      double sys3Pressure = 3000.0;
+    };
+
+    HydSystem hyd;
+
+    auto getPressure = [&](int consumer) -> double {
+      // Consumer priority: 1=flight controls, 2=gear, 3=brakes
+      // Routing: sys1 primary, sys2 backup, sys3 emergency
+      double minPressure = 2000.0;
+
+      if (hyd.sys1Available && hyd.sys1Pressure > minPressure) {
+        return hyd.sys1Pressure;
+      }
+      if (hyd.sys2Available && hyd.sys2Pressure > minPressure) {
+        return hyd.sys2Pressure;
+      }
+      if (consumer == 1 && hyd.sys3Available && hyd.sys3Pressure > minPressure) {
+        return hyd.sys3Pressure;  // Flight controls get backup
+      }
+      return 0.0;
+    };
+
+    // All systems normal
+    TS_ASSERT_DELTA(getPressure(1), 3000.0, epsilon);
+    TS_ASSERT_DELTA(getPressure(2), 3000.0, epsilon);
+
+    // Sys1 fails
+    hyd.sys1Available = false;
+    TS_ASSERT_DELTA(getPressure(1), 3000.0, epsilon);  // Sys2 backup
+    TS_ASSERT_DELTA(getPressure(2), 3000.0, epsilon);
+
+    // Sys2 also fails
+    hyd.sys2Available = false;
+    TS_ASSERT_DELTA(getPressure(1), 3000.0, epsilon);  // Sys3 for flight controls
+    TS_ASSERT_DELTA(getPressure(2), 0.0, epsilon);     // No pressure for gear
+  }
+
+  // Test 100: Complete switch system verification
+  void testCompleteSwitchSystemVerification() {
+    // Comprehensive test combining multiple switch patterns
+
+    // 1. Condition evaluation
+    auto eq = [](double a, double b) { return std::abs(a - b) < 1e-10; };
+    auto gt = [](double a, double b) { return a > b; };
+    TS_ASSERT(eq(5.0, 5.0));
+    TS_ASSERT(gt(6.0, 5.0));
+
+    // 2. Logical operations
+    auto AND = [](bool a, bool b) { return a && b; };
+    auto OR = [](bool a, bool b) { return a || b; };
+    TS_ASSERT(AND(true, true));
+    TS_ASSERT(OR(false, true));
+
+    // 3. Multi-way switch
+    auto rangeSwitch = [](double x) {
+      if (x < 0) return 0;
+      if (x < 100) return 1;
+      if (x < 200) return 2;
+      return 3;
+    };
+    TS_ASSERT_EQUALS(rangeSwitch(-5), 0);
+    TS_ASSERT_EQUALS(rangeSwitch(50), 1);
+    TS_ASSERT_EQUALS(rangeSwitch(150), 2);
+    TS_ASSERT_EQUALS(rangeSwitch(250), 3);
+
+    // 4. State machine with hysteresis
+    bool state = false;
+    double lowThresh = 30.0, highThresh = 70.0;
+    auto hystSwitch = [&](double val) {
+      if (val > highThresh) state = true;
+      else if (val < lowThresh) state = false;
+      return state;
+    };
+    TS_ASSERT(!hystSwitch(20.0));
+    TS_ASSERT(!hystSwitch(50.0));
+    TS_ASSERT(hystSwitch(80.0));
+    TS_ASSERT(hystSwitch(50.0));  // Stays high
+
+    // 5. Priority encoder
+    auto priority = [](bool p1, bool p2, bool p3) {
+      if (p1) return 1;
+      if (p2) return 2;
+      if (p3) return 3;
+      return 0;
+    };
+    TS_ASSERT_EQUALS(priority(true, true, true), 1);
+    TS_ASSERT_EQUALS(priority(false, true, true), 2);
+    TS_ASSERT_EQUALS(priority(false, false, true), 3);
+
+    // 6. Edge detection
+    bool prev = false;
+    auto risingEdge = [&](bool curr) {
+      bool edge = !prev && curr;
+      prev = curr;
+      return edge;
+    };
+    TS_ASSERT(risingEdge(true));
+    TS_ASSERT(!risingEdge(true));
+    TS_ASSERT(!risingEdge(false));
+    TS_ASSERT(risingEdge(true));
+
+    // 7. Debounce logic
+    int debounceCount = 0;
+    auto debounce = [&](bool input) {
+      if (input) debounceCount++;
+      else debounceCount = 0;
+      return debounceCount >= 3;
+    };
+    TS_ASSERT(!debounce(true));
+    TS_ASSERT(!debounce(true));
+    TS_ASSERT(debounce(true));
+
+    // All switch system patterns verified
+  }
 };

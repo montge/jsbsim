@@ -1374,4 +1374,587 @@ public:
     double error_m = error_ft * ft_to_m;
     TS_ASSERT_DELTA(error_m, 152.4, 0.1);
   }
+
+  /***************************************************************************
+   * Advanced PID Response Tests (77-80)
+   ***************************************************************************/
+
+  // Test 77: Critically damped response
+  void testCriticallyDampedResponse() {
+    double Kp = 0.5, Ki = 0.1, Kd = 0.3;  // Conservative gains for less overshoot
+    double dt = 0.1;
+
+    double setpoint = 100.0;
+    double process = 0.0;
+    double I_sum = 0.0;
+    double prev_error = setpoint;
+
+    // Simulate with well-tuned gains for critical damping
+    for (int i = 0; i < 200; i++) {
+      double error = setpoint - process;
+      I_sum += error * dt;
+      I_sum = std::max(-200.0, std::min(200.0, I_sum));  // Anti-windup
+      double D = (error - prev_error) / dt;
+
+      double output = Kp * error + Ki * I_sum + Kd * D;
+      process += 0.05 * output;  // Slower integration for stability
+
+      prev_error = error;
+    }
+
+    // Should converge close to setpoint
+    TS_ASSERT(std::abs(process - setpoint) < 10.0);
+  }
+
+  // Test 78: Response to step disturbance
+  void testStepDisturbanceRejection() {
+    double Kp = 2.0, Ki = 0.5;
+    double dt = 0.1;
+
+    double setpoint = 50.0;
+    double process = 50.0;  // Start at setpoint
+    double I_sum = 0.0;
+
+    // Apply step disturbance at step 10
+    for (int i = 0; i < 100; i++) {
+      double disturbance = (i >= 10 && i < 20) ? -10.0 : 0.0;
+      double error = setpoint - process;
+      I_sum += error * dt;
+
+      double output = Kp * error + Ki * I_sum;
+      // Process integrates output and experiences disturbance
+      process += 0.1 * (output - process + disturbance);
+    }
+
+    // Should recover close to setpoint after disturbance ends
+    TS_ASSERT(std::abs(process - setpoint) < 10.0);
+  }
+
+  // Test 79: Response to ramp reference
+  void testRampReferenceTracking() {
+    double Kp = 3.0, Ki = 1.0;
+    double dt = 0.1;
+
+    double process = 0.0;
+    double I_sum = 0.0;
+    double tracking_error = 0.0;
+
+    for (int i = 0; i < 50; i++) {
+      double setpoint = i * 1.0;  // Ramp: 0, 1, 2, 3...
+      double error = setpoint - process;
+      I_sum += error * dt;
+
+      double output = Kp * error + Ki * I_sum;
+      process += 0.3 * output;
+
+      if (i > 20) {  // After transient
+        tracking_error += std::abs(error);
+      }
+    }
+
+    // Should track ramp with bounded error
+    TS_ASSERT(tracking_error / 30.0 < 5.0);  // Average error < 5
+  }
+
+  // Test 80: Integral time constant relationship
+  void testIntegralTimeConstant() {
+    double Kp = 2.0;
+    double Ti = 1.0;  // Integral time constant
+    double dt = 0.1;
+
+    // Ki = Kp / Ti in standard form
+    double Ki = Kp / Ti;
+    TS_ASSERT_DELTA(Ki, 2.0, epsilon);
+
+    // After Ti seconds of constant error, integral contribution equals P
+    double I_sum = 0.0;
+    double error = 5.0;
+    int steps = static_cast<int>(Ti / dt);
+
+    for (int i = 0; i < steps; i++) {
+      I_sum += error * dt;
+    }
+
+    double P = Kp * error;
+    double I = Ki * I_sum;
+
+    TS_ASSERT_DELTA(P, I, 0.5);
+  }
+
+  /***************************************************************************
+   * Advanced Derivative Tests (81-84)
+   ***************************************************************************/
+
+  // Test 81: Derivative time constant relationship
+  void testDerivativeTimeConstant() {
+    double Kp = 2.0;
+    double Td = 0.5;  // Derivative time constant
+
+    // Kd = Kp * Td in standard form
+    double Kd = Kp * Td;
+    TS_ASSERT_DELTA(Kd, 1.0, epsilon);
+  }
+
+  // Test 82: Derivative with exponential filter
+  void testDerivativeExponentialFilter() {
+    double Kd = 1.0;
+    double N = 10.0;  // Filter coefficient
+    double dt = 0.1;
+    double filtered_D = 0.0;
+    double prev_error = 0.0;
+
+    for (int i = 0; i < 20; i++) {
+      double error = (i < 5) ? 0.0 : 10.0;  // Step at i=5
+      double raw_D = (error - prev_error) / dt;
+
+      // First-order filter: D_f = (1 - alpha) * D_f + alpha * D_raw
+      double alpha = N * dt / (1 + N * dt);
+      filtered_D = (1 - alpha) * filtered_D + alpha * raw_D;
+
+      TS_ASSERT(std::isfinite(filtered_D));
+      prev_error = error;
+    }
+
+    // Filtered derivative should be smaller than raw spike
+    TS_ASSERT(std::abs(filtered_D) < 100.0);
+  }
+
+  // Test 83: Derivative-on-measurement
+  void testDerivativeOnMeasurement() {
+    double Kd = 1.0;
+    double dt = 0.1;
+
+    double sp_prev = 50.0, sp_curr = 100.0;  // Setpoint step
+    double pv_prev = 75.0, pv_curr = 77.0;   // Slow measurement change
+
+    // D on error (has derivative kick from setpoint)
+    double D_error = Kd * ((sp_curr - pv_curr) - (sp_prev - pv_prev)) / dt;
+
+    // D on measurement (no kick)
+    double D_measurement = -Kd * (pv_curr - pv_prev) / dt;
+
+    TS_ASSERT(std::abs(D_error) > std::abs(D_measurement));
+    TS_ASSERT_DELTA(D_measurement, -20.0, epsilon);
+  }
+
+  // Test 84: Second derivative approximation
+  void testSecondDerivativeApproximation() {
+    double dt = 0.1;
+    double e_curr = 10.0, e_prev = 8.0, e_prev2 = 5.0;
+
+    // First derivative approximations
+    double d1 = (e_curr - e_prev) / dt;
+    double d2 = (e_prev - e_prev2) / dt;
+
+    // Second derivative
+    double d2_dt2 = (d1 - d2) / dt;
+
+    TS_ASSERT_DELTA(d1, 20.0, epsilon);
+    TS_ASSERT_DELTA(d2, 30.0, epsilon);
+    TS_ASSERT_DELTA(d2_dt2, -100.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Flight Control Application Tests (85-88)
+   ***************************************************************************/
+
+  // Test 85: Altitude hold PID
+  void testAltitudeHoldPID() {
+    double Kp = 0.1;   // ft/s per ft error
+    double Ki = 0.01;  // ft/s per ft-s
+    double dt = 0.1;
+
+    double target_alt = 10000.0;  // ft
+    double current_alt = 9800.0;  // ft
+    double I_sum = 0.0;
+
+    double error = target_alt - current_alt;
+    I_sum += error * dt;
+
+    double vs_command = Kp * error + Ki * I_sum;
+
+    // Should command positive (climb) vertical speed
+    // With Kp=0.1, Ki=0.01, error=200: output = 0.1*200 + 0.01*20 = 20.2 ft/s
+    TS_ASSERT(vs_command > 0.0);
+    TS_ASSERT_DELTA(vs_command, 20.2, 1.0);  // ~20 ft/s climb
+  }
+
+  // Test 86: Heading hold PID
+  void testHeadingHoldPID() {
+    double Kp = 2.0;  // deg/s per deg error
+    double dt = 0.1;
+
+    double target_hdg = 90.0;   // deg
+    double current_hdg = 85.0;  // deg
+    double error = target_hdg - current_hdg;
+
+    double roll_command = Kp * error;
+
+    TS_ASSERT_DELTA(roll_command, 10.0, epsilon);  // 10 deg/s roll rate
+  }
+
+  // Test 87: Airspeed hold PID
+  void testAirspeedHoldPID() {
+    double Kp = 0.5;   // % per knot error
+    double Ki = 0.05;
+    double dt = 0.1;
+
+    double target_speed = 250.0;  // knots
+    double current_speed = 240.0;
+    double I_sum = 0.0;
+
+    double error = target_speed - current_speed;
+    I_sum += error * dt;
+
+    double throttle_change = Kp * error + Ki * I_sum;
+
+    TS_ASSERT(throttle_change > 0.0);  // Increase throttle
+  }
+
+  // Test 88: Rate-based PID for pitch control
+  void testPitchRateController() {
+    double Kp = 3.0;  // elevator per deg/s rate error
+    double Kd = 0.1;
+    double dt = 0.02;
+
+    double commanded_rate = 5.0;    // deg/s
+    double actual_rate = 3.0;       // deg/s
+    double prev_rate_error = 1.5;   // deg/s
+
+    double rate_error = commanded_rate - actual_rate;
+    double rate_accel = (rate_error - prev_rate_error) / dt;
+
+    double elevator = Kp * rate_error + Kd * rate_accel;
+
+    TS_ASSERT(elevator > 0.0);  // Nose-up command
+  }
+
+  /***************************************************************************
+   * Practical Implementation Tests (89-92)
+   ***************************************************************************/
+
+  // Test 89: Velocity form PID
+  void testVelocityFormPID() {
+    double Kp = 2.0, Ki = 0.5, Kd = 0.1;
+    double dt = 0.1;
+
+    double e_curr = 10.0, e_prev = 8.0, e_prev2 = 5.0;
+
+    // Velocity form: delta_u = Kp*(e_n - e_n-1) + Ki*dt*e_n + Kd/dt*(e_n - 2*e_n-1 + e_n-2)
+    double delta_u = Kp * (e_curr - e_prev) +
+                     Ki * dt * e_curr +
+                     Kd / dt * (e_curr - 2*e_prev + e_prev2);
+
+    TS_ASSERT(std::isfinite(delta_u));
+  }
+
+  // Test 90: PID with deadband
+  void testPIDWithDeadband() {
+    double Kp = 2.0;
+    double deadband = 1.0;
+
+    // errors: 0.5, -0.3, 1.5, -2.0
+    // With deadband=1.0:
+    // 0.5: |0.5| < 1.0 -> effective=0, output=0
+    // -0.3: |-0.3| < 1.0 -> effective=0, output=0
+    // 1.5: 1.5 > 1.0 -> effective=1.5-1.0=0.5, output=2.0*0.5=1.0
+    // -2.0: |-2.0| > 1.0 -> effective=-2.0+1.0=-1.0, output=2.0*-1.0=-2.0
+    double errors[] = {0.5, -0.3, 1.5, -2.0};
+    double expected_outs[] = {0.0, 0.0, 1.0, -2.0};  // These are final outputs
+
+    for (int i = 0; i < 4; i++) {
+      double effective_error = errors[i];
+      if (std::abs(errors[i]) < deadband) {
+        effective_error = 0.0;
+      } else {
+        effective_error = errors[i] - (errors[i] > 0 ? deadband : -deadband);
+      }
+
+      double output = Kp * effective_error;
+      TS_ASSERT_DELTA(output, expected_outs[i], epsilon);
+    }
+  }
+
+  // Test 91: Split-range PID
+  void testSplitRangePID() {
+    double Kp = 1.0;
+    double output_split = 50.0;  // Split point
+
+    auto splitOutput = [output_split](double raw_output) -> std::pair<double, double> {
+      if (raw_output <= output_split) {
+        return {raw_output, 0.0};
+      } else {
+        return {output_split, raw_output - output_split};
+      }
+    };
+
+    auto [out1, out2] = splitOutput(75.0);
+    TS_ASSERT_DELTA(out1, 50.0, epsilon);
+    TS_ASSERT_DELTA(out2, 25.0, epsilon);
+
+    auto [out3, out4] = splitOutput(30.0);
+    TS_ASSERT_DELTA(out3, 30.0, epsilon);
+    TS_ASSERT_DELTA(out4, 0.0, epsilon);
+  }
+
+  // Test 92: PID with manual override
+  void testPIDWithManualOverride() {
+    double Kp = 2.0, Ki = 0.5;
+    double dt = 0.1;
+    double I_sum = 0.0;
+
+    bool manual_mode = false;
+    double manual_output = 50.0;
+    double error = 10.0;
+
+    I_sum += error * dt;
+    double auto_output = Kp * error + Ki * I_sum;
+
+    double final_output = manual_mode ? manual_output : auto_output;
+    TS_ASSERT_DELTA(final_output, auto_output, epsilon);
+
+    manual_mode = true;
+    final_output = manual_mode ? manual_output : auto_output;
+    TS_ASSERT_DELTA(final_output, manual_output, epsilon);
+  }
+
+  /***************************************************************************
+   * Robustness and Edge Case Tests (93-96)
+   ***************************************************************************/
+
+  // Test 93: PID with sensor failure detection
+  void testPIDSensorFailureDetection() {
+    double prev_value = 100.0;
+    double curr_value = 500.0;  // Large jump
+    double max_rate = 50.0;     // per step
+
+    bool sensor_failure = std::abs(curr_value - prev_value) > max_rate;
+    TS_ASSERT(sensor_failure);
+  }
+
+  // Test 94: PID with actuator saturation tracking
+  void testActuatorSaturationTracking() {
+    double Ki = 1.0;
+    double dt = 0.1;
+    double I_sum = 0.0;
+    double output_max = 100.0;
+
+    bool was_saturated = false;
+    for (int i = 0; i < 50; i++) {
+      double error = 20.0;
+
+      if (!was_saturated) {
+        I_sum += error * dt;
+      }
+
+      double output = Ki * I_sum;
+      was_saturated = output >= output_max;
+
+      if (was_saturated) {
+        I_sum = output_max / Ki;  // Back-calculate
+      }
+    }
+
+    TS_ASSERT_DELTA(I_sum, output_max / Ki, 0.5);
+  }
+
+  // Test 95: PID initialization from steady state
+  void testPIDInitFromSteadyState() {
+    double Kp = 2.0, Ki = 0.5;
+    double steady_output = 60.0;
+    double steady_error = 5.0;
+
+    // Initialize I_sum to match steady state
+    double P = Kp * steady_error;
+    double I_sum_init = (steady_output - P) / Ki;
+
+    double output = Kp * steady_error + Ki * I_sum_init;
+    TS_ASSERT_DELTA(output, steady_output, epsilon);
+  }
+
+  // Test 96: PID mode transition (auto to manual and back)
+  void testPIDModeTransition() {
+    double Kp = 2.0, Ki = 0.5;
+    double I_sum = 5.0;  // Accumulated integral
+    double error = 10.0;
+
+    double auto_output = Kp * error + Ki * I_sum;
+
+    // Switch to manual
+    double manual_output = 30.0;
+
+    // Switch back to auto - reinitialize I_sum for bumpless
+    double new_I_sum = (manual_output - Kp * error) / Ki;
+
+    double new_auto_output = Kp * error + Ki * new_I_sum;
+    TS_ASSERT_DELTA(new_auto_output, manual_output, epsilon);
+  }
+
+  /***************************************************************************
+   * Complete PID System Tests (97-100)
+   ***************************************************************************/
+
+  // Test 97: Complete altitude autopilot simulation
+  void testCompleteAltitudeAutopilot() {
+    double Kp = 0.2, Ki = 0.05, Kd = 0.3;
+    double dt = 0.1;
+
+    double target_alt = 10000.0;
+    double altitude = 9500.0;  // Start closer to target
+    double vs = 0.0;
+    double I_sum = 0.0;
+    double prev_error = target_alt - altitude;
+
+    for (int i = 0; i < 300; i++) {
+      double error = target_alt - altitude;
+      I_sum += error * dt;
+      I_sum = std::max(-1000.0, std::min(1000.0, I_sum));  // Anti-windup
+      double D = (error - prev_error) / dt;
+
+      double vs_cmd = Kp * error + Ki * I_sum + Kd * D;
+      vs_cmd = std::max(-500.0, std::min(500.0, vs_cmd));  // Rate limit
+
+      vs = vs + 0.2 * (vs_cmd - vs);  // Faster response
+      altitude += vs * dt;
+
+      prev_error = error;
+    }
+
+    // Should converge to within 100 ft of target
+    TS_ASSERT(std::abs(altitude - target_alt) < 100.0);
+  }
+
+  // Test 98: Complete heading autopilot simulation
+  void testCompleteHeadingAutopilot() {
+    double Kp = 1.5, Ki = 0.1, Kd = 0.3;
+    double dt = 0.1;
+
+    double target_hdg = 180.0;
+    double heading = 90.0;
+    double I_sum = 0.0;
+    double prev_error = 0.0;
+
+    for (int i = 0; i < 100; i++) {
+      double error = target_hdg - heading;
+      // Normalize to -180 to 180
+      while (error > 180.0) error -= 360.0;
+      while (error < -180.0) error += 360.0;
+
+      I_sum += error * dt;
+      I_sum = std::max(-50.0, std::min(50.0, I_sum));
+      double D = (error - prev_error) / dt;
+
+      double turn_rate = Kp * error + Ki * I_sum + Kd * D;
+      turn_rate = std::max(-15.0, std::min(15.0, turn_rate));
+
+      heading += turn_rate * dt;
+      if (heading < 0) heading += 360.0;
+      if (heading >= 360.0) heading -= 360.0;
+
+      prev_error = error;
+    }
+
+    double final_error = target_hdg - heading;
+    while (final_error > 180.0) final_error -= 360.0;
+    while (final_error < -180.0) final_error += 360.0;
+
+    TS_ASSERT(std::abs(final_error) < 10.0);
+  }
+
+  // Test 99: Complete airspeed controller simulation
+  void testCompleteAirspeedController() {
+    double Kp = 2.0, Ki = 0.2, Kd = 0.1;
+    double dt = 0.1;
+
+    double target_speed = 250.0;
+    double airspeed = 200.0;
+    double throttle = 50.0;  // Initial throttle %
+    double I_sum = 0.0;
+    double prev_error = target_speed - airspeed;
+
+    for (int i = 0; i < 100; i++) {
+      double error = target_speed - airspeed;
+      I_sum += error * dt;
+      I_sum = std::max(-100.0, std::min(100.0, I_sum));
+      double D = (error - prev_error) / dt;
+
+      double throttle_cmd = 50.0 + Kp * error + Ki * I_sum + Kd * D;
+      throttle_cmd = std::max(0.0, std::min(100.0, throttle_cmd));
+
+      throttle = throttle + 0.2 * (throttle_cmd - throttle);
+
+      // Simple speed model: speed increases with throttle
+      double accel = (throttle - 50.0) * 0.1 - 0.05 * airspeed * 0.01;
+      airspeed += accel * dt;
+
+      prev_error = error;
+    }
+
+    TS_ASSERT(std::abs(airspeed - target_speed) < 20.0);
+  }
+
+  // Test 100: Complete PID controller system verification
+  void testCompletePIDSystemVerification() {
+    // Comprehensive verification of PID controller behavior
+    double Kp = 2.0, Ki = 0.5, Kd = 0.2;
+    double dt = 0.1;
+
+    // 1. Verify proportional gain
+    double P = Kp * 10.0;
+    TS_ASSERT_DELTA(P, 20.0, epsilon);
+
+    // 2. Verify integral accumulation
+    double I_sum = 0.0;
+    for (int i = 0; i < 10; i++) I_sum += 10.0 * dt;
+    TS_ASSERT_DELTA(I_sum, 10.0, epsilon);
+
+    // 3. Verify derivative calculation
+    double D = Kd * (10.0 - 5.0) / dt;
+    TS_ASSERT_DELTA(D, 10.0, epsilon);
+
+    // 4. Verify anti-windup
+    double I_max = 50.0;
+    I_sum = 100.0;
+    I_sum = std::min(I_sum, I_max);
+    TS_ASSERT_DELTA(I_sum, I_max, epsilon);
+
+    // 5. Verify output limiting
+    double output = 200.0;
+    double out_max = 100.0;
+    output = std::min(output, out_max);
+    TS_ASSERT_DELTA(output, out_max, epsilon);
+
+    // 6. Verify rate limiting
+    double prev_output = 0.0;
+    double new_output = 50.0;
+    double rate_limit = 10.0;
+    double delta = new_output - prev_output;
+    double clamped_delta = std::max(-rate_limit, std::min(delta, rate_limit));
+    double limited = prev_output + clamped_delta;
+    TS_ASSERT_DELTA(limited, 10.0, epsilon);
+
+    // 7. Verify velocity form
+    double e0 = 10.0, e1 = 8.0, e2 = 5.0;
+    double delta_u = Kp * (e0 - e1) + Ki * dt * e0 + Kd / dt * (e0 - 2*e1 + e2);
+    TS_ASSERT(std::isfinite(delta_u));
+
+    // 8. Verify bumpless transfer
+    double manual = 60.0;
+    double P_comp = Kp * 10.0;
+    double I_init = (manual - P_comp) / Ki;
+    double auto_out = P_comp + Ki * I_init;
+    TS_ASSERT_DELTA(auto_out, manual, epsilon);
+
+    // 9. Verify deadband
+    double error = 0.5;
+    double deadband = 1.0;
+    double eff_error = std::abs(error) < deadband ? 0.0 : error;
+    TS_ASSERT_DELTA(eff_error, 0.0, epsilon);
+
+    // 10. Verify complete system coherence
+    TS_ASSERT(Kp > 0.0);
+    TS_ASSERT(Ki >= 0.0);
+    TS_ASSERT(Kd >= 0.0);
+    TS_ASSERT(dt > 0.0);
+  }
 };

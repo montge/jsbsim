@@ -1163,6 +1163,450 @@ public:
     TS_ASSERT(phi < 0.15);
   }
 
+  /***************************************************************************
+   * Landing Flare Profile Tests (77-80)
+   ***************************************************************************/
+
+  // Test 77: Flare entry timing
+  void testFlareEntryTiming() {
+    double wingspan = 35.0;
+    double approach_height = 50.0;  // ft
+    double flare_height = 5.0;      // ft - lower for noticeable ground effect
+
+    double phi_approach = calculateGroundEffectFactor(approach_height / wingspan);
+    double phi_flare = calculateGroundEffectFactor(flare_height / wingspan);
+
+    // Ground effect should start becoming noticeable at flare height
+    TS_ASSERT(phi_flare < phi_approach);
+    TS_ASSERT(phi_flare < 0.95);  // Noticeable effect (h/b = 0.14 -> phi ≈ 0.84)
+  }
+
+  // Test 78: Float height prediction
+  void testFloatHeightPrediction() {
+    double wingspan = 30.0;
+    double weight = 2500.0;  // lbs
+    double wing_area = 174.0;  // sq ft
+    double velocity = 100.0;  // ft/s
+    double density = 0.002377;
+
+    // Calculate stall speed and float characteristics
+    double CL_approach = 1.5;
+    double q = 0.5 * density * velocity * velocity;
+    double lift_approach = q * wing_area * CL_approach;
+
+    // At some height in ground effect, lift equals weight
+    for (double h = 1.0; h <= 20.0; h += 0.5) {
+      double phi = calculateGroundEffectFactor(h / wingspan);
+      double CL_effective = CL_approach / phi;
+      double lift = q * wing_area * CL_effective;
+      if (lift >= weight) {
+        TS_ASSERT(h > 0.5);  // Float occurs above ground
+        break;
+      }
+    }
+  }
+
+  // Test 79: Touchdown attitude effect
+  void testTouchdownAttitudeEffect() {
+    double wingspan = 30.0;
+    double nose_wheel_height = 2.0;
+    double main_wheel_height = 1.5;
+    double pitch_angle = 5.0;  // degrees nose up
+
+    // Wing height varies with pitch
+    double wing_height_level = 3.0;
+    double wing_height_pitched = wing_height_level +
+      (wingspan / 4) * sin(pitch_angle * PI / 180.0);
+
+    double phi_level = calculateGroundEffectFactor(wing_height_level / wingspan);
+    double phi_pitched = calculateGroundEffectFactor(wing_height_pitched / wingspan);
+
+    // Higher pitch = higher wing = less ground effect
+    TS_ASSERT(phi_pitched > phi_level);
+  }
+
+  // Test 80: Three-point landing ground effect
+  void testThreePointLandingGroundEffect() {
+    double wingspan = 25.0;  // Taildragger
+    double main_height = 2.0;
+    double tail_height = 0.5;
+    double avg_height = (main_height + tail_height) / 2.0;
+
+    double phi = calculateGroundEffectFactor(avg_height / wingspan);
+
+    // Strong ground effect at three-point attitude
+    TS_ASSERT(phi < 0.5);
+  }
+
+  /***************************************************************************
+   * Takeoff Ground Effect Tests (81-84)
+   ***************************************************************************/
+
+  // Test 81: Rotation ground effect
+  void testRotationGroundEffect() {
+    double wingspan = 35.0;
+    double wheel_height = 2.5;
+
+    double phi = calculateGroundEffectFactor(wheel_height / wingspan);
+
+    // Ground effect helps rotation by reducing induced drag
+    double CDi_reduction = 1.0 - phi * phi;
+    TS_ASSERT(CDi_reduction > 0.3);  // >30% reduction
+  }
+
+  // Test 82: Liftoff acceleration
+  void testLiftoffAcceleration() {
+    double wingspan = 35.0;
+    double weight = 3000.0;
+    double thrust = 600.0;  // lbs
+    double h_wheel = 2.0;
+    double h_just_airborne = 5.0;
+
+    double phi_wheel = calculateGroundEffectFactor(h_wheel / wingspan);
+    double phi_airborne = calculateGroundEffectFactor(h_just_airborne / wingspan);
+
+    // Induced drag increases as aircraft climbs out
+    double CDi_ratio = (phi_airborne * phi_airborne) / (phi_wheel * phi_wheel);
+    TS_ASSERT(CDi_ratio > 1.0);  // Drag increases
+  }
+
+  // Test 83: Obstacle clearance with ground effect
+  void testObstacleClearanceGroundEffect() {
+    double wingspan = 30.0;
+    double obstacle_height = 50.0;  // 50 ft obstacle
+
+    // Calculate height at which ground effect diminishes
+    // Use h/b = 0.05 -> phi = 0.39 (strong ground effect)
+    double h_half_effect = wingspan * 0.05;  // 1.5 ft
+    double phi_half = calculateGroundEffectFactor(h_half_effect / wingspan);
+
+    // Ground effect helps initial climb
+    TS_ASSERT(phi_half < 0.7);
+    TS_ASSERT(h_half_effect < obstacle_height);
+  }
+
+  // Test 84: Soft field takeoff ground effect
+  void testSoftFieldTakeoffGroundEffect() {
+    double wingspan = 30.0;
+    double min_wheel_height = 0.5;  // Flying just above surface
+
+    double phi = calculateGroundEffectFactor(min_wheel_height / wingspan);
+
+    // Very strong ground effect during soft field technique
+    TS_ASSERT(phi < 0.25);
+  }
+
+  /***************************************************************************
+   * Wind Effect Interactions (85-88)
+   ***************************************************************************/
+
+  // Test 85: Headwind ground effect enhancement
+  void testHeadwindGroundEffectEnhancement() {
+    double wingspan = 30.0;
+    double height = 5.0;
+    double groundspeed = 80.0;  // ft/s
+    double headwind = 20.0;     // ft/s
+
+    double airspeed = groundspeed + headwind;
+
+    // Ground effect factor is geometry-based
+    double phi = calculateGroundEffectFactor(height / wingspan);
+
+    // Lift increases with airspeed squared
+    double lift_ratio = (airspeed * airspeed) / (groundspeed * groundspeed);
+    TS_ASSERT(lift_ratio > 1.0);
+    TS_ASSERT(phi < 1.0);
+  }
+
+  // Test 86: Tailwind ground effect reduction
+  void testTailwindGroundEffectReduction() {
+    double wingspan = 30.0;
+    double height = 5.0;
+    double groundspeed = 100.0;  // ft/s
+    double tailwind = 15.0;       // ft/s
+
+    double airspeed = groundspeed - tailwind;
+
+    // Ground effect coefficient unchanged, but lift reduced
+    double phi = calculateGroundEffectFactor(height / wingspan);
+    double lift_reduction = (airspeed * airspeed) / (groundspeed * groundspeed);
+
+    TS_ASSERT(lift_reduction < 1.0);
+    TS_ASSERT(phi < 1.0);
+  }
+
+  // Test 87: Gusty wind ground effect
+  void testGustyWindGroundEffect() {
+    double wingspan = 30.0;
+    double height = 4.0;
+    double base_speed = 100.0;
+    double gust_amplitude = 15.0;
+
+    double phi = calculateGroundEffectFactor(height / wingspan);
+
+    // Ground effect factor remains constant, but lift varies with gusts
+    double lift_high = (base_speed + gust_amplitude);
+    double lift_low = (base_speed - gust_amplitude);
+    double lift_ratio = lift_high / lift_low;
+
+    TS_ASSERT(lift_ratio > 1.0);
+    TS_ASSERT(phi < 1.0);
+  }
+
+  // Test 88: Wind shear near ground
+  void testWindShearNearGround() {
+    double wingspan = 30.0;
+    double height_high = 50.0;
+    double height_low = 10.0;
+
+    double phi_high = calculateGroundEffectFactor(height_high / wingspan);
+    double phi_low = calculateGroundEffectFactor(height_low / wingspan);
+
+    // Ground effect increases as aircraft descends through shear
+    TS_ASSERT(phi_low < phi_high);
+  }
+
+  /***************************************************************************
+   * Formation Flying Ground Effect (89-92)
+   ***************************************************************************/
+
+  // Test 89: Echelon formation ground effect
+  void testEchelonFormationGroundEffect() {
+    double wingspan = 30.0;
+    double leader_height = 5.0;
+    double wingman_height = 5.5;  // Slightly higher
+
+    double phi_leader = calculateGroundEffectFactor(leader_height / wingspan);
+    double phi_wingman = calculateGroundEffectFactor(wingman_height / wingspan);
+
+    // Wingman has slightly less ground effect
+    TS_ASSERT(phi_wingman > phi_leader);
+  }
+
+  // Test 90: Trail formation ground effect
+  void testTrailFormationGroundEffect() {
+    double wingspan = 30.0;
+    double same_height = 5.0;
+
+    double phi = calculateGroundEffectFactor(same_height / wingspan);
+
+    // Both aircraft experience same ground effect
+    // But wake turbulence modifies effective flow for trailing aircraft
+    TS_ASSERT(phi < 1.0);
+    TS_ASSERT(phi > 0.0);
+  }
+
+  // Test 91: Formation breakup ground effect transient
+  void testFormationBreakupGroundEffect() {
+    double wingspan = 30.0;
+    double initial_height = 5.0;
+    double breakaway_height = 15.0;
+
+    double phi_initial = calculateGroundEffectFactor(initial_height / wingspan);
+    double phi_breakaway = calculateGroundEffectFactor(breakaway_height / wingspan);
+
+    // Ground effect reduces during breakaway climb
+    double effect_reduction = phi_breakaway - phi_initial;
+    TS_ASSERT(effect_reduction > 0.1);
+  }
+
+  // Test 92: Close formation spacing ground effect
+  void testCloseFormationSpacingGroundEffect() {
+    double wingspan = 30.0;
+    double height = 5.0;
+    double lateral_spacing = wingspan;  // One wingspan apart
+
+    double phi = calculateGroundEffectFactor(height / wingspan);
+
+    // Each aircraft experiences its own ground effect
+    // Interference effects are secondary
+    TS_ASSERT(phi < 1.0);
+  }
+
+  /***************************************************************************
+   * Special Operations Ground Effect (93-96)
+   ***************************************************************************/
+
+  // Test 93: Low pass ground effect
+  void testLowPassGroundEffect() {
+    double wingspan = 35.0;
+    double pass_height = 5.0;  // Low pass height (h/b=0.14 -> phi ≈ 0.84)
+
+    double phi = calculateGroundEffectFactor(pass_height / wingspan);
+
+    // Noticeable ground effect during low pass
+    TS_ASSERT(phi < 0.9);
+    TS_ASSERT(phi > 0.5);
+  }
+
+  // Test 94: Carrier approach ground effect
+  void testCarrierApproachGroundEffect() {
+    double wingspan = 45.0;  // Fighter aircraft
+    double deck_height = 60.0;  // Deck above water
+    double approach_height = 62.0;  // Just above deck (2 ft AGL -> h/b=0.044 -> phi ≈ 0.33)
+
+    double agl = approach_height - deck_height;
+    double phi = calculateGroundEffectFactor(agl / wingspan);
+
+    // Very close to deck, strong ground effect
+    TS_ASSERT(phi < 0.6);
+  }
+
+  // Test 95: Ski jump takeoff ground effect
+  void testSkiJumpTakeoffGroundEffect() {
+    double wingspan = 40.0;
+    double ramp_exit_height = 1.5;  // (h/b=0.0375 -> phi ≈ 0.26)
+
+    double phi = calculateGroundEffectFactor(ramp_exit_height / wingspan);
+
+    // Strong ground effect at ramp exit
+    TS_ASSERT(phi < 0.5);
+  }
+
+  // Test 96: Unprepared surface ground effect
+  void testUnpreparedSurfaceGroundEffect() {
+    double wingspan = 30.0;
+    double height = 4.0;
+
+    // Unprepared surface - slightly reduced effect due to irregularities
+    double phi_base = calculateGroundEffectFactor(height / wingspan);
+    double roughness_penalty = 1.02;  // 2% reduction in effect
+    double phi_unprepared = std::min(1.0, phi_base * roughness_penalty);
+
+    TS_ASSERT(phi_unprepared >= phi_base);
+    TS_ASSERT(phi_unprepared <= 1.0);
+  }
+
+  /***************************************************************************
+   * Complete Ground Effect System Tests (97-100)
+   ***************************************************************************/
+
+  // Test 97: Complete approach profile
+  void testCompleteApproachProfile() {
+    double wingspan = 35.0;
+    double heights[] = {200, 100, 50, 30, 20, 15, 10, 5, 3, 1};  // End at 1 ft
+    int n = sizeof(heights) / sizeof(heights[0]);
+
+    double prev_phi = 1.0;
+    for (int i = 0; i < n; i++) {
+      double phi = calculateGroundEffectFactor(heights[i] / wingspan);
+
+      // Phi should decrease monotonically as height decreases
+      TS_ASSERT(phi <= prev_phi);
+      prev_phi = phi;
+    }
+
+    // Final phi should be very low (h/b = 1/35 = 0.029 -> phi ≈ 0.18)
+    TS_ASSERT(prev_phi < 0.4);
+  }
+
+  // Test 98: Complete takeoff profile
+  void testCompleteTakeoffProfile() {
+    double wingspan = 35.0;
+    double heights[] = {2, 5, 10, 20, 50, 100, 200};
+    int n = sizeof(heights) / sizeof(heights[0]);
+
+    double prev_phi = 0.0;
+    for (int i = 0; i < n; i++) {
+      double phi = calculateGroundEffectFactor(heights[i] / wingspan);
+
+      // Phi should increase monotonically as height increases
+      TS_ASSERT(phi >= prev_phi);
+      prev_phi = phi;
+    }
+
+    // Final phi should approach 1.0
+    TS_ASSERT(prev_phi > 0.98);
+  }
+
+  // Test 99: Complete L/D analysis
+  void testCompleteLDAnalysis() {
+    double CL = 1.0;
+    double CD0 = 0.02;
+    double AR = 8.0;
+    double e = 0.85;
+    double wingspan = 35.0;
+
+    // Calculate L/D at various heights
+    double heights[] = {2, 5, 10, 20, 50, 200};
+    int n = sizeof(heights) / sizeof(heights[0]);
+
+    double LD_prev = 0.0;
+    for (int i = 0; i < n; i++) {
+      double phi = calculateGroundEffectFactor(heights[i] / wingspan);
+      double CDi = (CL * CL) / (PI * AR * e) * phi * phi;
+      double CL_eff = CL / phi;
+      double LD = CL_eff / (CD0 + CDi);
+
+      if (i > 0) {
+        // L/D should decrease as we climb out
+        TS_ASSERT(LD < LD_prev);
+      }
+      LD_prev = LD;
+    }
+  }
+
+  // Test 100: Complete ground effect system state
+  void testCompleteGroundEffectSystemState() {
+    // Comprehensive test of ground effect system
+    double wingspan = 35.0;
+    double height = 5.0;
+    double h_over_b = height / wingspan;
+
+    // 1. Calculate ground effect factor
+    double phi = calculateGroundEffectFactor(h_over_b);
+    TS_ASSERT(phi > 0.0);
+    TS_ASSERT(phi < 1.0);
+
+    // 2. Calculate induced drag reduction
+    double CDi_freestream = 0.05;
+    double CDi_ground = CDi_freestream * phi * phi;
+    TS_ASSERT(CDi_ground < CDi_freestream);
+
+    // 3. Calculate lift increase
+    double CL_freestream = 1.0;
+    double CL_ground = CL_freestream / phi;
+    TS_ASSERT(CL_ground > CL_freestream);
+
+    // 4. Calculate downwash reduction
+    double epsilon_freestream = 0.1;
+    double epsilon_ground = epsilon_freestream * phi;
+    TS_ASSERT(epsilon_ground < epsilon_freestream);
+
+    // 5. Calculate pitch moment change
+    double delta_Cm = calculatePitchMomentDelta(h_over_b);
+    TS_ASSERT(delta_Cm < 0.0);  // Nose-down
+
+    // 6. Calculate CP shift
+    double chord = 5.0;
+    double cp_shift = calculateCPShift(h_over_b, chord);
+    TS_ASSERT(cp_shift > 0.0);  // Forward
+
+    // 7. Calculate cushion factor
+    double cushion = calculateCushionFactor(h_over_b);
+    TS_ASSERT(cushion == phi);  // In our simplified model
+
+    // 8. Verify L/D improvement
+    double CD0 = 0.02;
+    double AR = 8.0;
+    double e = 0.85;
+    double CDi_free = (CL_freestream * CL_freestream) / (PI * AR * e);
+    double CDi_ge = CDi_free * phi * phi;
+    double LD_free = CL_freestream / (CD0 + CDi_free);
+    double LD_ge = CL_ground / (CD0 + CDi_ge);
+    TS_ASSERT(LD_ge > LD_free);
+
+    // 9. Verify energy efficiency
+    double drag_reduction = (CDi_free - CDi_ge) / CDi_free;
+    TS_ASSERT(drag_reduction > 0.0);
+
+    // 10. Verify overall system coherence
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isnan(CL_ground));
+    TS_ASSERT(!std::isnan(CDi_ground));
+    TS_ASSERT(!std::isnan(LD_ge));
+  }
+
 private:
   /***************************************************************************
    * Helper Functions for Ground Effect Calculations

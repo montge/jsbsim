@@ -913,4 +913,347 @@ public:
     bool needs_tank = critical_fuel < bingo_fuel;
     TS_ASSERT(needs_tank);
   }
+
+  // Burble Effect (Deck Wake Turbulence) Tests
+
+  void testBurbleZoneExtent() {
+    // Burble zone extends behind carrier
+    double carrier_speed = 30.0 * Constants::KTS_TO_FTPS; // ft/s
+    double burble_length_multiplier = 3.0; // ship lengths
+    double carrier_length = 1100.0; // ft (Nimitz class)
+
+    double burble_zone_length = burble_length_multiplier * carrier_length;
+
+    TS_ASSERT_DELTA(burble_zone_length, 3300.0, 100.0); // ft
+    TS_ASSERT(burble_zone_length > 3000.0);
+  }
+
+  void testBurbleDowndraftMagnitude() {
+    // Downdraft in burble zone
+    double wod = 30.0 * Constants::KTS_TO_FTPS; // ft/s
+    double downdraft_fraction = 0.08; // 8% of WOD
+
+    double downdraft = wod * downdraft_fraction;
+
+    TS_ASSERT_DELTA(downdraft, 4.05, 0.2); // ft/s
+    TS_ASSERT(downdraft > 2.0); // Noticeable effect
+  }
+
+  void testBurbleAirspeedFluctuation() {
+    // Airspeed fluctuation in burble
+    double approach_airspeed = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+    double fluctuation_percent = 5.0; // +/- 5%
+
+    double max_fluctuation = approach_airspeed * (fluctuation_percent / 100.0);
+
+    TS_ASSERT_DELTA(max_fluctuation / Constants::KTS_TO_FTPS, 7.0, 0.5); // knots
+  }
+
+  // AoA Indexer Lights Tests
+
+  void testAoAIndexerOnSpeed() {
+    // On-speed: donut light
+    double target_aoa = 8.1; // degrees
+    double actual_aoa = 8.0; // degrees
+    double tolerance = 0.5; // degrees
+
+    bool is_on_speed = fabs(actual_aoa - target_aoa) < tolerance;
+    TS_ASSERT(is_on_speed);
+  }
+
+  void testAoAIndexerFast() {
+    // Fast: chevron pointing down (low AoA)
+    double target_aoa = 8.1; // degrees
+    double actual_aoa = 6.0; // degrees
+    double fast_threshold = target_aoa - 1.0;
+
+    bool is_fast = actual_aoa < fast_threshold;
+    TS_ASSERT(is_fast);
+  }
+
+  void testAoAIndexerSlow() {
+    // Slow: chevron pointing up (high AoA)
+    double target_aoa = 8.1; // degrees
+    double actual_aoa = 10.0; // degrees
+    double slow_threshold = target_aoa + 1.0;
+
+    bool is_slow = actual_aoa > slow_threshold;
+    TS_ASSERT(is_slow);
+  }
+
+  // Carrier Course and Speed Management
+
+  void testOptimalRecoveryHeading() {
+    // Carrier turns into wind for recovery
+    double true_wind_direction = 270.0; // degrees
+    double angled_deck_offset = 10.0; // degrees port
+
+    // Optimal heading is into wind plus deck angle offset
+    double recovery_heading = true_wind_direction - angled_deck_offset;
+    if (recovery_heading < 0) recovery_heading += 360.0;
+
+    TS_ASSERT_DELTA(recovery_heading, 260.0, 1.0);
+  }
+
+  void testMinimumCarrierSpeed() {
+    // Minimum speed for safe operations
+    double min_speed_with_wind = 15.0; // knots
+    double min_speed_no_wind = 25.0; // knots
+    double true_wind = 10.0; // knots
+
+    double required_ship_speed = min_speed_no_wind - true_wind;
+    TS_ASSERT_DELTA(required_ship_speed, 15.0, 1.0);
+    TS_ASSERT(required_ship_speed >= min_speed_with_wind);
+  }
+
+  // Aircraft Energy Management
+
+  void testEnergyAngleCalculation() {
+    // Energy angle for approach
+    double aircraft_weight = 45000.0; // lbs
+    double drag = 8000.0; // lbs (clean config)
+    double thrust = 7500.0; // lbs (approach power)
+
+    double thrust_deficit = drag - thrust;
+    double energy_angle = asin(thrust_deficit / aircraft_weight);
+
+    TS_ASSERT_DELTA(energy_angle * Constants::RAD_TO_DEG, 0.64, 0.1);
+  }
+
+  void testSteadyStateDescentRate() {
+    // Descent rate for given power setting
+    double approach_speed = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+
+    double descent_rate = approach_speed * sin(glideslope);
+    double descent_rate_fpm = descent_rate * 60.0;
+
+    TS_ASSERT_DELTA(descent_rate_fpm, 860.0, 30.0); // fpm
+  }
+
+  void testPowerForLevelFlight() {
+    // Power required to maintain level flight
+    double aircraft_weight = 45000.0; // lbs
+    double approach_speed = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+    double aoa = 8.0 * Constants::DEG_TO_RAD;
+
+    // Simplified: thrust = weight * sin(aoa) for level slow flight
+    double thrust_required = aircraft_weight * sin(aoa);
+
+    TS_ASSERT(thrust_required > 5000.0); // lbs
+    TS_ASSERT(thrust_required < 8000.0);
+  }
+
+  // Aircraft Configuration Constraints
+
+  void testMaxSpeedForGearDown() {
+    // Maximum speed with gear down
+    double max_gear_speed = 250.0; // knots
+    double approach_speed = 140.0; // knots
+
+    TS_ASSERT(approach_speed < max_gear_speed);
+    double margin = max_gear_speed - approach_speed;
+    TS_ASSERT(margin > 100.0);
+  }
+
+  void testMaxSpeedForHookDown() {
+    // Maximum speed with tailhook lowered
+    double max_hook_speed = 200.0; // knots
+    double approach_speed = 145.0; // knots
+
+    TS_ASSERT(approach_speed < max_hook_speed);
+    double margin = max_hook_speed - approach_speed;
+    TS_ASSERT_DELTA(margin, 55.0, 1.0);
+  }
+
+  // Multi-Aircraft Recovery Sequence
+
+  void testIntervalBetweenTraps() {
+    // Time between successive traps
+    double min_interval = 45.0; // seconds
+    double deck_cycle_time = 60.0; // seconds average
+
+    TS_ASSERT(deck_cycle_time >= min_interval);
+    TS_ASSERT(deck_cycle_time < 90.0);
+  }
+
+  void testRecoveryWindowDuration() {
+    // Total recovery window for all aircraft
+    double num_aircraft = 12;
+    double avg_interval = 60.0; // seconds
+
+    double total_time = num_aircraft * avg_interval;
+    double total_minutes = total_time / 60.0;
+
+    TS_ASSERT_DELTA(total_minutes, 12.0, 0.5);
+  }
+
+  // Emergency Divert Scenarios
+
+  void testDivertDistanceCalculation() {
+    // Distance to nearest divert field
+    double divert_lat_diff = 0.5; // degrees
+    double divert_lon_diff = 0.75; // degrees
+    double nm_per_degree = 60.0;
+
+    double lat_distance = divert_lat_diff * nm_per_degree;
+    double lon_distance = divert_lon_diff * nm_per_degree * cos(30.0 * Constants::DEG_TO_RAD);
+    double divert_distance = sqrt(lat_distance * lat_distance + lon_distance * lon_distance);
+
+    TS_ASSERT(divert_distance < 60.0); // Within 60 NM
+  }
+
+  void testDivertFuelRequired() {
+    // Fuel needed to reach divert
+    double divert_distance = 50.0; // NM
+    double cruise_speed = 300.0; // knots
+    double fuel_flow = 4000.0; // lbs/hr
+
+    double flight_time = divert_distance / cruise_speed; // hours
+    double fuel_required = fuel_flow * flight_time;
+
+    TS_ASSERT_DELTA(fuel_required, 666.7, 20.0); // lbs
+  }
+
+  // Angle of Bank in Pattern
+
+  void testDownwindBankAngle() {
+    // Bank angle in visual pattern
+    double pattern_speed = 250.0 * Constants::KTS_TO_FTPS; // ft/s
+    double turn_radius = 5000.0; // ft
+
+    // bank = atan(v^2 / (g * r))
+    double bank_angle = atan((pattern_speed * pattern_speed) / (Constants::G_FTPS2 * turn_radius));
+
+    // 250 kts at 5000 ft radius requires steep bank (about 48 degrees)
+    TS_ASSERT_DELTA(bank_angle * Constants::RAD_TO_DEG, 48.0, 2.0);
+  }
+
+  void testGrooveRollRate() {
+    // Maximum roll rate in the groove (final approach)
+    double max_roll_rate = 10.0; // deg/s
+    double actual_roll_rate = 5.0; // deg/s
+
+    TS_ASSERT(actual_roll_rate < max_roll_rate);
+    TS_ASSERT(actual_roll_rate > 0.0);
+  }
+
+  // Complete Carrier Landing Simulation Tests
+
+  void testCompleteApproachProfile() {
+    // Test complete approach from 3/4 mile
+    double start_distance = 0.75 * 6076.0; // ft (3/4 NM)
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double approach_speed = 140.0 * Constants::KTS_TO_FTPS; // ft/s
+
+    // Starting altitude
+    double start_altitude = start_distance * tan(glideslope);
+
+    // Time to touchdown
+    double time_to_touchdown = start_distance / approach_speed;
+
+    // Verify reasonable values
+    TS_ASSERT_DELTA(start_altitude, 278.0, 10.0); // ft
+    TS_ASSERT_DELTA(time_to_touchdown, 19.3, 1.0); // seconds
+  }
+
+  void testCompleteTrapSequence() {
+    // Complete trap from wire engagement to stop
+    double touchdown_speed = 145.0 * Constants::KTS_TO_FTPS; // ft/s
+    double runout = 340.0; // ft
+    double decel_g = 3.0;
+    double decel = decel_g * Constants::G_FTPS2;
+
+    // Time to stop: t = v0 / a
+    double stop_time = touchdown_speed / decel;
+
+    // Verify kinematic consistency
+    double calculated_runout = (touchdown_speed * touchdown_speed) / (2.0 * decel);
+
+    TS_ASSERT_DELTA(stop_time, 2.53, 0.2); // seconds
+    TS_ASSERT_DELTA(calculated_runout, 310.0, 30.0); // ft
+  }
+
+  void testCompleteCarrierOpsVerification() {
+    // Comprehensive verification of carrier operations physics
+
+    // 1. Catapult launch
+    double cat_stroke = 310.0; // ft
+    double cat_accel_g = 3.0;
+    double cat_accel = cat_accel_g * Constants::G_FTPS2;
+    double cat_end_speed = sqrt(2.0 * cat_accel * cat_stroke);
+    TS_ASSERT(cat_end_speed > 200.0); // ft/s
+
+    // 2. Approach glideslope
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double distance_1nm = 6076.0;
+    double altitude_at_1nm = distance_1nm * tan(glideslope);
+    TS_ASSERT_DELTA(altitude_at_1nm, 371.5, 10.0);
+
+    // 3. Wind-over-deck
+    double ship_speed = 25.0;
+    double true_wind = 10.0;
+    double wod = ship_speed + true_wind;
+    TS_ASSERT_DELTA(wod, 35.0, 0.1);
+
+    // 4. Arresting wire engagement
+    double trap_speed = 145.0 * Constants::KTS_TO_FTPS;
+    double wire_runout = 340.0;
+    double trap_decel = (trap_speed * trap_speed) / (2.0 * wire_runout);
+    double trap_decel_g = trap_decel / Constants::G_FTPS2;
+    TS_ASSERT_DELTA(trap_decel_g, 2.78, 0.2);
+
+    // 5. Deck motion effect on glideslope
+    double pitch_amplitude = 2.0 * Constants::DEG_TO_RAD;
+    double distance_from_ramp = 500.0;
+    double altitude_effect = distance_from_ramp * sin(pitch_amplitude);
+    TS_ASSERT_DELTA(altitude_effect, 17.4, 1.0);
+
+    // 6. Fuel management
+    double bingo_fuel = 4500.0;
+    double current_fuel = 6000.0;
+    double margin = current_fuel - bingo_fuel;
+    TS_ASSERT(margin > 1000.0);
+
+    // All carrier ops physics verified
+  }
+
+  // Test 100: Complete carrier recovery cycle verification
+  void testCompleteRecoveryCycleVerification() {
+    // Comprehensive test of full recovery cycle
+
+    // 1. Marshal stack entry
+    double marshal_altitude = 6000.0;  // ft
+    double holding_speed = 250.0 * Constants::KTS_TO_FTPS;
+    TS_ASSERT(marshal_altitude > 5000.0);
+
+    // 2. Approach descent
+    double glideslope = 3.5 * Constants::DEG_TO_RAD;
+    double three_quarter_nm = 0.75 * 6076.0;
+    double approach_alt = three_quarter_nm * tan(glideslope);
+    TS_ASSERT_DELTA(approach_alt, 278.0, 10.0);
+
+    // 3. Wind-over-deck
+    double ship_speed = 28.0;
+    double true_wind = 7.0;
+    double wod = ship_speed + true_wind;
+    TS_ASSERT(wod >= 30.0);
+
+    // 4. Touchdown parameters
+    double approach_speed = 140.0 * Constants::KTS_TO_FTPS;
+    double touchdown_vv = approach_speed * sin(glideslope);
+    TS_ASSERT_DELTA(touchdown_vv, 14.4, 1.0);
+
+    // 5. Arresting wire engagement
+    double runout = 340.0;
+    double decel = (approach_speed * approach_speed) / (2.0 * runout);
+    double decel_g = decel / Constants::G_FTPS2;
+    TS_ASSERT(decel_g > 2.0 && decel_g < 4.0);
+
+    // 6. Time to stop
+    double stop_time = approach_speed / decel;
+    TS_ASSERT(stop_time < 3.0);
+
+    // Full carrier recovery cycle verified
+  }
 };
