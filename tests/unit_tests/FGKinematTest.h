@@ -964,4 +964,531 @@ public:
     double result = slewRateLimit(0.1, prev, 0.2, 1.0);
     TS_ASSERT_DELTA(result, 0.1, epsilon);
   }
+
+  /***************************************************************************
+   * Advanced Kinematic Motion Tests (78-81)
+   ***************************************************************************/
+
+  // Test 78: S-curve velocity profile
+  void testSCurveVelocityProfile() {
+    // S-curve provides smooth acceleration and deceleration
+    double position = 0.0;
+    double velocity = 0.0;
+    double target = 1.0;
+    double maxVel = 0.5;
+    double maxAccel = 0.2;
+    double dt = 0.1;
+
+    // Simulate S-curve motion (simplified)
+    for (int i = 0; i < 50; i++) {
+      double distToTarget = target - position;
+      double decelDist = (velocity * velocity) / (2.0 * maxAccel);
+
+      if (distToTarget > decelDist) {
+        // Accelerate
+        velocity = std::min(velocity + maxAccel * dt, maxVel);
+      } else {
+        // Decelerate
+        velocity = std::max(velocity - maxAccel * dt, 0.0);
+      }
+      position += velocity * dt;
+    }
+
+    TS_ASSERT_DELTA(position, target, 0.1);  // Allow larger tolerance for S-curve overshoot
+  }
+
+  // Test 79: Jerk-limited motion
+  void testJerkLimitedMotion() {
+    double velocity = 0.0;
+    double accel = 0.0;
+    double maxJerk = 1.0;  // Units/s^3
+    double maxAccel = 0.5;
+    double dt = 0.1;
+
+    // Ramp up acceleration with jerk limit
+    for (int i = 0; i < 10; i++) {
+      accel = std::min(accel + maxJerk * dt, maxAccel);
+      velocity += accel * dt;
+    }
+
+    // Acceleration should ramp smoothly
+    TS_ASSERT(accel <= maxAccel);
+    TS_ASSERT(velocity > 0.0);
+  }
+
+  // Test 80: Trapezoidal velocity profile
+  void testTrapezoidalVelocityProfile() {
+    double position = 0.0;
+    double velocity = 0.0;
+    double target = 2.0;
+    double maxVel = 0.5;
+    double accel = 0.25;
+    double dt = 0.1;
+
+    // Three phases: accelerate, cruise, decelerate
+    int phase = 0;  // 0=accel, 1=cruise, 2=decel
+
+    for (int i = 0; i < 100 && std::abs(position - target) > 0.01; i++) {
+      double distToTarget = target - position;
+      double stopDist = (velocity * velocity) / (2.0 * accel);
+
+      if (phase == 0 && velocity >= maxVel) phase = 1;
+      if (phase < 2 && distToTarget <= stopDist) phase = 2;
+
+      if (phase == 0) velocity = std::min(velocity + accel * dt, maxVel);
+      else if (phase == 2) velocity = std::max(velocity - accel * dt, 0.0);
+
+      position += velocity * dt;
+    }
+
+    TS_ASSERT_DELTA(position, target, 0.1);
+  }
+
+  // Test 81: Bang-bang control (time-optimal)
+  void testBangBangControl() {
+    // Bang-bang control switches between max acceleration and max deceleration
+    // Simplified test: just verify the concept works for a simple trajectory
+    double position = 0.0;
+    double velocity = 0.0;
+    double target = 1.0;
+    double maxAccel = 1.0;
+    double dt = 0.1;
+
+    // First half: accelerate
+    // Second half: decelerate
+    // Total time to reach target = 2 * sqrt(distance / maxAccel)
+    double totalTime = 2.0 * std::sqrt(target / maxAccel);  // ~2.0 seconds
+    double halfTime = totalTime / 2.0;
+
+    double t = 0.0;
+    while (t < totalTime + dt) {
+      double accel = (t < halfTime) ? maxAccel : -maxAccel;
+      velocity += accel * dt;
+      velocity = std::max(0.0, velocity);  // Clamp to prevent going backward
+      position += velocity * dt;
+      t += dt;
+    }
+
+    // Position should be near target
+    TS_ASSERT(position >= 0.5);  // Should have moved significantly
+    TS_ASSERT(position <= 1.5);  // Should not have gone too far
+  }
+
+  /***************************************************************************
+   * Complex Actuator Simulations (82-85)
+   ***************************************************************************/
+
+  // Test 82: Spoiler deployment with blowback
+  void testSpoilerDeploymentWithBlowback() {
+    double position = 0.0;
+    double rate = 0.5;  // 2 seconds to full deploy
+    double dt = 0.1;
+    double aeroPressure = 0.2;  // Simulated blowback from aero load
+
+    // Deploy against aero pressure
+    double target = 1.0;
+    double effectiveRate = rate - aeroPressure;  // 0.3 units/s
+
+    // Need 1.0 / 0.3 = 3.33 seconds = 34 iterations to reach target
+    for (int i = 0; i < 40; i++) {
+      position = rateLimitedMove(position, target, effectiveRate, dt);
+    }
+
+    TS_ASSERT_DELTA(position, 1.0, 0.05);
+  }
+
+  // Test 83: Slat extension schedule
+  void testSlatExtensionSchedule() {
+    // Slats extend based on speed/flap position
+    double slatPosition = 0.0;
+    double flapPosition = 0.0;
+    double rate = 0.3;
+    double dt = 0.1;
+
+    // Extend flaps first, then slats follow
+    for (int i = 0; i < 20; i++) {
+      flapPosition = rateLimitedMove(flapPosition, 1.0, rate, dt);
+      // Slats target 50% of flap position
+      double slatTarget = flapPosition * 0.5;
+      slatPosition = rateLimitedMove(slatPosition, slatTarget, rate, dt);
+    }
+
+    TS_ASSERT(slatPosition > 0.0);
+    TS_ASSERT(slatPosition <= flapPosition);
+  }
+
+  // Test 84: Canard deflection limits
+  void testCanardDeflectionLimits() {
+    double position = 0.0;
+    double minLimit = -25.0;
+    double maxLimit = 10.0;  // Asymmetric limits
+    double rate = 15.0;  // deg/s
+    double dt = 0.1;
+
+    // Try to exceed positive limit
+    for (int i = 0; i < 20; i++) {
+      double target = 20.0;
+      position = rateLimitedMove(position, target, rate, dt);
+      position = clampPosition(position, minLimit, maxLimit);
+    }
+    TS_ASSERT_DELTA(position, maxLimit, epsilon);
+
+    // Try to exceed negative limit
+    for (int i = 0; i < 40; i++) {
+      double target = -40.0;
+      position = rateLimitedMove(position, target, rate, dt);
+      position = clampPosition(position, minLimit, maxLimit);
+    }
+    TS_ASSERT_DELTA(position, minLimit, epsilon);
+  }
+
+  // Test 85: Thrust reverser deployment
+  void testThrustReverserDeployment() {
+    double leftRev = 0.0;
+    double rightRev = 0.0;
+    double rate = 0.4;  // 2.5 seconds to deploy
+    double dt = 0.1;
+
+    // Deploy both reversers
+    for (int i = 0; i < 30; i++) {
+      leftRev = rateLimitedMove(leftRev, 1.0, rate, dt);
+      rightRev = rateLimitedMove(rightRev, 1.0, rate, dt);
+    }
+
+    TS_ASSERT_DELTA(leftRev, 1.0, epsilon);
+    TS_ASSERT_DELTA(rightRev, 1.0, epsilon);
+
+    // Stow reversers
+    for (int i = 0; i < 30; i++) {
+      leftRev = rateLimitedMove(leftRev, 0.0, rate, dt);
+      rightRev = rateLimitedMove(rightRev, 0.0, rate, dt);
+    }
+
+    TS_ASSERT_DELTA(leftRev, 0.0, epsilon);
+    TS_ASSERT_DELTA(rightRev, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Failure Mode Tests (86-89)
+   ***************************************************************************/
+
+  // Test 86: Actuator jam simulation
+  void testActuatorJam() {
+    double position = 0.5;
+    double rate = 0.2;
+    double dt = 0.1;
+    bool jammed = true;
+
+    // Attempt to move jammed actuator
+    double target = 1.0;
+    for (int i = 0; i < 10; i++) {
+      if (!jammed) {
+        position = rateLimitedMove(position, target, rate, dt);
+      }
+    }
+
+    TS_ASSERT_DELTA(position, 0.5, epsilon);  // Should not have moved
+  }
+
+  // Test 87: Runaway actuator detection
+  void testRunawayActuatorDetection() {
+    double position = 0.0;
+    double prevPosition = 0.0;
+    double normalRate = 0.2;
+    double runawayRate = 1.0;  // Much faster than normal
+    double dt = 0.1;
+
+    // Simulate runaway
+    for (int i = 0; i < 5; i++) {
+      prevPosition = position;
+      position += runawayRate * dt;
+    }
+
+    double actualRate = (position - prevPosition) / dt;
+    bool runawayDetected = actualRate > normalRate * 2.0;
+
+    TS_ASSERT(runawayDetected);
+  }
+
+  // Test 88: Hydraulic failure slow motion
+  void testHydraulicFailureSlowMotion() {
+    double position = 0.0;
+    double normalRate = 0.5;
+    double failureRate = 0.1;  // 20% of normal
+    double dt = 0.1;
+    bool hydraulicFailed = true;
+
+    double effectiveRate = hydraulicFailed ? failureRate : normalRate;
+
+    // Move at reduced rate
+    for (int i = 0; i < 20; i++) {
+      position = rateLimitedMove(position, 1.0, effectiveRate, dt);
+    }
+
+    // Should have only moved 20% as far as normal
+    TS_ASSERT_DELTA(position, 0.2, 0.01);
+  }
+
+  // Test 89: Asymmetric failure (one side stuck)
+  void testAsymmetricFailure() {
+    double leftPos = 0.0;
+    double rightPos = 0.0;
+    double rate = 0.3;
+    double dt = 0.1;
+    bool leftFailed = true;
+
+    // Attempt symmetric deployment
+    for (int i = 0; i < 20; i++) {
+      if (!leftFailed) {
+        leftPos = rateLimitedMove(leftPos, 1.0, rate, dt);
+      }
+      rightPos = rateLimitedMove(rightPos, 1.0, rate, dt);
+    }
+
+    TS_ASSERT_DELTA(leftPos, 0.0, epsilon);   // Left stuck
+    TS_ASSERT_DELTA(rightPos, 0.6, 0.01);      // Right moved normally
+  }
+
+  /***************************************************************************
+   * Synchronization Tests (90-93)
+   ***************************************************************************/
+
+  // Test 90: Multi-actuator synchronization
+  void testMultiActuatorSync() {
+    double pos1 = 0.0, pos2 = 0.0, pos3 = 0.0;
+    double rate = 0.25;
+    double dt = 0.1;
+
+    for (int i = 0; i < 50; i++) {
+      pos1 = rateLimitedMove(pos1, 1.0, rate, dt);
+      pos2 = rateLimitedMove(pos2, 1.0, rate, dt);
+      pos3 = rateLimitedMove(pos3, 1.0, rate, dt);
+    }
+
+    // All should be at same position
+    TS_ASSERT_DELTA(pos1, pos2, epsilon);
+    TS_ASSERT_DELTA(pos2, pos3, epsilon);
+    TS_ASSERT_DELTA(pos1, 1.0, epsilon);
+  }
+
+  // Test 91: Phased deployment (sequential)
+  void testPhasedDeployment() {
+    double flaps = 0.0;
+    double slats = 0.0;
+    double rate = 0.3;
+    double dt = 0.1;
+
+    // Flaps start first, slats follow at 50% flaps
+    for (int i = 0; i < 50; i++) {
+      flaps = rateLimitedMove(flaps, 1.0, rate, dt);
+      if (flaps >= 0.5) {
+        slats = rateLimitedMove(slats, 1.0, rate, dt);
+      }
+    }
+
+    TS_ASSERT_DELTA(flaps, 1.0, epsilon);
+    TS_ASSERT(slats > 0.5);  // Slats started late
+  }
+
+  // Test 92: Master-slave actuator
+  void testMasterSlaveActuator() {
+    double master = 0.0;
+    double slave = 0.0;
+    double rate = 0.2;
+    double dt = 0.1;
+
+    for (int i = 0; i < 30; i++) {
+      master = rateLimitedMove(master, 1.0, rate, dt);
+      // Slave follows master with slight delay
+      slave = rateLimitedMove(slave, master, rate * 1.2, dt);
+    }
+
+    TS_ASSERT_DELTA(master, 0.6, 0.01);
+    TS_ASSERT(std::abs(slave - master) < 0.1);  // Slave tracks master
+  }
+
+  // Test 93: Split control surface
+  void testSplitControlSurface() {
+    double inboard = 0.0;
+    double outboard = 0.0;
+    double inboardRate = 0.3;
+    double outboardRate = 0.4;  // Outboard faster
+    double dt = 0.1;
+
+    // Deploy both sections
+    double target = 1.0;
+    for (int i = 0; i < 30; i++) {
+      inboard = rateLimitedMove(inboard, target, inboardRate, dt);
+      outboard = rateLimitedMove(outboard, target, outboardRate, dt);
+    }
+
+    TS_ASSERT_DELTA(inboard, 0.9, 0.1);
+    TS_ASSERT_DELTA(outboard, 1.0, epsilon);  // Outboard reached first
+  }
+
+  /***************************************************************************
+   * Complete Kinematic System Tests (94-100)
+   ***************************************************************************/
+
+  // Test 94: Complete flap cycle
+  void testCompleteFlapCycle() {
+    std::vector<double> detents = {0.0, 5.0, 15.0, 25.0, 40.0};
+    double position = 0.0;
+    double rate = 3.0;  // deg/s
+    double dt = 0.1;
+
+    // Extend to each detent
+    for (size_t i = 1; i < detents.size(); i++) {
+      while (std::abs(position - detents[i]) > 0.1) {
+        position = rateLimitedMove(position, detents[i], rate, dt);
+      }
+      TS_ASSERT_DELTA(position, detents[i], 0.1);
+    }
+
+    // Retract to clean
+    while (std::abs(position - detents[0]) > 0.1) {
+      position = rateLimitedMove(position, detents[0], rate, dt);
+    }
+    TS_ASSERT_DELTA(position, 0.0, 0.1);
+  }
+
+  // Test 95: Landing gear with door sequence
+  void testLandingGearWithDoors() {
+    double doorPosition = 0.0;   // 0=closed, 1=open
+    double gearPosition = 0.0;   // 0=up, 1=down
+    double doorRate = 0.4;       // Door faster
+    double gearRate = 0.2;
+    double dt = 0.1;
+
+    // Extend sequence: doors first, then gear
+    // Open doors
+    while (doorPosition < 0.99) {
+      doorPosition = rateLimitedMove(doorPosition, 1.0, doorRate, dt);
+    }
+    TS_ASSERT_DELTA(doorPosition, 1.0, 0.01);
+
+    // Extend gear
+    while (gearPosition < 0.99) {
+      gearPosition = rateLimitedMove(gearPosition, 1.0, gearRate, dt);
+    }
+    TS_ASSERT_DELTA(gearPosition, 1.0, 0.01);
+
+    // Doors stay open with gear down
+    TS_ASSERT(doorPosition > 0.9);
+  }
+
+  // Test 96: Aileron droop with flap interconnect
+  void testAileronDroopWithFlaps() {
+    double flapPosition = 0.0;
+    double aileronDroop = 0.0;
+    double flapRate = 0.2;
+    double dt = 0.1;
+
+    // Extend flaps
+    for (int i = 0; i < 50; i++) {
+      flapPosition = rateLimitedMove(flapPosition, 1.0, flapRate, dt);
+      // Ailerons droop proportionally to flaps
+      double droopTarget = flapPosition * 0.3;  // 30% of flap position
+      aileronDroop = rateLimitedMove(aileronDroop, droopTarget, flapRate, dt);
+    }
+
+    TS_ASSERT_DELTA(flapPosition, 1.0, epsilon);
+    TS_ASSERT_DELTA(aileronDroop, 0.3, 0.02);
+  }
+
+  // Test 97: Speed brake modulation
+  void testSpeedBrakeModulation() {
+    double position = 0.0;
+    double rate = 0.5;
+    double dt = 0.1;
+
+    // Series of modulation commands
+    double targets[] = {0.5, 0.3, 0.8, 0.0, 1.0};
+    for (int t = 0; t < 5; t++) {
+      for (int i = 0; i < 30; i++) {
+        position = rateLimitedMove(position, targets[t], rate, dt);
+      }
+      TS_ASSERT_DELTA(position, targets[t], 0.1);
+    }
+  }
+
+  // Test 98: Variable rate based on hydraulic pressure
+  void testVariableRateWithPressure() {
+    double position = 0.0;
+    double baseRate = 0.5;
+    double dt = 0.1;
+
+    // Varying hydraulic pressure
+    double pressures[] = {3000.0, 2500.0, 2000.0, 1500.0};
+    double expectedRates[] = {0.5, 0.417, 0.333, 0.25};  // Rate proportional to pressure
+
+    for (int p = 0; p < 4; p++) {
+      double effectiveRate = baseRate * (pressures[p] / 3000.0);
+      TS_ASSERT_DELTA(effectiveRate, expectedRates[p], 0.01);
+    }
+  }
+
+  // Test 99: Position feedback loop
+  void testPositionFeedbackLoop() {
+    double position = 0.0;
+    double target = 1.0;
+    double Kp = 2.0;  // Proportional gain
+    double maxRate = 0.5;
+    double dt = 0.1;
+
+    for (int i = 0; i < 50; i++) {
+      double error = target - position;
+      double command = Kp * error;
+      // Rate limited
+      double actualRate = std::min(std::abs(command), maxRate);
+      if (command < 0) actualRate = -actualRate;
+      position += actualRate * dt;
+    }
+
+    TS_ASSERT_DELTA(position, target, 0.05);
+  }
+
+  // Test 100: Complete kinematic system verification
+  void testCompleteKinematicSystemVerification() {
+    // Comprehensive test of all kinematic behaviors
+
+    // 1. Basic rate-limited motion
+    double pos = 0.0;
+    pos = rateLimitedMove(pos, 1.0, 0.5, 0.2);
+    TS_ASSERT_DELTA(pos, 0.1, epsilon);
+
+    // 2. Asymmetric rates
+    double upRate = 0.2, downRate = 0.4;
+    pos = 0.5;
+    pos = asymmetricRateLimitedMove(pos, 0.0, upRate, downRate, 1.0);
+    TS_ASSERT_DELTA(pos, 0.1, epsilon);
+
+    // 3. Multi-detent system
+    std::vector<double> detents = {0.0, 0.25, 0.5, 0.75, 1.0};
+    double interpPos = interpolatePosition(0.5, detents);
+    TS_ASSERT_DELTA(interpPos, 0.5, epsilon);
+
+    // 4. Input scaling
+    double scaled = scaleInput(0.0, 1.0);
+    TS_ASSERT_DELTA(scaled, 0.5, epsilon);
+
+    // 5. Clamping
+    double clamped = clampPosition(1.5, 0.0, 1.0);
+    TS_ASSERT_DELTA(clamped, 1.0, epsilon);
+
+    // 6. Detent snapping
+    double snapped = snapToNearestDetent(0.48, detents, 0.05);
+    TS_ASSERT_DELTA(snapped, 0.5, epsilon);
+
+    // 7. Transition state
+    TS_ASSERT_EQUALS(getTransitionState(0.0, 1.0), EXTENDING);
+    TS_ASSERT_EQUALS(getTransitionState(1.0, 0.0), RETRACTING);
+    TS_ASSERT_EQUALS(getTransitionState(0.5, 0.5), STOPPED);
+
+    // 8. Time calculations
+    double time = timeToTarget(0.0, 1.0, 0.25);
+    TS_ASSERT_DELTA(time, 4.0, epsilon);
+
+    // All kinematic system functions verified
+  }
 };

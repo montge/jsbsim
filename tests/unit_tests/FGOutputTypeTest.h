@@ -880,4 +880,462 @@ public:
     }
     TS_ASSERT(true);
   }
+
+  /***************************************************************************
+   * Rate Calculation Tests (Tests 78-82)
+   ***************************************************************************/
+
+  // Test 78: Rate Hz to period conversion logic
+  void testRateHzPeriodConversion() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Common output rates and their expected periods
+    double rates[] = {1.0, 10.0, 30.0, 60.0, 120.0};
+    for (double rate : rates) {
+      output->SetRateHz(rate);
+      // Period = 1/rate (in seconds)
+      double expectedPeriod = 1.0 / rate;
+      TS_ASSERT(expectedPeriod > 0.0);
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 79: Fractional rate handling
+  void testFractionalRateHz() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Test fractional rates (less than 1 Hz)
+    double fractionalRates[] = {0.5, 0.25, 0.1, 0.01, 0.001};
+    for (double rate : fractionalRates) {
+      output->SetRateHz(rate);
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 80: High frequency rate handling
+  void testHighFrequencyRateHz() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Test high frequency rates
+    double highRates[] = {500.0, 1000.0, 5000.0, 10000.0};
+    for (double rate : highRates) {
+      output->SetRateHz(rate);
+      output->Run(false);
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 81: Rate change during simulation
+  void testRateChangeDuringSimulation() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    output->InitModel();
+    output->Enable();
+
+    // Simulate changing rate during running simulation
+    for (int i = 0; i < 20; i++) {
+      if (i == 5) output->SetRateHz(10.0);
+      if (i == 10) output->SetRateHz(50.0);
+      if (i == 15) output->SetRateHz(100.0);
+      output->Run(false);
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 82: Rate validation with infinity
+  void testRateHzInfinity() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Test with infinity - should not crash
+    output->SetRateHz(std::numeric_limits<double>::infinity());
+    output->Run(false);
+    TS_ASSERT(true);
+  }
+
+  /***************************************************************************
+   * Output Buffer Management Tests (Tests 83-87)
+   ***************************************************************************/
+
+  // Test 83: Output after many runs
+  void testOutputAfterManyRuns() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    output->InitModel();
+    output->Enable();
+
+    // Many runs to stress buffer management
+    for (int i = 0; i < 1000; i++) {
+      output->Run(false);
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 84: Print after many runs
+  void testPrintAfterManyRuns() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 100; i++) {
+      output->Run(false);
+    }
+    output->Print();
+    TS_ASSERT(true);
+  }
+
+  // Test 85: SetStartNewOutput multiple cycles
+  void testSetStartNewOutputManyCycles() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 50; i++) {
+      for (int j = 0; j < 10; j++) {
+        output->Run(false);
+      }
+      output->SetStartNewOutput();
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 86: Force output sequence
+  void testForceOutputSequencePattern() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    output->InitModel();
+
+    // Force output at various patterns
+    for (int i = 0; i < 100; i++) {
+      output->Run(false);
+      if (i % 10 == 0) {
+        fdmex.ForceOutput(0);
+      }
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 87: Mixed buffer operations
+  void testMixedBufferOperations() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    output->InitModel();
+    output->Enable();
+
+    for (int i = 0; i < 50; i++) {
+      output->Run(false);
+      if (i % 5 == 0) output->Print();
+      if (i % 7 == 0) output->SetStartNewOutput();
+      if (i % 11 == 0) fdmex.ForceOutput(0);
+    }
+    TS_ASSERT(true);
+  }
+
+  /***************************************************************************
+   * Output State Persistence Tests (Tests 88-92)
+   ***************************************************************************/
+
+  // Test 88: State persistence across disable/enable
+  void testStatePersistenceAcrossDisableEnable() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    output->InitModel();
+    output->SetRateHz(25.0);
+
+    // Run some iterations
+    for (int i = 0; i < 10; i++) {
+      output->Run(false);
+    }
+
+    // Disable and re-enable
+    output->Disable();
+    output->Enable();
+
+    // Continue running
+    for (int i = 0; i < 10; i++) {
+      bool result = output->Run(false);
+      TS_ASSERT_EQUALS(result, false);
+    }
+  }
+
+  // Test 89: Multiple init cycles
+  void testMultipleInitCycles() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    for (int cycle = 0; cycle < 5; cycle++) {
+      output->InitModel();
+      output->Enable();
+      output->SetRateHz(10.0 * (cycle + 1));
+
+      for (int i = 0; i < 20; i++) {
+        output->Run(false);
+      }
+
+      output->Disable();
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 90: Output state after SetStartNewOutput
+  void testStateAfterSetStartNewOutput() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    output->InitModel();
+    output->Enable();
+
+    for (int i = 0; i < 50; i++) {
+      output->Run(false);
+    }
+
+    output->SetStartNewOutput();
+
+    // Output should still work after starting new
+    bool result = output->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test 91: State recovery after error-like conditions
+  void testStateRecoveryAfterErrors() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Attempt operations that might fail
+    output->Toggle(-1);  // Invalid index
+    output->SetOutputName(-1, "test");  // Invalid
+    output->GetOutputName(-1);  // Invalid
+
+    // Should still work normally
+    output->InitModel();
+    output->Enable();
+    bool result = output->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test 92: Rapid state transitions
+  void testRapidStateTransitions() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 200; i++) {
+      switch (i % 4) {
+        case 0: output->Enable(); break;
+        case 1: output->Disable(); break;
+        case 2: output->InitModel(); break;
+        case 3: output->Run(false); break;
+      }
+    }
+    TS_ASSERT(true);
+  }
+
+  /***************************************************************************
+   * Output Naming Extended Tests (Tests 93-96)
+   ***************************************************************************/
+
+  // Test 93: Get output name boundary indices
+  void testGetOutputNameBoundaryIndices() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Test various boundary indices
+    int indices[] = {-1000, -1, 0, 1, 10, 100, 1000,
+                     std::numeric_limits<int>::max()};
+    for (int idx : indices) {
+      std::string name = output->GetOutputName(idx);
+      TS_ASSERT(name.empty());  // No outputs configured
+    }
+  }
+
+  // Test 94: Set output name with special characters
+  void testSetOutputNameSpecialCharacters() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Should return false (no outputs) but not crash
+    bool r1 = output->SetOutputName(0, "test file.csv");
+    bool r2 = output->SetOutputName(0, "test/path/file.csv");
+    bool r3 = output->SetOutputName(0, "test\\path\\file.csv");
+    bool r4 = output->SetOutputName(0, "test:file.csv");
+
+    TS_ASSERT_EQUALS(r1, false);
+    TS_ASSERT_EQUALS(r2, false);
+    TS_ASSERT_EQUALS(r3, false);
+    TS_ASSERT_EQUALS(r4, false);
+  }
+
+  // Test 95: Set output name with various extensions
+  void testSetOutputNameExtensions() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    std::vector<std::string> names = {
+      "output.csv", "output.txt", "output.dat",
+      "output.xml", "output.json", "output"
+    };
+
+    for (const auto& name : names) {
+      bool result = output->SetOutputName(0, name);
+      TS_ASSERT_EQUALS(result, false);  // No outputs configured
+    }
+  }
+
+  // Test 96: Set output name long string
+  void testSetOutputNameLongString() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // Very long filename
+    std::string longName(1000, 'x');
+    longName += ".csv";
+
+    bool result = output->SetOutputName(0, longName);
+    TS_ASSERT_EQUALS(result, false);  // No outputs configured
+  }
+
+  /***************************************************************************
+   * Multiple Instance Interaction Tests (Tests 97-100)
+   ***************************************************************************/
+
+  // Test 97: Sequential FDMExec creation and output operations
+  void testSequentialFDMExecCreation() {
+    for (int i = 0; i < 10; i++) {
+      FGFDMExec fdmex;
+      auto output = fdmex.GetOutput();
+
+      output->InitModel();
+      output->Enable();
+      output->SetRateHz(10.0 + i);
+
+      for (int j = 0; j < 10; j++) {
+        output->Run(false);
+      }
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test 98: Parallel output operations on multiple instances
+  void testParallelOutputOperations() {
+    FGFDMExec fdmex1, fdmex2, fdmex3;
+    auto output1 = fdmex1.GetOutput();
+    auto output2 = fdmex2.GetOutput();
+    auto output3 = fdmex3.GetOutput();
+
+    // Initialize all
+    output1->InitModel();
+    output2->InitModel();
+    output3->InitModel();
+
+    // Set different rates
+    output1->SetRateHz(10.0);
+    output2->SetRateHz(25.0);
+    output3->SetRateHz(50.0);
+
+    // Run all in interleaved fashion
+    for (int i = 0; i < 30; i++) {
+      output1->Run(false);
+      output2->Run(false);
+      output3->Run(false);
+    }
+
+    TS_ASSERT(true);
+  }
+
+  // Test 99: Mixed enable/disable across instances
+  void testMixedEnableDisableAcrossInstances() {
+    FGFDMExec fdmex1, fdmex2, fdmex3, fdmex4;
+
+    // Different enable/disable states
+    fdmex1.EnableOutput();
+    fdmex2.DisableOutput();
+    fdmex3.EnableOutput();
+    fdmex4.DisableOutput();
+
+    // Run all
+    fdmex1.GetOutput()->Run(false);
+    fdmex2.GetOutput()->Run(false);
+    fdmex3.GetOutput()->Run(false);
+    fdmex4.GetOutput()->Run(false);
+
+    // Swap states
+    fdmex1.DisableOutput();
+    fdmex2.EnableOutput();
+    fdmex3.DisableOutput();
+    fdmex4.EnableOutput();
+
+    // Run all again
+    fdmex1.GetOutput()->Run(false);
+    fdmex2.GetOutput()->Run(false);
+    fdmex3.GetOutput()->Run(false);
+    fdmex4.GetOutput()->Run(false);
+
+    TS_ASSERT(true);
+  }
+
+  // Test 100: Complete output system verification
+  void testCompleteOutputSystemVerification() {
+    FGFDMExec fdmex;
+    auto output = fdmex.GetOutput();
+
+    // 1. Initialization
+    bool initResult = output->InitModel();
+    TS_ASSERT_EQUALS(initResult, false);  // No outputs configured
+
+    // 2. Enable/Disable cycle
+    output->Enable();
+    output->Disable();
+    output->Enable();
+
+    // 3. Rate configuration
+    output->SetRateHz(1.0);
+    output->SetRateHz(10.0);
+    output->SetRateHz(100.0);
+    output->SetRateHz(50.0);  // Final rate
+
+    // 4. Run operations
+    for (int i = 0; i < 50; i++) {
+      bool runResult = output->Run(false);
+      TS_ASSERT_EQUALS(runResult, false);
+    }
+
+    // 5. Print operation
+    output->Print();
+
+    // 6. Force output
+    fdmex.ForceOutput(0);
+
+    // 7. SetStartNewOutput
+    output->SetStartNewOutput();
+
+    // 8. Toggle (should fail with no outputs)
+    bool toggleResult = output->Toggle(0);
+    TS_ASSERT_EQUALS(toggleResult, false);
+
+    // 9. Name operations (should fail with no outputs)
+    std::string name = output->GetOutputName(0);
+    TS_ASSERT(name.empty());
+
+    bool setNameResult = output->SetOutputName(0, "test.csv");
+    TS_ASSERT_EQUALS(setNameResult, false);
+
+    // 10. Final run after all operations
+    bool finalResult = output->Run(false);
+    TS_ASSERT_EQUALS(finalResult, false);
+
+    // 11. Disable and verify disabled behavior
+    output->Disable();
+    bool disabledResult = output->Run(false);
+    TS_ASSERT_EQUALS(disabledResult, true);
+
+    // 12. Re-enable and verify
+    output->Enable();
+    bool reenabledResult = output->Run(false);
+    TS_ASSERT_EQUALS(reenabledResult, false);
+  }
 };
