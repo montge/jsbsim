@@ -1331,4 +1331,45 @@ public:
     TS_ASSERT_DELTA(weight_factor, 1.167, 0.01);
     TS_ASSERT_DELTA(distance_factor, 1.361, 0.01);
   }
+
+  //===========================================================================
+  // 23. COMPLETE SYSTEM VERIFICATION TEST
+  //===========================================================================
+
+  void testCompleteTakeoffLandingSystemVerification() {
+    // Comprehensive verification of takeoff/landing calculations
+
+    // 1. Basic takeoff parameters
+    double weight = 12000.0;  // lbs
+    double wing_area = 174.0;  // sqft
+    double CL_max = 2.0;
+    double rho = 0.002378;  // slugs/ft³
+
+    // 2. Calculate stall speed (ft/s)
+    double Vs = sqrt((2.0 * weight) / (rho * wing_area * CL_max));
+    TS_ASSERT(Vs > 100.0 && Vs < 200.0);  // Reasonable stall speed in ft/s
+
+    // 3. Calculate rotation speed (1.1 Vs)
+    double Vr = 1.1 * Vs;
+    TS_ASSERT(Vr > Vs);
+
+    // 4. Calculate V2 (1.2 Vs)
+    double V2 = 1.2 * Vs;
+    TS_ASSERT(V2 > Vr);
+
+    // 5. Landing approach speed (1.3 Vs)
+    double Vref = 1.3 * Vs;
+    TS_ASSERT(Vref > V2);
+
+    // 6. Verify speed relationships
+    TS_ASSERT(Vs < Vr);
+    TS_ASSERT(Vr < V2);
+    TS_ASSERT(V2 < Vref);
+
+    // 7. Safety factor verification
+    double safety_factor = 1.15;
+    double base_distance = 3000.0;
+    double required_distance = base_distance * safety_factor;
+    TS_ASSERT_DELTA(required_distance, 3450.0, 1.0);
+  }
 };

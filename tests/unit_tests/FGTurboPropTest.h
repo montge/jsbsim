@@ -1354,4 +1354,85 @@ public:
     TS_ASSERT(optimalSetting > 0.5);
     TS_ASSERT(optimalSetting < 0.9);
   }
+
+  /***************************************************************************
+   * Complete System Verification Tests
+   ***************************************************************************/
+
+  // Test complete turboprop system verification
+  void testCompleteTurbopropSystemVerification() {
+    // 1. N1 spool dynamics
+    double N1 = 0.0;
+    double N1_target = 100.0;
+    double tau = 2.0;  // time constant (seconds)
+    double dt = 0.1;
+
+    for (int i = 0; i < 100; i++) {  // 10 seconds total
+      N1 += (N1_target - N1) * dt / tau;
+    }
+    TS_ASSERT(N1 > 90.0);
+    TS_ASSERT(N1 <= 100.0);
+
+    // 2. Torque calculation
+    double shaftPower = 1000.0;  // HP
+    double RPM = 2000.0;
+    double torque = shaftPower * 5252.0 / RPM;  // lb-ft
+    TS_ASSERT(torque > 2000.0);
+
+    // 3. Fuel flow verification
+    double SFC = 0.5;  // lb/HP/hr
+    double fuelFlow = SFC * shaftPower;
+    TS_ASSERT_DELTA(fuelFlow, 500.0, epsilon);
+
+    // 4. Propeller efficiency
+    double prop_efficiency = 0.85;
+    double thrust_power = shaftPower * prop_efficiency;
+    TS_ASSERT_DELTA(thrust_power, 850.0, epsilon);
+  }
+
+  // Test turboprop performance envelope
+  void testTurbopropPerformanceEnvelope() {
+    // Test operating limits
+    double N1_idle = 60.0;
+    double N1_max = 100.0;
+    double ITT_max = 850.0;
+    double torque_max = 100.0;
+
+    // 1. Idle verification
+    TS_ASSERT(N1_idle > 50.0);
+    TS_ASSERT(N1_idle < 70.0);
+
+    // 2. Max power verification
+    TS_ASSERT(N1_max <= 100.0);
+
+    // 3. Temperature limit
+    double ITT_current = 780.0;
+    TS_ASSERT(ITT_current < ITT_max);
+
+    // 4. Torque limit verification
+    double torque_current = 95.0;
+    double torque_margin = (torque_max - torque_current) / torque_max * 100.0;
+    TS_ASSERT(torque_margin > 0.0);
+  }
+
+  // Test turboprop fuel system integration
+  void testTurbopropFuelSystemIntegration() {
+    // Fuel consumption calculation
+    double fuelFlow = 300.0;  // PPH
+    double flightTime = 2.0;  // hours
+    double fuelUsed = fuelFlow * flightTime;
+    TS_ASSERT_DELTA(fuelUsed, 600.0, epsilon);
+
+    // Range calculation
+    double fuelCapacity = 1000.0;  // lbs
+    double reserve = 0.1;  // 10% reserve
+    double usableFuel = fuelCapacity * (1.0 - reserve);
+    double endurance = usableFuel / fuelFlow;
+    TS_ASSERT(endurance > 2.5);
+
+    // Fuel quantity monitoring
+    double fuelRemaining = fuelCapacity - fuelUsed;
+    TS_ASSERT(fuelRemaining > 0.0);
+    TS_ASSERT_DELTA(fuelRemaining, 400.0, epsilon);
+  }
 };

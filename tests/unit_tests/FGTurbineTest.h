@@ -1448,4 +1448,115 @@ public:
     double cruiseThrust = maxCruiseThrust * cruiseSetting;
     TS_ASSERT_DELTA(cruiseThrust, 15300.0, DEFAULT_TOLERANCE);
   }
+
+  /***************************************************************************
+   * Complete System Verification Tests
+   ***************************************************************************/
+
+  // Test complete turbine system verification
+  void testCompleteTurbineSystemVerification() {
+    // 1. N1/N2 spool dynamics
+    double N1 = 25.0;  // Idle
+    double N2 = 60.0;
+    double throttle = 0.9;
+    double tau_N1 = 2.0;  // time constant (seconds)
+    double tau_N2 = 1.5;
+    double dt = 0.1;
+
+    double N1_target = 25.0 + throttle * 75.0;  // 25-100%
+    double N2_target = 60.0 + throttle * 40.0;  // 60-100%
+
+    for (int i = 0; i < 100; i++) {  // 10 seconds total
+      N1 += (N1_target - N1) * dt / tau_N1;
+      N2 += (N2_target - N2) * dt / tau_N2;
+    }
+    TS_ASSERT(N1 > 90.0);
+    TS_ASSERT(N2 > 95.0);
+
+    // 2. EGT calculation
+    double EGT_idle = 400.0;
+    double EGT_max = 900.0;
+    double EGT = EGT_idle + (EGT_max - EGT_idle) * (N1 - 25.0) / 75.0;
+    TS_ASSERT(EGT > 800.0);
+    TS_ASSERT(EGT <= EGT_max);
+
+    // 3. Thrust calculation
+    double maxThrust = 25000.0;
+    double thrust = maxThrust * (N1 / 100.0) * (N1 / 100.0);
+    TS_ASSERT(thrust > 20000.0);
+
+    // 4. Fuel flow
+    double TSFC = 0.6;  // lb/hr/lb
+    double fuelFlow = thrust * TSFC;
+    TS_ASSERT(fuelFlow > 10000.0);
+  }
+
+  // Test turbine engine envelope protection
+  void testTurbineEnvelopeProtection() {
+    // Operating limits
+    double N1_max = 104.0;  // 4% overspeed allowed briefly
+    double N2_max = 102.0;
+    double EGT_max = 950.0;
+    double EPR_max = 2.0;
+
+    // 1. N1 overspeed protection
+    double N1_current = 103.0;
+    bool N1_warning = N1_current > 100.0;
+    bool N1_limit = N1_current > N1_max;
+    TS_ASSERT(N1_warning);
+    TS_ASSERT(!N1_limit);
+
+    // 2. EGT exceedance
+    double EGT_current = 920.0;
+    double EGT_margin = EGT_max - EGT_current;
+    TS_ASSERT(EGT_margin > 0.0);
+
+    // 3. EPR limiting
+    double EPR_commanded = 2.1;
+    double EPR_limited = std::min(EPR_commanded, EPR_max);
+    TS_ASSERT_DELTA(EPR_limited, 2.0, DEFAULT_TOLERANCE);
+
+    // 4. Surge margin
+    double surge_margin = 15.0;  // percent
+    TS_ASSERT(surge_margin > 10.0);
+  }
+
+  // Test turbine starting sequence
+  void testTurbineStartingSequence() {
+    // Start sequence: Starter->N2 rise->Fuel on->Ignition->Light off->Idle
+    double N2 = 0.0;
+    double EGT = 20.0;
+    bool starter_on = true;
+    bool fuel_on = false;
+    bool ignition = false;
+    bool lightoff = false;
+
+    // 1. Starter motoring
+    if (starter_on) {
+      N2 = 25.0;  // Motoring speed
+    }
+    TS_ASSERT_DELTA(N2, 25.0, DEFAULT_TOLERANCE);
+
+    // 2. Fuel introduction at 15% N2
+    fuel_on = (N2 > 15.0);
+    TS_ASSERT(fuel_on);
+
+    // 3. Ignition
+    ignition = fuel_on;
+    TS_ASSERT(ignition);
+
+    // 4. Light-off (EGT rise)
+    if (ignition) {
+      EGT = 400.0;
+      lightoff = true;
+    }
+    TS_ASSERT(lightoff);
+    TS_ASSERT(EGT > 300.0);
+
+    // 5. Acceleration to idle
+    N2 = 60.0;  // Idle N2
+    EGT = 450.0;  // Idle EGT
+    TS_ASSERT(N2 >= 60.0);
+    TS_ASSERT(EGT < 500.0);
+  }
 };

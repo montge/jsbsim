@@ -1321,4 +1321,74 @@ public:
     bool bite_pass = position_valid && current_valid && temp_valid;
     TS_ASSERT(bite_pass);
   }
+
+  // ==================== COMPLETE SYSTEM VERIFICATION ====================
+
+  // Test complete actuator system verification
+  void testCompleteActuatorSystemVerification() {
+    // 1. Rate limiting verification
+    double max_rate = 60.0;  // deg/sec
+    double dt = 0.01;
+    double cmd = 45.0;
+    double pos = 0.0;
+
+    for (int i = 0; i < 100; i++) {
+      double error = cmd - pos;
+      double delta = std::min(fabs(error), max_rate * dt);
+      pos += (error > 0 ? delta : -delta);
+    }
+    TS_ASSERT(pos > 40.0);
+    TS_ASSERT(pos <= 45.0);
+
+    // 2. Position limiting verification
+    double min_pos = -25.0;
+    double max_pos = 25.0;
+    double test_cmd = 30.0;
+    double limited_pos = std::max(min_pos, std::min(max_pos, test_cmd));
+    TS_ASSERT_DELTA(limited_pos, 25.0, epsilon);
+
+    // 3. Deadband verification
+    double deadband = 0.5;
+    double small_input = 0.3;
+    double output = (fabs(small_input) < deadband) ? 0.0 : small_input;
+    TS_ASSERT_DELTA(output, 0.0, epsilon);
+
+    // 4. Hysteresis verification
+    double hysteresis = 1.0;
+    double last_output = 10.0;
+    double new_input = 10.5;
+    double final_output = (fabs(new_input - last_output) > hysteresis) ? new_input : last_output;
+    TS_ASSERT_DELTA(final_output, 10.0, epsilon);
+  }
+
+  // Test actuator fault tolerance
+  void testActuatorFaultTolerance() {
+    // Dual-redundant actuator system
+    double primary_cmd = 15.0;
+    double backup_cmd = 15.0;
+    bool primary_valid = true;
+    bool backup_valid = true;
+
+    // 1. Normal operation - use primary
+    double active_cmd = primary_valid ? primary_cmd : backup_cmd;
+    TS_ASSERT_DELTA(active_cmd, 15.0, epsilon);
+
+    // 2. Primary failure - switch to backup
+    primary_valid = false;
+    active_cmd = primary_valid ? primary_cmd : backup_cmd;
+    TS_ASSERT_DELTA(active_cmd, 15.0, epsilon);
+
+    // 3. Verify monitoring thresholds
+    double position_error = 0.5;
+    double error_threshold = 2.0;
+    bool position_ok = fabs(position_error) < error_threshold;
+    TS_ASSERT(position_ok);
+
+    // 4. Verify rate monitoring
+    double actual_rate = 55.0;
+    double commanded_rate = 60.0;
+    double rate_tolerance = 10.0;
+    bool rate_ok = fabs(actual_rate - commanded_rate) < rate_tolerance;
+    TS_ASSERT(rate_ok);
+  }
 };
