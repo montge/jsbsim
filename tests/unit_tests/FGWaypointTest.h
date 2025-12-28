@@ -1050,4 +1050,394 @@ public:
     TS_ASSERT(dist > 0);
     TS_ASSERT(dist < 10.0);  // Very small distance
   }
+
+  /***************************************************************************
+   * Section 17: Final Bearing Tests
+   ***************************************************************************/
+
+  // Helper: Calculate final bearing at destination
+  double finalBearing(double lat1, double lon1, double lat2, double lon2) {
+    // Final bearing is initial bearing from end to start, reversed
+    double bearing = greatCircleHeading(lat2, lon2, lat1, lon1);
+    return std::fmod(bearing + 180.0, 360.0);
+  }
+
+  // Test final bearing due north (same as initial)
+  void testFinalBearingDueNorth() {
+    double lat1 = 40.0, lon = -74.0;
+    double lat2 = 50.0;
+
+    double initBearing = greatCircleHeading(lat1, lon, lat2, lon);
+    double finBearing = finalBearing(lat1, lon, lat2, lon);
+
+    // For north-south routes, initial and final should be the same
+    TS_ASSERT_DELTA(initBearing, 0.0, 0.1);
+    TS_ASSERT_DELTA(finBearing, 0.0, 0.1);
+  }
+
+  // Test final bearing for long route (great circle curvature)
+  void testFinalBearingLongRoute() {
+    double lat1 = 40.0, lon1 = -74.0;  // NY
+    double lat2 = 51.0, lon2 = 0.0;    // London
+
+    double initBearing = greatCircleHeading(lat1, lon1, lat2, lon2);
+    double finBearing = finalBearing(lat1, lon1, lat2, lon2);
+
+    // Initial and final bearings differ for east-west routes
+    TS_ASSERT(initBearing > 30.0 && initBearing < 70.0);  // Roughly NE
+    TS_ASSERT(finBearing > 60.0 && finBearing < 130.0);   // More easterly at end
+    TS_ASSERT(finBearing > initBearing);  // Final is more easterly
+  }
+
+  // Test final bearing at equator
+  void testFinalBearingAtEquator() {
+    double lat = 0.0;
+    double lon1 = 0.0, lon2 = 90.0;
+
+    double initBearing = greatCircleHeading(lat, lon1, lat, lon2);
+    double finBearing = finalBearing(lat, lon1, lat, lon2);
+
+    // At equator, bearings should be symmetric
+    TS_ASSERT_DELTA(initBearing, 90.0, 0.1);
+    TS_ASSERT_DELTA(finBearing, 90.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Section 18: Wind Correction Angle Tests
+   ***************************************************************************/
+
+  // Helper: Calculate wind correction angle
+  double windCorrectionAngle(double trueAirspeed, double windSpeed,
+                             double windDirection, double desiredTrack) {
+    // Wind from direction means wind blowing toward opposite
+    double headwindComponent = windSpeed * std::cos((windDirection - desiredTrack) * DEG_TO_RAD);
+    double crosswindComponent = windSpeed * std::sin((windDirection - desiredTrack) * DEG_TO_RAD);
+
+    // WCA = arcsin(crosswind / TAS)
+    double wca = std::asin(crosswindComponent / trueAirspeed) * RAD_TO_DEG;
+    return wca;
+  }
+
+  // Test no wind gives zero correction
+  void testNoWindCorrection() {
+    double wca = windCorrectionAngle(200.0, 0.0, 0.0, 90.0);
+    TS_ASSERT_DELTA(wca, 0.0, 0.01);
+  }
+
+  // Test direct headwind gives zero correction
+  void testHeadwindZeroCorrection() {
+    double wca = windCorrectionAngle(200.0, 30.0, 90.0, 90.0);  // Wind from direction of flight
+    TS_ASSERT_DELTA(wca, 0.0, 0.01);
+  }
+
+  // Test direct crosswind from left
+  void testCrosswindFromLeft() {
+    double wca = windCorrectionAngle(200.0, 20.0, 0.0, 90.0);  // Flying east, wind from north
+    TS_ASSERT(wca < 0);  // Need to crab left (into wind)
+  }
+
+  // Test direct crosswind from right
+  void testCrosswindFromRight() {
+    double wca = windCorrectionAngle(200.0, 20.0, 180.0, 90.0);  // Flying east, wind from south
+    TS_ASSERT(wca > 0);  // Need to crab right (into wind)
+  }
+
+  /***************************************************************************
+   * Section 19: Ground Speed Calculation Tests
+   ***************************************************************************/
+
+  // Helper: Calculate ground speed with wind
+  double groundSpeed(double trueAirspeed, double windSpeed,
+                     double windDirection, double heading) {
+    // Headwind component
+    double headwindComponent = windSpeed * std::cos((windDirection - heading + 180.0) * DEG_TO_RAD);
+    return trueAirspeed + headwindComponent;
+  }
+
+  // Test pure headwind reduces ground speed
+  void testHeadwindReducesGroundSpeed() {
+    double gs = groundSpeed(200.0, 30.0, 0.0, 0.0);  // Flying north, wind from north
+    TS_ASSERT_DELTA(gs, 170.0, 1.0);  // TAS - wind
+  }
+
+  // Test pure tailwind increases ground speed
+  void testTailwindIncreasesGroundSpeed() {
+    double gs = groundSpeed(200.0, 30.0, 180.0, 0.0);  // Flying north, wind from south
+    TS_ASSERT_DELTA(gs, 230.0, 1.0);  // TAS + wind
+  }
+
+  // Test crosswind minimal effect on ground speed
+  void testCrosswindGroundSpeed() {
+    double gs = groundSpeed(200.0, 30.0, 90.0, 0.0);  // Flying north, wind from east
+    TS_ASSERT_DELTA(gs, 200.0, 1.0);  // No headwind/tailwind component
+  }
+
+  /***************************************************************************
+   * Section 20: Time Enroute Calculation Tests
+   ***************************************************************************/
+
+  // Helper: Calculate time in minutes
+  double timeEnrouteMinutes(double distanceNM, double groundSpeedKts) {
+    return (distanceNM / groundSpeedKts) * 60.0;
+  }
+
+  // Test simple time calculation
+  void testTimeEnroute() {
+    double time = timeEnrouteMinutes(300.0, 150.0);  // 300nm at 150kts
+    TS_ASSERT_DELTA(time, 120.0, 0.1);  // 2 hours = 120 minutes
+  }
+
+  // Test short leg time
+  void testShortLegTime() {
+    double time = timeEnrouteMinutes(50.0, 200.0);  // 50nm at 200kts
+    TS_ASSERT_DELTA(time, 15.0, 0.1);  // 15 minutes
+  }
+
+  // Test long haul time
+  void testLongHaulTime() {
+    double time = timeEnrouteMinutes(3000.0, 500.0);  // 3000nm at 500kts
+    TS_ASSERT_DELTA(time, 360.0, 0.1);  // 6 hours
+  }
+
+  /***************************************************************************
+   * Section 21: Intersection Calculation Tests
+   ***************************************************************************/
+
+  // Helper: Check if two paths intersect
+  bool pathsIntersect(double lat1, double lon1, double bearing1,
+                      double lat2, double lon2, double bearing2) {
+    // Simplified check - if bearings converge
+    double headingTo2 = greatCircleHeading(lat1, lon1, lat2, lon2);
+    double headingTo1 = greatCircleHeading(lat2, lon2, lat1, lon1);
+
+    double diff1 = std::fmod(std::abs(bearing1 - headingTo2) + 360.0, 360.0);
+    double diff2 = std::fmod(std::abs(bearing2 - headingTo1) + 360.0, 360.0);
+
+    // Paths converge if bearings point toward each other
+    return (diff1 < 90.0 || diff1 > 270.0) && (diff2 < 90.0 || diff2 > 270.0);
+  }
+
+  // Test convergent paths
+  void testConvergentPathsIntersect() {
+    // Two paths heading toward same point
+    bool intersect = pathsIntersect(40.0, -75.0, 45.0,   // From southwest, heading NE
+                                    40.0, -73.0, 315.0); // From southeast, heading NW
+    TS_ASSERT(intersect);
+  }
+
+  // Test parallel paths don't intersect
+  void testParallelPathsNoIntersect() {
+    // Two parallel paths
+    bool intersect = pathsIntersect(40.0, -74.0, 90.0,   // Heading east
+                                    41.0, -74.0, 90.0);  // Parallel, heading east
+    TS_ASSERT(!intersect);
+  }
+
+  // Test divergent paths don't intersect
+  void testDivergentPathsNoIntersect() {
+    bool intersect = pathsIntersect(40.0, -74.0, 45.0,   // Heading NE
+                                    40.0, -74.0, 135.0); // Heading SE
+    TS_ASSERT(!intersect);
+  }
+
+  /***************************************************************************
+   * Section 22: Hold Pattern Entry Tests
+   ***************************************************************************/
+
+  // Helper: Determine hold entry type
+  // Returns: 0 = Direct, 1 = Parallel, 2 = Teardrop
+  int holdEntryType(double inboundCourse, double holdCourse) {
+    double diff = std::fmod(holdCourse - inboundCourse + 360.0, 360.0);
+
+    // Standard right-hand hold
+    if (diff <= 70.0 || diff > 290.0) {
+      return 0;  // Direct entry
+    } else if (diff > 70.0 && diff <= 180.0) {
+      return 2;  // Teardrop entry
+    } else {
+      return 1;  // Parallel entry
+    }
+  }
+
+  // Test direct entry when approaching from behind
+  void testHoldDirectEntry() {
+    int entry = holdEntryType(90.0, 90.0);  // Approaching on same course as hold
+    TS_ASSERT_EQUALS(entry, 0);  // Direct
+  }
+
+  // Test parallel entry
+  void testHoldParallelEntry() {
+    // For parallel: diff between 180 and 290
+    // inbound=90, hold=320 gives diff=230
+    int entry = holdEntryType(90.0, 320.0);
+    TS_ASSERT_EQUALS(entry, 1);  // Parallel
+  }
+
+  // Test teardrop entry
+  void testHoldTeardropEntry() {
+    int entry = holdEntryType(0.0, 90.0);  // Approaching from the north, hold east
+    TS_ASSERT_EQUALS(entry, 2);  // Teardrop
+  }
+
+  /***************************************************************************
+   * Section 23: Course Deviation Indicator Tests
+   ***************************************************************************/
+
+  // Test CDI deflection calculation
+  void testCDIFullScaleDeflection() {
+    // VOR has 10 degree full scale deflection
+    double desiredCourse = 90.0;
+    double actualBearing = 85.0;
+    double deviation = desiredCourse - actualBearing;
+
+    // Deflection dots (2.5 degrees per dot)
+    double dots = deviation / 2.5;
+    TS_ASSERT_DELTA(dots, 2.0, 0.1);  // 2 dots right
+  }
+
+  // Test CDI centered
+  void testCDICentered() {
+    double desiredCourse = 90.0;
+    double actualBearing = 90.0;
+    double deviation = desiredCourse - actualBearing;
+
+    TS_ASSERT_DELTA(deviation, 0.0, 0.01);
+  }
+
+  // Test CDI full scale left
+  void testCDIFullScaleLeft() {
+    double desiredCourse = 90.0;
+    double actualBearing = 100.0;
+    double deviation = desiredCourse - actualBearing;
+
+    double dots = deviation / 2.5;
+    TS_ASSERT(dots < -3.0);  // More than full scale left
+  }
+
+  /***************************************************************************
+   * Section 24: DME Arc Tests
+   ***************************************************************************/
+
+  // Helper: Calculate points on DME arc
+  void dmeArcPoint(double lat0, double lon0, double radiusNM,
+                   double radial, double& latPt, double& lonPt) {
+    destinationPoint(lat0, lon0, radial, radiusNM * NM_TO_FT, latPt, lonPt);
+  }
+
+  // Test DME arc point calculation
+  void testDMEArcPoint() {
+    double lat0 = 40.0, lon0 = -74.0;  // VOR location
+    double latPt, lonPt;
+
+    dmeArcPoint(lat0, lon0, 10.0, 90.0, latPt, lonPt);  // 10nm arc, 090 radial
+
+    double dist = greatCircleDistance(lat0, lon0, latPt, lonPt);
+    TS_ASSERT_DELTA(dist / NM_TO_FT, 10.0, 0.1);
+  }
+
+  // Test multiple arc points maintain distance
+  void testDMEArcConstantDistance() {
+    double lat0 = 40.0, lon0 = -74.0;
+    double radiusNM = 15.0;
+
+    for (int radial = 0; radial < 360; radial += 30) {
+      double latPt, lonPt;
+      dmeArcPoint(lat0, lon0, radiusNM, static_cast<double>(radial), latPt, lonPt);
+
+      double dist = greatCircleDistance(lat0, lon0, latPt, lonPt);
+      TS_ASSERT_DELTA(dist / NM_TO_FT, radiusNM, 0.2);
+    }
+  }
+
+  /***************************************************************************
+   * Section 25: Radial/Distance Fix Tests
+   ***************************************************************************/
+
+  // Test fix defined by radial and DME
+  void testRadialDistanceFix() {
+    double vorLat = 40.0, vorLon = -74.0;
+    double radial = 45.0;  // 045 radial
+    double dme = 20.0;     // 20 DME
+
+    double fixLat, fixLon;
+    destinationPoint(vorLat, vorLon, radial, dme * NM_TO_FT, fixLat, fixLon);
+
+    // Verify fix position
+    double distBack = greatCircleDistance(vorLat, vorLon, fixLat, fixLon);
+    TS_ASSERT_DELTA(distBack / NM_TO_FT, 20.0, 0.1);
+
+    double bearingBack = greatCircleHeading(vorLat, vorLon, fixLat, fixLon);
+    TS_ASSERT_DELTA(bearingBack, 45.0, 0.5);
+  }
+
+  // Test radial reciprocal (inbound vs outbound)
+  void testRadialReciprocal() {
+    double radial = 135.0;
+    double inboundCourse = std::fmod(radial + 180.0, 360.0);
+    TS_ASSERT_DELTA(inboundCourse, 315.0, 0.01);
+  }
+
+  /***************************************************************************
+   * Section 26: Procedure Turn Tests
+   ***************************************************************************/
+
+  // Helper: Calculate procedure turn heading
+  double procedureTurnHeading(double inboundCourse, bool rightTurn) {
+    double offset = rightTurn ? 45.0 : -45.0;
+    return std::fmod(inboundCourse + 180.0 + offset + 360.0, 360.0);
+  }
+
+  // Test procedure turn outbound heading (right turn)
+  void testProcedureTurnRight() {
+    double outbound = procedureTurnHeading(360.0, true);  // Inbound 360, right turn
+    TS_ASSERT_DELTA(outbound, 225.0, 0.1);  // 180 + 45 = 225
+  }
+
+  // Test procedure turn outbound heading (left turn)
+  void testProcedureTurnLeft() {
+    double outbound = procedureTurnHeading(360.0, false);  // Inbound 360, left turn
+    TS_ASSERT_DELTA(outbound, 135.0, 0.1);  // 180 - 45 = 135
+  }
+
+  // Test procedure turn reversal
+  void testProcedureTurnReversal() {
+    double inbound = 90.0;
+    double outbound = procedureTurnHeading(inbound, true);
+    double reversal = std::fmod(outbound + 180.0, 360.0);
+
+    // After 180 turn, should be roughly heading inbound
+    TS_ASSERT(std::abs(reversal - inbound) < 50.0 ||
+              std::abs(reversal - inbound) > 310.0);
+  }
+
+  /***************************************************************************
+   * Section 27: Magnetic Variation Tests
+   ***************************************************************************/
+
+  // Test magnetic to true heading conversion
+  void testMagneticToTrue() {
+    double magneticHeading = 360.0;
+    double variation = -15.0;  // 15 degrees West
+    double trueHeading = std::fmod(magneticHeading + variation + 360.0, 360.0);
+
+    TS_ASSERT_DELTA(trueHeading, 345.0, 0.01);  // True = Mag + West var
+  }
+
+  // Test true to magnetic conversion
+  void testTrueToMagnetic() {
+    double trueHeading = 90.0;
+    double variation = 10.0;  // 10 degrees East
+    double magneticHeading = std::fmod(trueHeading - variation + 360.0, 360.0);
+
+    TS_ASSERT_DELTA(magneticHeading, 80.0, 0.01);
+  }
+
+  // Test variation at prime meridian (typically East)
+  void testEastVariation() {
+    double trueHeading = 180.0;
+    double variation = 5.0;  // 5E
+    double magHeading = std::fmod(trueHeading - variation + 360.0, 360.0);
+
+    TS_ASSERT_DELTA(magHeading, 175.0, 0.01);
+  }
 };

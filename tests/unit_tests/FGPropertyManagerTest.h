@@ -891,4 +891,203 @@ public:
     TS_ASSERT(nodeB != nullptr);
     TS_ASSERT_EQUALS(nodeB->nChildren(), 2);
   }
+
+  /***************************************************************************
+   * Section 17: Property Update Tests
+   ***************************************************************************/
+
+  void testMultipleValueUpdates() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("update/test", true);
+
+    for (int i = 0; i < 100; i++) {
+      node->setDoubleValue(i * 1.5);
+    }
+
+    TS_ASSERT_DELTA(node->getDoubleValue(), 99 * 1.5, 1e-10);
+  }
+
+  void testAlternatingTypes() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Different nodes for different types
+    auto intNode = pm->GetNode("alt/int", true);
+    auto dblNode = pm->GetNode("alt/dbl", true);
+    auto boolNode = pm->GetNode("alt/bool", true);
+
+    intNode->setIntValue(10);
+    TS_ASSERT_EQUALS(intNode->getIntValue(), 10);
+
+    dblNode->setDoubleValue(20.5);
+    TS_ASSERT_DELTA(dblNode->getDoubleValue(), 20.5, 1e-10);
+
+    boolNode->setBoolValue(true);
+    TS_ASSERT_EQUALS(boolNode->getBoolValue(), true);
+  }
+
+  void testValuePersistence() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    pm->GetNode("persist/a", true)->setIntValue(100);
+    pm->GetNode("persist/b", true)->setIntValue(200);
+
+    // Access other node, then come back
+    auto nodeB = pm->GetNode("persist/b");
+    auto nodeA = pm->GetNode("persist/a");
+
+    TS_ASSERT_EQUALS(nodeA->getIntValue(), 100);
+    TS_ASSERT_EQUALS(nodeB->getIntValue(), 200);
+  }
+
+  /***************************************************************************
+   * Section 18: Property Tree Structure Tests
+   ***************************************************************************/
+
+  void testVeryDeepNesting() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("l1/l2/l3/l4/l5/l6/l7/l8", true);
+
+    node->setIntValue(888);
+    TS_ASSERT_EQUALS(node->getIntValue(), 888);
+  }
+
+  void testManyTopLevelNodes() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    for (int i = 0; i < 50; i++) {
+      std::string path = "top" + std::to_string(i) + "/value";
+      pm->GetNode(path, true)->setIntValue(i);
+    }
+
+    // Verify some values
+    TS_ASSERT_EQUALS(pm->GetNode("top0/value")->getIntValue(), 0);
+    TS_ASSERT_EQUALS(pm->GetNode("top25/value")->getIntValue(), 25);
+    TS_ASSERT_EQUALS(pm->GetNode("top49/value")->getIntValue(), 49);
+  }
+
+  void testNodeReuse() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node1 = pm->GetNode("reuse/test", true);
+    auto node2 = pm->GetNode("reuse/test", false);
+
+    TS_ASSERT(node1 == node2);  // Same node
+  }
+
+  /***************************************************************************
+   * Section 19: Value Conversion Tests
+   ***************************************************************************/
+
+  void testIntToDouble() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("convert/int2dbl", true);
+
+    node->setIntValue(42);
+    double val = node->getDoubleValue();
+
+    TS_ASSERT_DELTA(val, 42.0, 1e-10);
+  }
+
+  void testDoubleToInt() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("convert/dbl2int", true);
+
+    node->setDoubleValue(42.7);
+    int val = node->getIntValue();
+
+    TS_ASSERT_EQUALS(val, 42);  // Truncated
+  }
+
+  void testBoolToInt() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("convert/bool2int", true);
+
+    node->setBoolValue(true);
+    TS_ASSERT_EQUALS(node->getIntValue(), 1);
+
+    node->setBoolValue(false);
+    TS_ASSERT_EQUALS(node->getIntValue(), 0);
+  }
+
+  /***************************************************************************
+   * Section 20: Property Value Range Tests
+   ***************************************************************************/
+
+  void testLargeIntValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("range/int", true);
+
+    node->setIntValue(2000000000);
+    TS_ASSERT_EQUALS(node->getIntValue(), 2000000000);
+  }
+
+  void testNegativeValue() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("range/neg", true);
+
+    node->setDoubleValue(-12345.678);
+    TS_ASSERT_DELTA(node->getDoubleValue(), -12345.678, 1e-6);
+  }
+
+  void testVerySmallDouble() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("range/tiny", true);
+
+    node->setDoubleValue(1e-15);
+    TS_ASSERT(node->getDoubleValue() > 0);
+    TS_ASSERT(node->getDoubleValue() < 1e-10);
+  }
+
+  /***************************************************************************
+   * Section 21: Multiple Property Manager Tests
+   ***************************************************************************/
+
+  void testTwoPropertyManagers() {
+    auto pm1 = std::make_shared<FGPropertyManager>();
+    auto pm2 = std::make_shared<FGPropertyManager>();
+
+    pm1->GetNode("test/value", true)->setIntValue(1);
+    pm2->GetNode("test/value", true)->setIntValue(2);
+
+    TS_ASSERT_EQUALS(pm1->GetNode("test/value")->getIntValue(), 1);
+    TS_ASSERT_EQUALS(pm2->GetNode("test/value")->getIntValue(), 2);
+  }
+
+  void testPropertyManagerIsolation() {
+    auto pm1 = std::make_shared<FGPropertyManager>();
+    auto pm2 = std::make_shared<FGPropertyManager>();
+
+    pm1->GetNode("isolated/prop", true)->setIntValue(100);
+
+    auto node = pm2->GetNode("isolated/prop", false);
+    TS_ASSERT(node == nullptr);  // Doesn't exist in pm2
+  }
+
+  /***************************************************************************
+   * Section 22: String Property Tests
+   ***************************************************************************/
+
+  void testLongString() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("string/long", true);
+
+    std::string longStr(500, 'x');
+    node->setStringValue(longStr.c_str());
+
+    TS_ASSERT_EQUALS(node->getStringValue(), longStr);
+  }
+
+  void testStringWithSpaces() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("string/spaces", true);
+
+    node->setStringValue("hello world test");
+    TS_ASSERT_EQUALS(node->getStringValue(), std::string("hello world test"));
+  }
+
+  void testStringWithNumbers() {
+    auto pm = std::make_shared<FGPropertyManager>();
+    auto node = pm->GetNode("string/nums", true);
+
+    node->setStringValue("test123value");
+    TS_ASSERT_EQUALS(node->getStringValue(), std::string("test123value"));
+  }
 };

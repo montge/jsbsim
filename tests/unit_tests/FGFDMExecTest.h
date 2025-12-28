@@ -761,4 +761,427 @@ public:
     TS_ASSERT(fdmex1.Holding());
     TS_ASSERT(!fdmex2.Holding());
   }
+
+  /***************************************************************************
+   * Section 17: Simulation Mode Tests
+   ***************************************************************************/
+
+  void testSimulationTimeIncrement() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(0.01);
+
+    double t0 = fdmex.GetSimTime();
+    fdmex.IncrTime();
+    double t1 = fdmex.GetSimTime();
+
+    TS_ASSERT_DELTA(t1 - t0, 0.01, epsilon);
+  }
+
+  void testModelNameAfterConstruction() {
+    FGFDMExec fdmex;
+    // Model name should be empty before loading
+    TS_ASSERT(fdmex.GetModelName().empty());
+  }
+
+  void testDebugLevelRange() {
+    FGFDMExec fdmex;
+    int level = fdmex.GetDebugLevel();
+    // Debug level should be non-negative
+    TS_ASSERT(level >= 0);
+  }
+
+  /***************************************************************************
+   * Section 18: Startup and Trim Configuration Tests
+   ***************************************************************************/
+
+  void testTrimStatusToggle() {
+    FGFDMExec fdmex;
+
+    fdmex.SetTrimStatus(true);
+    TS_ASSERT(fdmex.GetTrimStatus());
+
+    fdmex.SetTrimStatus(false);
+    TS_ASSERT(!fdmex.GetTrimStatus());
+
+    fdmex.SetTrimStatus(true);
+    TS_ASSERT(fdmex.GetTrimStatus());
+  }
+
+  void testTrimStatusDoesNotAffectHold() {
+    FGFDMExec fdmex;
+
+    fdmex.SetTrimStatus(true);
+    TS_ASSERT(!fdmex.Holding());  // Trim status doesn't auto-hold
+  }
+
+  /***************************************************************************
+   * Section 19: Extended DeltaT Tests
+   ***************************************************************************/
+
+  void testDeltaTVerySmall() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(0.0001);  // 100 microseconds
+    TS_ASSERT_DELTA(fdmex.GetDeltaT(), 0.0001, epsilon);
+  }
+
+  void testDeltaTChange() {
+    FGFDMExec fdmex;
+
+    fdmex.Setdt(0.01);
+    TS_ASSERT_DELTA(fdmex.GetDeltaT(), 0.01, epsilon);
+
+    fdmex.Setdt(0.02);
+    TS_ASSERT_DELTA(fdmex.GetDeltaT(), 0.02, epsilon);
+  }
+
+  void testDeltaTAfterTimeAdvance() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(0.01);
+
+    fdmex.IncrTime();
+    fdmex.IncrTime();
+
+    // DeltaT should remain consistent
+    TS_ASSERT_DELTA(fdmex.GetDeltaT(), 0.01, epsilon);
+  }
+
+  /***************************************************************************
+   * Section 20: Suspend/Resume Integration Tests
+   ***************************************************************************/
+
+  void testSuspendIntegrationState() {
+    FGFDMExec fdmex;
+
+    TS_ASSERT(!fdmex.IntegrationSuspended());
+
+    fdmex.SuspendIntegration();
+    TS_ASSERT(fdmex.IntegrationSuspended());
+
+    fdmex.ResumeIntegration();
+    TS_ASSERT(!fdmex.IntegrationSuspended());
+  }
+
+  void testSuspendResumeMultiple() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 5; i++) {
+      fdmex.SuspendIntegration();
+      TS_ASSERT(fdmex.IntegrationSuspended());
+
+      fdmex.ResumeIntegration();
+      TS_ASSERT(!fdmex.IntegrationSuspended());
+    }
+  }
+
+  void testSuspendDoesNotAffectHold() {
+    FGFDMExec fdmex;
+
+    fdmex.SuspendIntegration();
+    TS_ASSERT(!fdmex.Holding());  // Suspend != Hold
+
+    fdmex.Hold();
+    TS_ASSERT(fdmex.Holding());
+    TS_ASSERT(fdmex.IntegrationSuspended());
+
+    fdmex.Resume();
+    TS_ASSERT(!fdmex.Holding());
+    TS_ASSERT(fdmex.IntegrationSuspended());  // Still suspended
+  }
+
+  /***************************************************************************
+   * Section 21: Extended Path Tests
+   ***************************************************************************/
+
+  void testSetFullRootDir() {
+    FGFDMExec fdmex;
+    fdmex.SetRootDir(SGPath("/home/user/jsbsim"));
+    TS_ASSERT_EQUALS(fdmex.GetRootDir().utf8Str(), "/home/user/jsbsim");
+  }
+
+  void testSetRelativeEnginePath() {
+    FGFDMExec fdmex;
+    fdmex.SetEnginePath(SGPath("engine"));
+    TS_ASSERT_EQUALS(fdmex.GetEnginePath().utf8Str(), "engine");
+  }
+
+  void testSetMultiplePaths() {
+    FGFDMExec fdmex;
+
+    fdmex.SetRootDir(SGPath("/testroot"));
+    fdmex.SetAircraftPath(SGPath("aircraft"));
+    fdmex.SetEnginePath(SGPath("engine"));
+    fdmex.SetSystemsPath(SGPath("systems"));
+
+    // Root dir should be as set
+    TS_ASSERT_EQUALS(fdmex.GetRootDir().utf8Str(), "/testroot");
+
+    // Other paths may be relative to root
+    std::string aircraftPath = fdmex.GetAircraftPath().utf8Str();
+    std::string enginePath = fdmex.GetEnginePath().utf8Str();
+    std::string systemsPath = fdmex.GetSystemsPath().utf8Str();
+
+    // Check that paths contain the expected directory names
+    TS_ASSERT(aircraftPath.find("aircraft") != std::string::npos);
+    TS_ASSERT(enginePath.find("engine") != std::string::npos);
+    TS_ASSERT(systemsPath.find("systems") != std::string::npos);
+  }
+
+  /***************************************************************************
+   * Section 22: Multiple FDMExec Stress Tests
+   ***************************************************************************/
+
+  void testManyFDMExecInstances() {
+    std::vector<std::unique_ptr<FGFDMExec>> instances;
+
+    for (int i = 0; i < 10; i++) {
+      instances.push_back(std::make_unique<FGFDMExec>());
+    }
+
+    // Verify all have property managers
+    for (auto& fdm : instances) {
+      TS_ASSERT(fdm->GetPropertyManager() != nullptr);
+    }
+  }
+
+  void testManyInstancesDifferentRates() {
+    std::vector<std::unique_ptr<FGFDMExec>> instances;
+
+    for (int i = 0; i < 5; i++) {
+      auto fdm = std::make_unique<FGFDMExec>();
+      fdm->Setdt(0.001 * (i + 1));  // 0.001, 0.002, 0.003, 0.004, 0.005
+      instances.push_back(std::move(fdm));
+    }
+
+    // Verify rates are independent
+    for (int i = 0; i < 5; i++) {
+      double expectedDt = 0.001 * (i + 1);
+      TS_ASSERT_DELTA(instances[i]->GetDeltaT(), expectedDt, epsilon);
+    }
+  }
+
+  /***************************************************************************
+   * Section 23: Property Management Stress Tests
+   ***************************************************************************/
+
+  void testManyProperties() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) {
+      std::string propName = "stress/prop" + std::to_string(i);
+      auto node = pm->GetNode(propName, true);
+      node->setDoubleValue(static_cast<double>(i));
+    }
+
+    // Verify all values
+    for (int i = 0; i < 100; i++) {
+      std::string propName = "stress/prop" + std::to_string(i);
+      double val = fdmex.GetPropertyValue(propName);
+      TS_ASSERT_DELTA(val, static_cast<double>(i), epsilon);
+    }
+  }
+
+  void testPropertyOverwrite() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    pm->GetNode("test/overwrite", true)->setDoubleValue(1.0);
+    TS_ASSERT_DELTA(fdmex.GetPropertyValue("test/overwrite"), 1.0, epsilon);
+
+    fdmex.SetPropertyValue("test/overwrite", 2.0);
+    TS_ASSERT_DELTA(fdmex.GetPropertyValue("test/overwrite"), 2.0, epsilon);
+
+    fdmex.SetPropertyValue("test/overwrite", 3.0);
+    TS_ASSERT_DELTA(fdmex.GetPropertyValue("test/overwrite"), 3.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Section 24: Frame and Time Relationship Tests
+   ***************************************************************************/
+
+  void testFrameTimeRelationship() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(0.01);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.IncrTime();
+    }
+
+    unsigned int frames = fdmex.GetFrame();
+    double time = fdmex.GetSimTime();
+
+    TS_ASSERT_EQUALS(frames, 50u);
+    TS_ASSERT_DELTA(time, 0.5, epsilon);  // 50 * 0.01
+  }
+
+  void testFrameCountLarge() {
+    FGFDMExec fdmex;
+
+    for (int i = 0; i < 10000; i++) {
+      fdmex.IncrTime();
+    }
+
+    TS_ASSERT_EQUALS(fdmex.GetFrame(), 10000u);
+  }
+
+  /***************************************************************************
+   * Section 25: Output File Name Tests
+   ***************************************************************************/
+
+  void testOutputFileNameEmpty() {
+    FGFDMExec fdmex;
+    // Without outputs configured, file names should be empty
+    std::string name = fdmex.GetOutputFileName(0);
+    TS_ASSERT(name.empty());
+  }
+
+  void testOutputFileNameInvalidIndex() {
+    FGFDMExec fdmex;
+    // Invalid index should return empty or not crash
+    std::string name = fdmex.GetOutputFileName(999);
+    TS_ASSERT(name.empty());
+  }
+
+  /***************************************************************************
+   * Section 26: Subsystem Stability Tests
+   ***************************************************************************/
+
+  void testSubsystemsAfterTimeAdvance() {
+    FGFDMExec fdmex;
+
+    // Advance time
+    for (int i = 0; i < 10; i++) {
+      fdmex.IncrTime();
+    }
+
+    // Subsystems should still be accessible
+    TS_ASSERT(fdmex.GetPropagate() != nullptr);
+    TS_ASSERT(fdmex.GetAuxiliary() != nullptr);
+    TS_ASSERT(fdmex.GetAtmosphere() != nullptr);
+  }
+
+  void testSubsystemsAfterHoldResume() {
+    FGFDMExec fdmex;
+
+    fdmex.Hold();
+    fdmex.Resume();
+
+    // Subsystems should still be valid
+    TS_ASSERT(fdmex.GetPropagate() != nullptr);
+    TS_ASSERT(fdmex.GetFCS() != nullptr);
+    TS_ASSERT(fdmex.GetPropulsion() != nullptr);
+  }
+
+  /***************************************************************************
+   * Section 27: Edge Case Tests
+   ***************************************************************************/
+
+  void testZeroDeltaTHandled() {
+    FGFDMExec fdmex;
+    double originalDt = fdmex.GetDeltaT();
+
+    // Zero dt might be handled specially
+    fdmex.Setdt(0.0);
+
+    double newDt = fdmex.GetDeltaT();
+    // Either dt stays original or is handled gracefully
+    TS_ASSERT(newDt >= 0.0);
+  }
+
+  void testNegativeDeltaTHandling() {
+    FGFDMExec fdmex;
+
+    // JSBSim allows negative dt (it just sets it)
+    fdmex.Setdt(-0.01);
+
+    double newDt = fdmex.GetDeltaT();
+    // Just verify we can get the dt value
+    TS_ASSERT_DELTA(newDt, -0.01, 1e-10);
+  }
+
+  void testVeryLargeDeltaT() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(1.0);  // 1 second steps
+    TS_ASSERT_DELTA(fdmex.GetDeltaT(), 1.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Section 28: Property Hierarchy Tests
+   ***************************************************************************/
+
+  void testDeepPropertyHierarchy() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    auto node = pm->GetNode("a/b/c/d/e/f/g/h", true);
+    node->setDoubleValue(888.0);
+
+    double val = fdmex.GetPropertyValue("a/b/c/d/e/f/g/h");
+    TS_ASSERT_DELTA(val, 888.0, epsilon);
+  }
+
+  void testPropertyInDifferentBranches() {
+    FGFDMExec fdmex;
+    auto pm = fdmex.GetPropertyManager();
+
+    pm->GetNode("branch1/prop", true)->setDoubleValue(1.0);
+    pm->GetNode("branch2/prop", true)->setDoubleValue(2.0);
+    pm->GetNode("branch3/prop", true)->setDoubleValue(3.0);
+
+    TS_ASSERT_DELTA(fdmex.GetPropertyValue("branch1/prop"), 1.0, epsilon);
+    TS_ASSERT_DELTA(fdmex.GetPropertyValue("branch2/prop"), 2.0, epsilon);
+    TS_ASSERT_DELTA(fdmex.GetPropertyValue("branch3/prop"), 3.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Section 29: Simulation Precision Tests
+   ***************************************************************************/
+
+  void testTimePrecisionSmallDt() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(0.0001);  // 0.1ms
+
+    for (int i = 0; i < 10000; i++) {
+      fdmex.IncrTime();
+    }
+
+    // 10000 * 0.0001 = 1.0 second
+    TS_ASSERT_DELTA(fdmex.GetSimTime(), 1.0, 1e-6);
+  }
+
+  void testTimePrecisionLargeDt() {
+    FGFDMExec fdmex;
+    fdmex.Setdt(0.1);  // 100ms
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.IncrTime();
+    }
+
+    // 100 * 0.1 = 10.0 seconds
+    TS_ASSERT_DELTA(fdmex.GetSimTime(), 10.0, 1e-10);
+  }
+
+  /***************************************************************************
+   * Section 30: Version and Info Tests
+   ***************************************************************************/
+
+  void testVersionNotEmpty() {
+    FGFDMExec fdmex;
+    std::string version = fdmex.GetVersion();
+    TS_ASSERT(version.length() > 0);
+  }
+
+  void testVersionFormat() {
+    FGFDMExec fdmex;
+    std::string version = fdmex.GetVersion();
+    // Version should contain at least one digit (e.g., "1.2.0")
+    bool hasDigit = false;
+    for (char c : version) {
+      if (std::isdigit(c)) {
+        hasDigit = true;
+        break;
+      }
+    }
+    TS_ASSERT(hasDigit);
+  }
 };

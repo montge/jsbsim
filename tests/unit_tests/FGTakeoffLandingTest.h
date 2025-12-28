@@ -997,4 +997,338 @@ public:
     TS_ASSERT(mu_wet > mu_ice);
     TS_ASSERT(mu_ice < 0.2);  // Very poor braking
   }
+
+  //===========================================================================
+  // 16. SHORT FIELD OPERATIONS TESTS (4 tests)
+  //===========================================================================
+
+  void testShortFieldTakeoffTechnique() {
+    // Short field: use max thrust before brake release
+    double static_thrust = 6500.0;  // lbs at full power
+    double rolling_thrust = 6000.0; // lbs once moving
+
+    // Static thrust higher due to ram air effect absent
+    TS_ASSERT(static_thrust > rolling_thrust);
+  }
+
+  void testShortFieldObstacleClearance() {
+    // Clear 50 ft obstacle in minimum distance
+    double climb_gradient = 0.12;  // 12% climb angle
+    double obstacle_height = 50.0;
+
+    double horizontal_distance = obstacle_height / climb_gradient;
+
+    TS_ASSERT_DELTA(horizontal_distance, 416.7, 1.0);
+  }
+
+  void testShortFieldLandingSpotTarget() {
+    // Touch down at precise point
+    double threshold_crossing_height = 50.0;
+    double approach_angle = 3.5 * degtoman;  // Steeper than normal
+
+    double distance_from_threshold = threshold_crossing_height / tan(approach_angle);
+
+    TS_ASSERT(distance_from_threshold < 900.0);  // Short distance
+    TS_ASSERT_DELTA(distance_from_threshold, 817.7, 5.0);
+  }
+
+  void testShortFieldBrakingEffort() {
+    // Maximum braking immediately after touchdown
+    double v_touchdown = 120.0;
+    double mu_max = 0.6;
+    double decel = mu_max * g;
+
+    double distance = (v_touchdown * v_touchdown) / (2.0 * decel);
+
+    TS_ASSERT_DELTA(decel, 19.3, 0.1);
+    TS_ASSERT_DELTA(distance, 372.9, 2.0);
+  }
+
+  //===========================================================================
+  // 17. SOFT FIELD OPERATIONS TESTS (4 tests)
+  //===========================================================================
+
+  void testSoftFieldRollingResistance() {
+    // Increased rolling friction on grass/dirt
+    double mu_hard = 0.02;
+    double mu_grass = 0.05;
+    double mu_soft = 0.10;
+
+    TS_ASSERT(mu_grass > mu_hard);
+    TS_ASSERT(mu_soft > mu_grass);
+  }
+
+  void testSoftFieldTakeoffDistance() {
+    // Soft field increases ground roll
+    double v_liftoff = 140.0;
+    double thrust = 5000.0;
+    double drag = 600.0;
+    double weight = 10000.0;
+    double mu_hard = 0.02;
+    double mu_soft = 0.08;
+
+    double mass = weight / g;
+    double accel_hard = (thrust - drag - mu_hard * weight) / mass;
+    double accel_soft = (thrust - drag - mu_soft * weight) / mass;
+
+    double distance_hard = (v_liftoff * v_liftoff) / (2.0 * accel_hard);
+    double distance_soft = (v_liftoff * v_liftoff) / (2.0 * accel_soft);
+
+    TS_ASSERT(distance_soft > distance_hard);
+  }
+
+  void testSoftFieldLiftoffTechnique() {
+    // Lift off at minimum speed to reduce ground contact
+    double v_stall = 100.0;
+    double v_liftoff_normal = 1.15 * v_stall;
+    double v_liftoff_soft = 1.05 * v_stall;  // Earlier rotation
+
+    TS_ASSERT(v_liftoff_soft < v_liftoff_normal);
+  }
+
+  void testSoftFieldGroundEffect() {
+    // Use ground effect to accelerate
+    double height_agl = 5.0;  // ft
+    double span = 30.0;       // ft wingspan
+    double ground_effect_factor = 1.0 - (height_agl / span);
+
+    TS_ASSERT(ground_effect_factor < 1.0);
+    TS_ASSERT_DELTA(ground_effect_factor, 0.833, 0.01);
+  }
+
+  //===========================================================================
+  // 18. GO-AROUND / MISSED APPROACH TESTS (4 tests)
+  //===========================================================================
+
+  void testGoAroundDecisionHeight() {
+    // Decision altitude for missed approach
+    double decision_height = 200.0;  // ft AGL
+    double current_altitude = 180.0;
+    double runway_in_sight = false;
+
+    bool execute_go_around = (current_altitude <= decision_height) && !runway_in_sight;
+
+    TS_ASSERT(execute_go_around);
+  }
+
+  void testGoAroundThrustApplication() {
+    // Full thrust for go-around
+    double approach_thrust = 0.5;  // 50% power
+    double go_around_thrust = 1.0;  // TOGA
+
+    TS_ASSERT(go_around_thrust > approach_thrust);
+    TS_ASSERT_DELTA(go_around_thrust, 1.0, 0.01);
+  }
+
+  void testGoAroundClimbGradient() {
+    // Minimum climb gradient for go-around
+    double thrust = 8000.0;
+    double drag_dirty = 3500.0;  // Gear and flaps down initially
+    double weight = 15000.0;
+
+    double gradient = (thrust - drag_dirty) / weight;
+
+    TS_ASSERT(gradient > 0.0);
+    TS_ASSERT_DELTA(gradient, 0.30, 0.01);  // 30%
+  }
+
+  void testGoAroundConfiguration() {
+    // Clean up configuration sequence
+    double flap_retract_speed = 160.0;  // kts
+    double gear_retract_speed = 140.0;  // kts
+    double current_speed = 150.0;
+
+    bool retract_gear = (current_speed >= gear_retract_speed);
+    bool retract_flaps = (current_speed >= flap_retract_speed);
+
+    TS_ASSERT(retract_gear);
+    TS_ASSERT(!retract_flaps);
+  }
+
+  //===========================================================================
+  // 19. AUTOBRAKE SETTINGS TESTS (4 tests)
+  //===========================================================================
+
+  void testAutobrakeLow() {
+    // Low autobrake setting
+    double decel_low = 4.0;  // ft/s^2 (~0.12g)
+    double v_touchdown = 130.0;
+
+    double distance = (v_touchdown * v_touchdown) / (2.0 * decel_low);
+
+    TS_ASSERT_DELTA(decel_low / g, 0.124, 0.01);
+    TS_ASSERT_DELTA(distance, 2112.5, 2.0);
+  }
+
+  void testAutobrakeMedium() {
+    // Medium autobrake setting
+    double decel_med = 8.0;  // ft/s^2 (~0.25g)
+    double v_touchdown = 130.0;
+
+    double distance = (v_touchdown * v_touchdown) / (2.0 * decel_med);
+
+    TS_ASSERT_DELTA(decel_med / g, 0.249, 0.01);
+    TS_ASSERT_DELTA(distance, 1056.25, 2.0);
+  }
+
+  void testAutobrakeMax() {
+    // Maximum autobrake setting
+    double decel_max = 14.0;  // ft/s^2 (~0.44g)
+    double v_touchdown = 130.0;
+
+    double distance = (v_touchdown * v_touchdown) / (2.0 * decel_max);
+
+    TS_ASSERT_DELTA(decel_max / g, 0.435, 0.01);
+    TS_ASSERT_DELTA(distance, 603.6, 2.0);
+  }
+
+  void testAutobrakeRTO() {
+    // RTO (Rejected Takeoff) autobrake mode
+    double decel_rto = 16.0;  // ft/s^2 (~0.5g)
+    double v_abort = 140.0;
+
+    double distance = (v_abort * v_abort) / (2.0 * decel_rto);
+
+    TS_ASSERT_DELTA(decel_rto / g, 0.497, 0.01);
+    TS_ASSERT_DELTA(distance, 612.5, 2.0);
+  }
+
+  //===========================================================================
+  // 20. CROSSWIND LANDING TESTS (4 tests)
+  //===========================================================================
+
+  void testCrosswindLimit() {
+    // Maximum demonstrated crosswind
+    double max_crosswind = 25.0;  // kts
+    double current_crosswind = 20.0;
+
+    bool within_limits = (current_crosswind <= max_crosswind);
+
+    TS_ASSERT(within_limits);
+  }
+
+  void testCrosswindCrabAngle() {
+    // Calculate crab angle for crosswind
+    double groundspeed = 120.0;  // kts
+    double crosswind = 15.0;     // kts
+
+    double crab_angle = atan(crosswind / groundspeed) * radtodeg;
+
+    TS_ASSERT_DELTA(crab_angle, 7.13, 0.1);
+  }
+
+  void testCrosswindDecrab() {
+    // Rudder required to decrab before touchdown
+    double crab_angle = 10.0;  // degrees
+    double rudder_authority = 25.0;  // degrees
+
+    bool sufficient_rudder = (rudder_authority > crab_angle);
+
+    TS_ASSERT(sufficient_rudder);
+  }
+
+  void testCrosswindWingLow() {
+    // Bank angle for wing-low crosswind approach
+    double crosswind = 15.0;  // kts
+    double approach_speed = 130.0;  // kts
+
+    // Bank angle approximately proportional to crosswind/speed ratio
+    double bank_angle = atan(crosswind / (2.0 * approach_speed)) * radtodeg;
+
+    TS_ASSERT(bank_angle < 10.0);  // Small bank angle
+    TS_ASSERT(bank_angle > 0.0);
+  }
+
+  //===========================================================================
+  // 21. RUNWAY CONTAMINATION TESTS (4 tests)
+  //===========================================================================
+
+  void testStandingWaterEffect() {
+    // Standing water causes hydroplaning risk
+    double water_depth_mm = 3.0;  // mm
+    double hydroplane_threshold = 2.5;  // mm
+
+    bool hydroplane_risk = (water_depth_mm >= hydroplane_threshold);
+
+    TS_ASSERT(hydroplane_risk);
+  }
+
+  void testHydroplaneSpeed() {
+    // Speed at which hydroplaning occurs
+    double tire_pressure = 200.0;  // psi
+
+    // Hydroplane speed (kts) = 9 * sqrt(tire_pressure)
+    double hydroplane_speed = 9.0 * sqrt(tire_pressure);
+
+    TS_ASSERT_DELTA(hydroplane_speed, 127.3, 1.0);  // kts
+  }
+
+  void testSlushDragEffect() {
+    // Slush/water increases drag during takeoff roll
+    double normal_drag = 800.0;
+    double slush_depth_in = 0.5;
+    double slush_drag_factor = 1.0 + slush_depth_in * 0.5;
+
+    double total_drag = normal_drag * slush_drag_factor;
+
+    TS_ASSERT(total_drag > normal_drag);
+    TS_ASSERT_DELTA(total_drag, 1000.0, 10.0);
+  }
+
+  void testSnowCoveredRunway() {
+    // Snow reduces braking effectiveness
+    double mu_dry = 0.5;
+    double mu_compact_snow = 0.2;
+    double mu_loose_snow = 0.15;
+
+    TS_ASSERT(mu_compact_snow < mu_dry);
+    TS_ASSERT(mu_loose_snow < mu_compact_snow);
+  }
+
+  //===========================================================================
+  // 22. PERFORMANCE PLANNING FACTORS TESTS (4 tests)
+  //===========================================================================
+
+  void testSafetyFactorTakeoff() {
+    // FAR 25 requires 15% safety margin
+    double actual_distance = 3000.0;
+    double safety_factor = 1.15;
+
+    double required_runway = actual_distance * safety_factor;
+
+    TS_ASSERT_DELTA(required_runway, 3450.0, 1.0);
+  }
+
+  void testSafetyFactorLandingDry() {
+    // FAR 25 landing distance factor (dry runway)
+    double actual_landing = 2500.0;
+    double safety_factor = 1.67;  // 60% margin
+
+    double required_runway = actual_landing * safety_factor;
+
+    TS_ASSERT_DELTA(required_runway, 4175.0, 5.0);
+  }
+
+  void testSafetyFactorLandingWet() {
+    // FAR 25 landing distance factor (wet runway)
+    double actual_landing = 2500.0;
+    double safety_factor_dry = 1.67;
+    double wet_multiplier = 1.15;
+
+    double required_runway = actual_landing * safety_factor_dry * wet_multiplier;
+
+    TS_ASSERT_DELTA(required_runway, 4801.3, 5.0);
+  }
+
+  void testWeightCorrectionFactor() {
+    // Weight correction for performance charts
+    double ref_weight = 12000.0;
+    double actual_weight = 14000.0;
+
+    double weight_factor = actual_weight / ref_weight;
+    double distance_factor = weight_factor * weight_factor;  // Distance ~ W^2
+
+    TS_ASSERT_DELTA(weight_factor, 1.167, 0.01);
+    TS_ASSERT_DELTA(distance_factor, 1.361, 0.01);
+  }
 };
