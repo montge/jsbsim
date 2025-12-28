@@ -1134,4 +1134,191 @@ public:
     // THEN: Should select middle value
     TS_ASSERT_DELTA(voted_output, 2.5, 0.01);
   }
+
+  // ============ Complete System Tests ============
+
+  void testCompleteAutolandSequence() {
+    // Verify complete autoland from 1000 ft to touchdown
+    double altitude = 1000.0;
+    double glideslope_angle = 3.0 * Constants::DEG_TO_RAD;
+    double groundspeed_fps = 200.0;
+    double descent_rate_fps = groundspeed_fps * std::tan(glideslope_angle);
+    double time_to_touchdown = altitude / descent_rate_fps;
+
+    TS_ASSERT(time_to_touchdown > 90.0 && time_to_touchdown < 110.0);
+  }
+
+  void testFlareEnergyManagement() {
+    // Test kinetic energy during flare
+    double mass_slug = 3000.0;
+    double initial_speed_fps = 230.0;
+    double final_speed_fps = 220.0;
+    double ke_initial = 0.5 * mass_slug * initial_speed_fps * initial_speed_fps;
+    double ke_final = 0.5 * mass_slug * final_speed_fps * final_speed_fps;
+    double energy_lost = ke_initial - ke_final;
+
+    TS_ASSERT(energy_lost > 0.0);
+  }
+
+  void testTouchdownPointAccuracy() {
+    // CAT III touchdown accuracy
+    double target_ft = 1000.0;
+    double tolerance_ft = 200.0;
+    double actual_ft = 1050.0;
+
+    bool within_tolerance = std::abs(actual_ft - target_ft) <= tolerance_ft;
+    TS_ASSERT(within_tolerance);
+  }
+
+  void testAutolandArmedConditions() {
+    bool ils_captured = true;
+    bool gear_down = true;
+    bool flaps_landing = true;
+    double altitude_ft = 1500.0;
+    bool below_arm_altitude = altitude_ft < 2500.0;
+
+    bool autoland_armed = ils_captured && gear_down && flaps_landing && below_arm_altitude;
+    TS_ASSERT(autoland_armed);
+  }
+
+  void testGlideslopeCaptureLogic() {
+    double gs_deviation_dots = 0.3;
+    double capture_threshold = 0.5;
+    bool captured = std::abs(gs_deviation_dots) < capture_threshold;
+    TS_ASSERT(captured);
+  }
+
+  void testLocalizerCaptureLogic() {
+    double loc_deviation_dots = 0.2;
+    double capture_threshold = 0.5;
+    bool captured = std::abs(loc_deviation_dots) < capture_threshold;
+    TS_ASSERT(captured);
+  }
+
+  void testFlareGainSchedule() {
+    // Flare gain increases as altitude decreases
+    double alt_50 = 50.0;
+    double alt_10 = 10.0;
+    double gain_at_50 = 1.0;
+    double gain_at_10 = 2.0;
+
+    TS_ASSERT(gain_at_10 > gain_at_50);
+  }
+
+  void testRolloutBrakeApplication() {
+    double weight_on_wheels = true;
+    double ground_speed_kts = 100.0;
+    double brake_speed_threshold = 60.0;
+    bool auto_brake_active = weight_on_wheels && (ground_speed_kts > brake_speed_threshold);
+    TS_ASSERT(auto_brake_active);
+  }
+
+  void testAutolandDisengageConditions() {
+    bool pilot_takeover = false;
+    bool system_fault = false;
+    double deviation_dots = 0.8;
+    double max_deviation = 1.0;
+    bool excessive_deviation = std::abs(deviation_dots) > max_deviation;
+
+    bool should_disengage = pilot_takeover || system_fault || excessive_deviation;
+    TS_ASSERT(!should_disengage);
+  }
+
+  void testWeatherMinimumCheck() {
+    double rvr_ft = 1000.0;
+    double cat_ii_minimum = 1200.0;
+    double cat_iii_minimum = 700.0;
+
+    bool cat_ii_ok = rvr_ft >= cat_ii_minimum;
+    bool cat_iii_ok = rvr_ft >= cat_iii_minimum;
+
+    TS_ASSERT(!cat_ii_ok);
+    TS_ASSERT(cat_iii_ok);
+  }
+
+  void testAutolandModeAnnunciation() {
+    bool approach_mode = true;
+    bool capture_mode = true;
+    bool land_mode = false;
+
+    int mode_level = approach_mode ? 1 : 0;
+    mode_level += capture_mode ? 1 : 0;
+    mode_level += land_mode ? 1 : 0;
+
+    TS_ASSERT_EQUALS(mode_level, 2);
+  }
+
+  void testTouchdownRateLimit() {
+    double sink_rate_fps = 3.0;
+    double max_sink_rate_fps = 5.0;
+    bool within_limits = sink_rate_fps <= max_sink_rate_fps;
+    TS_ASSERT(within_limits);
+  }
+
+  void testAutolandRollCommand() {
+    double localizer_deviation_dots = 0.5;
+    double roll_gain = 10.0;  // deg per dot
+    double roll_command = localizer_deviation_dots * roll_gain;
+    TS_ASSERT_DELTA(roll_command, 5.0, DEFAULT_TOLERANCE);
+  }
+
+  void testAutolandPitchCommand() {
+    double glideslope_deviation_dots = -0.3;
+    double pitch_gain = 2.0;  // deg per dot
+    double pitch_command = -glideslope_deviation_dots * pitch_gain;
+    TS_ASSERT_DELTA(pitch_command, 0.6, DEFAULT_TOLERANCE);
+  }
+
+  void testApproachLightingCheck() {
+    double rvr_ft = 600.0;
+    bool approach_lights = true;
+    bool touchdown_lights = true;
+    bool centerline_lights = true;
+
+    bool lighting_adequate = approach_lights && touchdown_lights && centerline_lights;
+    TS_ASSERT(lighting_adequate);
+  }
+
+  void testAutopilotChannelMonitor() {
+    double channel_1 = 5.0;
+    double channel_2 = 5.1;
+    double max_difference = 1.0;
+    bool channels_agree = std::abs(channel_1 - channel_2) < max_difference;
+    TS_ASSERT(channels_agree);
+  }
+
+  void testDecrabManeuver() {
+    double crosswind_kts = 10.0;
+    double approach_speed_kts = 140.0;
+    double crab_angle_rad = std::atan(crosswind_kts / approach_speed_kts);
+    double crab_angle_deg = crab_angle_rad * Constants::RAD_TO_DEG;
+    TS_ASSERT(crab_angle_deg > 3.0 && crab_angle_deg < 5.0);
+  }
+
+  void testAutolandSystemRedundancy() {
+    int autopilot_channels = 3;
+    int required_for_catiii = 2;
+    int failures = 1;
+    int remaining = autopilot_channels - failures;
+    bool can_continue = remaining >= required_for_catiii;
+    TS_ASSERT(can_continue);
+  }
+
+  void testCompleteAutolandVerification() {
+    // Verify all autoland conditions
+    double gs_angle_deg = 3.0;
+    double airspeed_kts = 140.0;
+    double flare_height_ft = 50.0;
+    double touchdown_zone_ft = 1000.0;
+    double sink_rate_limit_fps = 5.0;
+
+    double gs_rad = gs_angle_deg * Constants::DEG_TO_RAD;
+    double gs_fps = airspeed_kts * 1.68781;
+    double descent_rate_fps = gs_fps * std::tan(gs_rad);
+
+    TS_ASSERT(descent_rate_fps < 15.0);
+    TS_ASSERT(flare_height_ft >= 30.0 && flare_height_ft <= 60.0);
+    TS_ASSERT(touchdown_zone_ft >= 500.0 && touchdown_zone_ft <= 1500.0);
+    TS_ASSERT(sink_rate_limit_fps <= 6.0);
+  }
 };

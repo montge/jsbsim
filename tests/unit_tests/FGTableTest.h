@@ -2572,4 +2572,294 @@ public:
     TS_ASSERT_DELTA(t.GetValue(1e6), 2e10, 1e5);
     TS_ASSERT_DELTA(t.GetValue(1e9), 3e10, 1e5);
   }
+
+  // Test 1D table with single entry
+  void test1DSingleEntry() {
+    FGTable t(1);
+    t << 5.0 << 100.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(5.0), 100.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 100.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0), 100.0);
+  }
+
+  // Test 1D monotonically increasing table
+  void test1DMonotonicIncreasing() {
+    FGTable t(5);
+    t << 0.0 << 0.0
+      << 1.0 << 10.0
+      << 2.0 << 20.0
+      << 3.0 << 30.0
+      << 4.0 << 40.0;
+
+    for (int i = 0; i <= 4; i++) {
+      TS_ASSERT_EQUALS(t.GetValue(static_cast<double>(i)), static_cast<double>(i * 10));
+    }
+  }
+
+  // Test 2D table with single row single column
+  void test2DSingleCell() {
+    FGTable t(1, 1);
+    t << 10.0
+      << 100.0 << 5.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 10.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 0.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(200.0, 20.0), 5.0);
+  }
+
+  // Test 2D table row extrapolation
+  void test2DRowExtrapolation() {
+    FGTable t(2, 2);
+    t << 0.0 << 10.0
+      << 0.0 << 1.0 << 2.0
+      << 10.0 << 3.0 << 4.0;
+
+    // Below table
+    TS_ASSERT_EQUALS(t.GetValue(-10.0, 0.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(-10.0, 10.0), 2.0);
+    // Above table
+    TS_ASSERT_EQUALS(t.GetValue(20.0, 0.0), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(20.0, 10.0), 4.0);
+  }
+
+  // Test 2D table column extrapolation
+  void test2DColumnExtrapolation() {
+    FGTable t(2, 2);
+    t << 0.0 << 10.0
+      << 0.0 << 1.0 << 2.0
+      << 10.0 << 3.0 << 4.0;
+
+    // Left of table
+    TS_ASSERT_EQUALS(t.GetValue(0.0, -10.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0, -10.0), 3.0);
+    // Right of table
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 20.0), 2.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0, 20.0), 4.0);
+  }
+
+  // Test 1D zero crossing interpolation
+  void test1DZeroCrossing() {
+    FGTable t(3);
+    t << -1.0 << -10.0
+      << 0.0 << 0.0
+      << 1.0 << 10.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(-0.5), -5.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.5), 5.0);
+  }
+
+  // Test 2D diagonal values
+  void test2DDiagonalValues() {
+    FGTable t(3, 3);
+    t << 0.0 << 1.0 << 2.0
+      << 0.0 << 0.0 << 1.0 << 2.0
+      << 1.0 << 1.0 << 2.0 << 3.0
+      << 2.0 << 2.0 << 3.0 << 4.0;
+
+    // Check diagonal elements
+    for (int i = 0; i <= 2; i++) {
+      TS_ASSERT_EQUALS(t.GetValue(static_cast<double>(i), static_cast<double>(i)), static_cast<double>(2 * i));
+    }
+  }
+
+  // Test 1D steep gradient
+  void test1DSteepGradient() {
+    FGTable t(2);
+    t << 0.0 << 0.0
+      << 0.001 << 1000.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.001), 1000.0);
+    TS_ASSERT_DELTA(t.GetValue(0.0005), 500.0, 0.001);
+  }
+
+  // Test 2D symmetry
+  void test2DSymmetry() {
+    FGTable t(3, 3);
+    t << -1.0 << 0.0 << 1.0
+      << -1.0 << 1.0 << 0.5 << 1.0
+      << 0.0 << 0.5 << 0.0 << 0.5
+      << 1.0 << 1.0 << 0.5 << 1.0;
+
+    // Check symmetry: f(x,y) = f(-x,y) = f(x,-y) = f(-x,-y)
+    TS_ASSERT_EQUALS(t.GetValue(1.0, 1.0), t.GetValue(-1.0, 1.0));
+    TS_ASSERT_EQUALS(t.GetValue(1.0, 1.0), t.GetValue(1.0, -1.0));
+    TS_ASSERT_EQUALS(t.GetValue(1.0, 1.0), t.GetValue(-1.0, -1.0));
+  }
+
+  // Test multiple 1D table interpolations in sequence
+  void testMultiple1DInterpolations() {
+    FGTable t(4);
+    t << 0.0 << 0.0
+      << 100.0 << 100.0
+      << 200.0 << 200.0
+      << 300.0 << 300.0;
+
+    for (int i = 0; i <= 300; i += 10) {
+      TS_ASSERT_DELTA(t.GetValue(static_cast<double>(i)), static_cast<double>(i), epsilon);
+    }
+  }
+
+  // Test 2D table with all same values
+  void test2DConstantValues() {
+    FGTable t(2, 2);
+    t << 0.0 << 10.0
+      << 0.0 << 5.0 << 5.0
+      << 10.0 << 5.0 << 5.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 0.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(5.0, 5.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0, 10.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(-10.0, -10.0), 5.0);
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 100.0), 5.0);
+  }
+
+  // Test 1D non-uniform spacing
+  void test1DNonUniformSpacing() {
+    FGTable t(4);
+    t << 0.0 << 0.0
+      << 1.0 << 10.0
+      << 10.0 << 20.0
+      << 100.0 << 30.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.0), 10.0);
+    TS_ASSERT_EQUALS(t.GetValue(10.0), 20.0);
+    TS_ASSERT_EQUALS(t.GetValue(100.0), 30.0);
+    TS_ASSERT_DELTA(t.GetValue(0.5), 5.0, epsilon);
+    TS_ASSERT_DELTA(t.GetValue(5.5), 15.0, epsilon);
+  }
+
+  // Test 2D corner values
+  void test2DCornerValues() {
+    FGTable t(3, 3);
+    t << 0.0 << 50.0 << 100.0
+      << 0.0 << 1.0 << 2.0 << 3.0
+      << 50.0 << 4.0 << 5.0 << 6.0
+      << 100.0 << 7.0 << 8.0 << 9.0;
+
+    // Test all four corners
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 0.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 100.0), 3.0);
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 0.0), 7.0);
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 100.0), 9.0);
+  }
+
+  // Test 1D reverse order lookup
+  void test1DReverseLookup() {
+    FGTable t(4);
+    t << 0.0 << 100.0
+      << 25.0 << 75.0
+      << 50.0 << 50.0
+      << 100.0 << 0.0;
+
+    // Values decrease as key increases
+    TS_ASSERT(t.GetValue(0.0) > t.GetValue(50.0));
+    TS_ASSERT(t.GetValue(50.0) > t.GetValue(100.0));
+    TS_ASSERT_EQUALS(t.GetValue(75.0), 25.0);
+  }
+
+  // Test 2D center point calculation
+  void test2DCenterPoint() {
+    FGTable t(2, 2);
+    t << 0.0 << 2.0
+      << 0.0 << 0.0 << 4.0
+      << 2.0 << 4.0 << 8.0;
+
+    // Center point should be average of all corners
+    // (0+4+4+8)/4 = 4.0 via bilinear interpolation
+    TS_ASSERT_EQUALS(t.GetValue(1.0, 1.0), 4.0);
+  }
+
+  // Test stress: many rapid lookups
+  void testStressRapidLookups() {
+    FGTable t(10);
+    for (int i = 0; i < 10; i++) {
+      t << static_cast<double>(i) << static_cast<double>(i * 2);
+    }
+
+    for (int iter = 0; iter < 100; iter++) {
+      for (int i = 0; i < 10; i++) {
+        double val = t.GetValue(static_cast<double>(i));
+        TS_ASSERT_EQUALS(val, static_cast<double>(i * 2));
+      }
+    }
+  }
+
+  // Test 2D stress with many lookups
+  void test2DStressRapidLookups() {
+    FGTable t(5, 5);
+    t << 0.0 << 1.0 << 2.0 << 3.0 << 4.0;
+    for (int i = 0; i < 5; i++) {
+      t << static_cast<double>(i);
+      for (int j = 0; j < 5; j++) {
+        t << static_cast<double>(i + j);
+      }
+    }
+
+    for (int iter = 0; iter < 50; iter++) {
+      for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 5; j++) {
+          double val = t.GetValue(static_cast<double>(i), static_cast<double>(j));
+          TS_ASSERT_EQUALS(val, static_cast<double>(i + j));
+        }
+      }
+    }
+  }
+
+  // Test complete table verification
+  void testCompleteTableVerification() {
+    // Test all table types work correctly
+    FGTable t1(3);
+    t1 << 0.0 << 10.0 << 1.0 << 20.0 << 2.0 << 30.0;
+    TS_ASSERT_EQUALS(t1.GetValue(0.5), 15.0);
+
+    FGTable t2(2, 2);
+    t2 << 0.0 << 1.0 << 0.0 << 1.0 << 2.0 << 1.0 << 3.0 << 4.0;
+    TS_ASSERT_EQUALS(t2.GetValue(0.5, 0.5), 2.5);
+
+    // Verify independence
+    TS_ASSERT_EQUALS(t1.GetValue(1.0), 20.0);
+    TS_ASSERT_EQUALS(t2.GetValue(0.0, 0.0), 1.0);
+  }
+
+  // Test 1D table instance independence
+  void test1DTableInstanceIndependence() {
+    FGTable t1(2);
+    FGTable t2(2);
+
+    t1 << 0.0 << 100.0 << 1.0 << 200.0;
+    t2 << 0.0 << 300.0 << 1.0 << 400.0;
+
+    TS_ASSERT_EQUALS(t1.GetValue(0.5), 150.0);
+    TS_ASSERT_EQUALS(t2.GetValue(0.5), 350.0);
+  }
+
+  // Test 2D table with negative key values
+  void test2DTableNegativeKeys() {
+    FGTable t(2, 2);
+    t << -10.0 << 10.0
+      << -100.0 << 1.0 << 2.0
+      << 100.0 << 3.0 << 4.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(-100.0, -10.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(100.0, 10.0), 4.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0, 0.0), 2.5);
+  }
+
+  // Test table zero value handling
+  void testTableZeroValueHandling() {
+    FGTable t(3);
+    t << -1.0 << -1.0
+      << 0.0 << 0.0
+      << 1.0 << 1.0;
+
+    TS_ASSERT_EQUALS(t.GetValue(-1.0), -1.0);
+    TS_ASSERT_EQUALS(t.GetValue(0.0), 0.0);
+    TS_ASSERT_EQUALS(t.GetValue(1.0), 1.0);
+    TS_ASSERT_EQUALS(t.GetValue(-0.5), -0.5);
+    TS_ASSERT_EQUALS(t.GetValue(0.5), 0.5);
+  }
 };

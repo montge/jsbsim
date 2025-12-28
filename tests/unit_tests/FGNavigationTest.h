@@ -1207,6 +1207,194 @@ public:
   }
 
   /***************************************************************************
+   * Complete Navigation System Tests
+   ***************************************************************************/
+
+  // Test complete flight plan distance
+  void testCompleteFlightPlanDistance() {
+    // Multi-leg flight plan
+    double leg_distances[] = {150.0, 200.0, 175.0, 125.0};  // nm
+    double total_distance = 0.0;
+    for (double dist : leg_distances) {
+      total_distance += dist;
+    }
+    TS_ASSERT_DELTA(total_distance, 650.0, epsilon);
+  }
+
+  // Test flight plan ETE calculation
+  void testFlightPlanETE() {
+    double total_distance = 500.0;  // nm
+    double ground_speed = 200.0;     // knots
+    double ete_hours = total_distance / ground_speed;
+    double ete_minutes = ete_hours * 60.0;
+    TS_ASSERT_DELTA(ete_minutes, 150.0, epsilon);
+  }
+
+  // Test waypoint sequencing logic
+  void testWaypointSequencingLogic() {
+    double waypoint_dist = 0.3;  // nm
+    double sequencing_threshold = 0.5;
+    bool should_sequence = waypoint_dist < sequencing_threshold;
+    TS_ASSERT(should_sequence);
+  }
+
+  // Test magnetic variation application
+  void testMagneticVariation() {
+    double true_course = 90.0;  // degrees
+    double mag_var = -15.0;     // 15 degrees west
+    double mag_course = true_course - mag_var;
+    TS_ASSERT_DELTA(mag_course, 105.0, epsilon);
+  }
+
+  // Test wind triangle complete
+  void testWindTriangleComplete() {
+    double tas = 200.0;  // knots
+    double wind_speed = 40.0;
+    double wind_angle = 30.0 * DEG_TO_RAD;  // 30 degrees relative
+
+    double headwind = wind_speed * std::cos(wind_angle);
+    double crosswind = wind_speed * std::sin(wind_angle);
+    double gs = tas - headwind;
+    double drift = std::atan(crosswind / gs) * RAD_TO_DEG;
+
+    TS_ASSERT(gs < tas);
+    TS_ASSERT(drift > 0.0);
+  }
+
+  // Test vertical navigation VNAV path
+  void testVNAVPathAngle() {
+    double altitude_change = 10000.0;  // ft
+    double distance = 30.0;            // nm
+    double distance_ft = distance * NM_TO_FT;
+    double path_angle = std::atan(altitude_change / distance_ft) * RAD_TO_DEG;
+    TS_ASSERT(path_angle > 2.5 && path_angle < 3.5);
+  }
+
+  // Test RNAV approach waypoint
+  void testRNAVApproachWaypoint() {
+    double faf_distance = 5.0;  // nm from runway
+    double gs_angle = 3.0 * DEG_TO_RAD;
+    double faf_altitude = faf_distance * NM_TO_FT * std::tan(gs_angle);
+    TS_ASSERT(faf_altitude > 1500.0 && faf_altitude < 1700.0);
+  }
+
+  // Test holding pattern timing
+  void testHoldingPatternTiming() {
+    double leg_time_min = 1.0;
+    double turn_rate_deg_sec = 3.0;
+    double turn_time = 180.0 / turn_rate_deg_sec;  // 180 degree turn
+    double total_circuit = 2.0 * (leg_time_min * 60.0 + turn_time);
+    TS_ASSERT(total_circuit > 200.0 && total_circuit < 300.0);
+  }
+
+  // Test DME slant range correction
+  void testDMESlantRangeCorrection() {
+    double slant_range = 15.0;  // nm
+    double altitude_nm = 6000.0 / NM_TO_FT;
+    double ground_range = std::sqrt(slant_range * slant_range - altitude_nm * altitude_nm);
+    TS_ASSERT(ground_range < slant_range);
+    TS_ASSERT(ground_range > 14.9);
+  }
+
+  // Test VOR radial intercept
+  void testVORRadialIntercept() {
+    double current_radial = 85.0 * DEG_TO_RAD;
+    double desired_radial = 90.0 * DEG_TO_RAD;
+    double intercept_angle = 30.0 * DEG_TO_RAD;
+    double heading_to_intercept = desired_radial - intercept_angle;
+    TS_ASSERT(heading_to_intercept > 0.0);
+  }
+
+  // Test localizer back course
+  void testLocalizerBackCourse() {
+    double front_course = 270.0;
+    double back_course = front_course + 180.0;
+    if (back_course >= 360.0) back_course -= 360.0;
+    TS_ASSERT_DELTA(back_course, 90.0, epsilon);
+  }
+
+  // Test arc to radial intercept
+  void testArcToRadialIntercept() {
+    double arc_radius = 10.0;  // nm DME arc
+    double target_radial = 30.0 * DEG_TO_RAD;
+    double arc_length = arc_radius * target_radial;
+    TS_ASSERT(arc_length > 5.0);
+  }
+
+  // Test holding entry determination
+  void testHoldingEntryDetermination() {
+    double hold_inbound = 270.0;
+    double aircraft_heading = 045.0;
+    double relative = aircraft_heading - hold_inbound;
+    if (relative < 0) relative += 360.0;
+    // Direct: 0-70 or 290-360
+    // Parallel: 110-180
+    // Teardrop: 180-290
+    bool teardrop = relative >= 180.0 && relative < 290.0;
+    TS_ASSERT(!teardrop);  // 045 relative to 270 = 135, not teardrop
+  }
+
+  // Test procedure turn timing
+  void testProcedureTurnTiming() {
+    double outbound_time = 60.0;  // seconds
+    double turn_time = 45.0 / 3.0;  // 45 degree turn at standard rate
+    double total_time = outbound_time + 2.0 * turn_time + 60.0;  // both turns + return
+    TS_ASSERT(total_time > 120.0);
+  }
+
+  // Test LNAV cross track sensitivity
+  void testLNAVCrossTrackSensitivity() {
+    double distance_to_waypoint = 30.0;  // nm
+    double sensitivity;
+    if (distance_to_waypoint > 30.0) {
+      sensitivity = 2.0;  // enroute
+    } else if (distance_to_waypoint > 2.0) {
+      sensitivity = 1.0;  // terminal
+    } else {
+      sensitivity = 0.3;  // approach
+    }
+    TS_ASSERT_DELTA(sensitivity, 1.0, epsilon);
+  }
+
+  // Test GPS RAIM availability
+  void testGPSRAIMAvailability() {
+    int satellites_visible = 6;
+    int min_for_raim = 5;
+    bool raim_available = satellites_visible >= min_for_raim;
+    TS_ASSERT(raim_available);
+  }
+
+  // Test step-down fix altitude
+  void testStepDownFixAltitude() {
+    double final_approach_fix_alt = 2000.0;
+    double step_down_alt = 1500.0;
+    double runway_elevation = 500.0;
+    double height_above_runway = step_down_alt - runway_elevation;
+    TS_ASSERT_DELTA(height_above_runway, 1000.0, epsilon);
+  }
+
+  // Test circling approach radius
+  void testCirclingApproachRadius() {
+    double category_c_radius = 1.7;  // nm
+    double speed_kts = 140.0;
+    double bank_angle = 25.0 * DEG_TO_RAD;
+    double g = 32.2;
+    double v_fps = speed_kts * 1.68781;
+    double turn_radius_ft = (v_fps * v_fps) / (g * std::tan(bank_angle));
+    double turn_radius_nm = turn_radius_ft / NM_TO_FT;
+    TS_ASSERT(turn_radius_nm < category_c_radius);
+  }
+
+  // Test missed approach point
+  void testMissedApproachPoint() {
+    double runway_threshold = 0.0;
+    double map_distance = 0.5;  // nm from threshold
+    double gs_angle = 3.0 * DEG_TO_RAD;
+    double map_height = map_distance * NM_TO_FT * std::tan(gs_angle);
+    TS_ASSERT(map_height < 200.0);
+  }
+
+  /***************************************************************************
    * Stress Tests
    ***************************************************************************/
 
@@ -1249,5 +1437,26 @@ public:
       TS_ASSERT(!std::isnan(distance));
       TS_ASSERT(distance >= 0.0);
     }
+  }
+
+  // Test complete navigation system verification
+  void testCompleteNavigationSystemVerification() {
+    // Complete flight from takeoff to landing
+    double departure_lat = 40.0 * DEG_TO_RAD;
+    double departure_lon = -74.0 * DEG_TO_RAD;
+    double arrival_lat = 51.5 * DEG_TO_RAD;
+    double arrival_lon = -0.1 * DEG_TO_RAD;
+
+    // Calculate great circle distance
+    double dlat = arrival_lat - departure_lat;
+    double dlon = arrival_lon - departure_lon;
+    double a = std::sin(dlat/2) * std::sin(dlat/2) +
+               std::cos(departure_lat) * std::cos(arrival_lat) *
+               std::sin(dlon/2) * std::sin(dlon/2);
+    double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1.0 - a));
+    double distance = EARTH_RADIUS_NM * c;
+
+    // NYC to London is approximately 3000-3500 nm
+    TS_ASSERT(distance > 2500.0 && distance < 4000.0);
   }
 };

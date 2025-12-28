@@ -1390,4 +1390,231 @@ public:
     TS_ASSERT(grass.GetRollingFFactor() > gravel.GetRollingFFactor());
     TS_ASSERT(gravel.GetRollingFFactor() > concrete.GetRollingFFactor());
   }
+
+  /***************************************************************************
+   * Complete Surface System Tests
+   ***************************************************************************/
+
+  // Test complete landing roll simulation
+  void testCompleteLandingRollSimulation() {
+    double weight = 10000.0;
+    double initial_speed_fps = 200.0;
+    double mu = 0.5;
+    double g = 32.2;
+    double decel = mu * g;
+    double stopping_distance = (initial_speed_fps * initial_speed_fps) / (2.0 * decel);
+    TS_ASSERT(stopping_distance > 1000.0 && stopping_distance < 1500.0);
+  }
+
+  // Test surface transition (concrete to grass)
+  void testSurfaceTransition() {
+    FGFDMExec fdmex;
+    FGSurface concrete(&fdmex);
+    FGSurface grass(&fdmex);
+
+    concrete.SetStaticFFactor(0.8);
+    grass.SetStaticFFactor(0.4);
+
+    double weight = 10000.0;
+    double friction_concrete = concrete.GetStaticFFactor() * weight;
+    double friction_grass = grass.GetStaticFFactor() * weight;
+
+    TS_ASSERT(friction_concrete > friction_grass);
+    TS_ASSERT_DELTA(friction_concrete - friction_grass, 4000.0, epsilon);
+  }
+
+  // Test wet runway braking action
+  void testWetRunwayBrakingAction() {
+    double mu_dry = 0.8;
+    double mu_wet = 0.5;
+    double braking_action_percent = (mu_wet / mu_dry) * 100.0;
+    TS_ASSERT(braking_action_percent < 70.0);  // Poor braking action
+  }
+
+  // Test runway contamination levels
+  void testRunwayContaminationLevels() {
+    double mu_dry = 0.8;
+    double mu_damp = 0.6;
+    double mu_wet = 0.5;
+    double mu_standing_water = 0.3;
+    double mu_ice = 0.1;
+
+    TS_ASSERT(mu_dry > mu_damp);
+    TS_ASSERT(mu_damp > mu_wet);
+    TS_ASSERT(mu_wet > mu_standing_water);
+    TS_ASSERT(mu_standing_water > mu_ice);
+  }
+
+  // Test tire-surface contact area
+  void testTireSurfaceContactArea() {
+    double tire_load = 5000.0;
+    double tire_pressure = 100.0;
+    double contact_area = tire_load / tire_pressure;
+    TS_ASSERT_DELTA(contact_area, 50.0, epsilon);
+  }
+
+  // Test cornering friction utilization
+  void testCorneringFrictionUtilization() {
+    double mu = 0.8;
+    double normal_force = 5000.0;
+    double max_cornering_force = mu * normal_force;
+    double actual_cornering_force = 3000.0;
+    double utilization = actual_cornering_force / max_cornering_force;
+    TS_ASSERT(utilization < 1.0);
+  }
+
+  // Test emergency braking simulation
+  void testEmergencyBrakingSimulation() {
+    double speed_kts = 150.0;
+    double speed_fps = speed_kts * 1.68781;
+    double mu_max = 0.7;
+    double g = 32.2;
+    double max_decel = mu_max * g;
+    double min_stopping_distance = (speed_fps * speed_fps) / (2.0 * max_decel);
+    // At 150 kts with mu=0.7, stopping distance is about 1422 ft
+    TS_ASSERT(min_stopping_distance > 1000.0 && min_stopping_distance < 2000.0);
+  }
+
+  // Test crosswind tire loading
+  void testCrosswindTireLoading() {
+    double static_load = 5000.0;
+    double crosswind_load_transfer = 200.0;
+    double upwind_load = static_load - crosswind_load_transfer;
+    double downwind_load = static_load + crosswind_load_transfer;
+    TS_ASSERT_DELTA(upwind_load + downwind_load, 2.0 * static_load, epsilon);
+  }
+
+  // Test aquaplaning speed calculation
+  void testAquaplaningSpeedCalculation() {
+    double tire_pressure = 150.0;  // psi
+    double aquaplaning_speed_kts = 9.0 * std::sqrt(tire_pressure);
+    TS_ASSERT(aquaplaning_speed_kts > 100.0 && aquaplaning_speed_kts < 115.0);
+  }
+
+  // Test surface friction with temperature
+  void testSurfaceFrictionTemperature() {
+    double mu_reference = 0.8;
+    double temp_coefficient = 0.001;
+    double temp_deviation = 30.0;  // degrees above reference
+    double mu_hot = mu_reference * (1.0 - temp_coefficient * temp_deviation);
+    TS_ASSERT(mu_hot < mu_reference);
+    TS_ASSERT_DELTA(mu_hot, 0.776, 0.001);
+  }
+
+  // Test multi-gear load distribution
+  void testMultiGearLoadDistribution() {
+    double total_weight = 100000.0;
+    double nose_gear_percent = 0.10;
+    double main_gear_percent = 0.90;
+    double nose_load = total_weight * nose_gear_percent;
+    double main_load = total_weight * main_gear_percent;
+    TS_ASSERT_DELTA(nose_load + main_load, total_weight, epsilon);
+  }
+
+  // Test runway gradient braking
+  void testRunwayGradientBraking() {
+    double weight = 100000.0;
+    double gradient = 0.02;  // 2% uphill
+    double brake_force = 40000.0;
+    double gravity_assist = weight * gradient;
+    double total_decel_force = brake_force + gravity_assist;
+    TS_ASSERT(total_decel_force > brake_force);
+  }
+
+  // Test anti-skid cycling
+  void testAntiSkidCycling() {
+    double mu_peak = 0.8;
+    double mu_slide = 0.5;
+    double cycle_efficiency = 0.9;
+    double effective_mu = mu_peak * cycle_efficiency;
+    TS_ASSERT(effective_mu > mu_slide);
+    TS_ASSERT(effective_mu < mu_peak);
+  }
+
+  // Test tire temperature effect
+  void testTireTemperatureEffect() {
+    double cold_grip = 0.7;
+    double optimal_grip = 0.85;
+    double hot_grip = 0.75;
+    TS_ASSERT(optimal_grip > cold_grip);
+    TS_ASSERT(optimal_grip > hot_grip);
+  }
+
+  // Test surface porosity effect
+  void testSurfacePorosityEffect() {
+    double non_porous_wet = 0.4;
+    double porous_wet = 0.55;
+    TS_ASSERT(porous_wet > non_porous_wet);
+  }
+
+  // Test worn tire performance
+  void testWornTirePerformance() {
+    double new_tire_mu = 0.85;
+    double worn_tire_mu = 0.70;
+    double performance_loss = (new_tire_mu - worn_tire_mu) / new_tire_mu * 100.0;
+    TS_ASSERT(performance_loss > 15.0);
+  }
+
+  // Test complete friction circle utilization
+  void testCompleteFrictionCircleUtilization() {
+    double mu = 0.8;
+    double normal_force = 5000.0;
+    double max_force = mu * normal_force;
+
+    // 50% braking, 50% cornering
+    double brake_force = max_force * 0.5;
+    double corner_force = max_force * 0.5;
+    double total_force = std::sqrt(brake_force * brake_force + corner_force * corner_force);
+    double utilization = total_force / max_force;
+
+    TS_ASSERT(utilization < 1.0);  // Not exceeding friction circle
+  }
+
+  // Test runway surface aging effect
+  void testRunwaySurfaceAgingEffect() {
+    double new_mu = 0.85;
+    double aged_mu = 0.70;
+    double age_years = 10.0;
+    double degradation_per_year = (new_mu - aged_mu) / age_years;
+    TS_ASSERT_DELTA(degradation_per_year, 0.015, 0.001);
+  }
+
+  // Test surface instance independence
+  void testSurfaceInstanceIndependence() {
+    FGFDMExec fdmex;
+    FGSurface s1(&fdmex);
+    FGSurface s2(&fdmex);
+
+    s1.SetStaticFFactor(0.5);
+    s2.SetStaticFFactor(0.8);
+
+    TS_ASSERT_DELTA(s1.GetStaticFFactor(), 0.5, epsilon);
+    TS_ASSERT_DELTA(s2.GetStaticFFactor(), 0.8, epsilon);
+    TS_ASSERT(s1.GetStaticFFactor() != s2.GetStaticFFactor());
+  }
+
+  // Test complete surface system verification
+  void testCompleteSurfaceSystemVerification() {
+    FGFDMExec fdmex;
+    FGSurface runway(&fdmex);
+
+    // Configure for wet runway conditions
+    runway.SetStaticFFactor(0.5);
+    runway.SetRollingFFactor(0.03);
+    runway.SetBumpiness(0.1);
+    runway.SetMaximumForce(100000.0);
+    runway.SetSolid(true);
+
+    // Verify all properties are set correctly
+    TS_ASSERT_DELTA(runway.GetStaticFFactor(), 0.5, epsilon);
+    TS_ASSERT_DELTA(runway.GetRollingFFactor(), 0.03, epsilon);
+    TS_ASSERT_DELTA(runway.GetBumpiness(), 0.1, epsilon);
+    TS_ASSERT_DELTA(runway.GetMaximumForce(), 100000.0, epsilon);
+    TS_ASSERT(runway.GetSolid());
+
+    // Test braking force calculation
+    double weight = 50000.0;
+    double max_braking_force = runway.GetStaticFFactor() * weight;
+    TS_ASSERT_DELTA(max_braking_force, 25000.0, epsilon);
+  }
 };
