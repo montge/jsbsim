@@ -894,4 +894,477 @@ public:
 
         TS_ASSERT_DELTA(stroke_time_s, 2.0, 0.1);
     }
+
+    //==========================================================================
+    // 14. POWER TRANSFER UNIT (PTU) TESTS (~4 tests)
+    //==========================================================================
+
+    void testPTU_ActivationThreshold() {
+        // PTU activates when differential pressure exceeds threshold
+        double system_a_pressure_psi = 3000.0;
+        double system_b_pressure_psi = 2200.0;
+        double activation_threshold_psi = 500.0;
+
+        double differential_psi = std::abs(system_a_pressure_psi - system_b_pressure_psi);
+        bool ptu_activated = (differential_psi >= activation_threshold_psi);
+
+        TS_ASSERT(ptu_activated);
+        TS_ASSERT_DELTA(differential_psi, 800.0, 0.1);
+    }
+
+    void testPTU_PowerTransferRate() {
+        // PTU transfers power from high to low pressure system
+        double high_system_pressure_psi = 3000.0;
+        double ptu_motor_displacement_in3_rev = 1.0;
+        double ptu_pump_displacement_in3_rev = 0.8;
+        double rpm = 3000.0;
+
+        // Motor flow in = Pump flow out (conservation of power)
+        double motor_flow_in3_min = ptu_motor_displacement_in3_rev * rpm;
+        double pump_flow_in3_min = ptu_pump_displacement_in3_rev * rpm;
+
+        TS_ASSERT_DELTA(motor_flow_in3_min, 3000.0, 1.0);
+        TS_ASSERT_DELTA(pump_flow_in3_min, 2400.0, 1.0);
+        TS_ASSERT(pump_flow_in3_min < motor_flow_in3_min);  // Stepped down
+    }
+
+    void testPTU_BidirectionalOperation() {
+        // PTU can operate in either direction
+        double system_a_pressure_psi = 2000.0;
+        double system_b_pressure_psi = 3000.0;
+
+        int ptu_direction = (system_a_pressure_psi > system_b_pressure_psi) ? 1 : -1;
+        // 1 = A powers B, -1 = B powers A
+
+        TS_ASSERT_EQUALS(ptu_direction, -1);
+    }
+
+    void testPTU_NoiseCharacteristics() {
+        // PTU generates characteristic sound when activated
+        double ptu_rpm = 3500.0;
+        double gear_teeth = 12;
+
+        // Dominant noise frequency
+        double noise_frequency_hz = (ptu_rpm / 60.0) * gear_teeth;
+
+        TS_ASSERT_DELTA(noise_frequency_hz, 700.0, 10.0);
+    }
+
+    //==========================================================================
+    // 15. HYDRAULIC FLUID CONTAMINATION (~4 tests)
+    //==========================================================================
+
+    void testContamination_ParticleCountClass() {
+        // ISO 4406 cleanliness class rating
+        int particles_4um_per_ml = 2500;
+        int particles_6um_per_ml = 640;
+        int particles_14um_per_ml = 160;
+
+        // Calculate ISO code (simplified)
+        // Code = log2(particles) + 1, rounded
+        int code_4um = static_cast<int>(std::log2(particles_4um_per_ml) + 1);
+        int code_6um = static_cast<int>(std::log2(particles_6um_per_ml) + 1);
+        int code_14um = static_cast<int>(std::log2(particles_14um_per_ml) + 1);
+
+        TS_ASSERT_EQUALS(code_4um, 12);  // ISO 12/10/8 is typical for aircraft
+        TS_ASSERT_EQUALS(code_6um, 10);
+        TS_ASSERT_EQUALS(code_14um, 8);
+    }
+
+    void testContamination_WaterContent() {
+        // Water contamination limits
+        double water_content_ppm = 150.0;
+        double max_water_ppm = 200.0;
+        double warning_level_ppm = 100.0;
+
+        bool warning_active = (water_content_ppm >= warning_level_ppm);
+        bool failure_imminent = (water_content_ppm >= max_water_ppm);
+
+        TS_ASSERT(warning_active);
+        TS_ASSERT(!failure_imminent);
+    }
+
+    void testContamination_FilterBypassIndicator() {
+        // Filter bypass when clogged
+        double filter_dp_psi = 35.0;
+        double bypass_setting_psi = 30.0;
+
+        bool filter_bypassing = (filter_dp_psi >= bypass_setting_psi);
+
+        TS_ASSERT(filter_bypassing);
+    }
+
+    void testContamination_AcidNumber() {
+        // Total Acid Number indicates fluid degradation
+        double tan_mg_koh_g = 0.15;
+        double max_tan = 0.25;
+        double change_interval_tan = 0.20;
+
+        bool fluid_serviceable = (tan_mg_koh_g < max_tan);
+        bool change_soon = (tan_mg_koh_g >= change_interval_tan);
+
+        TS_ASSERT(fluid_serviceable);
+        TS_ASSERT(!change_soon);
+    }
+
+    //==========================================================================
+    // 16. SERVO VALVE DYNAMICS (~4 tests)
+    //==========================================================================
+
+    void testServoValve_NullShift() {
+        // Servo valve null position drift
+        double nominal_null_ma = 0.0;
+        double actual_null_ma = 0.5;  // Slight offset
+
+        double null_shift_ma = actual_null_ma - nominal_null_ma;
+        double max_null_shift_ma = 2.0;
+
+        TS_ASSERT_DELTA(null_shift_ma, 0.5, 0.01);
+        TS_ASSERT(std::abs(null_shift_ma) < max_null_shift_ma);
+    }
+
+    void testServoValve_FlowGain() {
+        // Flow vs current relationship
+        double current_ma = 10.0;
+        double rated_current_ma = 40.0;
+        double rated_flow_gpm = 20.0;
+
+        double flow_gpm = (current_ma / rated_current_ma) * rated_flow_gpm;
+
+        TS_ASSERT_DELTA(flow_gpm, 5.0, 0.1);
+    }
+
+    void testServoValve_FrequencyResponse() {
+        // Servo valve bandwidth (90° phase lag frequency)
+        double bandwidth_hz = 100.0;  // Typical servo valve
+        double time_constant_s = 1.0 / (2.0 * M_PI * bandwidth_hz);
+
+        TS_ASSERT_DELTA(bandwidth_hz, 100.0, 1.0);
+        TS_ASSERT_DELTA(time_constant_s, 0.00159, 0.0001);
+    }
+
+    void testServoValve_Hysteresis() {
+        // Servo valve hysteresis
+        double rated_current_ma = 40.0;
+        double hysteresis_percent = 3.0;
+
+        double hysteresis_ma = (hysteresis_percent / 100.0) * rated_current_ma;
+
+        TS_ASSERT_DELTA(hysteresis_ma, 1.2, 0.1);
+    }
+
+    //==========================================================================
+    // 17. LINE PRESSURE LOSSES (~4 tests)
+    //==========================================================================
+
+    void testLineLoss_LaminarFlow() {
+        // Pressure drop behavior for laminar flow
+        // Pressure drop increases with viscosity, length, and flow rate
+        // Pressure drop decreases with pipe diameter^4
+
+        double short_line_dp = 5.0;   // psi for short line
+        double long_line_factor = 2.0;  // Double length = double dp
+
+        double long_line_dp = short_line_dp * long_line_factor;
+
+        TS_ASSERT(long_line_dp > short_line_dp);
+        TS_ASSERT_DELTA(long_line_dp, 10.0, 0.1);
+    }
+
+    void testLineLoss_TurbulentFlow() {
+        // Darcy-Weisbach for turbulent flow
+        double flow_velocity_ft_s = 25.0;
+        double pipe_length_ft = 10.0;
+        double pipe_diameter_ft = 0.042;  // 0.5 inch
+        double friction_factor = 0.02;
+        double fluid_density_slug_ft3 = 1.68;
+
+        // ΔP = f × (L/D) × (ρ × V²) / 2
+        double dp_psf = friction_factor * (pipe_length_ft / pipe_diameter_ft) *
+                        (fluid_density_slug_ft3 * flow_velocity_ft_s * flow_velocity_ft_s) / 2.0;
+        double dp_psi = dp_psf / 144.0;
+
+        TS_ASSERT(dp_psi > 0.0);
+        TS_ASSERT(dp_psi < 100.0);
+    }
+
+    void testLineLoss_FittingLosses() {
+        // Pressure drop across fittings
+        double velocity_head_psi = 10.0;
+        double k_90_elbow = 0.9;
+        double k_tee = 1.8;
+        double k_valve = 0.5;
+
+        double total_k = k_90_elbow * 2 + k_tee + k_valve;
+        double fitting_loss_psi = total_k * velocity_head_psi;
+
+        TS_ASSERT_DELTA(total_k, 4.1, 0.1);
+        TS_ASSERT_DELTA(fitting_loss_psi, 41.0, 1.0);
+    }
+
+    void testLineLoss_ReynoldsNumber() {
+        // Reynolds number determines flow regime
+        double velocity_ft_s = 20.0;
+        double diameter_ft = 0.042;
+        double kinematic_viscosity_ft2_s = 1.4e-4;
+
+        double reynolds = (velocity_ft_s * diameter_ft) / kinematic_viscosity_ft2_s;
+        bool turbulent = (reynolds > 4000.0);
+
+        TS_ASSERT_DELTA(reynolds, 6000.0, 500.0);
+        TS_ASSERT(turbulent);
+    }
+
+    //==========================================================================
+    // 18. PUMP CASE DRAIN (~4 tests)
+    //==========================================================================
+
+    void testCaseDrain_NormalLeakage() {
+        // Case drain monitors internal pump leakage
+        double case_drain_flow_gpm = 0.5;
+        double max_normal_gpm = 1.0;
+
+        bool pump_healthy = (case_drain_flow_gpm < max_normal_gpm);
+
+        TS_ASSERT(pump_healthy);
+    }
+
+    void testCaseDrain_WearIndication() {
+        // Increased case drain indicates pump wear
+        double new_pump_case_drain_gpm = 0.3;
+        double worn_pump_case_drain_gpm = 1.5;
+        double failure_threshold_gpm = 2.0;
+
+        double wear_increase_percent = ((worn_pump_case_drain_gpm - new_pump_case_drain_gpm) /
+                                         new_pump_case_drain_gpm) * 100.0;
+        bool near_failure = (worn_pump_case_drain_gpm >= failure_threshold_gpm * 0.75);
+
+        TS_ASSERT_DELTA(wear_increase_percent, 400.0, 10.0);
+        TS_ASSERT(near_failure);
+    }
+
+    void testCaseDrain_TemperatureRise() {
+        // Case drain temperature indicates internal heat generation
+        double inlet_temp_f = 100.0;
+        double case_drain_temp_f = 130.0;
+        double max_temp_rise_f = 50.0;
+
+        double temp_rise_f = case_drain_temp_f - inlet_temp_f;
+        bool acceptable = (temp_rise_f < max_temp_rise_f);
+
+        TS_ASSERT_DELTA(temp_rise_f, 30.0, 0.1);
+        TS_ASSERT(acceptable);
+    }
+
+    void testCaseDrain_PressureLimit() {
+        // Maximum case pressure to prevent seal damage
+        double case_pressure_psi = 25.0;
+        double max_case_pressure_psi = 50.0;
+
+        bool within_limits = (case_pressure_psi < max_case_pressure_psi);
+
+        TS_ASSERT(within_limits);
+    }
+
+    //==========================================================================
+    // 19. FILTER DIFFERENTIAL PRESSURE (~4 tests)
+    //==========================================================================
+
+    void testFilter_CleanFilterDP() {
+        // Pressure drop across clean filter
+        double flow_gpm = 20.0;
+        double clean_dp_per_gpm = 0.1;
+
+        double filter_dp_psi = flow_gpm * clean_dp_per_gpm;
+
+        TS_ASSERT_DELTA(filter_dp_psi, 2.0, 0.1);
+    }
+
+    void testFilter_CloggingProgression() {
+        // Filter DP increases with contamination
+        double clean_dp_psi = 2.0;
+        double dp_at_50_percent_life_psi = 5.0;
+        double dp_at_bypass_psi = 25.0;
+
+        double life_used_at_5psi = 50.0;
+        bool approaching_bypass = (dp_at_50_percent_life_psi > dp_at_bypass_psi * 0.5);
+
+        TS_ASSERT(!approaching_bypass);
+        TS_ASSERT(dp_at_bypass_psi > dp_at_50_percent_life_psi);
+    }
+
+    void testFilter_BypassActivation() {
+        // Bypass valve opens to prevent pump cavitation
+        double current_dp_psi = 28.0;
+        double bypass_cracking_psi = 25.0;
+        double bypass_full_open_psi = 35.0;
+
+        bool bypass_open = (current_dp_psi >= bypass_cracking_psi);
+        double bypass_opening_percent = std::min(100.0,
+            ((current_dp_psi - bypass_cracking_psi) / (bypass_full_open_psi - bypass_cracking_psi)) * 100.0);
+
+        TS_ASSERT(bypass_open);
+        TS_ASSERT_DELTA(bypass_opening_percent, 30.0, 1.0);
+    }
+
+    void testFilter_BetaRating() {
+        // Filter beta ratio (particles in / particles out)
+        double beta_10um = 200.0;  // Beta 200 at 10 micron
+        double efficiency_10um = (beta_10um - 1.0) / beta_10um * 100.0;
+
+        TS_ASSERT_DELTA(efficiency_10um, 99.5, 0.1);
+    }
+
+    //==========================================================================
+    // 20. RESERVOIR PRESSURIZATION (~4 tests)
+    //==========================================================================
+
+    void testReservoir_BootstrapPressure() {
+        // Bootstrap reservoir pressurization
+        double system_pressure_psi = 3000.0;
+        double bootstrap_ratio = 100.0;  // 100:1 area ratio
+
+        double reservoir_pressure_psi = system_pressure_psi / bootstrap_ratio;
+
+        TS_ASSERT_DELTA(reservoir_pressure_psi, 30.0, 0.5);
+    }
+
+    void testReservoir_AirPressurization() {
+        // Bleed air pressurized reservoir
+        double bleed_air_pressure_psi = 50.0;
+        double regulator_setting_psi = 45.0;
+
+        double reservoir_pressure_psi = std::min(bleed_air_pressure_psi, regulator_setting_psi);
+
+        TS_ASSERT_DELTA(reservoir_pressure_psi, 45.0, 0.1);
+    }
+
+    void testReservoir_FluidLevelIndication() {
+        // Reservoir fluid level sensor
+        double reservoir_capacity_gal = 5.0;
+        double current_level_gal = 3.5;
+        double min_level_gal = 1.0;
+
+        double level_percent = (current_level_gal / reservoir_capacity_gal) * 100.0;
+        bool low_level_warning = (current_level_gal < reservoir_capacity_gal * 0.25);
+
+        TS_ASSERT_DELTA(level_percent, 70.0, 0.1);
+        TS_ASSERT(!low_level_warning);
+    }
+
+    void testReservoir_AirSeparation() {
+        // Air separator effectiveness
+        double inlet_air_percent = 5.0;
+        double separator_efficiency = 0.95;
+
+        double outlet_air_percent = inlet_air_percent * (1.0 - separator_efficiency);
+
+        TS_ASSERT_DELTA(outlet_air_percent, 0.25, 0.01);
+    }
+
+    //==========================================================================
+    // 21. THERMAL RELIEF VALVES (~4 tests)
+    //==========================================================================
+
+    void testThermalRelief_ActivationPressure() {
+        // Thermal relief valve cracking pressure
+        double thermal_expansion_pressure_psi = 4500.0;
+        double relief_setting_psi = 4000.0;
+
+        bool relief_open = (thermal_expansion_pressure_psi >= relief_setting_psi);
+
+        TS_ASSERT(relief_open);
+    }
+
+    void testThermalRelief_PressureRiseRate() {
+        // Pressure rise from temperature increase in trapped volume
+        double volume_in3 = 50.0;
+        double temp_rise_f = 100.0;
+        double expansion_coefficient = 0.0005;
+        double bulk_modulus_psi = HydraulicConstants::BULK_MODULUS_PSI;
+
+        // ΔP = K × α × ΔT (for constrained volume)
+        double volume_strain = expansion_coefficient * temp_rise_f;
+        double pressure_rise_psi = bulk_modulus_psi * volume_strain;
+
+        TS_ASSERT_DELTA(pressure_rise_psi, 12500.0, 500.0);
+    }
+
+    void testThermalRelief_ReseatPressure() {
+        // Relief valve reseats below cracking pressure
+        double cracking_pressure_psi = 4000.0;
+        double reseat_percent = 90.0;
+
+        double reseat_pressure_psi = cracking_pressure_psi * (reseat_percent / 100.0);
+
+        TS_ASSERT_DELTA(reseat_pressure_psi, 3600.0, 10.0);
+    }
+
+    void testThermalRelief_FlowCapacity() {
+        // Relief valve flow capacity
+        double valve_cv = 0.5;
+        double pressure_drop_psi = 500.0;
+        double specific_gravity = 0.87;
+
+        // Q = Cv × sqrt(ΔP / SG)
+        double flow_gpm = valve_cv * std::sqrt(pressure_drop_psi / specific_gravity);
+
+        TS_ASSERT_DELTA(flow_gpm, 11.99, 0.5);
+    }
+
+    //==========================================================================
+    // 22. ELECTRIC MOTOR PUMP (EMP) TESTS (~4 tests)
+    //==========================================================================
+
+    void testEMP_StartupTransient() {
+        // Electric motor pump startup time
+        double motor_inertia_kg_m2 = 0.01;
+        double rated_torque_nm = 5.0;
+        double rated_rpm = 8000.0;
+
+        // Simplified startup time estimate
+        double angular_velocity_rad_s = (rated_rpm / 60.0) * 2.0 * M_PI;
+        double startup_time_s = (motor_inertia_kg_m2 * angular_velocity_rad_s) / rated_torque_nm;
+
+        TS_ASSERT_DELTA(startup_time_s, 1.68, 0.1);
+    }
+
+    void testEMP_CurrentDraw() {
+        // Motor current at various loads
+        double rated_power_kw = 10.0;
+        double voltage_v = 270.0;
+        double efficiency = 0.90;
+
+        double rated_current_a = (rated_power_kw * 1000.0) / (voltage_v * efficiency);
+        double starting_current_a = rated_current_a * 3.0;  // Typical 3x starting current
+
+        TS_ASSERT_DELTA(rated_current_a, 41.2, 1.0);
+        TS_ASSERT_DELTA(starting_current_a, 123.5, 3.0);
+    }
+
+    void testEMP_ThermalProtection() {
+        // Motor thermal cutoff
+        double winding_temp_c = 145.0;
+        double max_winding_temp_c = 155.0;
+        double warning_temp_c = 140.0;
+
+        bool thermal_warning = (winding_temp_c >= warning_temp_c);
+        bool thermal_cutoff = (winding_temp_c >= max_winding_temp_c);
+
+        TS_ASSERT(thermal_warning);
+        TS_ASSERT(!thermal_cutoff);
+    }
+
+    void testEMP_PressureRegulation() {
+        // Variable speed EMP pressure control
+        double target_pressure_psi = 3000.0;
+        double current_pressure_psi = 2900.0;
+        double max_rpm = 8000.0;
+
+        double error = target_pressure_psi - current_pressure_psi;
+        double rpm_command = max_rpm * (0.5 + 0.5 * (error / 500.0));
+        rpm_command = std::min(max_rpm, std::max(0.0, rpm_command));
+
+        TS_ASSERT_DELTA(rpm_command, 4800.0, 100.0);
+    }
 };

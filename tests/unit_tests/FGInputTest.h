@@ -1,9 +1,11 @@
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <iomanip>
 #include <FGFDMExec.h>
@@ -1191,5 +1193,500 @@ public:
       if (c == '.') dotCount++;
     }
     TS_ASSERT_EQUALS(dotCount, 0);
+  }
+
+  //==========================================================================
+  // UDP INPUT HANDLING TESTS
+  //==========================================================================
+
+  // Test UDP datagram size limits
+  void testUDPDatagramSizeLimits() {
+    size_t maxUDPPayload = 65507;  // Max UDP payload size
+    size_t typicalMTU = 1500;      // Typical ethernet MTU
+    size_t safePayload = 1472;     // MTU - IP header - UDP header
+
+    TS_ASSERT(maxUDPPayload > typicalMTU);
+    TS_ASSERT(safePayload < typicalMTU);
+    TS_ASSERT_EQUALS(safePayload, 1472u);
+  }
+
+  // Test UDP packet sequencing
+  void testUDPPacketSequencing() {
+    int expectedSequence = 100;
+    int receivedSequence = 101;
+
+    bool outOfOrder = (receivedSequence != expectedSequence);
+    int missed = receivedSequence - expectedSequence - 1;
+
+    TS_ASSERT(outOfOrder);
+    TS_ASSERT_EQUALS(missed, 0);  // No packets missed, just received next one
+  }
+
+  // Test UDP packet loss detection
+  void testUDPPacketLossDetection() {
+    int lastSequence = 50;
+    int currentSequence = 55;
+
+    int packetsLost = currentSequence - lastSequence - 1;
+
+    TS_ASSERT_EQUALS(packetsLost, 4);
+    TS_ASSERT(packetsLost > 0);
+  }
+
+  // Test UDP source address filtering
+  void testUDPSourceFiltering() {
+    std::string allowedSource = "192.168.1.100";
+    std::string receivedSource = "192.168.1.100";
+    std::string blockedSource = "10.0.0.5";
+
+    bool sourceAllowed = (receivedSource == allowedSource);
+    bool sourceBlocked = (blockedSource != allowedSource);
+
+    TS_ASSERT(sourceAllowed);
+    TS_ASSERT(sourceBlocked);
+  }
+
+  //==========================================================================
+  // BINARY PROTOCOL PARSING TESTS
+  //==========================================================================
+
+  // Test binary header parsing
+  void testBinaryHeaderParsing() {
+    // Simulate binary header: magic (4 bytes), version (2), length (2)
+    // Using big-endian (network byte order) format
+    unsigned char header[8] = {0x4A, 0x53, 0x42, 0x53, 0x00, 0x01, 0x00, 0x40};
+    // "JSBS" magic, version 1 (big-endian), length 64 (big-endian)
+
+    unsigned int magic = (header[0] << 24) | (header[1] << 16) |
+                         (header[2] << 8) | header[3];
+    unsigned short version = (header[4] << 8) | header[5];
+    unsigned short length = (header[6] << 8) | header[7];
+
+    TS_ASSERT_EQUALS(magic, 0x4A534253u);  // "JSBS"
+    TS_ASSERT_EQUALS(version, 1u);
+    TS_ASSERT_EQUALS(length, 64u);
+  }
+
+  // Test binary float encoding (IEEE 754)
+  void testBinaryFloatEncoding() {
+    float testValue = 150.5f;
+    unsigned char bytes[4];
+
+    // Copy float to bytes
+    std::memcpy(bytes, &testValue, sizeof(float));
+
+    // Reconstruct float
+    float reconstructed;
+    std::memcpy(&reconstructed, bytes, sizeof(float));
+
+    TS_ASSERT_DELTA(reconstructed, 150.5f, 0.001f);
+  }
+
+  // Test binary double encoding
+  void testBinaryDoubleEncoding() {
+    double testValue = 3.141592653589793;
+    unsigned char bytes[8];
+
+    std::memcpy(bytes, &testValue, sizeof(double));
+
+    double reconstructed;
+    std::memcpy(&reconstructed, bytes, sizeof(double));
+
+    TS_ASSERT_DELTA(reconstructed, testValue, 1e-15);
+  }
+
+  // Test endianness detection
+  void testEndiannessDetection() {
+    unsigned int test = 0x01020304;
+    unsigned char* bytes = reinterpret_cast<unsigned char*>(&test);
+
+    bool isLittleEndian = (bytes[0] == 0x04);
+    bool isBigEndian = (bytes[0] == 0x01);
+
+    TS_ASSERT(isLittleEndian != isBigEndian);  // Must be one or the other
+  }
+
+  //==========================================================================
+  // CONNECTION MANAGEMENT TESTS
+  //==========================================================================
+
+  // Test connection retry logic
+  void testConnectionRetryLogic() {
+    int maxRetries = 5;
+    int currentRetry = 0;
+    int retryDelay_ms = 1000;
+    double backoffFactor = 2.0;
+
+    for (int i = 0; i < 3; i++) {
+      currentRetry++;
+      int currentDelay = static_cast<int>(retryDelay_ms * std::pow(backoffFactor, currentRetry - 1));
+      TS_ASSERT(currentDelay >= retryDelay_ms);
+    }
+
+    TS_ASSERT(currentRetry < maxRetries);
+  }
+
+  // Test connection keepalive
+  void testConnectionKeepalive() {
+    double keepaliveInterval_s = 30.0;
+    double lastActivity_s = 25.0;
+    double currentTime_s = 50.0;
+
+    double timeSinceActivity = currentTime_s - lastActivity_s;
+    bool needsKeepalive = (timeSinceActivity >= keepaliveInterval_s);
+
+    TS_ASSERT(!needsKeepalive);
+
+    lastActivity_s = 15.0;
+    timeSinceActivity = currentTime_s - lastActivity_s;
+    needsKeepalive = (timeSinceActivity >= keepaliveInterval_s);
+
+    TS_ASSERT(needsKeepalive);
+  }
+
+  // Test connection pool sizing
+  void testConnectionPoolSizing() {
+    int maxConnections = 10;
+    int activeConnections = 5;
+    int pendingConnections = 3;
+
+    int totalInUse = activeConnections + pendingConnections;
+    int available = maxConnections - totalInUse;
+
+    TS_ASSERT_EQUALS(available, 2);
+    TS_ASSERT(totalInUse <= maxConnections);
+  }
+
+  // Test graceful disconnect handling
+  void testGracefulDisconnect() {
+    bool connected = true;
+    bool pendingWrites = true;
+
+    // Wait for pending writes before disconnect
+    bool canDisconnect = connected && !pendingWrites;
+
+    TS_ASSERT(!canDisconnect);
+
+    pendingWrites = false;
+    canDisconnect = connected && !pendingWrites;
+
+    TS_ASSERT(canDisconnect);
+  }
+
+  //==========================================================================
+  // INPUT THROTTLING TESTS
+  //==========================================================================
+
+  // Test input rate throttling
+  void testInputRateThrottling() {
+    double maxInputRate_hz = 100.0;
+    double minInterval_s = 1.0 / maxInputRate_hz;
+    double lastInputTime_s = 0.0;
+    double currentTime_s = 0.005;  // 5ms later
+
+    bool canProcess = (currentTime_s - lastInputTime_s) >= minInterval_s;
+
+    TS_ASSERT(!canProcess);  // Too soon
+
+    currentTime_s = 0.015;  // 15ms later
+    canProcess = (currentTime_s - lastInputTime_s) >= minInterval_s;
+
+    TS_ASSERT(canProcess);  // OK now
+  }
+
+  // Test burst input handling
+  void testBurstInputHandling() {
+    int burstLimit = 15;
+    int burstWindow_ms = 100;
+    std::vector<int> inputTimestamps_ms = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50};
+
+    // Count inputs within burst window
+    int inputsInWindow = 0;
+    int windowStart = 50 - burstWindow_ms;
+
+    for (int ts : inputTimestamps_ms) {
+      if (ts >= windowStart) inputsInWindow++;
+    }
+
+    bool withinBurstLimit = (inputsInWindow <= burstLimit);
+
+    TS_ASSERT(withinBurstLimit);  // 11 <= 15
+    TS_ASSERT_EQUALS(inputsInWindow, 11);
+  }
+
+  // Test input queue depth limit
+  void testInputQueueDepthLimit() {
+    size_t maxQueueDepth = 100;
+    std::vector<std::string> inputQueue;
+
+    for (int i = 0; i < 150; i++) {
+      if (inputQueue.size() < maxQueueDepth) {
+        inputQueue.push_back("command");
+      }
+    }
+
+    TS_ASSERT_EQUALS(inputQueue.size(), maxQueueDepth);
+    TS_ASSERT(inputQueue.size() <= maxQueueDepth);
+  }
+
+  // Test priority input handling
+  void testPriorityInputHandling() {
+    enum Priority { Low = 0, Normal = 1, High = 2, Critical = 3 };
+
+    std::vector<std::pair<Priority, std::string>> inputQueue = {
+      {Normal, "cmd1"}, {Low, "cmd2"}, {Critical, "cmd3"}, {High, "cmd4"}
+    };
+
+    // Sort by priority (highest first)
+    std::sort(inputQueue.begin(), inputQueue.end(),
+              [](const auto& a, const auto& b) { return a.first > b.first; });
+
+    TS_ASSERT_EQUALS(inputQueue[0].second, "cmd3");  // Critical
+    TS_ASSERT_EQUALS(inputQueue[1].second, "cmd4");  // High
+  }
+
+  //==========================================================================
+  // COMMAND VALIDATION TESTS
+  //==========================================================================
+
+  // Test command length validation
+  void testCommandLengthValidation() {
+    size_t maxCommandLength = 1024;
+    std::string shortCommand = "set prop 1.0";
+    std::string longCommand(2000, 'x');
+
+    bool shortValid = (shortCommand.length() <= maxCommandLength);
+    bool longValid = (longCommand.length() <= maxCommandLength);
+
+    TS_ASSERT(shortValid);
+    TS_ASSERT(!longValid);
+  }
+
+  // Test command character validation
+  void testCommandCharacterValidation() {
+    std::string validCommand = "set fcs/throttle-cmd-norm 0.8";
+    std::string invalidCommand = "set prop\x00value";  // Contains null
+
+    // Check for printable characters
+    bool allPrintable = true;
+    for (char c : validCommand) {
+      if (!std::isprint(static_cast<unsigned char>(c)) && !std::isspace(static_cast<unsigned char>(c))) {
+        allPrintable = false;
+        break;
+      }
+    }
+
+    TS_ASSERT(allPrintable);
+  }
+
+  // Test property access permissions
+  void testPropertyAccessPermissions() {
+    std::vector<std::string> readOnlyProps = {
+      "sim/time-sec", "sim/dt-sec", "sim/version"
+    };
+
+    std::string testProp = "sim/time-sec";
+
+    bool isReadOnly = std::find(readOnlyProps.begin(), readOnlyProps.end(),
+                                 testProp) != readOnlyProps.end();
+
+    TS_ASSERT(isReadOnly);
+
+    testProp = "fcs/throttle-cmd-norm";
+    isReadOnly = std::find(readOnlyProps.begin(), readOnlyProps.end(),
+                           testProp) != readOnlyProps.end();
+
+    TS_ASSERT(!isReadOnly);
+  }
+
+  // Test numeric range validation
+  void testNumericRangeValidation() {
+    struct PropertyRange {
+      std::string name;
+      double minVal;
+      double maxVal;
+    };
+
+    std::vector<PropertyRange> ranges = {
+      {"fcs/throttle-cmd-norm", 0.0, 1.0},
+      {"fcs/elevator-cmd-norm", -1.0, 1.0},
+      {"attitude/phi-rad", -M_PI, M_PI}
+    };
+
+    double testValue = 0.5;
+    bool inRange = (testValue >= ranges[0].minVal && testValue <= ranges[0].maxVal);
+
+    TS_ASSERT(inRange);
+
+    testValue = 1.5;
+    inRange = (testValue >= ranges[0].minVal && testValue <= ranges[0].maxVal);
+
+    TS_ASSERT(!inRange);
+  }
+
+  //==========================================================================
+  // PROPERTY SUBSCRIPTION TESTS
+  //==========================================================================
+
+  // Test property subscription add/remove
+  void testPropertySubscription() {
+    std::vector<std::string> subscriptions;
+
+    // Add subscription
+    subscriptions.push_back("velocities/vc-kts");
+    TS_ASSERT_EQUALS(subscriptions.size(), 1u);
+
+    // Add another
+    subscriptions.push_back("position/h-sl-ft");
+    TS_ASSERT_EQUALS(subscriptions.size(), 2u);
+
+    // Remove first
+    subscriptions.erase(subscriptions.begin());
+    TS_ASSERT_EQUALS(subscriptions.size(), 1u);
+    TS_ASSERT_EQUALS(subscriptions[0], "position/h-sl-ft");
+  }
+
+  // Test subscription update rate
+  void testSubscriptionUpdateRate() {
+    double subscriptionRate_hz = 20.0;
+    double simRate_hz = 120.0;
+
+    int framesPerUpdate = static_cast<int>(simRate_hz / subscriptionRate_hz);
+
+    TS_ASSERT_EQUALS(framesPerUpdate, 6);
+  }
+
+  // Test subscription filter (delta only)
+  void testSubscriptionDeltaFilter() {
+    double lastValue = 100.0;
+    double currentValue = 100.5;
+    double deltaThreshold = 1.0;
+
+    bool hasChanged = std::abs(currentValue - lastValue) >= deltaThreshold;
+
+    TS_ASSERT(!hasChanged);
+
+    currentValue = 102.0;
+    hasChanged = std::abs(currentValue - lastValue) >= deltaThreshold;
+
+    TS_ASSERT(hasChanged);
+  }
+
+  // Test subscription grouping
+  void testSubscriptionGrouping() {
+    std::map<std::string, std::vector<std::string>> groups;
+
+    groups["flight"] = {"velocities/vc-kts", "position/h-sl-ft", "attitude/phi-rad"};
+    groups["engine"] = {"propulsion/engine[0]/thrust-lbs", "propulsion/engine[0]/n1"};
+
+    TS_ASSERT_EQUALS(groups.size(), 2u);
+    TS_ASSERT_EQUALS(groups["flight"].size(), 3u);
+    TS_ASSERT_EQUALS(groups["engine"].size(), 2u);
+  }
+
+  //==========================================================================
+  // TELEMETRY OUTPUT FORMAT TESTS
+  //==========================================================================
+
+  // Test CSV output format
+  void testCSVOutputFormat() {
+    std::vector<double> values = {150.5, 10000.0, 0.1, 0.8};
+    std::ostringstream csv;
+
+    for (size_t i = 0; i < values.size(); i++) {
+      csv << values[i];
+      if (i < values.size() - 1) csv << ",";
+    }
+    csv << "\n";
+
+    std::string result = csv.str();
+    TS_ASSERT(result.find(",") != std::string::npos);
+    TS_ASSERT(result.find("\n") != std::string::npos);
+  }
+
+  // Test JSON output format
+  void testJSONOutputFormat() {
+    std::ostringstream json;
+    json << "{\"velocity\":" << 150.5 << ",\"altitude\":" << 10000 << "}";
+
+    std::string result = json.str();
+    TS_ASSERT(result.find("{") != std::string::npos);
+    TS_ASSERT(result.find("}") != std::string::npos);
+    TS_ASSERT(result.find("\"velocity\"") != std::string::npos);
+  }
+
+  // Test timestamp formatting
+  void testTimestampFormatting() {
+    double simTime_s = 123.456789;
+
+    std::ostringstream ts;
+    ts << std::fixed << std::setprecision(6) << simTime_s;
+
+    std::string result = ts.str();
+    TS_ASSERT_EQUALS(result, "123.456789");
+  }
+
+  // Test output field alignment
+  void testOutputFieldAlignment() {
+    std::ostringstream output;
+    output << std::setw(12) << std::right << 150.5
+           << std::setw(12) << std::right << 10000.0
+           << std::setw(12) << std::right << 0.1;
+
+    std::string result = output.str();
+    TS_ASSERT_EQUALS(result.length(), 36u);
+  }
+
+  //==========================================================================
+  // INPUT VALIDATION EDGE CASES
+  //==========================================================================
+
+  // Test NaN value rejection
+  void testNaNValueRejection() {
+    std::string nanStr = "nan";
+    double value = std::atof(nanStr.c_str());
+
+    bool isValidNumber = !std::isnan(value) && !std::isinf(value);
+
+    TS_ASSERT(!isValidNumber);
+  }
+
+  // Test infinity value handling
+  void testInfinityValueHandling() {
+    std::string infStr = "inf";
+    double value = std::atof(infStr.c_str());
+
+    bool isFinite = std::isfinite(value);
+
+    TS_ASSERT(!isFinite);
+  }
+
+  // Test empty property name
+  void testEmptyPropertyName() {
+    std::string line = "set  1.0";  // Empty property name
+
+    std::istringstream iss(line);
+    std::string cmd, prop, val;
+    iss >> cmd >> prop >> val;
+
+    // Second token becomes value, no property
+    bool hasValidProperty = !prop.empty() && prop.find('/') != std::string::npos;
+
+    TS_ASSERT(!hasValidProperty);  // "1.0" is not a valid property
+  }
+
+  // Test special character in property name
+  void testSpecialCharInPropertyName() {
+    std::string property = "fcs/aileron$pos";
+
+    bool hasInvalidChar = false;
+    for (char c : property) {
+      if (c == '$' || c == '@' || c == '#' || c == '!') {
+        hasInvalidChar = true;
+        break;
+      }
+    }
+
+    TS_ASSERT(hasInvalidChar);
   }
 };

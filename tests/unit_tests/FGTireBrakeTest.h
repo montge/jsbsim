@@ -845,4 +845,367 @@ public:
 
     TS_ASSERT(blowoutRisk);
   }
+
+  /***************************************************************************
+   * Autobrake System Tests
+   ***************************************************************************/
+
+  // Test autobrake deceleration setting
+  void testAutobrakeSetting() {
+    double lowDecel = 4.0;    // ft/s^2
+    double medDecel = 7.0;    // ft/s^2
+    double hiDecel = 12.0;    // ft/s^2
+    double maxDecel = 16.0;   // ft/s^2
+
+    TS_ASSERT(lowDecel < medDecel);
+    TS_ASSERT(medDecel < hiDecel);
+    TS_ASSERT(hiDecel < maxDecel);
+  }
+
+  // Test autobrake pressure modulation
+  void testAutobrakePressureModulation() {
+    double targetDecel = 8.0;    // ft/s^2
+    double actualDecel = 6.0;    // ft/s^2
+    double Kp = 100.0;           // Gain
+
+    double error = targetDecel - actualDecel;
+    double pressureAdjust = Kp * error;
+
+    TS_ASSERT(pressureAdjust > 0);  // Increase pressure
+    TS_ASSERT_DELTA(pressureAdjust, 200.0, epsilon);
+  }
+
+  // Test autobrake disarm on manual brake
+  void testAutobrakeDisarmManual() {
+    bool autobrakeArmed = true;
+    double manualBrakePressure = 500.0;  // psi
+    double disarmThreshold = 100.0;      // psi
+
+    if (manualBrakePressure > disarmThreshold) {
+      autobrakeArmed = false;
+    }
+
+    TS_ASSERT(!autobrakeArmed);
+  }
+
+  // Test autobrake RTO mode
+  void testAutobrakeRTO() {
+    double groundSpeed = 80.0;   // kts
+    double rtoThreshold = 60.0;  // kts
+    bool throttleIdle = true;
+
+    bool rtoActive = (groundSpeed > rtoThreshold) && throttleIdle;
+    TS_ASSERT(rtoActive);
+  }
+
+  /***************************************************************************
+   * Carbon Brake Characteristics Tests
+   ***************************************************************************/
+
+  // Test carbon brake higher operating temperature
+  void testCarbonBrakeTemperature() {
+    double steelMaxTemp = 800.0;    // degrees F
+    double carbonMaxTemp = 1800.0;  // degrees F
+
+    TS_ASSERT(carbonMaxTemp > steelMaxTemp);
+    TS_ASSERT_DELTA(carbonMaxTemp / steelMaxTemp, 2.25, 0.01);
+  }
+
+  // Test carbon brake wear rate
+  void testCarbonBrakeWearRate() {
+    double energyAbsorbed = 1000000.0;  // ft-lbf
+    double wearCoefficient = 1e-9;       // Wear per ft-lbf
+
+    double wear = energyAbsorbed * wearCoefficient;
+    TS_ASSERT_DELTA(wear, 0.001, epsilon);  // 0.1% wear
+  }
+
+  // Test carbon brake cold performance
+  void testCarbonBrakeColdPerformance() {
+    double coldMu = 0.25;   // Lower at cold
+    double hotMu = 0.35;    // Normal at hot
+    double temp = 100.0;    // degrees F
+
+    // Carbon brakes need warmup
+    double transitionTemp = 300.0;
+    double effectiveMu = (temp < transitionTemp) ? coldMu : hotMu;
+
+    TS_ASSERT_DELTA(effectiveMu, 0.25, epsilon);
+  }
+
+  // Test carbon brake moisture sensitivity
+  void testCarbonBrakeMoisture() {
+    double dryMu = 0.35;
+    double wetMu = 0.20;    // Significant reduction
+    bool wetBrakes = true;
+
+    double effectiveMu = wetBrakes ? wetMu : dryMu;
+    TS_ASSERT_DELTA(effectiveMu, 0.20, epsilon);
+  }
+
+  /***************************************************************************
+   * Tire Wear Modeling Tests
+   ***************************************************************************/
+
+  // Test tire wear from braking
+  void testTireWearBraking() {
+    double slipDistance = 100.0;   // ft
+    double wearRate = 0.001;       // Wear per ft of slip
+
+    double wear = slipDistance * wearRate;
+    TS_ASSERT_DELTA(wear, 0.1, epsilon);
+  }
+
+  // Test tire wear from cornering
+  void testTireWearCornering() {
+    double slipAngle = 5.0 * M_PI / 180.0;
+    double distanceTraveled = 1000.0;  // ft
+    double lateralSlip = distanceTraveled * std::tan(slipAngle);
+    double wearRate = 0.0001;
+
+    double wear = lateralSlip * wearRate;
+    TS_ASSERT(wear > 0);
+  }
+
+  // Test tire tread depth
+  void testTireTreadDepth() {
+    double newTreadDepth = 0.5;     // inches
+    double minTreadDepth = 0.125;   // inches
+    double currentDepth = 0.2;
+
+    bool needsReplacement = (currentDepth < minTreadDepth);
+    TS_ASSERT(!needsReplacement);
+
+    currentDepth = 0.1;
+    needsReplacement = (currentDepth < minTreadDepth);
+    TS_ASSERT(needsReplacement);
+  }
+
+  // Test tire pressure loss rate
+  void testTirePressureLoss() {
+    double initialPressure = 200.0;  // psi
+    double lossRate = 0.5;           // psi per day
+    double days = 7.0;
+
+    double finalPressure = initialPressure - (lossRate * days);
+    TS_ASSERT_DELTA(finalPressure, 196.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Emergency Braking Tests
+   ***************************************************************************/
+
+  // Test emergency brake system
+  void testEmergencyBrakeSystem() {
+    bool hydraulicFailed = true;
+    bool emergencyAccumulator = true;
+    double accumulatorPressure = 2500.0;  // psi
+
+    bool canBrake = emergencyAccumulator && (accumulatorPressure > 1000.0);
+    TS_ASSERT(canBrake);
+  }
+
+  // Test parking brake force
+  void testParkingBrakeForce() {
+    double springForce = 1500.0;    // lbs
+    double padMu = 0.35;
+    double effectiveRadius = 0.5;   // ft
+
+    double torque = springForce * padMu * effectiveRadius;
+    TS_ASSERT_DELTA(torque, 262.5, epsilon);
+  }
+
+  // Test brake by wire backup
+  void testBrakeByWireBackup() {
+    bool primarySystem = false;
+    bool backupSystem = true;
+
+    bool brakingAvailable = primarySystem || backupSystem;
+    TS_ASSERT(brakingAvailable);
+  }
+
+  // Test accumulator brake cycles
+  void testAccumulatorBrakeCycles() {
+    double accumulatorVolume = 50.0;   // cubic inches
+    double volumePerCycle = 5.0;       // cubic inches
+
+    int maxCycles = static_cast<int>(accumulatorVolume / volumePerCycle);
+    TS_ASSERT_EQUALS(maxCycles, 10);
+  }
+
+  /***************************************************************************
+   * Tire Pressure Monitoring Tests
+   ***************************************************************************/
+
+  // Test TPMS warning threshold
+  void testTPMSWarning() {
+    double nominalPressure = 200.0;  // psi
+    double currentPressure = 165.0;  // psi
+    double warningThreshold = 0.15;  // 15% low
+
+    double deviation = (nominalPressure - currentPressure) / nominalPressure;
+    bool warning = (deviation > warningThreshold);
+
+    TS_ASSERT(warning);  // 17.5% > 15%
+  }
+
+  // Test TPMS temperature compensation
+  void testTPMSTempCompensation() {
+    double measuredPressure = 220.0;  // psi
+    double ambientTemp = 100.0;       // degrees F
+    double refTemp = 70.0;
+    double tempCoeff = 0.002;         // psi per degree F
+
+    double correctedPressure = measuredPressure - tempCoeff * (ambientTemp - refTemp) * measuredPressure;
+    TS_ASSERT(correctedPressure < measuredPressure);
+  }
+
+  // Test dual sensor redundancy
+  void testDualSensorRedundancy() {
+    double sensor1 = 198.0;  // psi
+    double sensor2 = 202.0;  // psi
+    double maxDisagreement = 10.0;
+
+    double disagreement = std::abs(sensor1 - sensor2);
+    bool sensorsValid = (disagreement < maxDisagreement);
+
+    TS_ASSERT(sensorsValid);
+  }
+
+  /***************************************************************************
+   * Brake Hydraulic System Tests
+   ***************************************************************************/
+
+  // Test brake line pressure drop
+  void testBrakeLinePressureDrop() {
+    double masterCylinderPressure = 1500.0;  // psi
+    double lineLength = 20.0;                // ft
+    double frictionFactor = 1.0;             // psi per ft
+
+    double pressureDrop = lineLength * frictionFactor;
+    double wheelPressure = masterCylinderPressure - pressureDrop;
+
+    TS_ASSERT_DELTA(wheelPressure, 1480.0, epsilon);
+  }
+
+  // Test brake fluid boiling point
+  void testBrakeFluidBoiling() {
+    double fluidTemp = 400.0;          // degrees F
+    double boilingPoint = 450.0;       // degrees F (DOT 4)
+    double wetBoilingPoint = 311.0;    // degrees F
+
+    bool dryFluidSafe = (fluidTemp < boilingPoint);
+    bool wetFluidSafe = (fluidTemp < wetBoilingPoint);
+
+    TS_ASSERT(dryFluidSafe);
+    TS_ASSERT(!wetFluidSafe);
+  }
+
+  // Test brake pedal feel simulation
+  void testBrakePedalFeel() {
+    double pedalForce = 50.0;        // lbs
+    double pedalRatio = 5.0;
+    double masterCylinderArea = 1.0; // sq in
+
+    double hydraulicPressure = (pedalForce * pedalRatio) / masterCylinderArea;
+    TS_ASSERT_DELTA(hydraulicPressure, 250.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Runway Surface Detection Tests
+   ***************************************************************************/
+
+  // Test runway contamination depth
+  void testContaminationDepth() {
+    double waterDepth = 0.25;        // inches
+    double slushDepth = 0.5;         // inches
+    double snowDepth = 2.0;          // inches
+
+    // Friction degradation increases with depth
+    double waterMuFactor = 1.0 - 0.3 * waterDepth;
+    double slushMuFactor = 1.0 - 0.4 * slushDepth;
+    double snowMuFactor = 1.0 - 0.1 * snowDepth;
+
+    TS_ASSERT_DELTA(waterMuFactor, 0.925, 0.01);
+    TS_ASSERT_DELTA(slushMuFactor, 0.80, 0.01);
+    TS_ASSERT_DELTA(snowMuFactor, 0.80, 0.01);
+  }
+
+  // Test grooved runway friction
+  void testGroovedRunwayFriction() {
+    double smoothMu = 0.5;   // Wet smooth
+    double groovedMu = 0.7;  // Wet grooved
+
+    TS_ASSERT(groovedMu > smoothMu);
+    double improvement = (groovedMu - smoothMu) / smoothMu;
+    TS_ASSERT_DELTA(improvement, 0.4, 0.01);  // 40% improvement
+  }
+
+  // Test rubber deposit effect
+  void testRubberDepositEffect() {
+    double cleanMu = 0.8;
+    double rubberMu = 0.6;   // Rubber contaminated
+
+    double degradation = (cleanMu - rubberMu) / cleanMu;
+    TS_ASSERT_DELTA(degradation, 0.25, 0.01);  // 25% reduction
+  }
+
+  /***************************************************************************
+   * Advanced Tire Physics Tests
+   ***************************************************************************/
+
+  // Test Pacejka magic formula
+  void testPacejkaMagicFormula() {
+    double B = 10.0;   // Stiffness factor
+    double C = 1.9;    // Shape factor
+    double D = 1.0;    // Peak value
+    double E = 0.97;   // Curvature factor
+    double slip = 0.1; // 10% slip
+
+    // Simplified Pacejka formula: F = D * sin(C * atan(B*slip - E*(B*slip - atan(B*slip))))
+    double Bslip = B * slip;
+    double F = D * std::sin(C * std::atan(Bslip - E * (Bslip - std::atan(Bslip))));
+
+    TS_ASSERT(F > 0.0);
+    TS_ASSERT(F <= D);  // Cannot exceed peak
+  }
+
+  // Test load sensitivity
+  void testLoadSensitivity() {
+    double nominalLoad = 3000.0;    // lbs
+    double nominalMu = 0.8;
+    double loadSensitivity = 0.1;   // Mu reduction per 1000 lbs over nominal
+
+    double actualLoad = 5000.0;     // lbs
+    double loadExcess = (actualLoad - nominalLoad) / 1000.0;
+    double actualMu = nominalMu - loadSensitivity * loadExcess;
+
+    TS_ASSERT(actualMu < nominalMu);
+    TS_ASSERT_DELTA(actualMu, 0.6, 0.01);
+  }
+
+  // Test tire speed rating
+  void testTireSpeedRating() {
+    double maxRatedSpeed = 225.0;   // mph
+    double actualSpeed = 200.0;     // mph
+
+    bool withinRating = (actualSpeed <= maxRatedSpeed);
+    TS_ASSERT(withinRating);
+
+    actualSpeed = 250.0;
+    withinRating = (actualSpeed <= maxRatedSpeed);
+    TS_ASSERT(!withinRating);
+  }
+
+  // Test tire heat generation
+  void testTireHeatGeneration() {
+    double rollingResistanceForce = 45.0;  // lbs
+    double velocity = 100.0;                // ft/s
+
+    double heatRate = rollingResistanceForce * velocity;  // ft-lbf/s
+    double heatRateBTU = heatRate / 778.16;               // BTU/s
+
+    TS_ASSERT(heatRateBTU > 0);
+    TS_ASSERT_DELTA(heatRateBTU, 5.78, 0.1);
+  }
 };

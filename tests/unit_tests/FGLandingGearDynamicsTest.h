@@ -863,4 +863,424 @@ public:
 
     TS_ASSERT(newPos >= gearPos);
   }
+
+  /***************************************************************************
+   * Shimmy Damper Tests
+   ***************************************************************************/
+
+  // Test shimmy damper effectiveness
+  void testShimmyDamperEffectiveness() {
+    double oscillationFrequency_hz = 15.0;  // Typical shimmy frequency
+    double dampingCoefficient = 500.0;  // lb-s/rad
+    double angularVelocity_rad_s = 0.5;
+
+    double dampingForce_lb = dampingCoefficient * angularVelocity_rad_s;
+
+    TS_ASSERT_DELTA(dampingForce_lb, 250.0, 1.0);
+    TS_ASSERT(dampingForce_lb > 0.0);
+  }
+
+  // Test shimmy damper failure detection
+  void testShimmyDamperFailure() {
+    double normalOscillation_deg = 0.5;
+    double failedOscillation_deg = 5.0;
+    double threshold_deg = 2.0;
+
+    bool damperFailed = (failedOscillation_deg > threshold_deg);
+
+    TS_ASSERT(damperFailed);
+  }
+
+  // Test shimmy frequency calculation
+  void testShimmyFrequencyCalculation() {
+    double wheelInertia_slug_ft2 = 0.5;
+    double tireStiffness_lb_rad = 5000.0;
+
+    // Natural frequency = sqrt(k/I) / (2*pi)
+    double omega_rad_s = std::sqrt(tireStiffness_lb_rad / wheelInertia_slug_ft2);
+    double frequency_hz = omega_rad_s / (2.0 * M_PI);
+
+    TS_ASSERT_DELTA(frequency_hz, 15.92, 0.5);
+  }
+
+  // Test shimmy onset speed
+  void testShimmyOnsetSpeed() {
+    double criticalSpeed_kts = 80.0;  // Speed above which shimmy may occur
+    double groundspeed_kts = 90.0;
+
+    bool shimmyRisk = (groundspeed_kts > criticalSpeed_kts);
+
+    TS_ASSERT(shimmyRisk);
+  }
+
+  /***************************************************************************
+   * Oleo Strut Dynamics Tests
+   ***************************************************************************/
+
+  // Test oleo strut compression on touchdown
+  void testOleoStrutCompression() {
+    double sinkRate_fps = 8.0;
+    double aircraftMass_slug = 300.0;
+    double oleoStiffness_lb_ft = 50000.0;
+    double dampingCoeff_lb_s_ft = 5000.0;
+
+    // Energy absorption: 0.5 * m * v^2
+    double kineticEnergy_ft_lb = 0.5 * aircraftMass_slug * sinkRate_fps * sinkRate_fps;
+
+    TS_ASSERT_DELTA(kineticEnergy_ft_lb, 9600.0, 10.0);
+  }
+
+  // Test oleo extension after compression
+  void testOleoExtensionRebound() {
+    double maxCompression_ft = 0.8;
+    double reboundDamping = 0.3;  // 30% of compression rate
+
+    double extensionRate_fps = 5.0 * reboundDamping;
+
+    TS_ASSERT_DELTA(extensionRate_fps, 1.5, 0.1);
+  }
+
+  // Test oleo strut nitrogen pressure
+  void testOleoNitrogenPressure() {
+    double staticPressure_psi = 800.0;
+    double strokeRatio = 0.5;  // 50% compressed
+    double polytropicExponent = 1.3;
+
+    // Pressure increases with compression: P2 = P1 * (1/(1-stroke))^n
+    double dynamicPressure_psi = staticPressure_psi *
+        std::pow(1.0 / (1.0 - strokeRatio), polytropicExponent);
+
+    TS_ASSERT(dynamicPressure_psi > staticPressure_psi);
+    TS_ASSERT_DELTA(dynamicPressure_psi, 1966.0, 50.0);
+  }
+
+  // Test oleo strut servicing check
+  void testOleoStrutServicing() {
+    double actualExtension_in = 3.5;
+    double minExtension_in = 3.0;
+    double maxExtension_in = 4.0;
+
+    bool properlyServiced = (actualExtension_in >= minExtension_in) &&
+                            (actualExtension_in <= maxExtension_in);
+
+    TS_ASSERT(properlyServiced);
+  }
+
+  /***************************************************************************
+   * Nose Wheel Steering Tests
+   ***************************************************************************/
+
+  // Test nose wheel steering authority
+  void testNoseWheelSteeringAuthority() {
+    double maxSteeringAngle_deg = 60.0;
+    double rudderpPosition_norm = 0.5;
+
+    double commandedAngle_deg = maxSteeringAngle_deg * rudderpPosition_norm;
+
+    TS_ASSERT_DELTA(commandedAngle_deg, 30.0, 0.1);
+  }
+
+  // Test steering rate limit
+  void testSteeringRateLimit() {
+    double maxSteeringRate_deg_s = 20.0;
+    double dt = 0.1;
+    double currentAngle_deg = 10.0;
+    double commandedAngle_deg = 40.0;
+
+    double deltaAngle = commandedAngle_deg - currentAngle_deg;
+    double maxDelta = maxSteeringRate_deg_s * dt;
+    double actualDelta = std::min(std::abs(deltaAngle), maxDelta);
+    if (deltaAngle < 0) actualDelta = -actualDelta;
+
+    double newAngle = currentAngle_deg + actualDelta;
+
+    TS_ASSERT_DELTA(newAngle, 12.0, 0.1);
+  }
+
+  // Test steering disconnect at high speed
+  void testSteeringHighSpeedDisconnect() {
+    double groundspeed_kts = 80.0;
+    double disconnectSpeed_kts = 60.0;
+
+    bool steeringEnabled = (groundspeed_kts < disconnectSpeed_kts);
+
+    TS_ASSERT(!steeringEnabled);
+  }
+
+  // Test tiller vs rudder pedal steering
+  void testTillerVsRudderSteering() {
+    double tillerAngle_deg = 45.0;
+    double rudderPedalAngle_deg = 5.0;
+
+    // Tiller provides more authority
+    double tillerAuthority_deg = 60.0;
+    double rudderAuthority_deg = 7.0;
+
+    double tillerCommand = (tillerAngle_deg / tillerAuthority_deg) * tillerAuthority_deg;
+    double rudderCommand = (rudderPedalAngle_deg / rudderAuthority_deg) * rudderAuthority_deg;
+
+    TS_ASSERT(tillerCommand > rudderCommand);
+  }
+
+  /***************************************************************************
+   * Tailhook/Arresting Gear Tests (Carrier Operations)
+   ***************************************************************************/
+
+  // Test tailhook extension time
+  void testTailhookExtensionTime() {
+    double hookPos = 0.0;  // Retracted
+    double extensionTime_s = 2.0;
+    double dt = 0.1;
+
+    double extensionRate = 1.0 / extensionTime_s;
+    hookPos += extensionRate * dt;
+
+    TS_ASSERT_DELTA(hookPos, 0.05, 0.001);
+  }
+
+  // Test arrestor wire engagement
+  void testArrestorWireEngagement() {
+    double hookHeight_ft = 0.5;
+    double wireHeight_ft = 0.3;
+    double engagementTolerance_ft = 0.4;
+
+    bool wireEngaged = std::abs(hookHeight_ft - wireHeight_ft) < engagementTolerance_ft;
+
+    TS_ASSERT(wireEngaged);
+  }
+
+  // Test arrested deceleration
+  void testArrestedDeceleration() {
+    double initialSpeed_kts = 130.0;
+    double arrestDistance_ft = 300.0;
+    double initialSpeed_fps = initialSpeed_kts * 1.68781;
+
+    // v^2 = 2*a*d -> a = v^2 / (2*d)
+    double deceleration_fps2 = (initialSpeed_fps * initialSpeed_fps) / (2.0 * arrestDistance_ft);
+    double deceleration_g = deceleration_fps2 / 32.174;
+
+    TS_ASSERT_DELTA(deceleration_g, 2.49, 0.1);  // ~2.5g arrest deceleration
+  }
+
+  // Test hook bounce back prevention
+  void testHookBounceBack() {
+    double hookAngle_deg = 45.0;  // Normal deployed angle
+    double bounceAngle_deg = 60.0;  // Max before damper engages
+    double dampingForce_lb = 200.0;
+
+    bool damperActive = (hookAngle_deg > 40.0);
+
+    TS_ASSERT(damperActive);
+  }
+
+  /***************************************************************************
+   * Catapult Launch Tests (Carrier Operations)
+   ***************************************************************************/
+
+  // Test launch bar extension
+  void testLaunchBarExtension() {
+    double launchBarPos = 0.0;
+    double extensionTime_s = 1.5;
+    double dt = 0.1;
+
+    double rate = 1.0 / extensionTime_s;
+    launchBarPos += rate * dt;
+
+    TS_ASSERT_DELTA(launchBarPos, 0.0667, 0.001);
+  }
+
+  // Test catapult acceleration
+  void testCatapultAcceleration() {
+    double launchSpeed_kts = 150.0;
+    double catapultLength_ft = 300.0;
+    double launchSpeed_fps = launchSpeed_kts * 1.68781;
+
+    // v^2 = 2*a*d -> a = v^2 / (2*d)
+    double acceleration_fps2 = (launchSpeed_fps * launchSpeed_fps) / (2.0 * catapultLength_ft);
+    double acceleration_g = acceleration_fps2 / 32.174;
+
+    TS_ASSERT_DELTA(acceleration_g, 3.31, 0.1);
+  }
+
+  // Test hold-back bar release
+  void testHoldBackBarRelease() {
+    double catapultForce_lb = 80000.0;
+    double holdBackStrength_lb = 75000.0;
+
+    bool holdBackReleased = (catapultForce_lb > holdBackStrength_lb);
+
+    TS_ASSERT(holdBackReleased);
+  }
+
+  // Test nose gear catapult loads
+  void testNoseGearCatapultLoads() {
+    double catapultForce_lb = 80000.0;
+    double noseGearDesignLoad_lb = 100000.0;
+
+    bool withinLimits = (catapultForce_lb < noseGearDesignLoad_lb);
+
+    TS_ASSERT(withinLimits);
+  }
+
+  /***************************************************************************
+   * Ground Maneuvering Tests
+   ***************************************************************************/
+
+  // Test minimum turning radius
+  void testMinimumTurningRadius() {
+    double wheelbase_ft = 40.0;
+    double maxSteeringAngle_deg = 60.0;
+    double maxSteeringAngle_rad = maxSteeringAngle_deg * deg2rad;
+
+    // R = L / tan(steering_angle)
+    double turningRadius_ft = wheelbase_ft / std::tan(maxSteeringAngle_rad);
+
+    TS_ASSERT_DELTA(turningRadius_ft, 23.1, 0.5);
+  }
+
+  // Test crosswind weathervaning
+  void testCrosswindWeathervaning() {
+    double crosswindComponent_kts = 15.0;
+    double finArea_ft2 = 100.0;
+    double dynamicPressure = 0.5 * 0.002377 * std::pow(crosswindComponent_kts * 1.68781, 2);
+
+    double weathervaneForce_lb = dynamicPressure * finArea_ft2;
+
+    TS_ASSERT(weathervaneForce_lb > 0.0);
+  }
+
+  // Test taxi speed limits
+  void testTaxiSpeedLimits() {
+    double currentSpeed_kts = 25.0;
+    double maxStraightTaxi_kts = 30.0;
+    double maxTurnTaxi_kts = 10.0;
+    bool inTurn = false;
+
+    double maxSpeed = inTurn ? maxTurnTaxi_kts : maxStraightTaxi_kts;
+    bool withinLimits = (currentSpeed_kts < maxSpeed);
+
+    TS_ASSERT(withinLimits);
+  }
+
+  // Test differential braking turn assist
+  void testDifferentialBrakingTurn() {
+    double leftBrake = 0.8;
+    double rightBrake = 0.2;
+    double brakeDifferential = leftBrake - rightBrake;
+
+    // Differential creates yaw moment
+    bool turningRight = (brakeDifferential > 0.0);
+
+    TS_ASSERT(turningRight);
+    TS_ASSERT_DELTA(brakeDifferential, 0.6, 0.01);
+  }
+
+  /***************************************************************************
+   * Gear Bay Environment Tests
+   ***************************************************************************/
+
+  // Test gear bay temperature limits
+  void testGearBayTemperature() {
+    double ambientTemp_c = -50.0;  // High altitude
+    double brakeHeat_c = 150.0;    // After landing
+    double gearBayTemp_c = brakeHeat_c;
+
+    double maxTemp_c = 200.0;
+    bool tempSafe = (gearBayTemp_c < maxTemp_c);
+
+    TS_ASSERT(tempSafe);
+  }
+
+  // Test gear bay fire detection
+  void testGearBayFireDetection() {
+    double temperature_c = 180.0;
+    double fireWarningThreshold_c = 150.0;
+
+    bool fireWarning = (temperature_c > fireWarningThreshold_c);
+
+    TS_ASSERT(fireWarning);
+  }
+
+  // Test gear bay pressurization effect
+  void testGearBayPressurization() {
+    double cabinAltitude_ft = 8000.0;
+    double gearBayAltitude_ft = 35000.0;  // Unpressurized
+
+    double pressureDifferential_psi = (gearBayAltitude_ft - cabinAltitude_ft) / 2000.0;
+
+    TS_ASSERT(pressureDifferential_psi > 0.0);
+  }
+
+  // Test gear bay ice accumulation
+  void testGearBayIceAccumulation() {
+    double temperature_c = -20.0;
+    double humidity_percent = 80.0;
+    double flightTime_hr = 2.0;
+
+    bool icingConditions = (temperature_c < 0.0) && (humidity_percent > 60.0);
+    double iceAccumulation_mm = icingConditions ? (flightTime_hr * 0.5) : 0.0;
+
+    TS_ASSERT(icingConditions);
+    TS_ASSERT_DELTA(iceAccumulation_mm, 1.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Tire Pressure and Temperature Tests
+   ***************************************************************************/
+
+  // Test tire pressure change with altitude
+  void testTirePressureWithAltitude() {
+    double groundPressure_psi = 200.0;
+    double ambientPressure_ground_psi = 14.7;
+    double ambientPressure_altitude_psi = 3.46;  // 35000 ft
+
+    // Tire expands as ambient pressure drops
+    double pressureIncrease_psi = (ambientPressure_ground_psi - ambientPressure_altitude_psi);
+    double altitudePressure_psi = groundPressure_psi + pressureIncrease_psi;
+
+    TS_ASSERT_DELTA(altitudePressure_psi, 211.24, 0.5);
+  }
+
+  // Test tire temperature from braking
+  void testTireTemperatureFromBraking() {
+    double initialTemp_c = 20.0;
+    double brakingEnergy_j = 5000000.0;  // 5 MJ
+    double tireMass_kg = 50.0;
+    double specificHeat_j_kg_c = 1500.0;
+
+    double tempRise_c = brakingEnergy_j / (tireMass_kg * specificHeat_j_kg_c);
+    double finalTemp_c = initialTemp_c + tempRise_c;
+
+    TS_ASSERT_DELTA(tempRise_c, 66.67, 1.0);
+  }
+
+  // Test tire pressure monitoring system
+  void testTPMSWarningLogic() {
+    double leftMainPressure_psi = 185.0;
+    double rightMainPressure_psi = 200.0;
+    double nominalPressure_psi = 200.0;
+    double warningThreshold_percent = 10.0;
+
+    double leftDeviation_percent = std::abs(leftMainPressure_psi - nominalPressure_psi) /
+                                   nominalPressure_psi * 100.0;
+
+    bool lowPressureWarning = (leftDeviation_percent > warningThreshold_percent);
+
+    TS_ASSERT(!lowPressureWarning);
+    TS_ASSERT_DELTA(leftDeviation_percent, 7.5, 0.1);
+  }
+
+  // Test tire blowout detection
+  void testTireBlowoutDetection() {
+    double previousPressure_psi = 200.0;
+    double currentPressure_psi = 20.0;
+    double maxPressureLossRate_psi_s = 50.0;
+    double dt = 0.1;
+
+    double pressureLossRate = (previousPressure_psi - currentPressure_psi) / dt;
+    bool blowoutDetected = (pressureLossRate > maxPressureLossRate_psi_s);
+
+    TS_ASSERT(blowoutDetected);
+    TS_ASSERT_DELTA(pressureLossRate, 1800.0, 10.0);
+  }
 };
