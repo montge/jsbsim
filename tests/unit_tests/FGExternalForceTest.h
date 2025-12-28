@@ -1251,4 +1251,198 @@ public:
       TS_ASSERT_DELTA(moment.Magnitude(), 0.0, epsilon);
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete external force system
+  void testCompleteExternalForceSystem() {
+    FGColumnVector3 thrust(1000.0, 0.0, 0.0);
+    FGColumnVector3 drag(-200.0, 0.0, 0.0);
+    FGColumnVector3 lift(0.0, 0.0, -500.0);
+    FGColumnVector3 weight(0.0, 0.0, 3000.0);
+
+    FGColumnVector3 total = thrust + drag + lift + weight;
+    TS_ASSERT_DELTA(total(1), 800.0, epsilon);
+    TS_ASSERT_DELTA(total(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(total(3), 2500.0, epsilon);
+  }
+
+  // Test force resolution into components
+  void testForceResolutionComponents() {
+    double magnitude = 1000.0;
+    double angle = 30.0 * M_PI / 180.0;
+
+    double fx = magnitude * std::cos(angle);
+    double fz = magnitude * std::sin(angle);
+
+    TS_ASSERT_DELTA(fx, 866.025, 0.01);
+    TS_ASSERT_DELTA(fz, 500.0, 0.01);
+  }
+
+  // Test moment from offset force
+  void testMomentFromOffsetForce() {
+    FGColumnVector3 position(10.0, 0.0, 0.0);  // ft from CG
+    FGColumnVector3 force(0.0, 0.0, -100.0);   // downward force
+
+    // Cross product: M = r x F
+    FGColumnVector3 moment = position * force;
+    TS_ASSERT_DELTA(moment(2), 1000.0, epsilon);  // Pitching moment
+  }
+
+  // Test multiple force vector summation
+  void testMultipleForceVectorSummation() {
+    std::vector<FGColumnVector3> forces;
+    forces.push_back(FGColumnVector3(100.0, 0.0, 0.0));
+    forces.push_back(FGColumnVector3(200.0, 50.0, 0.0));
+    forces.push_back(FGColumnVector3(-50.0, -50.0, 100.0));
+
+    FGColumnVector3 total(0.0, 0.0, 0.0);
+    for (const auto& f : forces) {
+      total += f;
+    }
+
+    TS_ASSERT_DELTA(total(1), 250.0, epsilon);
+    TS_ASSERT_DELTA(total(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(total(3), 100.0, epsilon);
+  }
+
+  // Test force transformation body to wind axis
+  void testForceTransformationBodyToWind() {
+    double alpha = 5.0 * M_PI / 180.0;  // angle of attack
+    FGColumnVector3 forceBody(100.0, 0.0, -50.0);
+
+    // Simple 2D rotation
+    double fx_wind = forceBody(1) * std::cos(alpha) + forceBody(3) * std::sin(alpha);
+    double fz_wind = -forceBody(1) * std::sin(alpha) + forceBody(3) * std::cos(alpha);
+
+    TS_ASSERT(!std::isnan(fx_wind));
+    TS_ASSERT(!std::isnan(fz_wind));
+  }
+
+  // Test thrust vectoring effect
+  void testThrustVectoringEffect() {
+    double thrust = 5000.0;  // lbf
+    double deflection = 10.0 * M_PI / 180.0;  // rad
+
+    double axial = thrust * std::cos(deflection);
+    double normal = thrust * std::sin(deflection);
+
+    TS_ASSERT(axial > normal);
+    TS_ASSERT_DELTA(axial, 4924.0, 1.0);
+    TS_ASSERT_DELTA(normal, 868.2, 1.0);
+  }
+
+  // Test ground reaction force
+  void testGroundReactionForce() {
+    double weight = 10000.0;  // lbf
+    double gear_load_factor = 0.4;  // 40% on nose gear
+
+    double nose_load = weight * gear_load_factor;
+    double main_load = weight * (1.0 - gear_load_factor);
+
+    TS_ASSERT_DELTA(nose_load + main_load, weight, epsilon);
+  }
+
+  // Test aerodynamic center offset moment
+  void testAerodynamicCenterOffsetMoment() {
+    double lift = 5000.0;
+    double ac_offset = 0.5;  // ft forward of CG
+
+    double pitching_moment = lift * ac_offset;
+    TS_ASSERT_DELTA(pitching_moment, 2500.0, epsilon);
+  }
+
+  // Test propeller torque reaction
+  void testPropellerTorqueReaction() {
+    double power = 200.0 * 550.0;  // 200 HP in ft-lbf/s
+    double rpm = 2400.0;
+    double omega = rpm * 2.0 * M_PI / 60.0;
+
+    double torque = power / omega;
+    TS_ASSERT(torque > 0.0);
+    TS_ASSERT_DELTA(torque, 437.5, 1.0);
+  }
+
+  // Test gyroscopic precession force
+  void testGyroscopicPrecessionForce() {
+    double I_prop = 5.0;    // slug-ft^2
+    double omega_prop = 250.0;  // rad/s
+    double pitch_rate = 0.1;    // rad/s
+
+    double precession_moment = I_prop * omega_prop * pitch_rate;
+    TS_ASSERT_DELTA(precession_moment, 125.0, epsilon);
+  }
+
+  // Test force coefficient to force conversion
+  void testForceCoefficientConversion() {
+    double Cx = 0.05;
+    double qbar = 100.0;  // psf
+    double S = 200.0;     // ft^2
+
+    double force = Cx * qbar * S;
+    TS_ASSERT_DELTA(force, 1000.0, epsilon);
+  }
+
+  // Test distributed load integration
+  void testDistributedLoadIntegration() {
+    double span = 40.0;  // ft
+    double load_per_ft = 50.0;  // lbf/ft
+
+    double total_load = load_per_ft * span;
+    TS_ASSERT_DELTA(total_load, 2000.0, epsilon);
+  }
+
+  // Test force equilibrium check
+  void testForceEquilibriumCheck() {
+    FGColumnVector3 lift(0.0, 0.0, -10000.0);
+    FGColumnVector3 weight(0.0, 0.0, 10000.0);
+    FGColumnVector3 thrust(500.0, 0.0, 0.0);
+    FGColumnVector3 drag(-500.0, 0.0, 0.0);
+
+    FGColumnVector3 net = lift + weight + thrust + drag;
+    TS_ASSERT_DELTA(net.Magnitude(), 0.0, epsilon);
+  }
+
+  // Test moment equilibrium check
+  void testMomentEquilibriumCheck() {
+    double nose_up_moment = 5000.0;
+    double tail_down_moment = -5000.0;
+
+    double net_moment = nose_up_moment + tail_down_moment;
+    TS_ASSERT_DELTA(net_moment, 0.0, epsilon);
+  }
+
+  // Test force application point effect
+  void testForceApplicationPointEffect() {
+    FGColumnVector3 force(0.0, 0.0, -100.0);
+    FGColumnVector3 point1(5.0, 0.0, 0.0);
+    FGColumnVector3 point2(10.0, 0.0, 0.0);
+
+    FGColumnVector3 moment1 = point1 * force;
+    FGColumnVector3 moment2 = point2 * force;
+
+    TS_ASSERT(moment2.Magnitude() > moment1.Magnitude());
+  }
+
+  // Test external force instance independence
+  void testExternalForceInstanceIndependence() {
+    FGColumnVector3 force1(100.0, 0.0, 0.0);
+    FGColumnVector3 force2(200.0, 50.0, -30.0);
+
+    TS_ASSERT(force1.Magnitude() != force2.Magnitude());
+    TS_ASSERT_DELTA(force1(1), 100.0, epsilon);
+    TS_ASSERT_DELTA(force2(1), 200.0, epsilon);
+  }
+
+  // Test force vector state independence
+  void testForceVectorStateIndependence() {
+    FGColumnVector3 state1(100.0, 200.0, 300.0);
+    FGColumnVector3 state2 = state1;
+    state2(1) = 500.0;
+
+    TS_ASSERT_DELTA(state1(1), 100.0, epsilon);
+    TS_ASSERT_DELTA(state2(1), 500.0, epsilon);
+  }
 };

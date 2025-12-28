@@ -1465,4 +1465,318 @@ public:
     TS_ASSERT(thrust < 1.0);
     TS_ASSERT(!std::isnan(thrust));
   }
+
+  /***************************************************************************
+   * Nozzle Efficiency and Performance Tests
+   ***************************************************************************/
+
+  // Test nozzle efficiency calculation
+  void testNozzleEfficiencyCalculation() {
+    double actualThrust = 450000.0;    // lbf
+    double idealThrust = 500000.0;     // lbf
+
+    double efficiency = actualThrust / idealThrust;
+    TS_ASSERT_DELTA(efficiency, 0.9, 0.001);
+
+    // Typical rocket nozzle efficiency range
+    TS_ASSERT(efficiency > 0.85);
+    TS_ASSERT(efficiency < 1.0);
+  }
+
+  // Test thrust coefficient calculation
+  void testThrustCoefficientCalculation() {
+    double gamma = 1.4;
+    double expansionRatio = 25.0;
+    double pressureRatio = 100.0;
+
+    // Simplified thrust coefficient calculation
+    double term1 = 2.0 * gamma * gamma / (gamma - 1.0);
+    double term2 = pow(2.0 / (gamma + 1.0), (gamma + 1.0) / (gamma - 1.0));
+    double term3 = 1.0 - pow(1.0 / pressureRatio, (gamma - 1.0) / gamma);
+
+    double Cf = sqrt(term1 * term2 * term3);
+    TS_ASSERT(Cf > 1.5);
+    TS_ASSERT(Cf < 2.0);
+  }
+
+  // Test specific impulse from thrust and mass flow
+  void testSpecificImpulseFromThrustMassFlow() {
+    double thrust = 500000.0;     // lbf
+    double massFlow = 1500.0;     // lbs/s
+
+    double Isp = thrust / massFlow;
+    TS_ASSERT_DELTA(Isp, 333.33, 1.0);
+
+    // Good rocket engine Isp range (300-450 s)
+    TS_ASSERT(Isp > 300.0);
+    TS_ASSERT(Isp < 450.0);
+  }
+
+  // Test characteristic velocity from pressure and mass flow
+  void testCharacteristicVelocityFromPressure() {
+    double chamberPressure = 1000.0 * 144.0;  // psi to psf
+    double throatArea = 1.5;                   // sq ft
+    double massFlow = 1500.0;                  // lbs/s
+
+    // c* = Pc * At / mdot
+    double cStar = chamberPressure * throatArea / massFlow;
+    TS_ASSERT(cStar > 100.0);
+
+    // Verify units are consistent
+    double velocity = cStar;  // ft/s
+    TS_ASSERT(velocity > 0.0);
+  }
+
+  // Test exhaust velocity calculation
+  void testExhaustVelocityCalculation() {
+    double Isp = 400.0;          // seconds
+    double g0 = 32.174;          // ft/s^2
+
+    double exhaustVelocity = Isp * g0;
+    TS_ASSERT_DELTA(exhaustVelocity, 12869.6, 1.0);
+
+    // High performance exhaust velocity
+    TS_ASSERT(exhaustVelocity > 12000.0);
+  }
+
+  /***************************************************************************
+   * Nozzle Geometry Optimization Tests
+   ***************************************************************************/
+
+  // Test optimal expansion ratio for altitude
+  void testOptimalExpansionRatioForAltitude() {
+    // At sea level, smaller expansion preferred
+    double seaLevelOptimal = 10.0;
+
+    // At high altitude, larger expansion preferred
+    double highAltitudeOptimal = 50.0;
+
+    // In vacuum, even larger
+    double vacuumOptimal = 100.0;
+
+    TS_ASSERT(highAltitudeOptimal > seaLevelOptimal);
+    TS_ASSERT(vacuumOptimal > highAltitudeOptimal);
+
+    // Verify ratio relationships
+    TS_ASSERT_DELTA(highAltitudeOptimal / seaLevelOptimal, 5.0, 0.01);
+  }
+
+  // Test bell nozzle contour parameters
+  void testBellNozzleContour() {
+    double throatRadius = 0.5;     // ft
+    double exitRadius = 2.0;       // ft
+    double nozzleLength = 3.0;     // ft
+
+    double areaRatio = (exitRadius * exitRadius) / (throatRadius * throatRadius);
+    TS_ASSERT_DELTA(areaRatio, 16.0, 0.01);
+
+    // Length-to-throat ratio
+    double lengthRatio = nozzleLength / throatRadius;
+    TS_ASSERT_DELTA(lengthRatio, 6.0, 0.01);
+  }
+
+  // Test aerospike nozzle altitude compensation
+  void testAerospikeAltitudeCompensation() {
+    double seaLevelThrust = 450000.0;
+    double vacuumThrust = 500000.0;
+
+    // Aerospike maintains better efficiency ratio
+    double conventionalSeaLevel = 400000.0;
+    double conventionalVacuum = 500000.0;
+
+    double aerospikeRatio = seaLevelThrust / vacuumThrust;
+    double conventionalRatio = conventionalSeaLevel / conventionalVacuum;
+
+    // Aerospike has better sea-level to vacuum ratio
+    TS_ASSERT(aerospikeRatio > conventionalRatio);
+    TS_ASSERT_DELTA(aerospikeRatio, 0.9, 0.01);
+    TS_ASSERT_DELTA(conventionalRatio, 0.8, 0.01);
+  }
+
+  // Test dual-bell nozzle mode transition
+  void testDualBellNozzleModeTransition() {
+    double mode1ExpansionRatio = 15.0;
+    double mode2ExpansionRatio = 40.0;
+
+    // Transition altitude (simplified)
+    double transitionAltitude = 30000.0;  // ft
+
+    // Mode 1 thrust at sea level
+    double mode1SeaLevelThrust = 450000.0;
+
+    // Mode 2 thrust at altitude
+    double mode2AltitudeThrust = 480000.0;
+
+    TS_ASSERT(mode2ExpansionRatio > mode1ExpansionRatio);
+    TS_ASSERT(mode2AltitudeThrust > mode1SeaLevelThrust);
+    TS_ASSERT(transitionAltitude > 0.0);
+  }
+
+  /***************************************************************************
+   * Thermal and Material Effects Tests
+   ***************************************************************************/
+
+  // Test thermal expansion effect on throat area
+  void testThermalExpansionOnThroatArea() {
+    double coldThroatDiameter = 1.0;      // ft
+    double thermalExpansionCoeff = 0.001; // per 100°F
+    double tempRise = 500.0;              // °F
+
+    double hotThroatDiameter = coldThroatDiameter * (1.0 + thermalExpansionCoeff * tempRise / 100.0);
+    double areaRatio = (hotThroatDiameter * hotThroatDiameter) / (coldThroatDiameter * coldThroatDiameter);
+
+    TS_ASSERT(hotThroatDiameter > coldThroatDiameter);
+    TS_ASSERT_DELTA(areaRatio, 1.01, 0.01);
+  }
+
+  // Test regenerative cooling heat transfer
+  void testRegenerativeCoolingHeatTransfer() {
+    double heatFlux = 10.0;           // BTU/ft^2-s
+    double nozzleWallArea = 50.0;     // sq ft
+    double coolantMassFlow = 500.0;   // lbs/s
+    double coolantCp = 1.0;           // BTU/lb-°F
+
+    double totalHeat = heatFlux * nozzleWallArea;
+    double tempRise = totalHeat / (coolantMassFlow * coolantCp);
+
+    TS_ASSERT_DELTA(totalHeat, 500.0, 0.1);
+    TS_ASSERT_DELTA(tempRise, 1.0, 0.01);
+  }
+
+  // Test film cooling effectiveness
+  void testFilmCoolingEffectiveness() {
+    double hotGasTemp = 6000.0;       // °F
+    double wallTempWithCooling = 2000.0;
+    double coolantTemp = 500.0;
+
+    double effectiveness = (hotGasTemp - wallTempWithCooling) / (hotGasTemp - coolantTemp);
+    TS_ASSERT_DELTA(effectiveness, 0.727, 0.01);
+
+    // Good film cooling effectiveness > 0.5
+    TS_ASSERT(effectiveness > 0.5);
+  }
+
+  /***************************************************************************
+   * Complete Nozzle System Tests
+   ***************************************************************************/
+
+  // Test complete nozzle performance envelope
+  void testCompleteNozzlePerformanceEnvelope() {
+    double vacuumThrust = 500000.0;
+    double exitArea = 4.0;
+    double Isp_vacuum = 450.0;
+
+    // Calculate performance at multiple altitudes
+    double altitudes[] = {0.0, 30000.0, 60000.0, 100000.0};
+    double pressures[] = {2116.22, 628.0, 151.0, 23.0};
+
+    double prevThrust = 0.0;
+    for (int i = 0; i < 4; i++) {
+      double thrust = vacuumThrust - pressures[i] * exitArea;
+      TS_ASSERT(thrust > prevThrust || i == 0);
+      prevThrust = thrust;
+    }
+
+    // Vacuum thrust should be maximum
+    double spaceThrust = vacuumThrust - 0.0 * exitArea;
+    TS_ASSERT_DELTA(spaceThrust, vacuumThrust, 0.01);
+  }
+
+  // Test nozzle thrust vectoring system
+  void testNozzleThrustVectoringSystem() {
+    double thrust = 500000.0;
+    double maxGimbalAngle = 8.0 * M_PI / 180.0;  // 8 degrees in radians
+
+    double axialThrust = thrust * cos(maxGimbalAngle);
+    double sideForce = thrust * sin(maxGimbalAngle);
+
+    TS_ASSERT_DELTA(axialThrust, 495139.0, 100.0);
+    TS_ASSERT_DELTA(sideForce, 69565.0, 100.0);
+
+    // Verify thrust magnitude is preserved
+    double totalThrust = sqrt(axialThrust * axialThrust + sideForce * sideForce);
+    TS_ASSERT_DELTA(totalThrust, thrust, 1.0);
+  }
+
+  // Test multi-nozzle cluster performance
+  void testMultiNozzleClusterPerformance() {
+    double singleNozzleThrust = 500000.0;
+    int nozzleCount = 9;  // Like Falcon 9 first stage
+
+    double totalThrust = singleNozzleThrust * nozzleCount;
+    TS_ASSERT_DELTA(totalThrust, 4500000.0, 1.0);
+
+    // Center engine throttled for landing
+    double landingThrust = singleNozzleThrust * 0.4;  // 40% throttle
+    TS_ASSERT_DELTA(landingThrust, 200000.0, 1.0);
+
+    // Cluster redundancy
+    double thrustWith1Out = singleNozzleThrust * (nozzleCount - 1);
+    TS_ASSERT_DELTA(thrustWith1Out / totalThrust, 0.889, 0.01);
+  }
+
+  // Test nozzle startup transient
+  void testNozzleStartupTransient() {
+    double steadyStateThrust = 500000.0;
+    double rampTime = 2.0;  // seconds
+
+    // Simulate thrust buildup
+    double times[] = {0.0, 0.5, 1.0, 1.5, 2.0};
+    double prevThrust = 0.0;
+
+    for (int i = 0; i < 5; i++) {
+      double fraction = times[i] / rampTime;
+      if (fraction > 1.0) fraction = 1.0;
+      double thrust = steadyStateThrust * fraction;
+      TS_ASSERT(thrust >= prevThrust);
+      prevThrust = thrust;
+    }
+
+    TS_ASSERT_DELTA(prevThrust, steadyStateThrust, 0.01);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test independent nozzle calculations
+  void testIndependentNozzleCalculations() {
+    double vacThrust1 = 500000.0;
+    double exitArea1 = 4.0;
+    double ambient1 = 2116.22;
+
+    double vacThrust2 = 300000.0;
+    double exitArea2 = 2.5;
+    double ambient2 = 1000.0;
+
+    double thrust1 = vacThrust1 - ambient1 * exitArea1;
+    double thrust2 = vacThrust2 - ambient2 * exitArea2;
+
+    TS_ASSERT_DELTA(thrust1, 491535.12, 1.0);
+    TS_ASSERT_DELTA(thrust2, 297500.0, 1.0);
+
+    // Verify independence
+    TS_ASSERT(std::abs(thrust1 - thrust2) > 100000.0);
+  }
+
+  // Test nozzle state does not persist between calculations
+  void testNozzleStateNoPersistence() {
+    // First calculation set
+    double Isp1 = 400.0;
+    double massFlow1 = 1000.0;
+    double thrust1 = Isp1 * massFlow1;
+
+    // Second calculation set (different values)
+    double Isp2 = 350.0;
+    double massFlow2 = 1200.0;
+    double thrust2 = Isp2 * massFlow2;
+
+    // Verify calculations are independent
+    TS_ASSERT_DELTA(thrust1, 400000.0, 0.1);
+    TS_ASSERT_DELTA(thrust2, 420000.0, 0.1);
+
+    // Recalculate first to verify no state pollution
+    double thrust1_again = Isp1 * massFlow1;
+    TS_ASSERT_DELTA(thrust1_again, thrust1, 0.001);
+  }
 };

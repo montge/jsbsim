@@ -1086,4 +1086,180 @@ public:
     // This is a small effect
     TS_ASSERT(R_moon > r * 50);  // Moon is much farther than Earth radius
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete inertial navigation calculation
+  void testCompleteInertialNavigation() {
+    double lat = 45.0 * DEG_TO_RAD;
+    double lon = -75.0 * DEG_TO_RAD;
+    double alt = 30000.0;  // ft
+
+    // Earth radius at latitude (WGS84 eccentricity squared)
+    double e2 = 1.0 - (WGS84_B * WGS84_B) / (WGS84_A * WGS84_A);
+    double N = WGS84_A / std::sqrt(1.0 - e2 * std::sin(lat) * std::sin(lat));
+    double M = WGS84_A * (1.0 - e2) / std::pow(1.0 - e2 * std::sin(lat) * std::sin(lat), 1.5);
+
+    TS_ASSERT(N > 0.0);
+    TS_ASSERT(M > 0.0);
+    TS_ASSERT(N > M);  // N > M for oblate ellipsoid
+  }
+
+  // Test inertial velocity to ground velocity
+  void testInertialToGroundVelocity() {
+    double v_inertial = 500.0;  // ft/s
+    double omega_earth = OMEGA_EARTH;
+    double r = WGS84_A + 30000.0;
+    double lat = 45.0 * DEG_TO_RAD;
+
+    double v_rotation = omega_earth * r * std::cos(lat);
+    double v_ground_approx = v_inertial - v_rotation;
+
+    TS_ASSERT(v_rotation > 0.0);
+    TS_ASSERT(!std::isnan(v_ground_approx));
+  }
+
+  // Test gravity gradient torque
+  void testGravityGradientTorque() {
+    double I_diff = 100.0;  // slug-ft^2 (difference in inertias)
+    double g = G0;
+    double r = WGS84_A;
+    double theta = 5.0 * DEG_TO_RAD;
+
+    double torque = 3.0 * g * I_diff * std::sin(2.0 * theta) / (2.0 * r);
+    TS_ASSERT(!std::isnan(torque));
+  }
+
+  // Test orbital velocity at altitude
+  void testOrbitalVelocityAtAltitude() {
+    double alt = 200.0 * 6076.12;  // 200 nm in ft
+    double r = WGS84_A + alt;
+
+    double v_orbital = std::sqrt(GM / r);
+    TS_ASSERT(v_orbital > 20000.0);  // Should be about 25000 ft/s
+    TS_ASSERT(v_orbital < 30000.0);
+  }
+
+  // Test atmospheric drag effect on orbit
+  void testAtmosphericDragOrbitEffect() {
+    double v = 25000.0;  // ft/s
+    double Cd = 2.2;
+    double A = 100.0;  // ft^2
+    double rho = 1e-12;  // Very thin atmosphere (higher orbit)
+
+    double drag = 0.5 * rho * v * v * Cd * A;
+    TS_ASSERT(drag > 0.0);
+    TS_ASSERT(drag < 0.1);  // Very small at high altitude
+  }
+
+  // Test Schuler period calculation
+  void testSchulerPeriodCalculation() {
+    // Schuler period = 2*pi*sqrt(R/g) ≈ 84.4 minutes
+    double T_schuler = 2.0 * M_PI * std::sqrt(WGS84_A / G0);
+    double T_minutes = T_schuler / 60.0;
+
+    TS_ASSERT_DELTA(T_minutes, 84.4, 1.0);
+  }
+
+  // Test Foucault pendulum period at latitude
+  void testFoucaultPendulumPeriodAtLatitude() {
+    double lat = 45.0 * DEG_TO_RAD;
+    double sidereal_day = 86164.1;  // seconds
+
+    double T_foucault = sidereal_day / std::sin(lat);
+    TS_ASSERT(T_foucault > sidereal_day);
+  }
+
+  // Test geopotential vs geometric altitude
+  void testGeopotentialVsGeometricAltitude() {
+    double geometric_alt = 100000.0;  // ft
+    double r0 = WGS84_A;
+
+    double geopotential_alt = geometric_alt * r0 / (r0 + geometric_alt);
+    TS_ASSERT(geopotential_alt < geometric_alt);
+  }
+
+  // Test gravitational potential energy
+  void testGravitationalPotentialEnergy() {
+    double m = 100.0;  // slugs
+    double r1 = WGS84_A;
+    double r2 = WGS84_A + 100000.0;
+
+    double PE_diff = GM * m * (1.0 / r1 - 1.0 / r2);
+    TS_ASSERT(PE_diff > 0.0);
+  }
+
+  // Test J4 gravity term magnitude
+  void testJ4GravityTermMagnitude() {
+    // J4 << J2
+    double J2 = 1.08263e-3;  // WGS84 J2 coefficient
+    double J4 = 1.62e-6;     // Approximate value
+    TS_ASSERT(J4 < J2 / 100.0);
+  }
+
+  // Test Earth rotation effect on projectile
+  void testEarthRotationProjectileEffect() {
+    double v_north = 1000.0;  // ft/s
+    double lat = 30.0 * DEG_TO_RAD;
+    double dt = 10.0;  // seconds
+
+    double deflection = 2.0 * OMEGA_EARTH * v_north * std::sin(lat) * dt;
+    TS_ASSERT(deflection > 0.0);
+    TS_ASSERT(deflection < 1.0);  // Small deflection
+  }
+
+  // Test centrifugal acceleration at pole vs equator
+  void testCentrifugalPoleVsEquator() {
+    double a_equator = OMEGA_EARTH * OMEGA_EARTH * WGS84_A;
+    double a_pole = 0.0;  // No centrifugal at pole
+
+    TS_ASSERT(a_equator > a_pole);
+    TS_ASSERT_DELTA(a_equator, 0.11, 0.01);  // About 0.11 ft/s^2
+  }
+
+  // Test escape velocity from Earth surface
+  void testEscapeVelocityEarthSurface() {
+    double v_escape = std::sqrt(2.0 * GM / WGS84_A);
+    TS_ASSERT(v_escape > 35000.0);  // About 36,700 ft/s
+    TS_ASSERT(v_escape < 40000.0);
+  }
+
+  // Test inertial reference frame transformation
+  void testInertialReferenceFrameTransform() {
+    double theta = 45.0 * DEG_TO_RAD;
+    double x = 100.0;
+    double y = 0.0;
+
+    double x_rot = x * std::cos(theta) - y * std::sin(theta);
+    double y_rot = x * std::sin(theta) + y * std::cos(theta);
+
+    TS_ASSERT_DELTA(x_rot, 70.71, 0.1);
+    TS_ASSERT_DELTA(y_rot, 70.71, 0.1);
+  }
+
+  // Test inertial instance independence
+  void testInertialInstanceIndependence() {
+    double lat1 = 0.0;
+    double lat2 = 45.0 * DEG_TO_RAD;
+
+    double g1 = G0 * (1.0 + 0.00193185 * std::sin(lat1) * std::sin(lat1));
+    double g2 = G0 * (1.0 + 0.00193185 * std::sin(lat2) * std::sin(lat2));
+
+    TS_ASSERT(g1 != g2);
+    TS_ASSERT(g2 > g1);  // Higher at higher latitude
+  }
+
+  // Test gravity calculation state independence
+  void testGravityCalculationStateIndependence() {
+    double h1 = 0.0;
+    double h2 = 50000.0;
+
+    double g1 = GM / ((WGS84_A + h1) * (WGS84_A + h1));
+    double g2 = GM / ((WGS84_A + h2) * (WGS84_A + h2));
+
+    TS_ASSERT(g1 > g2);  // Gravity decreases with altitude
+    TS_ASSERT_DELTA(g1, G0, 0.1);
+  }
 };

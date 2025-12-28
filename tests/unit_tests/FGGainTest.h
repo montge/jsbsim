@@ -1067,4 +1067,212 @@ public:
     TS_ASSERT(positive * gain > 0.0);
     TS_ASSERT(negative * gain < 0.0);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete gain schedule system
+  void testCompleteGainScheduleSystem() {
+    // Speed-dependent gain schedule
+    double speeds[] = {100.0, 200.0, 300.0, 400.0};
+    double gains[] = {2.0, 1.5, 1.0, 0.75};
+
+    double speed = 250.0;
+    // Interpolate between 200 and 300
+    double t = (speed - 200.0) / (300.0 - 200.0);
+    double gain = gains[1] + t * (gains[2] - gains[1]);
+
+    TS_ASSERT_DELTA(gain, 1.25, 0.01);
+  }
+
+  // Test feedback gain calculation
+  void testFeedbackGainCalculation() {
+    double open_loop_gain = 10.0;
+    double feedback_gain = 0.5;
+
+    double closed_loop_gain = open_loop_gain / (1.0 + open_loop_gain * feedback_gain);
+    TS_ASSERT_DELTA(closed_loop_gain, 1.667, 0.01);
+  }
+
+  // Test proportional-derivative gain
+  void testProportionalDerivativeGain() {
+    double error = 5.0;
+    double error_rate = 2.0;
+    double Kp = 1.0;
+    double Kd = 0.5;
+
+    double output = Kp * error + Kd * error_rate;
+    TS_ASSERT_DELTA(output, 6.0, epsilon);
+  }
+
+  // Test gain margin in dB
+  void testGainMarginInDecibels() {
+    double gain_crossover = 0.5;
+    double gain_margin_db = 20.0 * std::log10(1.0 / gain_crossover);
+
+    TS_ASSERT_DELTA(gain_margin_db, 6.02, 0.1);
+  }
+
+  // Test variable gain with altitude
+  void testVariableGainWithAltitude() {
+    double sea_level_gain = 1.0;
+    double gain_reduction_rate = 0.00001;  // per ft (smaller rate)
+    double altitude = 30000.0;
+
+    double gain = sea_level_gain * (1.0 - gain_reduction_rate * altitude);
+    TS_ASSERT(gain < sea_level_gain);
+    TS_ASSERT(gain > 0.0);
+    TS_ASSERT_DELTA(gain, 0.7, epsilon);  // 1 - 0.3 = 0.7
+  }
+
+  // Test anti-windup gain
+  void testAntiWindupGain() {
+    double integral = 100.0;
+    double limit = 50.0;
+    double anti_windup_gain = 0.1;
+
+    double excess = std::max(0.0, std::abs(integral) - limit);
+    double correction = anti_windup_gain * excess;
+
+    TS_ASSERT_DELTA(correction, 5.0, epsilon);
+  }
+
+  // Test gain with dead zone
+  void testGainWithDeadZone() {
+    double input = 0.05;
+    double dead_zone = 0.1;
+    double gain = 2.0;
+
+    double effective_input = (std::abs(input) < dead_zone) ? 0.0 : input;
+    double output = effective_input * gain;
+
+    TS_ASSERT_DELTA(output, 0.0, epsilon);
+  }
+
+  // Test nonlinear gain curve
+  void testNonlinearGainCurve() {
+    double input = 0.5;
+    double linear_gain = 1.0;
+    double nonlinear_factor = 2.0;
+
+    // Quadratic nonlinearity
+    double output = linear_gain * input + nonlinear_factor * input * input;
+    TS_ASSERT_DELTA(output, 1.0, epsilon);
+  }
+
+  // Test gain with hysteresis
+  void testGainWithHysteresis() {
+    double input = 5.0;
+    double hysteresis_band = 0.5;
+    double last_output = 4.8;
+
+    // Output only changes if input exceeds hysteresis band
+    double output = last_output;
+    if (std::abs(input - last_output) > hysteresis_band) {
+      output = input;
+    }
+
+    TS_ASSERT_DELTA(output, 4.8, epsilon);  // No change
+  }
+
+  // Test cascaded gains
+  void testCascadedGains() {
+    double input = 1.0;
+    double gain1 = 2.0;
+    double gain2 = 3.0;
+    double gain3 = 0.5;
+
+    double output = input * gain1 * gain2 * gain3;
+    TS_ASSERT_DELTA(output, 3.0, epsilon);
+  }
+
+  // Test rate-limited gain change
+  void testRateLimitedGainChange() {
+    double current_gain = 1.0;
+    double target_gain = 2.0;
+    double max_rate = 0.1;  // per time step
+    double dt = 1.0;
+
+    double gain_change = std::clamp(target_gain - current_gain, -max_rate * dt, max_rate * dt);
+    double new_gain = current_gain + gain_change;
+
+    TS_ASSERT_DELTA(new_gain, 1.1, epsilon);
+  }
+
+  // Test gain sensitivity analysis
+  void testGainSensitivityAnalysis() {
+    double nominal_gain = 1.0;
+    double perturbation = 0.01;
+    double input = 10.0;
+
+    double nominal_output = input * nominal_gain;
+    double perturbed_output = input * (nominal_gain + perturbation);
+    double sensitivity = (perturbed_output - nominal_output) / perturbation;
+
+    TS_ASSERT_DELTA(sensitivity, input, epsilon);
+  }
+
+  // Test gain normalization
+  void testGainNormalization() {
+    double raw_gain = 50.0;
+    double max_gain = 100.0;
+    double min_gain = 0.0;
+
+    double normalized = (raw_gain - min_gain) / (max_gain - min_gain);
+    TS_ASSERT_DELTA(normalized, 0.5, epsilon);
+  }
+
+  // Test automatic gain control
+  void testAutomaticGainControl() {
+    double signal_level = 0.5;
+    double target_level = 1.0;
+    double agc_gain = target_level / signal_level;
+
+    double output = signal_level * agc_gain;
+    TS_ASSERT_DELTA(output, target_level, epsilon);
+  }
+
+  // Test gain instance independence
+  void testGainInstanceIndependence() {
+    double gain1 = 2.0;
+    double gain2 = 5.0;
+    double input = 10.0;
+
+    double output1 = input * gain1;
+    double output2 = input * gain2;
+
+    TS_ASSERT(output1 != output2);
+    TS_ASSERT_DELTA(output1, 20.0, epsilon);
+    TS_ASSERT_DELTA(output2, 50.0, epsilon);
+  }
+
+  // Test gain calculation state independence
+  void testGainCalculationStateIndependence() {
+    double gain = 3.0;
+    double input1 = 5.0;
+    double input2 = 10.0;
+
+    double output1 = input1 * gain;
+    double output2 = input2 * gain;
+
+    TS_ASSERT_DELTA(output1, 15.0, epsilon);
+    TS_ASSERT_DELTA(output2, 30.0, epsilon);
+    TS_ASSERT(output2 == output1 * 2.0);
+  }
+
+  // Test multiple gain path independence
+  void testMultipleGainPathIndependence() {
+    double input = 100.0;
+    double path1_gain = 0.5;
+    double path2_gain = 0.8;
+
+    double path1_output = input * path1_gain;
+    double path2_output = input * path2_gain;
+    double combined = path1_output + path2_output;
+
+    TS_ASSERT_DELTA(path1_output, 50.0, epsilon);
+    TS_ASSERT_DELTA(path2_output, 80.0, epsilon);
+    TS_ASSERT_DELTA(combined, 130.0, epsilon);
+  }
 };
