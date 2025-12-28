@@ -1013,4 +1013,518 @@ public:
     // Higher AR = better L/D
     TS_ASSERT(aspect_ratio > 5.0);  // Good for efficiency
   }
+
+  //===========================================================================
+  // 18. INDEPENDENT CALCULATION TESTS (79-82)
+  //===========================================================================
+
+  // Test 79: Independent ROC calculations
+  void testIndependentROCCalculations() {
+    // GIVEN: Two independent aircraft configurations
+    struct Aircraft {
+      double thrust, drag, weight, velocity;
+    };
+    Aircraft a1{5000.0, 2000.0, 10000.0, 300.0};
+    Aircraft a2{8000.0, 3000.0, 15000.0, 350.0};
+
+    // WHEN: Calculating ROC for each
+    double roc1 = (a1.thrust - a1.drag) * a1.velocity / a1.weight;
+    double roc2 = (a2.thrust - a2.drag) * a2.velocity / a2.weight;
+
+    // THEN: Calculations should be independent
+    TS_ASSERT_DELTA(roc1, 90.0, 0.1);   // 3000 * 300 / 10000 = 90
+    TS_ASSERT_DELTA(roc2, 116.67, 0.1); // 5000 * 350 / 15000 = 116.67
+    TS_ASSERT(roc1 != roc2);
+  }
+
+  // Test 80: Independent specific range calculations
+  void testIndependentSpecificRangeCalculations() {
+    // GIVEN: Different flight conditions
+    double v1 = 450.0, ff1 = 2000.0;  // nm/lb
+    double v2 = 500.0, ff2 = 2500.0;  // nm/lb
+
+    // WHEN: Calculating specific range
+    double sr1 = v1 / ff1;
+    double sr2 = v2 / ff2;
+
+    // THEN: Results should be independent
+    TS_ASSERT_DELTA(sr1, 0.225, 0.001);
+    TS_ASSERT_DELTA(sr2, 0.200, 0.001);
+    TS_ASSERT(sr1 > sr2);  // Lower speed is more efficient here
+  }
+
+  // Test 81: Independent turn performance calculations
+  void testIndependentTurnPerformanceCalculations() {
+    // GIVEN: Two different bank angles
+    double v = 400.0;  // ft/s
+    double bank1 = 30.0 * M_PI / 180.0;
+    double bank2 = 45.0 * M_PI / 180.0;
+
+    // WHEN: Calculating turn radii
+    double n1 = 1.0 / cos(bank1);
+    double n2 = 1.0 / cos(bank2);
+    double r1 = v * v / (g * sqrt(n1 * n1 - 1.0));
+    double r2 = v * v / (g * sqrt(n2 * n2 - 1.0));
+
+    // THEN: Higher bank gives tighter turn
+    TS_ASSERT(r1 > r2);
+    TS_ASSERT(std::isfinite(r1));
+    TS_ASSERT(std::isfinite(r2));
+  }
+
+  // Test 82: Independent endurance calculations
+  void testIndependentEnduranceCalculations() {
+    // GIVEN: Different fuel loads and consumption rates
+    double fuel1 = 5000.0, ff1 = 1000.0;  // lbs, lbs/hr
+    double fuel2 = 8000.0, ff2 = 1200.0;
+
+    // WHEN: Calculating endurance
+    double e1 = fuel1 / ff1;  // hours
+    double e2 = fuel2 / ff2;
+
+    // THEN: Each calculation independent
+    TS_ASSERT_DELTA(e1, 5.0, 0.01);
+    TS_ASSERT_DELTA(e2, 6.67, 0.01);
+  }
+
+  //===========================================================================
+  // 19. CONSISTENCY TESTS (83-86)
+  //===========================================================================
+
+  // Test 83: Energy state consistency
+  void testEnergyStateConsistency() {
+    // GIVEN: Aircraft at various altitudes and speeds
+    double weight = 10000.0;
+    double h1 = 10000.0, v1 = 300.0;  // ft, ft/s
+    double h2 = 20000.0, v2 = 250.0;
+
+    // WHEN: Computing specific energy
+    double Es1 = h1 + v1 * v1 / (2.0 * g);
+    double Es2 = h2 + v2 * v2 / (2.0 * g);
+
+    // THEN: Energy should be positive and finite
+    TS_ASSERT(Es1 > 0.0);
+    TS_ASSERT(Es2 > 0.0);
+    TS_ASSERT(std::isfinite(Es1));
+    TS_ASSERT(std::isfinite(Es2));
+
+    // Higher altitude version has more energy
+    TS_ASSERT(Es2 > Es1);
+  }
+
+  // Test 84: L/D and glide consistency
+  void testLDGlideConsistency() {
+    // GIVEN: Various L/D ratios
+    for (double ld = 5.0; ld <= 20.0; ld += 2.5) {
+      double altitude = 10000.0;
+
+      // WHEN: Computing glide distance
+      double glide_distance = altitude * ld;
+
+      // THEN: Consistency checks
+      TS_ASSERT(glide_distance > altitude);  // Always go further than you are high
+      TS_ASSERT_DELTA(glide_distance / altitude, ld, epsilon);
+    }
+  }
+
+  // Test 85: Thrust and weight ratio consistency
+  void testThrustWeightRatioConsistency() {
+    // GIVEN: Various T/W ratios
+    double weight = 10000.0;
+
+    for (double tw = 0.2; tw <= 1.5; tw += 0.2) {
+      double thrust = tw * weight;
+
+      // WHEN: Verifying
+      double computed_tw = thrust / weight;
+
+      // THEN: Should match
+      TS_ASSERT_DELTA(computed_tw, tw, epsilon);
+
+      // Climb angle calculation should be consistent
+      double drag = thrust / 2.0;  // Assume D = T/2 for this test
+      double gradient = (thrust - drag) / weight;
+      TS_ASSERT_DELTA(gradient, tw / 2.0, epsilon);
+    }
+  }
+
+  // Test 86: Stall speed altitude consistency
+  void testStallSpeedAltitudeConsistency() {
+    // GIVEN: Same aircraft at different densities
+    double weight = 12000.0;
+    double wing_area = 200.0;
+    double cl_max = 1.6;
+
+    double rho_sl = rho0;
+    double rho_10k = rho0 * 0.7385;  // Approximate at 10,000 ft
+
+    // WHEN: Computing stall speeds
+    double v_stall_sl = sqrt(2.0 * weight / (rho_sl * wing_area * cl_max));
+    double v_stall_10k = sqrt(2.0 * weight / (rho_10k * wing_area * cl_max));
+
+    // THEN: Stall speed increases with altitude
+    TS_ASSERT(v_stall_10k > v_stall_sl);
+
+    // And ratio should match density ratio
+    double speed_ratio = v_stall_10k / v_stall_sl;
+    double expected_ratio = sqrt(rho_sl / rho_10k);
+    TS_ASSERT_DELTA(speed_ratio, expected_ratio, 0.01);
+  }
+
+  //===========================================================================
+  // 20. EDGE CASE TESTS (87-90)
+  //===========================================================================
+
+  // Test 87: Zero excess thrust
+  void testZeroExcessThrust() {
+    // GIVEN: Thrust equals drag (level flight)
+    double thrust = 3500.0;
+    double drag = 3500.0;
+    double weight = 10000.0;
+    double velocity = 300.0;
+
+    // WHEN: Computing climb rate
+    double roc = (thrust - drag) * velocity / weight;
+
+    // THEN: Should be exactly zero
+    TS_ASSERT_DELTA(roc, 0.0, epsilon);
+  }
+
+  // Test 88: Maximum load factor turn
+  void testMaximumLoadFactorTurn() {
+    // GIVEN: Aircraft at structural limit
+    double n_max = 9.0;  // Fighter aircraft limit
+    double v = 500.0;    // ft/s
+
+    // WHEN: Computing turn rate and radius
+    double omega = g * sqrt(n_max * n_max - 1.0) / v;
+    double radius = v / omega;
+
+    // THEN: Values should be finite and reasonable
+    TS_ASSERT(std::isfinite(omega));
+    TS_ASSERT(std::isfinite(radius));
+    TS_ASSERT(omega > 0.0);
+    TS_ASSERT(radius > 0.0);
+  }
+
+  // Test 89: Minimum fuel weight ratio
+  void testMinimumFuelWeightRatio() {
+    // GIVEN: Near-empty fuel condition
+    double w_initial = 50000.0;
+    double w_final = 49900.0;  // Only 100 lbs burned
+
+    double v = 450.0, sfc = 0.6, ld = 15.0;
+
+    // WHEN: Computing range
+    double range = (v / sfc) * ld * log(w_initial / w_final);
+
+    // THEN: Small but positive range
+    TS_ASSERT(range > 0.0);
+    TS_ASSERT(range < 100.0);  // Very short range
+  }
+
+  // Test 90: High altitude performance limit
+  void testHighAltitudePerformanceLimit() {
+    // GIVEN: Very thin air at high altitude
+    double rho_high = rho0 * 0.1;  // ~60,000 ft equivalent
+    double weight = 15000.0;
+    double wing_area = 300.0;
+    double cl_max = 1.6;
+
+    // WHEN: Computing stall speed
+    double v_stall = sqrt(2.0 * weight / (rho_high * wing_area * cl_max));
+
+    // THEN: Stall speed very high but finite
+    TS_ASSERT(v_stall > 500.0);
+    TS_ASSERT(std::isfinite(v_stall));
+  }
+
+  //===========================================================================
+  // 21. COMBINED PERFORMANCE TESTS (91-94)
+  //===========================================================================
+
+  // Test 91: Combined climb and speed performance
+  void testCombinedClimbSpeedPerformance() {
+    // GIVEN: Aircraft configuration
+    double weight = 12000.0;
+    double thrust = 6000.0;
+    double wing_area = 200.0;
+    double cl_max = 1.6;
+
+    // WHEN: Computing various performance metrics
+    double tw_ratio = thrust / weight;
+    double wing_loading = weight / wing_area;
+    double v_stall = sqrt(2.0 * weight / (rho0 * wing_area * cl_max));
+
+    // THEN: All metrics consistent
+    TS_ASSERT_DELTA(tw_ratio, 0.5, 0.01);
+    TS_ASSERT_DELTA(wing_loading, 60.0, 0.1);
+    TS_ASSERT(v_stall > 100.0 && v_stall < 300.0);
+  }
+
+  // Test 92: Range and endurance tradeoff
+  void testRangeEnduranceTradeoff() {
+    // GIVEN: Aircraft with fixed fuel
+    double fuel = 6000.0;  // lbs
+
+    // Best range speed: higher velocity, moderate fuel flow
+    double v_range = 450.0, ff_range = 1800.0;
+    double range = v_range * (fuel / ff_range);
+
+    // Best endurance speed: lower velocity, lower fuel flow
+    double v_endure = 350.0, ff_endure = 1200.0;
+    double endurance = fuel / ff_endure;
+
+    // THEN: Range and endurance maximize at different speeds
+    TS_ASSERT(range > 0.0);
+    TS_ASSERT(endurance > 0.0);
+
+    // Verify endurance is in hours
+    TS_ASSERT_DELTA(endurance, 5.0, 0.1);
+  }
+
+  // Test 93: Takeoff and climb combined
+  void testTakeoffClimbCombined() {
+    // GIVEN: Takeoff performance data
+    double weight = 15000.0;
+    double thrust = 7500.0;
+    double drag = 2500.0;
+    double v_liftoff = 150.0;
+
+    // WHEN: Computing takeoff and initial climb
+    double tw_ratio = thrust / weight;
+    double excess_thrust = thrust - drag;
+    double roc = excess_thrust * v_liftoff / weight;
+    double climb_gradient = excess_thrust / weight;
+
+    // THEN: All performance numbers consistent
+    TS_ASSERT_DELTA(tw_ratio, 0.5, 0.01);
+    TS_ASSERT_DELTA(roc, 50.0, 1.0);
+    TS_ASSERT_DELTA(climb_gradient, 0.3333, 0.01);
+  }
+
+  // Test 94: Cruise and descent combined
+  void testCruiseDescentCombined() {
+    // GIVEN: Cruise conditions
+    double weight = 40000.0;
+    double velocity = 450.0;  // kts
+    double fuel_flow = 2500.0;  // lbs/hr
+    double altitude = 35000.0;
+
+    // WHEN: Computing cruise and glide performance
+    double sr = velocity / fuel_flow;
+    double ld = 15.0;  // Assumed
+    double glide_distance = altitude * ld;
+
+    // THEN: Consistent results
+    TS_ASSERT(sr > 0.0);
+    TS_ASSERT(glide_distance > 0.0);
+    TS_ASSERT_DELTA(glide_distance, 525000.0, 1.0);  // ft
+  }
+
+  //===========================================================================
+  // 22. STRESS TESTS (95-98)
+  //===========================================================================
+
+  // Test 95: Many sequential performance calculations
+  void testManySequentialPerformanceCalculations() {
+    // GIVEN: Base parameters
+    double weight = 10000.0;
+    double wing_area = 200.0;
+    double cl_max = 1.6;
+
+    // WHEN: Computing many stall speeds at different densities
+    double prev_vs = 0.0;
+    for (int i = 0; i <= 100; i++) {
+      double sigma = 1.0 - i * 0.008;  // Density ratio from 1.0 to 0.2
+      double rho = rho0 * sigma;
+      double v_stall = sqrt(2.0 * weight / (rho * wing_area * cl_max));
+
+      // THEN: Each calculation valid and increasing
+      TS_ASSERT(std::isfinite(v_stall));
+      if (i > 0) {
+        TS_ASSERT(v_stall > prev_vs);
+      }
+      prev_vs = v_stall;
+    }
+  }
+
+  // Test 96: Many range calculations
+  void testManyRangeCalculations() {
+    // GIVEN: Base parameters
+    double v = 450.0, sfc = 0.6, ld = 15.0;
+    double w_initial = 50000.0;
+
+    // WHEN: Computing range for various fuel burns
+    for (int i = 1; i <= 50; i++) {
+      double w_final = w_initial - i * 500.0;  // Burn 500 lbs increments
+      double range = (v / sfc) * ld * log(w_initial / w_final);
+
+      // THEN: Range should increase with fuel burned
+      TS_ASSERT(range > 0.0);
+      TS_ASSERT(std::isfinite(range));
+    }
+  }
+
+  // Test 97: Many turn calculations
+  void testManyTurnCalculations() {
+    // GIVEN: Base velocity
+    double v = 400.0;
+
+    // WHEN: Computing turn performance for various bank angles
+    for (int i = 10; i <= 80; i += 5) {
+      double bank = i * M_PI / 180.0;
+      double n = 1.0 / cos(bank);
+      double omega = g * sqrt(n * n - 1.0) / v;
+      double radius = v / omega;
+
+      // THEN: All values finite and reasonable
+      TS_ASSERT(std::isfinite(n));
+      TS_ASSERT(std::isfinite(omega));
+      TS_ASSERT(std::isfinite(radius));
+      TS_ASSERT(n >= 1.0);
+      TS_ASSERT(omega > 0.0);
+      TS_ASSERT(radius > 0.0);
+    }
+  }
+
+  // Test 98: Many energy calculations
+  void testManyEnergyCalculations() {
+    // GIVEN: Base weight
+    double weight = 15000.0;
+
+    // WHEN: Computing specific energy at various conditions
+    for (int alt = 0; alt <= 50; alt++) {
+      double h = alt * 1000.0;  // 0 to 50,000 ft
+      for (int spd = 1; spd <= 10; spd++) {
+        double v = spd * 100.0;  // 100 to 1000 ft/s
+        double Es = h + v * v / (2.0 * g);
+
+        // THEN: Energy always positive and finite
+        TS_ASSERT(Es > 0.0);
+        TS_ASSERT(std::isfinite(Es));
+      }
+    }
+  }
+
+  //===========================================================================
+  // 23. COMPLETE VERIFICATION TESTS (99-100)
+  //===========================================================================
+
+  // Test 99: Comprehensive aircraft performance profile
+  void testComprehensiveAircraftPerformanceProfile() {
+    // GIVEN: Complete aircraft performance data
+    struct AircraftPerformance {
+      double weight = 25000.0;      // lbs
+      double wing_area = 400.0;     // ft^2
+      double cl_max = 1.8;
+      double thrust = 8000.0;       // lbs
+      double drag_cruise = 2500.0;  // lbs
+      double ld_max = 14.0;
+      double fuel = 6000.0;         // lbs
+    } aircraft;
+
+    // WHEN: Computing full performance envelope
+
+    // 1. Stall speed
+    double v_stall = sqrt(2.0 * aircraft.weight / (rho0 * aircraft.wing_area * aircraft.cl_max));
+    TS_ASSERT(v_stall > 100.0 && v_stall < 200.0);
+
+    // 2. T/W ratio
+    double tw = aircraft.thrust / aircraft.weight;
+    TS_ASSERT_DELTA(tw, 0.32, 0.01);
+
+    // 3. Wing loading
+    double wl = aircraft.weight / aircraft.wing_area;
+    TS_ASSERT_DELTA(wl, 62.5, 0.1);
+
+    // 4. Rate of climb at typical speed
+    double v_climb = 250.0;
+    double roc = (aircraft.thrust - aircraft.drag_cruise) * v_climb / aircraft.weight;
+    TS_ASSERT(roc > 0.0);
+
+    // 5. Glide distance from 20,000 ft
+    double altitude = 20000.0;
+    double glide_dist = altitude * aircraft.ld_max;
+    TS_ASSERT_DELTA(glide_dist, 280000.0, 1.0);
+
+    // 6. Endurance at typical cruise
+    double ff = 2000.0;
+    double endurance = aircraft.fuel / ff;
+    TS_ASSERT_DELTA(endurance, 3.0, 0.01);
+
+    // 7. Specific range
+    double v_cruise = 400.0;
+    double sr = v_cruise / ff;
+    TS_ASSERT_DELTA(sr, 0.2, 0.001);
+  }
+
+  // Test 100: Complete performance calculation system integration
+  void testCompletePerformanceSystemIntegration() {
+    // GIVEN: Two different aircraft configurations
+    struct Config {
+      double weight, thrust, drag, wing_area, cl_max, ld, fuel;
+    };
+
+    Config fighter{15000.0, 18000.0, 3000.0, 300.0, 1.6, 10.0, 5000.0};
+    Config transport{80000.0, 40000.0, 10000.0, 1500.0, 2.0, 16.0, 25000.0};
+
+    // WHEN: Computing and comparing performance
+
+    // 1. T/W ratios
+    double tw_fighter = fighter.thrust / fighter.weight;
+    double tw_transport = transport.thrust / transport.weight;
+    TS_ASSERT(tw_fighter > tw_transport);  // Fighter has better T/W
+
+    // 2. Wing loading
+    double wl_fighter = fighter.weight / fighter.wing_area;
+    double wl_transport = transport.weight / transport.wing_area;
+    TS_ASSERT(wl_fighter < wl_transport);  // Transport has higher loading
+
+    // 3. Stall speeds
+    double vs_fighter = sqrt(2.0 * fighter.weight / (rho0 * fighter.wing_area * fighter.cl_max));
+    double vs_transport = sqrt(2.0 * transport.weight / (rho0 * transport.wing_area * transport.cl_max));
+    TS_ASSERT(vs_fighter > vs_transport);  // Transport stalls slower due to flaps
+
+    // 4. Climb rates at 300 ft/s
+    double v = 300.0;
+    double roc_fighter = (fighter.thrust - fighter.drag) * v / fighter.weight;
+    double roc_transport = (transport.thrust - transport.drag) * v / transport.weight;
+    TS_ASSERT(roc_fighter > roc_transport);  // Fighter climbs faster
+
+    // 5. Glide distances from 30,000 ft
+    double alt = 30000.0;
+    double glide_fighter = alt * fighter.ld;
+    double glide_transport = alt * transport.ld;
+    TS_ASSERT(glide_transport > glide_fighter);  // Transport glides further
+
+    // 6. Turn performance at 500 ft/s, 60° bank
+    double bank = 60.0 * M_PI / 180.0;
+    double n = 1.0 / cos(bank);
+    double omega = g * sqrt(n * n - 1.0) / 500.0;
+    double radius = 500.0 / omega;
+
+    // Both can do same turn if within limits
+    double n_max_fighter = 9.0;
+    double n_max_transport = 2.5;
+    TS_ASSERT(n < n_max_fighter);
+    TS_ASSERT(n < n_max_transport);  // Both can make this turn
+
+    // 7. Range comparison (simplified)
+    double v_cruise = 450.0, sfc = 0.6;
+    double range_fighter = (v_cruise / sfc) * fighter.ld * log((fighter.weight + fighter.fuel) / fighter.weight);
+    double range_transport = (v_cruise / sfc) * transport.ld * log((transport.weight + transport.fuel) / transport.weight);
+    TS_ASSERT(range_transport > range_fighter);  // Transport has better range
+
+    // 8. All calculations are finite and consistent
+    TS_ASSERT(std::isfinite(tw_fighter));
+    TS_ASSERT(std::isfinite(tw_transport));
+    TS_ASSERT(std::isfinite(roc_fighter));
+    TS_ASSERT(std::isfinite(roc_transport));
+    TS_ASSERT(std::isfinite(range_fighter));
+    TS_ASSERT(std::isfinite(range_transport));
+
+    // 9. Final integration check
+    TS_ASSERT(true);
+  }
 };

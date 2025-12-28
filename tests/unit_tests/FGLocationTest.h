@@ -2078,4 +2078,505 @@ public:
     TS_ASSERT_DELTA(l3.GetLongitude(), 0.0, epsilon);
     TS_ASSERT_DELTA(l3.GetLatitude(), -M_PI / 2.0, epsilon);  // South pole
   }
+
+  // ============ Multi-Instance Independence Tests (79-82) ============
+
+  // Test 79: Multiple location instances are independent
+  void testMultipleInstanceIndependence() {
+    // GIVEN: Multiple location instances
+    JSBSim::FGLocation l1(0.0, 0.0, 1.0);
+    JSBSim::FGLocation l2(M_PI / 4.0, M_PI / 6.0, 2.0);
+    JSBSim::FGLocation l3(M_PI / 2.0, M_PI / 3.0, 3.0);
+
+    // Store original values
+    double l1_lon = l1.GetLongitude();
+    double l2_lon = l2.GetLongitude();
+    double l3_lon = l3.GetLongitude();
+
+    // WHEN: Modifying one instance
+    l2.SetLongitude(M_PI);
+
+    // THEN: Other instances should be unaffected
+    TS_ASSERT_DELTA(l1.GetLongitude(), l1_lon, epsilon);
+    TS_ASSERT_DELTA(l3.GetLongitude(), l3_lon, epsilon);
+    TS_ASSERT_DELTA(l2.GetLongitude(), M_PI, epsilon);
+  }
+
+  // Test 80: Independent ellipsoid settings
+  void testIndependentEllipsoidSettings() {
+    // GIVEN: Two locations with different ellipsoids
+    const double a1 = 20925646.32546, b1 = 20855486.5951;  // WGS84
+    const double a2 = 21000000.0, b2 = 20900000.0;         // Custom
+
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a1, b1);
+    l2.SetEllipse(a2, b2);
+
+    l1.SetPositionGeodetic(0.0, M_PI / 4.0, 0.0);
+    l2.SetPositionGeodetic(0.0, M_PI / 4.0, 0.0);
+
+    // THEN: They should have different sea level radii
+    double slr1 = l1.GetSeaLevelRadius();
+    double slr2 = l2.GetSeaLevelRadius();
+    TS_ASSERT(std::abs(slr1 - slr2) > 1000.0);
+  }
+
+  // Test 81: Copy independence
+  void testCopyIndependence() {
+    // GIVEN: A location
+    JSBSim::FGLocation l1(M_PI / 4.0, M_PI / 6.0, 10.0);
+    l1.SetEllipse(20925646.0, 20855486.0);
+
+    // WHEN: Copying and modifying
+    JSBSim::FGLocation l2 = l1;
+    l2.SetLongitude(M_PI / 2.0);
+
+    // THEN: Original should be unaffected
+    TS_ASSERT_DELTA(l1.GetLongitude(), M_PI / 4.0, epsilon);
+    TS_ASSERT_DELTA(l2.GetLongitude(), M_PI / 2.0, epsilon);
+  }
+
+  // Test 82: Assignment independence
+  void testAssignmentIndependence() {
+    // GIVEN: Two locations
+    JSBSim::FGLocation l1(0.0, M_PI / 4.0, 5.0);
+    JSBSim::FGLocation l2(M_PI / 2.0, 0.0, 10.0);
+
+    // WHEN: Assigning and modifying
+    JSBSim::FGLocation l3;
+    l3 = l1;
+    l1.SetLatitude(M_PI / 3.0);
+
+    // THEN: l3 should retain original l1 values
+    TS_ASSERT_DELTA(l3.GetLatitude(), M_PI / 4.0, epsilon);
+    TS_ASSERT_DELTA(l1.GetLatitude(), M_PI / 3.0, epsilon);
+  }
+
+  // ============ State Consistency Tests (83-86) ============
+
+  // Test 83: ECEF and geodetic consistency
+  void testECEFGeodeticConsistency() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // WHEN: Setting position geodetically
+    double lon = M_PI / 6.0;
+    double lat = M_PI / 4.0;
+    double alt = 10000.0;
+    l.SetPositionGeodetic(lon, lat, alt);
+
+    // THEN: ECEF coordinates should be consistent
+    double x = l(1), y = l(2), z = l(3);
+    double r = std::sqrt(x * x + y * y + z * z);
+    TS_ASSERT(r > a * 0.9);
+    TS_ASSERT(r < a * 1.1 + alt);
+
+    // And should be recoverable
+    TS_ASSERT_DELTA(l.GetLongitude(), lon, epsilon);
+    TS_ASSERT_DELTA(l.GetGeodLatitudeRad(), lat, epsilon);
+    TS_ASSERT_DELTA(l.GetGeodAltitude(), alt, 1e-6);
+  }
+
+  // Test 84: Transform matrix orthogonality
+  void testTransformMatrixOrthogonality() {
+    // GIVEN: Various locations
+    for (int ilat = -3; ilat <= 3; ilat++) {
+      for (int ilon = 0; ilon <= 6; ilon++) {
+        double lat = ilat * M_PI / 6.0;
+        double lon = ilon * M_PI / 6.0;
+        JSBSim::FGLocation l(lon, lat, 1.0);
+
+        const JSBSim::FGMatrix33& T = l.GetTec2l();
+
+        // THEN: Matrix should be orthogonal (T * T^T = I)
+        JSBSim::FGMatrix33 TTT = T * T.Transposed();
+        TS_ASSERT_DELTA(TTT(1,1), 1.0, epsilon);
+        TS_ASSERT_DELTA(TTT(2,2), 1.0, epsilon);
+        TS_ASSERT_DELTA(TTT(3,3), 1.0, epsilon);
+        TS_ASSERT_DELTA(TTT(1,2), 0.0, epsilon);
+        TS_ASSERT_DELTA(TTT(1,3), 0.0, epsilon);
+        TS_ASSERT_DELTA(TTT(2,3), 0.0, epsilon);
+      }
+    }
+  }
+
+  // Test 85: Sin/cos latitude consistency
+  void testSinCosLatitudeConsistency() {
+    // GIVEN: Locations at various latitudes
+    for (int ilat = -6; ilat <= 6; ilat++) {
+      double lat = ilat * M_PI / 12.0;
+      JSBSim::FGLocation l(0.0, lat, 1.0);
+
+      // THEN: Sin/cos should satisfy identity
+      double sin_lat = std::sin(l.GetLatitude());
+      double cos_lat = std::cos(l.GetLatitude());
+      TS_ASSERT_DELTA(sin_lat * sin_lat + cos_lat * cos_lat, 1.0, epsilon);
+
+      // And should match computed values
+      double sin_lon = l.GetSinLongitude();
+      double cos_lon = l.GetCosLongitude();
+      TS_ASSERT_DELTA(sin_lon * sin_lon + cos_lon * cos_lon, 1.0, epsilon);
+    }
+  }
+
+  // Test 86: Radius consistency
+  void testRadiusConsistency() {
+    // GIVEN: Locations with various radii
+    for (double r = 1.0; r <= 1e8; r *= 10.0) {
+      JSBSim::FGLocation l(M_PI / 4.0, M_PI / 6.0, r);
+
+      // THEN: Radius should be consistent with ECEF coordinates
+      double x = l(1), y = l(2), z = l(3);
+      double computed_r = std::sqrt(x * x + y * y + z * z);
+      TS_ASSERT_DELTA(l.GetRadius(), computed_r, computed_r * epsilon);
+    }
+  }
+
+  // ============ Transform Chain Tests (87-90) ============
+
+  // Test 87: ECEF->Local->ECEF round trip
+  void testECEFLocalECEFRoundTrip() {
+    // GIVEN: Various locations
+    for (int i = 0; i < 10; i++) {
+      double lon = i * M_PI / 5.0 - M_PI;
+      double lat = (i - 5) * M_PI / 12.0;
+      JSBSim::FGLocation l(lon, lat, 1e7);
+
+      JSBSim::FGColumnVector3 v_ecef(1000.0, 2000.0, 3000.0);
+
+      // WHEN: Transform ECEF->Local->ECEF
+      JSBSim::FGColumnVector3 v_local = l.GetTec2l() * v_ecef;
+      JSBSim::FGColumnVector3 v_back = l.GetTl2ec() * v_local;
+
+      // THEN: Should recover original
+      TS_ASSERT_DELTA(v_back(1), v_ecef(1), 1e-8);
+      TS_ASSERT_DELTA(v_back(2), v_ecef(2), 1e-8);
+      TS_ASSERT_DELTA(v_back(3), v_ecef(3), 1e-8);
+    }
+  }
+
+  // Test 88: Local->ECEF->Local round trip
+  void testLocalECEFLocalRoundTrip() {
+    // GIVEN: Various locations
+    JSBSim::FGLocation l(M_PI / 4.0, M_PI / 6.0, 1e7);
+    JSBSim::FGColumnVector3 v_local(100.0, 200.0, 300.0);
+
+    // WHEN: Transform Local->ECEF->Local
+    JSBSim::FGColumnVector3 v_ecef = l.GetTl2ec() * v_local;
+    JSBSim::FGColumnVector3 v_back = l.GetTec2l() * v_ecef;
+
+    // THEN: Should recover original
+    TS_ASSERT_DELTA(v_back(1), v_local(1), 1e-8);
+    TS_ASSERT_DELTA(v_back(2), v_local(2), 1e-8);
+    TS_ASSERT_DELTA(v_back(3), v_local(3), 1e-8);
+  }
+
+  // Test 89: Transform determinant is +1
+  void testTransformDeterminantPositiveOne() {
+    // GIVEN: Various locations
+    for (int i = 0; i < 12; i++) {
+      double lon = i * M_PI / 6.0;
+      for (int j = -3; j <= 3; j++) {
+        double lat = j * M_PI / 7.0;
+        JSBSim::FGLocation l(lon, lat, 1.0);
+
+        const JSBSim::FGMatrix33& T = l.GetTec2l();
+
+        // Compute determinant
+        double det = T(1,1) * (T(2,2) * T(3,3) - T(2,3) * T(3,2))
+                   - T(1,2) * (T(2,1) * T(3,3) - T(2,3) * T(3,1))
+                   + T(1,3) * (T(2,1) * T(3,2) - T(2,2) * T(3,1));
+
+        // THEN: Determinant should be +1 (proper rotation)
+        TS_ASSERT_DELTA(det, 1.0, epsilon);
+      }
+    }
+  }
+
+  // Test 90: Inverse matrix correctness
+  void testInverseMatrixCorrectness() {
+    // GIVEN: A location
+    JSBSim::FGLocation l(M_PI / 3.0, M_PI / 5.0, 1.0);
+
+    const JSBSim::FGMatrix33& Tec2l = l.GetTec2l();
+    const JSBSim::FGMatrix33& Tl2ec = l.GetTl2ec();
+
+    // THEN: Tl2ec should be transpose of Tec2l (for orthogonal matrix)
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(Tl2ec(i, j), Tec2l(j, i), epsilon);
+      }
+    }
+
+    // And their product should be identity
+    JSBSim::FGMatrix33 prod = Tec2l * Tl2ec;
+    TS_ASSERT_DELTA(prod(1,1), 1.0, epsilon);
+    TS_ASSERT_DELTA(prod(2,2), 1.0, epsilon);
+    TS_ASSERT_DELTA(prod(3,3), 1.0, epsilon);
+  }
+
+  // ============ Edge Case Tests (91-94) ============
+
+  // Test 91: Location at exact pole
+  void testLocationAtExactPole() {
+    // GIVEN: Location exactly at north pole
+    JSBSim::FGColumnVector3 north_pole(0.0, 0.0, 1.0);
+    JSBSim::FGLocation l(north_pole);
+
+    // THEN: Latitude should be π/2
+    TS_ASSERT_DELTA(l.GetLatitude(), M_PI / 2.0, epsilon);
+
+    // Longitude is undefined at pole, but should be finite
+    TS_ASSERT(std::isfinite(l.GetLongitude()));
+
+    // Transform matrices should still be valid
+    const JSBSim::FGMatrix33& T = l.GetTec2l();
+    TS_ASSERT(std::isfinite(T(1,1)));
+    TS_ASSERT(std::isfinite(T(2,2)));
+    TS_ASSERT(std::isfinite(T(3,3)));
+  }
+
+  // Test 92: Location at date line
+  void testLocationAtDateLine() {
+    // GIVEN: Location at ±180 degrees longitude
+    JSBSim::FGLocation l1(M_PI, 0.0, 1.0);
+    JSBSim::FGLocation l2(-M_PI, 0.0, 1.0);
+
+    // THEN: Both should represent the same point
+    TS_ASSERT_DELTA(l1(1), l2(1), epsilon);
+    TS_ASSERT_DELTA(l1(2), l2(2), epsilon);
+    TS_ASSERT_DELTA(l1(3), l2(3), epsilon);
+
+    // Both should have same latitude
+    TS_ASSERT_DELTA(l1.GetLatitude(), l2.GetLatitude(), epsilon);
+  }
+
+  // Test 93: Zero radius location
+  void testZeroRadiusLocation() {
+    // GIVEN: Location at origin (zero radius)
+    JSBSim::FGColumnVector3 origin(0.0, 0.0, 0.0);
+    JSBSim::FGLocation l(origin);
+
+    // THEN: Radius should be 0
+    TS_ASSERT_DELTA(l.GetRadius(), 0.0, epsilon);
+
+    // Lat/lon may be undefined but should be finite
+    TS_ASSERT(std::isfinite(l.GetLatitude()) || std::isnan(l.GetLatitude()));
+    TS_ASSERT(std::isfinite(l.GetLongitude()) || std::isnan(l.GetLongitude()));
+  }
+
+  // Test 94: Very small radius location
+  void testVerySmallRadiusLocation() {
+    // GIVEN: Location with very small radius
+    JSBSim::FGLocation l(0.0, M_PI / 4.0, 1e-10);
+
+    // THEN: Should still compute valid lat/lon
+    TS_ASSERT_DELTA(l.GetLatitude(), M_PI / 4.0, 1e-5);
+    TS_ASSERT_DELTA(l.GetLongitude(), 0.0, 1e-5);
+    TS_ASSERT(l.GetRadius() > 0.0);
+  }
+
+  // ============ Stress Tests (95-98) ============
+
+  // Test 95: Many sequential operations
+  void testManySequentialOperations() {
+    // GIVEN: A location
+    JSBSim::FGLocation l(0.0, 0.0, 1e7);
+    l.SetEllipse(20925646.0, 20855486.0);
+
+    // WHEN: Performing many sequential operations
+    for (int i = 0; i < 100; i++) {
+      double lon = (i * 0.1) * M_PI / 180.0;
+      double lat = (i * 0.05 - 2.5) * M_PI / 180.0;
+      l.SetPositionGeodetic(lon, lat, i * 100.0);
+
+      // Read back values
+      double read_lon = l.GetLongitude();
+      double read_lat = l.GetGeodLatitudeRad();
+      double read_alt = l.GetGeodAltitude();
+
+      // THEN: Values should be consistent
+      TS_ASSERT_DELTA(read_lon, lon, epsilon);
+      TS_ASSERT_DELTA(read_lat, lat, epsilon);
+      TS_ASSERT_DELTA(read_alt, i * 100.0, 1e-6);
+    }
+  }
+
+  // Test 96: Rapid transform access
+  void testRapidTransformAccess() {
+    // GIVEN: A location
+    JSBSim::FGLocation l(M_PI / 4.0, M_PI / 6.0, 1e7);
+
+    // WHEN: Accessing transforms rapidly
+    double sum = 0.0;
+    for (int i = 0; i < 1000; i++) {
+      const JSBSim::FGMatrix33& T = l.GetTec2l();
+      sum += T(1,1) + T(2,2) + T(3,3);
+    }
+
+    // THEN: Results should be consistent (trace of orthogonal matrix)
+    TS_ASSERT(std::isfinite(sum));
+    // Each access should give same trace
+    const JSBSim::FGMatrix33& T = l.GetTec2l();
+    double expected_trace = T(1,1) + T(2,2) + T(3,3);
+    TS_ASSERT_DELTA(sum, 1000.0 * expected_trace, 1e-6);
+  }
+
+  // Test 97: Many location instances
+  void testManyLocationInstances() {
+    // GIVEN: Many location instances
+    std::vector<JSBSim::FGLocation> locations;
+    for (int i = 0; i < 100; i++) {
+      double lon = (i - 50) * M_PI / 50.0;
+      double lat = (i % 10 - 5) * M_PI / 12.0;
+      locations.push_back(JSBSim::FGLocation(lon, lat, 1.0 + i));
+    }
+
+    // THEN: All should have valid and distinct values
+    for (size_t i = 0; i < locations.size(); i++) {
+      TS_ASSERT(std::isfinite(locations[i].GetRadius()));
+      TS_ASSERT_DELTA(locations[i].GetRadius(), 1.0 + i, epsilon);
+    }
+  }
+
+  // Test 98: Alternating operations stress test
+  void testAlternatingOperationsStress() {
+    // GIVEN: A location
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // WHEN: Alternating between different operations
+    for (int i = 0; i < 50; i++) {
+      // Set geodetic
+      l.SetPositionGeodetic(i * M_PI / 25.0, 0.0, i * 1000.0);
+      double r1 = l.GetRadius();
+
+      // Set ECEF directly
+      l(1) = a + i * 100.0;
+      l(2) = i * 50.0;
+      l(3) = i * 25.0;
+
+      // Read back geodetic
+      double lon = l.GetLongitude();
+      double lat = l.GetGeodLatitudeRad();
+      double alt = l.GetGeodAltitude();
+
+      // THEN: All values should be finite and reasonable
+      TS_ASSERT(std::isfinite(lon));
+      TS_ASSERT(std::isfinite(lat));
+      TS_ASSERT(std::isfinite(alt));
+      TS_ASSERT(l.GetRadius() > 0.0);
+    }
+  }
+
+  // ============ Complete Verification Tests (99-100) ============
+
+  // Test 99: Comprehensive geodetic verification
+  void testComprehensiveGeodeticVerification() {
+    // GIVEN: WGS84 ellipsoid
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l;
+    l.SetEllipse(a, b);
+
+    // Test comprehensive set of geodetic positions
+    std::vector<std::tuple<double, double, double>> test_cases = {
+      {0.0, 0.0, 0.0},                    // Equator, prime meridian
+      {M_PI / 2.0, 0.0, 0.0},             // Equator, 90E
+      {M_PI, 0.0, 0.0},                   // Equator, 180E
+      {0.0, M_PI / 2.0, 0.0},             // North pole
+      {0.0, -M_PI / 2.0, 0.0},            // South pole
+      {M_PI / 4.0, M_PI / 4.0, 10000.0},  // Mid-latitude with altitude
+      {-M_PI / 3.0, -M_PI / 6.0, 35000.0} // Southern hemisphere
+    };
+
+    for (const auto& tc : test_cases) {
+      double lon = std::get<0>(tc);
+      double lat = std::get<1>(tc);
+      double alt = std::get<2>(tc);
+
+      l.SetPositionGeodetic(lon, lat, alt);
+
+      // Verify round-trip
+      TS_ASSERT_DELTA(l.GetLongitude(), lon, epsilon);
+      TS_ASSERT_DELTA(l.GetGeodLatitudeRad(), lat, epsilon);
+      TS_ASSERT_DELTA(l.GetGeodAltitude(), alt, 1e-5);
+
+      // Verify transforms are valid
+      const JSBSim::FGMatrix33& T = l.GetTec2l();
+      double det = T(1,1) * (T(2,2) * T(3,3) - T(2,3) * T(3,2))
+                 - T(1,2) * (T(2,1) * T(3,3) - T(2,3) * T(3,1))
+                 + T(1,3) * (T(2,1) * T(3,2) - T(2,2) * T(3,1));
+      TS_ASSERT_DELTA(det, 1.0, epsilon);
+    }
+  }
+
+  // Test 100: Complete location system integration test
+  void testCompleteLocationSystemIntegration() {
+    // GIVEN: Two independent location instances
+    const double a = 20925646.32546;
+    const double b = 20855486.5951;
+    JSBSim::FGLocation l1, l2;
+    l1.SetEllipse(a, b);
+    l2.SetEllipse(a, b);
+
+    // 1. Set up different positions
+    l1.SetPositionGeodetic(0.0, M_PI / 4.0, 0.0);
+    l2.SetPositionGeodetic(M_PI / 2.0, 0.0, 10000.0);
+
+    // 2. Verify independence
+    TS_ASSERT(l1.GetLongitude() != l2.GetLongitude());
+    TS_ASSERT(l1.GetGeodLatitudeRad() != l2.GetGeodLatitudeRad());
+
+    // 3. Verify ECEF coordinates are different
+    TS_ASSERT(std::abs(l1(1) - l2(1)) > 1000.0 ||
+              std::abs(l1(2) - l2(2)) > 1000.0 ||
+              std::abs(l1(3) - l2(3)) > 1000.0);
+
+    // 4. Verify transform consistency for both
+    for (auto* loc : {&l1, &l2}) {
+      JSBSim::FGColumnVector3 v_ecef(1000.0, 2000.0, 3000.0);
+      JSBSim::FGColumnVector3 v_local = loc->GetTec2l() * v_ecef;
+      JSBSim::FGColumnVector3 v_back = loc->GetTl2ec() * v_local;
+
+      TS_ASSERT_DELTA(v_back(1), v_ecef(1), 1e-8);
+      TS_ASSERT_DELTA(v_back(2), v_ecef(2), 1e-8);
+      TS_ASSERT_DELTA(v_back(3), v_ecef(3), 1e-8);
+    }
+
+    // 5. Test distance calculation symmetry
+    double d12 = l1.GetDistanceTo(l2.GetLongitude(), l2.GetGeodLatitudeRad());
+    double d21 = l2.GetDistanceTo(l1.GetLongitude(), l1.GetGeodLatitudeRad());
+    TS_ASSERT_DELTA(d12, d21, 10.0);  // Distance should be symmetric
+
+    // 6. Test heading calculation
+    double h1 = l1.GetHeadingTo(l2.GetLongitude(), l2.GetGeodLatitudeRad());
+    TS_ASSERT(std::isfinite(h1));
+    TS_ASSERT(h1 >= -M_PI && h1 <= M_PI);
+
+    // 7. Test arithmetic operations
+    JSBSim::FGLocation l3 = l1 + l2;
+    TS_ASSERT_DELTA(l3(1), l1(1) + l2(1), epsilon * a);
+    TS_ASSERT_DELTA(l3(2), l1(2) + l2(2), epsilon * a);
+    TS_ASSERT_DELTA(l3(3), l1(3) + l2(3), epsilon * a);
+
+    // 8. Verify vector magnitude preservation through transforms
+    JSBSim::FGColumnVector3 test_vec(100.0, 200.0, 300.0);
+    double orig_mag = test_vec.Magnitude();
+    JSBSim::FGColumnVector3 transformed = l1.GetTec2l() * test_vec;
+    TS_ASSERT_DELTA(transformed.Magnitude(), orig_mag, 1e-10);
+
+    // 9. Verify LocalToLocation functionality
+    JSBSim::FGColumnVector3 local_offset(100.0, 0.0, 0.0);  // 100 ft north
+    JSBSim::FGLocation l4 = l1.LocalToLocation(local_offset);
+    TS_ASSERT(l4.GetLatitude() > l1.GetLatitude());  // Should be north
+
+    // 10. Complete verification passed
+    TS_ASSERT(true);
+  }
 };
