@@ -1275,4 +1275,149 @@ public:
     double speedRatio = maxSpeed / baseSpeed;
     TS_ASSERT_DELTA(speedRatio, 2.0, 0.1);
   }
+
+  /***************************************************************************
+   * Complete Electric Motor System Tests
+   ***************************************************************************/
+
+  // Test complete motor power system
+  void testCompleteMotorPowerSystem() {
+    double voltage = 400.0;     // V
+    double current = 100.0;     // A
+    double efficiency = 0.95;
+
+    double inputPower = voltage * current;
+    double outputPower = inputPower * efficiency;
+    double lossedPower = inputPower - outputPower;
+
+    TS_ASSERT_DELTA(inputPower, 40000.0, 1.0);
+    TS_ASSERT_DELTA(outputPower, 38000.0, 1.0);
+    TS_ASSERT_DELTA(lossedPower, 2000.0, 1.0);
+  }
+
+  // Test motor speed control loop
+  void testMotorSpeedControlLoop() {
+    double targetRPM = 5000.0;
+    double currentRPM = 4800.0;
+    double Kp = 0.1;
+
+    double error = targetRPM - currentRPM;
+    double correction = Kp * error;
+
+    TS_ASSERT_DELTA(error, 200.0, 0.1);
+    TS_ASSERT_DELTA(correction, 20.0, 0.1);
+  }
+
+  // Test battery discharge characteristics
+  void testBatteryDischargeCharacteristics() {
+    double initialCapacity = 100.0;  // Ah
+    double dischargeCurrent = 50.0;  // A
+    double time = 1.0;               // hours
+
+    double remainingCapacity = initialCapacity - dischargeCurrent * time;
+    double stateOfCharge = remainingCapacity / initialCapacity;
+
+    TS_ASSERT_DELTA(remainingCapacity, 50.0, 0.1);
+    TS_ASSERT_DELTA(stateOfCharge, 0.5, 0.01);
+  }
+
+  // Test motor thermal model
+  void testMotorThermalModel() {
+    double ambientTemp = 25.0;    // C
+    double powerLoss = 500.0;     // W
+    double thermalResistance = 0.1;  // C/W
+
+    double tempRise = powerLoss * thermalResistance;
+    double motorTemp = ambientTemp + tempRise;
+
+    TS_ASSERT_DELTA(tempRise, 50.0, 0.1);
+    TS_ASSERT_DELTA(motorTemp, 75.0, 0.1);
+  }
+
+  // Test inverter efficiency map
+  void testInverterEfficiencyMap() {
+    double loadPercent = 75.0;
+    double peakEfficiency = 0.98;
+    double partLoadFactor = 0.95;
+
+    double efficiency = peakEfficiency * partLoadFactor;
+    TS_ASSERT(efficiency > 0.9);
+    TS_ASSERT(efficiency < 1.0);
+  }
+
+  // Test regenerative braking energy recovery
+  void testRegenerativeEnergyRecovery() {
+    double kineticEnergy = 10000.0;  // J
+    double regenEfficiency = 0.7;
+
+    double recoveredEnergy = kineticEnergy * regenEfficiency;
+    double lostEnergy = kineticEnergy - recoveredEnergy;
+
+    TS_ASSERT_DELTA(recoveredEnergy, 7000.0, 0.1);
+    TS_ASSERT_DELTA(lostEnergy, 3000.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test motor calculations independence
+  void testMotorCalculationsIndependence() {
+    double Kv1 = 1000.0, V1 = 48.0;
+    double Kv2 = 500.0, V2 = 96.0;
+
+    double rpm1 = Kv1 * V1;
+    double rpm2 = Kv2 * V2;
+
+    TS_ASSERT_DELTA(rpm1, 48000.0, 1.0);
+    TS_ASSERT_DELTA(rpm2, 48000.0, 1.0);
+  }
+
+  // Test efficiency calculation independence
+  void testEfficiencyCalculationIndependence() {
+    double Pin1 = 1000.0, Pout1 = 900.0;
+    double Pin2 = 5000.0, Pout2 = 4500.0;
+
+    double eff1 = Pout1 / Pin1;
+    double eff2 = Pout2 / Pin2;
+
+    TS_ASSERT_DELTA(eff1, 0.9, 0.01);
+    TS_ASSERT_DELTA(eff2, 0.9, 0.01);
+  }
+
+  // Test torque calculation independence
+  void testTorqueCalculationIndependence() {
+    double P1 = 1000.0, rpm1 = 3000.0;
+    double P2 = 2000.0, rpm2 = 6000.0;
+
+    double torque1 = P1 * 5252.0 / rpm1;
+    double torque2 = P2 * 5252.0 / rpm2;
+
+    TS_ASSERT_DELTA(torque1, 1750.67, 1.0);
+    TS_ASSERT_DELTA(torque2, 1750.67, 1.0);
+  }
+
+  // Test current state independence
+  void testCurrentStateIndependence() {
+    double V1 = 48.0, R1 = 0.1;
+    double V2 = 96.0, R2 = 0.2;
+
+    double I1 = V1 / R1;
+    double I2 = V2 / R2;
+
+    TS_ASSERT_DELTA(I1, 480.0, 0.1);
+    TS_ASSERT_DELTA(I2, 480.0, 0.1);
+  }
+
+  // Test power factor calculation independence
+  void testPowerFactorCalculationIndependence() {
+    double realPower1 = 900.0, apparentPower1 = 1000.0;
+    double realPower2 = 800.0, apparentPower2 = 1000.0;
+
+    double pf1 = realPower1 / apparentPower1;
+    double pf2 = realPower2 / apparentPower2;
+
+    TS_ASSERT_DELTA(pf1, 0.9, 0.01);
+    TS_ASSERT_DELTA(pf2, 0.8, 0.01);
+  }
 };

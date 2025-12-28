@@ -1322,4 +1322,145 @@ public:
       }
     }
   }
+
+  /***************************************************************************
+   * Complete Engine Failure System Tests
+   ***************************************************************************/
+
+  // Test complete OEI performance envelope
+  void testCompleteOEIPerformanceEnvelope() {
+    double normalThrust = 50000.0;
+    double OEIThrust = 25000.0;
+    double weight = 40000.0;
+
+    double normalTW = normalThrust / weight;
+    double OEITW = OEIThrust / weight;
+
+    TS_ASSERT(normalTW > 1.0);
+    TS_ASSERT(OEITW < 1.0);
+    TS_ASSERT_DELTA(OEITW, 0.625, 0.01);
+  }
+
+  // Test engine failure during takeoff roll
+  void testEngineFailureDuringTakeoffRoll() {
+    double V1 = 120.0;  // kts
+    double currentSpeed = 100.0;  // kts
+    double accelerateStopDistance = 6000.0;  // ft
+    double runwayRemaining = 7000.0;  // ft
+
+    bool canReject = (currentSpeed < V1) && (accelerateStopDistance < runwayRemaining);
+    TS_ASSERT(canReject);
+  }
+
+  // Test engine failure climb gradient
+  void testEngineFailureClimbGradient() {
+    double OEIClimbRate = 300.0;   // ft/min
+    double groundSpeed = 150.0;    // kts
+
+    // Gradient in percent: (ROC / GS) * 100
+    double GSfpm = groundSpeed * 101.3;
+    double gradient = (OEIClimbRate / GSfpm) * 100.0;
+
+    TS_ASSERT(gradient > 1.5);  // Above obstacle clearance requirement
+  }
+
+  // Test asymmetric thrust compensation
+  void testAsymmetricThrustCompensation() {
+    double thrustDiff = 20000.0;  // lbf
+    double armLength = 15.0;      // ft
+    double rudderAuthority = 400000.0;  // ft-lbf max
+
+    double yawMoment = thrustDiff * armLength;
+    bool canCompensate = yawMoment < rudderAuthority;
+
+    TS_ASSERT(canCompensate);
+    TS_ASSERT_DELTA(yawMoment, 300000.0, 1.0);
+  }
+
+  // Test drift down profile
+  void testDriftDownProfile() {
+    double initialAlt = 35000.0;
+    double OEICeiling = 20000.0;
+    double descentRate = 500.0;  // ft/min
+
+    double descentRequired = initialAlt - OEICeiling;
+    double timeToLevel = descentRequired / descentRate;
+
+    TS_ASSERT_DELTA(descentRequired, 15000.0, 1.0);
+    TS_ASSERT_DELTA(timeToLevel, 30.0, 0.1);  // 30 minutes
+  }
+
+  // Test fuel dumping considerations
+  void testFuelDumpingForEmergency() {
+    double currentWeight = 180000.0;  // lbs
+    double maxLandingWeight = 150000.0;
+    double fuelDumpRate = 2000.0;  // lbs/min
+
+    double excessWeight = currentWeight - maxLandingWeight;
+    double dumpTime = excessWeight / fuelDumpRate;
+
+    TS_ASSERT_DELTA(excessWeight, 30000.0, 1.0);
+    TS_ASSERT_DELTA(dumpTime, 15.0, 0.1);  // 15 minutes
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test thrust calculation independence
+  void testThrustCalculationIndependence() {
+    double thrust1 = 50000.0, arm1 = 10.0;
+    double thrust2 = 25000.0, arm2 = 20.0;
+
+    double moment1 = thrust1 * arm1;
+    double moment2 = thrust2 * arm2;
+
+    TS_ASSERT_DELTA(moment1, 500000.0, 1.0);
+    TS_ASSERT_DELTA(moment2, 500000.0, 1.0);
+  }
+
+  // Test VMC calculation independence
+  void testVMCCalculationIndependence() {
+    double weight1 = 40000.0, VMCbase1 = 100.0;
+    double weight2 = 50000.0, VMCbase2 = 110.0;
+
+    // VMC doesn't scale linearly with weight
+    TS_ASSERT(VMCbase2 > VMCbase1);
+  }
+
+  // Test performance degradation independence
+  void testPerformanceDegradationIndependence() {
+    double normalClimb1 = 2000.0, OEIClimb1 = 500.0;
+    double normalClimb2 = 3000.0, OEIClimb2 = 800.0;
+
+    double ratio1 = OEIClimb1 / normalClimb1;
+    double ratio2 = OEIClimb2 / normalClimb2;
+
+    TS_ASSERT_DELTA(ratio1, 0.25, 0.01);
+    TS_ASSERT_DELTA(ratio2, 0.267, 0.01);
+  }
+
+  // Test yaw moment state independence
+  void testYawMomentStateIndependence() {
+    double T1 = 10000.0, arm1 = 15.0;
+    double T2 = 20000.0, arm2 = 10.0;
+
+    double M1 = T1 * arm1;
+    double M2 = T2 * arm2;
+
+    TS_ASSERT_DELTA(M1, 150000.0, 1.0);
+    TS_ASSERT_DELTA(M2, 200000.0, 1.0);
+  }
+
+  // Test controllability margin independence
+  void testControllabilityMarginIndependence() {
+    double VMC1 = 100.0, speed1 = 150.0;
+    double VMC2 = 110.0, speed2 = 140.0;
+
+    double margin1 = speed1 - VMC1;
+    double margin2 = speed2 - VMC2;
+
+    TS_ASSERT_DELTA(margin1, 50.0, 0.1);
+    TS_ASSERT_DELTA(margin2, 30.0, 0.1);
+  }
 };

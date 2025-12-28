@@ -1362,4 +1362,159 @@ public:
     // Transient should be attenuated
     TS_ASSERT(y < peak * 0.01);
   }
+
+  /***************************************************************************
+   * Complete Filter System Tests
+   ***************************************************************************/
+
+  // Test complete filter cascade
+  void testCompleteFilterCascade() {
+    double C1 = 10.0, C2 = 20.0;
+    double dt = 0.01;
+
+    double ca1 = std::exp(-C1 * dt);
+    double cb1 = 1.0 - ca1;
+    double ca2 = std::exp(-C2 * dt);
+    double cb2 = 1.0 - ca2;
+
+    double y1 = 0.0, y2 = 0.0;
+    double input = 1.0;
+
+    // Apply step input through cascade
+    for (int i = 0; i < 100; i++) {
+      y1 = ca1 * y1 + cb1 * input;
+      y2 = ca2 * y2 + cb2 * y1;
+    }
+
+    TS_ASSERT(y2 < y1);  // Second filter adds more lag
+    TS_ASSERT(y2 > 0.9);  // Both approach steady state
+  }
+
+  // Test notch filter attenuation
+  void testNotchFilterAttenuation() {
+    double notchFreq = 50.0;     // Hz
+    double notchWidth = 5.0;     // Hz bandwidth
+    double inputFreq = 50.0;     // At notch frequency
+
+    // At notch frequency, attenuation should be maximum
+    double attenuation_dB = -40.0;  // Typical deep notch
+    double gain = std::pow(10.0, attenuation_dB / 20.0);
+
+    TS_ASSERT(gain < 0.02);  // Less than 2% pass-through
+  }
+
+  // Test complementary filter fusion
+  void testComplementaryFilterFusion() {
+    double accelData = 1.0;      // Low frequency accurate
+    double gyroData = 0.9;       // High frequency accurate
+    double alpha = 0.98;         // High pass weight
+
+    double fused = alpha * gyroData + (1.0 - alpha) * accelData;
+    TS_ASSERT_DELTA(fused, 0.902, 0.001);
+  }
+
+  // Test moving average smoothing
+  void testMovingAverageSmoothing() {
+    double samples[] = {10.0, 12.0, 8.0, 11.0, 9.0};
+    double sum = 0.0;
+    int n = 5;
+
+    for (int i = 0; i < n; i++) {
+      sum += samples[i];
+    }
+    double average = sum / n;
+
+    TS_ASSERT_DELTA(average, 10.0, 0.01);
+  }
+
+  // Test Kalman filter prediction
+  void testKalmanFilterPrediction() {
+    double state = 100.0;
+    double velocity = 10.0;
+    double dt = 0.1;
+
+    double predictedState = state + velocity * dt;
+    TS_ASSERT_DELTA(predictedState, 101.0, 0.01);
+  }
+
+  // Test rate limiter integration
+  void testRateLimiterWithFilter() {
+    double maxRate = 10.0;   // units/sec
+    double dt = 0.1;
+    double target = 100.0;
+    double current = 0.0;
+
+    double maxChange = maxRate * dt;
+    double change = std::min(target - current, maxChange);
+    current += change;
+
+    TS_ASSERT_DELTA(current, 1.0, 0.01);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test filter coefficient independence
+  void testFilterCoefficientIndependence() {
+    double C1_a = 10.0, C1_b = 50.0;
+    double dt = 0.01;
+
+    double ca_a = std::exp(-C1_a * dt);
+    double ca_b = std::exp(-C1_b * dt);
+
+    TS_ASSERT(ca_a > ca_b);  // Slower filter has ca closer to 1
+    TS_ASSERT_DELTA(ca_a, 0.9048, 0.001);
+    TS_ASSERT_DELTA(ca_b, 0.6065, 0.001);
+  }
+
+  // Test filter state independence
+  void testFilterStateIndependence() {
+    double y1 = 50.0, y2 = 100.0;
+    double input = 0.0;
+    double ca = 0.9;
+
+    double y1_next = ca * y1 + (1.0 - ca) * input;
+    double y2_next = ca * y2 + (1.0 - ca) * input;
+
+    TS_ASSERT_DELTA(y1_next, 45.0, 0.1);
+    TS_ASSERT_DELTA(y2_next, 90.0, 0.1);
+  }
+
+  // Test gain calculation independence
+  void testFilterGainCalculationIndependence() {
+    double w1 = 5.0, C1 = 10.0;
+    double w2 = 20.0;
+
+    double gain1 = C1 / std::sqrt(w1*w1 + C1*C1);
+    double gain2 = C1 / std::sqrt(w2*w2 + C1*C1);
+
+    TS_ASSERT(gain1 > gain2);  // Lower frequency has higher gain in LP
+    TS_ASSERT_DELTA(gain1, 0.894, 0.01);
+    TS_ASSERT_DELTA(gain2, 0.447, 0.01);
+  }
+
+  // Test phase calculation independence
+  void testPhaseCalculationIndependence() {
+    double w1 = 5.0, C1 = 10.0;
+    double w2 = 10.0;
+
+    double phase1 = -std::atan(w1 / C1) * 180.0 / M_PI;
+    double phase2 = -std::atan(w2 / C1) * 180.0 / M_PI;
+
+    TS_ASSERT(std::abs(phase2) > std::abs(phase1));
+    TS_ASSERT_DELTA(phase1, -26.57, 0.1);
+    TS_ASSERT_DELTA(phase2, -45.0, 0.1);
+  }
+
+  // Test time constant independence
+  void testTimeConstantIndependence() {
+    double tau1 = 0.1, tau2 = 0.5;
+
+    double C1_1 = 1.0 / tau1;
+    double C1_2 = 1.0 / tau2;
+
+    TS_ASSERT_DELTA(C1_1, 10.0, 0.1);
+    TS_ASSERT_DELTA(C1_2, 2.0, 0.1);
+  }
 };

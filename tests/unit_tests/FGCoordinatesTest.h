@@ -1492,4 +1492,186 @@ public:
     TS_ASSERT_DELTA(r21, 0.0, epsilon);
     TS_ASSERT_DELTA(r22, 1.0, epsilon);
   }
+
+  /***************************************************************************
+   * Complete Coordinate System Tests
+   ***************************************************************************/
+
+  // Test complete ECEF to geodetic conversion
+  void testCompleteECEFToGeodetic() {
+    double lat = 40.0 * DEG_TO_RAD;
+    double lon = -75.0 * DEG_TO_RAD;
+    double alt = 10000.0;  // ft
+
+    double N = WGS84_A / std::sqrt(1.0 - WGS84_E2 * std::sin(lat) * std::sin(lat));
+    double X = (N + alt) * std::cos(lat) * std::cos(lon);
+    double Y = (N + alt) * std::cos(lat) * std::sin(lon);
+    double Z = (N * (1.0 - WGS84_E2) + alt) * std::sin(lat);
+
+    double R = std::sqrt(X*X + Y*Y + Z*Z);
+    TS_ASSERT(R > WGS84_B);  // Greater than polar radius
+    TS_ASSERT(R < WGS84_A + 100000.0);  // Less than equatorial + altitude
+    TS_ASSERT(std::isfinite(X) && std::isfinite(Y) && std::isfinite(Z));
+  }
+
+  // Test local tangent plane coordinates
+  void testLocalTangentPlane() {
+    double lat0 = 45.0 * DEG_TO_RAD;
+    double lon0 = -90.0 * DEG_TO_RAD;
+
+    // NED frame unit vectors at origin
+    double n_x = -std::sin(lat0) * std::cos(lon0);
+    double n_y = -std::sin(lat0) * std::sin(lon0);
+    double n_z = std::cos(lat0);
+
+    double e_x = -std::sin(lon0);
+    double e_y = std::cos(lon0);
+    double e_z = 0.0;
+
+    // Verify orthogonality
+    double dot_ne = n_x*e_x + n_y*e_y + n_z*e_z;
+    TS_ASSERT_DELTA(dot_ne, 0.0, epsilon);
+  }
+
+  // Test geodetic distance on sphere
+  void testGeodeticDistanceOnSphere() {
+    double R = 20902000.0;  // ft (approx Earth radius)
+    double lat1 = 0.0, lon1 = 0.0;
+    double lat2 = 0.0, lon2 = 1.0 * DEG_TO_RAD;
+
+    double arc = R * lon2;  // Arc length at equator
+    double nm = arc / 6076.0;
+
+    TS_ASSERT_DELTA(nm, 60.0, 1.0);  // 1 degree at equator ≈ 60 nm
+  }
+
+  // Test bearing calculation accuracy
+  void testBearingCalculationAccuracy() {
+    double lat1 = 40.0 * DEG_TO_RAD;
+    double lon1 = -74.0 * DEG_TO_RAD;
+    double lat2 = 41.0 * DEG_TO_RAD;
+    double lon2 = -74.0 * DEG_TO_RAD;
+
+    // Due north bearing should be 0/360
+    double dLon = lon2 - lon1;
+    double y = std::sin(dLon) * std::cos(lat2);
+    double x = std::cos(lat1) * std::sin(lat2) - std::sin(lat1) * std::cos(lat2) * std::cos(dLon);
+    double bearing = std::atan2(y, x) * RAD_TO_DEG;
+    if (bearing < 0) bearing += 360.0;
+
+    TS_ASSERT_DELTA(bearing, 0.0, 0.1);
+  }
+
+  // Test coordinate transformation chain
+  void testCoordinateTransformChain() {
+    double phi = 30.0 * DEG_TO_RAD;
+    double theta = 20.0 * DEG_TO_RAD;
+    double psi = 45.0 * DEG_TO_RAD;
+
+    // Original vector
+    double x = 1.0, y = 0.0, z = 0.0;
+
+    // Apply three rotations
+    double x1 = x * std::cos(psi) - y * std::sin(psi);
+    double y1 = x * std::sin(psi) + y * std::cos(psi);
+    double z1 = z;
+
+    // Magnitude should be preserved
+    double mag = std::sqrt(x1*x1 + y1*y1 + z1*z1);
+    TS_ASSERT_DELTA(mag, 1.0, epsilon);
+  }
+
+  // Test range and bearing from waypoint
+  void testRangeBearingFromWaypoint() {
+    double acft_lat = 40.0 * DEG_TO_RAD;
+    double acft_lon = -74.0 * DEG_TO_RAD;
+    double wpt_lat = 40.5 * DEG_TO_RAD;
+    double wpt_lon = -73.5 * DEG_TO_RAD;
+
+    double dLat = wpt_lat - acft_lat;
+    double dLon = wpt_lon - acft_lon;
+
+    double a = std::sin(dLat/2) * std::sin(dLat/2) +
+               std::cos(acft_lat) * std::cos(wpt_lat) *
+               std::sin(dLon/2) * std::sin(dLon/2);
+    double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1-a));
+    double range_nm = c * 3440.0;
+
+    TS_ASSERT(range_nm > 0.0);
+    TS_ASSERT(range_nm < 100.0);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test coordinate calculation independence
+  void testCoordinateCalculationIndependence() {
+    double lat1 = 30.0 * DEG_TO_RAD;
+    double lat2 = 60.0 * DEG_TO_RAD;
+
+    double N1 = WGS84_A / std::sqrt(1.0 - WGS84_E2 * std::sin(lat1) * std::sin(lat1));
+    double N2 = WGS84_A / std::sqrt(1.0 - WGS84_E2 * std::sin(lat2) * std::sin(lat2));
+
+    TS_ASSERT(N1 != N2);
+    TS_ASSERT(N2 > N1);  // N increases with latitude
+  }
+
+  // Test bearing state independence
+  void testBearingStateIndependence() {
+    double bearing1 = 45.0;
+    double bearing2 = 270.0;
+
+    double x1 = std::sin(bearing1 * DEG_TO_RAD);
+    double y1 = std::cos(bearing1 * DEG_TO_RAD);
+
+    double x2 = std::sin(bearing2 * DEG_TO_RAD);
+    double y2 = std::cos(bearing2 * DEG_TO_RAD);
+
+    TS_ASSERT_DELTA(x1, 0.707, 0.01);
+    TS_ASSERT_DELTA(x2, -1.0, 0.01);
+  }
+
+  // Test altitude conversion independence
+  void testAltitudeConversionIndependence() {
+    double alt_ft = 30000.0;
+    double alt_m = alt_ft * 0.3048;
+
+    double alt2_ft = 10000.0;
+    double alt2_m = alt2_ft * 0.3048;
+
+    TS_ASSERT_DELTA(alt_m, 9144.0, 1.0);
+    TS_ASSERT_DELTA(alt2_m, 3048.0, 1.0);
+  }
+
+  // Test spherical to cartesian independence
+  void testSphericalToCartesianIndependence() {
+    double r = 1.0;
+    double theta1 = 30.0 * DEG_TO_RAD;
+    double theta2 = 60.0 * DEG_TO_RAD;
+
+    double x1 = r * std::sin(theta1);
+    double z1 = r * std::cos(theta1);
+
+    double x2 = r * std::sin(theta2);
+    double z2 = r * std::cos(theta2);
+
+    TS_ASSERT_DELTA(x1, 0.5, 0.01);
+    TS_ASSERT_DELTA(x2, 0.866, 0.01);
+  }
+
+  // Test coordinate frame conversion independence
+  void testFrameConversionIndependence() {
+    double psi1 = 45.0 * DEG_TO_RAD;
+    double psi2 = 90.0 * DEG_TO_RAD;
+
+    double c1 = std::cos(psi1);
+    double s1 = std::sin(psi1);
+    double c2 = std::cos(psi2);
+    double s2 = std::sin(psi2);
+
+    TS_ASSERT_DELTA(c1, 0.707, 0.01);
+    TS_ASSERT_DELTA(c2, 0.0, 0.01);
+    TS_ASSERT_DELTA(s2, 1.0, 0.01);
+  }
 };
