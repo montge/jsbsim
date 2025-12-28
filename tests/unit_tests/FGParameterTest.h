@@ -672,3 +672,236 @@ public:
     TS_ASSERT_DELTA(x.GetValue(), 0.3, 1e-15);
   }
 };
+
+/***************************************************************************
+ * Extended Parameter Tests (Tests 76-100)
+ ***************************************************************************/
+
+class FGParameterExtendedTest : public CxxTest::TestSuite
+{
+public:
+  // Test 76: Parameter with zero value
+  void testZeroValue() {
+    FGConstantDummy x(0.0);
+
+    TS_ASSERT_EQUALS(x.GetValue(), 0.0);
+    TS_ASSERT(x.IsConstant());
+  }
+
+  // Test 77: Parameter with negative value
+  void testNegativeValue() {
+    FGConstantDummy x(-123.456);
+
+    TS_ASSERT_EQUALS(x.GetValue(), -123.456);
+    TS_ASSERT(x.GetValue() < 0);
+  }
+
+  // Test 78: Very large parameter value
+  void testVeryLargeValue() {
+    FGConstantDummy x(1.0e100);
+
+    TS_ASSERT_EQUALS(x.GetValue(), 1.0e100);
+    TS_ASSERT(x.GetValue() > 1.0e99);
+  }
+
+  // Test 79: Very small parameter value
+  void testVerySmallValue() {
+    FGConstantDummy x(1.0e-100);
+
+    TS_ASSERT_EQUALS(x.GetValue(), 1.0e-100);
+    TS_ASSERT(x.GetValue() < 1.0e-99);
+    TS_ASSERT(x.GetValue() > 0);
+  }
+
+  // Test 80: Parameter name length
+  void testParameterNameLength() {
+    std::string longName(100, 'x');
+    FGNamedDummy x(longName, 1.0);
+
+    TS_ASSERT_EQUALS(x.GetName().length(), 100u);
+    TS_ASSERT_EQUALS(x.GetName(), longName);
+  }
+
+  // Test 81: Empty parameter name
+  void testEmptyParameterName() {
+    FGNamedDummy x("", 42.0);
+
+    TS_ASSERT(x.GetName().empty());
+    TS_ASSERT_EQUALS(x.GetValue(), 42.0);
+  }
+
+  // Test 82: Parameter name with special characters
+  void testParameterNameSpecialChars() {
+    FGNamedDummy x("alpha/beta-gamma_delta", 1.0);
+
+    TS_ASSERT_EQUALS(x.GetName(), "alpha/beta-gamma_delta");
+  }
+
+  // Test 83: Parameter name with spaces
+  void testParameterNameWithSpaces() {
+    FGNamedDummy x("parameter name with spaces", 2.0);
+
+    TS_ASSERT_EQUALS(x.GetName(), "parameter name with spaces");
+    TS_ASSERT_EQUALS(x.GetValue(), 2.0);
+  }
+
+  // Test 84: Multiply parameter by scalar
+  void testMultiplyByScalar() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(5.0));
+
+    double result = px * 3.0;
+
+    TS_ASSERT_EQUALS(result, 15.0);
+  }
+
+  // Test 85: Multiply parameter by zero
+  void testMultiplyByZero() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(100.0));
+
+    double result = px * 0.0;
+
+    TS_ASSERT_EQUALS(result, 0.0);
+  }
+
+  // Test 86: Multiply parameter by negative
+  void testMultiplyByNegative() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(5.0));
+
+    double result = px * (-2.0);
+
+    TS_ASSERT_EQUALS(result, -10.0);
+  }
+
+  // Test 87: Pre-multiply parameter
+  void testPreMultiply() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(4.0));
+
+    double result = 2.5 * px;
+
+    TS_ASSERT_EQUALS(result, 10.0);
+  }
+
+  // Test 88: Chained GetValue calls
+  void testChainedGetValue() {
+    FGDummy x;
+
+    // Each call increments counter
+    double v1 = x.GetValue();
+    double v2 = x.GetValue();
+    double v3 = x.GetValue();
+
+    TS_ASSERT_EQUALS(v1, 0.0);
+    TS_ASSERT_EQUALS(v2, 1.0);
+    TS_ASSERT_EQUALS(v3, 2.0);
+  }
+
+  // Test 89: getDoubleValue alias
+  void testGetDoubleValueAlias() {
+    FGDummy x;
+
+    // First call via GetValue
+    x.GetValue();
+
+    // getDoubleValue should also increment
+    double v = x.getDoubleValue();
+
+    TS_ASSERT_EQUALS(v, 1.0);
+  }
+
+  // Test 90: Shared pointer null check
+  void testSharedPointerNullCheck() {
+    SGSharedPtr<FGConstantDummy> px;
+
+    TS_ASSERT(!px.valid());
+  }
+
+  // Test 91: Shared pointer valid check
+  void testSharedPointerValidCheck() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(1.0));
+
+    TS_ASSERT(px.valid());
+  }
+
+  // Test 92: Shared pointer reset
+  void testSharedPointerReset() {
+    SGSharedPtr<FGConstantDummy> px(new FGConstantDummy(10.0));
+    TS_ASSERT(px.valid());
+
+    px = SGSharedPtr<FGConstantDummy>();
+    TS_ASSERT(!px.valid());
+  }
+
+  // Test 93: Parameter value sign check
+  void testValueSignCheck() {
+    FGConstantDummy positive(5.0);
+    FGConstantDummy negative(-5.0);
+    FGConstantDummy zero(0.0);
+
+    TS_ASSERT(positive.GetValue() > 0);
+    TS_ASSERT(negative.GetValue() < 0);
+    TS_ASSERT(zero.GetValue() == 0);
+  }
+
+  // Test 94: Parameter infinity handling
+  void testInfinityValue() {
+    double inf = std::numeric_limits<double>::infinity();
+    FGConstantDummy x(inf);
+
+    TS_ASSERT(std::isinf(x.GetValue()));
+    TS_ASSERT(x.GetValue() > 0);
+  }
+
+  // Test 95: Parameter negative infinity
+  void testNegativeInfinityValue() {
+    double negInf = -std::numeric_limits<double>::infinity();
+    FGConstantDummy x(negInf);
+
+    TS_ASSERT(std::isinf(x.GetValue()));
+    TS_ASSERT(x.GetValue() < 0);
+  }
+
+  // Test 96: Parameter NaN handling
+  void testNaNValue() {
+    double nan = std::numeric_limits<double>::quiet_NaN();
+    FGConstantDummy x(nan);
+
+    TS_ASSERT(std::isnan(x.GetValue()));
+  }
+
+  // Test 97: Denormalized value
+  void testDenormalizedValue() {
+    double denorm = std::numeric_limits<double>::denorm_min();
+    FGConstantDummy x(denorm);
+
+    TS_ASSERT(x.GetValue() > 0);
+    TS_ASSERT(x.GetValue() < std::numeric_limits<double>::min());
+  }
+
+  // Test 98: Max double value
+  void testMaxDoubleValue() {
+    double maxVal = std::numeric_limits<double>::max();
+    FGConstantDummy x(maxVal);
+
+    TS_ASSERT_EQUALS(x.GetValue(), maxVal);
+  }
+
+  // Test 99: Min double value
+  void testMinDoubleValue() {
+    double minVal = std::numeric_limits<double>::lowest();
+    FGConstantDummy x(minVal);
+
+    TS_ASSERT_EQUALS(x.GetValue(), minVal);
+  }
+
+  // Test 100: Epsilon precision
+  void testEpsilonPrecision() {
+    double epsilon = std::numeric_limits<double>::epsilon();
+    FGConstantDummy x(1.0);
+    FGConstantDummy y(1.0 + epsilon);
+
+    // They should be different
+    TS_ASSERT(x.GetValue() != y.GetValue());
+    // But very close
+    TS_ASSERT_DELTA(x.GetValue(), y.GetValue(), 2 * epsilon);
+  }
+};

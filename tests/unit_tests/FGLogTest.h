@@ -1128,3 +1128,306 @@ public:
     TS_ASSERT_EQUALS(logger->buffer, "255");
   }
 };
+
+/***************************************************************************
+ * Extended Log Tests (Tests 76-100)
+ ***************************************************************************/
+
+class FGLogExtendedTest : public CxxTest::TestSuite
+{
+public:
+  // Test 76: Very small floating point values
+  void testVerySmallFloats() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::scientific << 1.23e-300;
+    }
+    TS_ASSERT(!logger->buffer.empty());
+    TS_ASSERT(logger->buffer.find("e") != std::string::npos ||
+              logger->buffer.find("E") != std::string::npos);
+  }
+
+  // Test 77: Very large floating point values
+  void testVeryLargeFloats() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::scientific << 1.23e+300;
+    }
+    TS_ASSERT(!logger->buffer.empty());
+  }
+
+  // Test 78: Infinity value
+  void testInfinityValue() {
+    auto logger = std::make_shared<DummyLogger>();
+    double inf = std::numeric_limits<double>::infinity();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << inf;
+    }
+    TS_ASSERT(!logger->buffer.empty());
+    // Output typically contains "inf" or "infinity"
+    TS_ASSERT(logger->buffer.find("inf") != std::string::npos ||
+              logger->buffer.find("Inf") != std::string::npos);
+  }
+
+  // Test 79: NaN value
+  void testNaNValue() {
+    auto logger = std::make_shared<DummyLogger>();
+    double nan = std::numeric_limits<double>::quiet_NaN();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << nan;
+    }
+    TS_ASSERT(!logger->buffer.empty());
+    TS_ASSERT(logger->buffer.find("nan") != std::string::npos ||
+              logger->buffer.find("NaN") != std::string::npos ||
+              logger->buffer.find("NAN") != std::string::npos);
+  }
+
+  // Test 80: Setw with right alignment
+  void testSetwRightAlignment() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::setw(8) << 42;
+    }
+    TS_ASSERT_EQUALS(logger->buffer.length(), 8u);
+    TS_ASSERT(logger->buffer.find("42") != std::string::npos);
+  }
+
+  // Test 81: Uppercase hex
+  void testUppercaseHex() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::hex << std::uppercase << 255;
+    }
+    TS_ASSERT_EQUALS(logger->buffer, "FF");
+  }
+
+  // Test 82: Showbase with hex
+  void testShowbaseHex() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::showbase << std::hex << 255;
+    }
+    TS_ASSERT(logger->buffer.find("0x") != std::string::npos ||
+              logger->buffer.find("0X") != std::string::npos);
+  }
+
+  // Test 83: Showbase with octal
+  void testShowbaseOctal() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::showbase << std::oct << 64;
+    }
+    TS_ASSERT(logger->buffer.find("0") == 0);  // Starts with 0
+  }
+
+  // Test 84: Internal alignment
+  void testInternalAlignment() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::internal << std::setw(6) << -42;
+    }
+    TS_ASSERT_EQUALS(logger->buffer.length(), 6u);
+    TS_ASSERT(logger->buffer.find("-") != std::string::npos);
+    TS_ASSERT(logger->buffer.find("42") != std::string::npos);
+  }
+
+  // Test 85: Showpoint for floats
+  void testShowpoint() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::showpoint << 100.0;
+    }
+    TS_ASSERT(logger->buffer.find(".") != std::string::npos);
+  }
+
+  // Test 86: Multiple format switches
+  void testMultipleFormatSwitches() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::hex << 15 << " " << std::dec << 15 << " " << std::oct << 15;
+    }
+    TS_ASSERT_EQUALS(logger->buffer, "f 15 17");
+  }
+
+  // Test 87: Log level comparison
+  void testLogLevelComparison() {
+    TS_ASSERT(JSBSim::LogLevel::BULK < JSBSim::LogLevel::DEBUG);
+    TS_ASSERT(JSBSim::LogLevel::DEBUG < JSBSim::LogLevel::INFO);
+    TS_ASSERT(JSBSim::LogLevel::INFO < JSBSim::LogLevel::WARN);
+    TS_ASSERT(JSBSim::LogLevel::WARN < JSBSim::LogLevel::ERROR);
+    TS_ASSERT(JSBSim::LogLevel::ERROR < JSBSim::LogLevel::FATAL);
+  }
+
+  // Test 88: Double precision output
+  void testDoublePrecisionOutput() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << std::setprecision(15) << 3.141592653589793;
+    }
+    TS_ASSERT(logger->buffer.find("3.14159265358979") != std::string::npos);
+  }
+
+  // Test 89: Short integer values
+  void testShortIntegerValues() {
+    auto logger = std::make_shared<DummyLogger>();
+    short s = -32768;
+    unsigned short us = 65535;
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << s << " " << us;
+    }
+    TS_ASSERT(logger->buffer.find("-32768") != std::string::npos);
+    TS_ASSERT(logger->buffer.find("65535") != std::string::npos);
+  }
+
+  // Test 90: Long double values
+  void testLongDoubleValues() {
+    auto logger = std::make_shared<DummyLogger>();
+    long double ld = 3.14159265358979323846L;
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << ld;
+    }
+    TS_ASSERT(!logger->buffer.empty());
+    TS_ASSERT(logger->buffer.find("3.14") != std::string::npos);
+  }
+
+  // Test 91: Mixed endl and explicit newlines
+  void testMixedNewlines() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << "A" << std::endl << "B\nC" << std::endl;
+    }
+    TS_ASSERT_EQUALS(logger->buffer, "A\nB\nC\n");
+  }
+
+  // Test 92: Unicode-like characters (extended ASCII)
+  void testExtendedASCII() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << "Degrees: 180\xB0";  // degree symbol
+    }
+    TS_ASSERT(logger->buffer.find("Degrees: 180") != std::string::npos);
+  }
+
+  // Test 93: Empty path
+  void testEmptyPath() {
+    auto logger = std::make_shared<DummyLogger>();
+    SGPath path("");
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << path;
+    }
+    TS_ASSERT(logger->buffer.find("Path") != std::string::npos);
+  }
+
+  // Test 94: Absolute path
+  void testAbsolutePath() {
+    auto logger = std::make_shared<DummyLogger>();
+    SGPath path("/root/path/to/file");
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << path;
+    }
+    TS_ASSERT(logger->buffer.find("/root/path/to/file") != std::string::npos);
+  }
+
+  // Test 95: Vector with small components
+  void testVectorSmallComponents() {
+    auto logger = std::make_shared<DummyLogger>();
+    JSBSim::FGColumnVector3 vec(1e-10, 2e-10, 3e-10);
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << vec;
+    }
+    TS_ASSERT(!logger->buffer.empty());
+  }
+
+  // Test 96: Multiple flush behavior
+  void testMultipleFlushBehavior() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log1(logger, JSBSim::LogLevel::INFO);
+      log1 << "First";
+    }
+    TS_ASSERT(logger->flushed);
+    size_t bufferLen = logger->buffer.length();
+
+    logger->flushed = false;
+    {
+      JSBSim::FGLogging log2(logger, JSBSim::LogLevel::DEBUG);
+      log2 << "Second";
+    }
+    TS_ASSERT(logger->flushed);
+    TS_ASSERT(logger->buffer.length() > bufferLen);
+  }
+
+  // Test 97: Log level change between messages
+  void testLogLevelChangeBetweenMessages() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << "Info message";
+    }
+    TS_ASSERT_EQUALS(logger->GetLogLevel(), JSBSim::LogLevel::INFO);
+
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::ERROR);
+      log << "Error message";
+    }
+    TS_ASSERT_EQUALS(logger->GetLogLevel(), JSBSim::LogLevel::ERROR);
+  }
+
+  // Test 98: Character special values
+  void testCharacterSpecialValues() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << 'A' << ' ' << '\t' << '\n';
+    }
+    TS_ASSERT_EQUALS(logger->buffer, "A \t\n");
+  }
+
+  // Test 99: Multi-line output
+  void testMultiLineOutput() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      log << "Line 1" << std::endl;
+      log << "Line 2" << std::endl;
+      log << "Line 3";
+    }
+    TS_ASSERT(!logger->buffer.empty());
+    TS_ASSERT(logger->buffer.find("Line 1") != std::string::npos);
+    TS_ASSERT(logger->buffer.find("Line 2") != std::string::npos);
+    TS_ASSERT(logger->buffer.find("Line 3") != std::string::npos);
+  }
+
+  // Test 100: Very long concatenation
+  void testVeryLongConcatenation() {
+    auto logger = std::make_shared<DummyLogger>();
+    {
+      JSBSim::FGLogging log(logger, JSBSim::LogLevel::INFO);
+      for (int i = 0; i < 100; ++i) {
+        log << i << " ";
+      }
+    }
+    TS_ASSERT(!logger->buffer.empty());
+    TS_ASSERT(logger->buffer.find("0 ") != std::string::npos);
+    TS_ASSERT(logger->buffer.find("99 ") != std::string::npos);
+  }
+};

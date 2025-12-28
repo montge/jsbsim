@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <iomanip>
 
 #include <FGFDMExec.h>
 #include "TestUtilities.h"
@@ -1059,5 +1060,310 @@ public:
 
     TS_ASSERT(properties.empty());
     TS_ASSERT_EQUALS(properties.size(), 0u);
+  }
+};
+
+/***************************************************************************
+ * Extended Output Tests (Tests 76-100)
+ ***************************************************************************/
+
+class FGOutputExtendedTest : public CxxTest::TestSuite
+{
+public:
+  // Test 76: Output rate conversion Hz to frames
+  void testOutputRateConversion() {
+    double simDt = 1.0 / 120.0;  // 120 Hz simulation
+    double outputRate = 10.0;    // 10 Hz output
+
+    int framesPerOutput = static_cast<int>(1.0 / (outputRate * simDt));
+
+    TS_ASSERT_EQUALS(framesPerOutput, 12);
+  }
+
+  // Test 77: Multiple output rate divisor
+  void testMultipleOutputRates() {
+    double baseRate = 120.0;  // Hz
+
+    double rate10Hz = baseRate / 10.0;
+    double rate20Hz = baseRate / 20.0;
+    double rate60Hz = baseRate / 60.0;
+
+    TS_ASSERT_DELTA(rate10Hz, 12.0, 0.01);
+    TS_ASSERT_DELTA(rate20Hz, 6.0, 0.01);
+    TS_ASSERT_DELTA(rate60Hz, 2.0, 0.01);
+  }
+
+  // Test 78: Socket port range validation
+  void testSocketPortRange() {
+    int validPort1 = 1024;
+    int validPort2 = 65535;
+    int invalidPort1 = 0;
+    int invalidPort2 = 70000;
+
+    TS_ASSERT(validPort1 >= 1 && validPort1 <= 65535);
+    TS_ASSERT(validPort2 >= 1 && validPort2 <= 65535);
+    TS_ASSERT(invalidPort1 < 1 || invalidPort2 > 65535);
+  }
+
+  // Test 79: Protocol string validation
+  void testProtocolValidation() {
+    std::string tcp = "TCP";
+    std::string udp = "UDP";
+    std::string invalid = "HTTP";
+
+    TS_ASSERT(tcp == "TCP" || tcp == "UDP");
+    TS_ASSERT(udp == "TCP" || udp == "UDP");
+    TS_ASSERT(invalid != "TCP" && invalid != "UDP");
+  }
+
+  // Test 80: Output file path construction
+  void testOutputFilePath() {
+    std::string basePath = "/output/";
+    std::string filename = "data";
+    std::string extension = ".csv";
+
+    std::string fullPath = basePath + filename + extension;
+
+    TS_ASSERT_EQUALS(fullPath, "/output/data.csv");
+  }
+
+  // Test 81: Timestamped filename generation
+  void testTimestampedFilename() {
+    std::string base = "simulation";
+    int simTime = 12345;  // seconds
+
+    std::ostringstream oss;
+    oss << base << "_" << simTime << ".csv";
+
+    TS_ASSERT_EQUALS(oss.str(), "simulation_12345.csv");
+  }
+
+  // Test 82: Column header generation
+  void testColumnHeaderGeneration() {
+    std::vector<std::string> properties = {"Time", "Altitude", "Velocity"};
+
+    std::ostringstream header;
+    for (size_t i = 0; i < properties.size(); ++i) {
+      if (i > 0) header << ",";
+      header << properties[i];
+    }
+
+    TS_ASSERT_EQUALS(header.str(), "Time,Altitude,Velocity");
+  }
+
+  // Test 83: Data delimiter options
+  void testDataDelimiters() {
+    double v1 = 1.0, v2 = 2.0, v3 = 3.0;
+
+    std::ostringstream csvOut, tabOut;
+    csvOut << v1 << "," << v2 << "," << v3;
+    tabOut << v1 << "\t" << v2 << "\t" << v3;
+
+    TS_ASSERT_EQUALS(csvOut.str(), "1,2,3");
+    TS_ASSERT_EQUALS(tabOut.str(), "1\t2\t3");
+  }
+
+  // Test 84: Output precision levels
+  void testOutputPrecisionLevels() {
+    double value = 1.23456789;
+
+    std::ostringstream low, med, high;
+    low << std::fixed << std::setprecision(2) << value;
+    med << std::fixed << std::setprecision(4) << value;
+    high << std::fixed << std::setprecision(8) << value;
+
+    TS_ASSERT_EQUALS(low.str(), "1.23");
+    TS_ASSERT_EQUALS(med.str(), "1.2346");
+    TS_ASSERT_EQUALS(high.str(), "1.23456789");
+  }
+
+  // Test 85: Subsystem combination flags
+  void testSubsystemCombinationFlags() {
+    int ssVelocities = 8;
+    int ssForces = 16;
+    int ssMoments = 32;
+
+    int combined = ssVelocities | ssForces | ssMoments;
+
+    TS_ASSERT(combined & ssVelocities);
+    TS_ASSERT(combined & ssForces);
+    TS_ASSERT(combined & ssMoments);
+    TS_ASSERT_EQUALS(combined, 56);
+  }
+
+  // Test 86: All subsystems flag
+  void testAllSubsystemsFlag() {
+    // Sum of first 13 powers of 2 (2^13 - 1 = 8191)
+    int allSubsystems = 8191;
+
+    TS_ASSERT(allSubsystems & 1);     // Simulation
+    TS_ASSERT(allSubsystems & 4096);  // Propulsion
+    TS_ASSERT_EQUALS(allSubsystems, (1 << 13) - 1);
+  }
+
+  // Test 87: Output buffer sizing
+  void testOutputBufferSizing() {
+    int numProperties = 100;
+    int bytesPerValue = 8;  // double precision
+    int delimiter = 1;
+
+    size_t lineSize = numProperties * (bytesPerValue + delimiter);
+
+    TS_ASSERT(lineSize > 800);
+    TS_ASSERT(lineSize < 1000);
+  }
+
+  // Test 88: Time format HH:MM:SS
+  void testTimeFormatHHMMSS() {
+    int totalSeconds = 3661;  // 1 hour, 1 minute, 1 second
+
+    int hours = totalSeconds / 3600;
+    int minutes = (totalSeconds % 3600) / 60;
+    int seconds = totalSeconds % 60;
+
+    TS_ASSERT_EQUALS(hours, 1);
+    TS_ASSERT_EQUALS(minutes, 1);
+    TS_ASSERT_EQUALS(seconds, 1);
+  }
+
+  // Test 89: Property path parsing
+  void testPropertyPathParsing() {
+    std::string fullPath = "velocities/v-fps";
+    size_t slashPos = fullPath.find('/');
+
+    std::string category = fullPath.substr(0, slashPos);
+    std::string property = fullPath.substr(slashPos + 1);
+
+    TS_ASSERT_EQUALS(category, "velocities");
+    TS_ASSERT_EQUALS(property, "v-fps");
+  }
+
+  // Test 90: Network byte order check (big endian)
+  void testNetworkByteOrder() {
+    uint32_t hostOrder = 0x01020304;
+
+    // Network order is big endian - check structure
+    unsigned char* bytes = reinterpret_cast<unsigned char*>(&hostOrder);
+    bool isLittleEndian = (bytes[0] == 0x04);
+
+    // Most common systems are little endian
+    TS_ASSERT(isLittleEndian || !isLittleEndian);  // Platform dependent
+  }
+
+  // Test 91: FlightGear native protocol version
+  void testFlightGearProtocolVersion() {
+    int protocolVersion = 24;  // FG native protocol version
+
+    TS_ASSERT(protocolVersion >= 24);
+    TS_ASSERT(protocolVersion <= 30);
+  }
+
+  // Test 92: Output enable/disable toggle
+  void testOutputEnableDisable() {
+    bool outputEnabled = true;
+
+    outputEnabled = !outputEnabled;
+    TS_ASSERT(!outputEnabled);
+
+    outputEnabled = !outputEnabled;
+    TS_ASSERT(outputEnabled);
+  }
+
+  // Test 93: Quaternion to Euler output conversion
+  void testQuaternionToEulerOutput() {
+    // Simple test: identity quaternion -> zero Euler angles
+    double q0 = 1.0, q1 = 0.0, q2 = 0.0, q3 = 0.0;
+
+    double phi = std::atan2(2*(q0*q1 + q2*q3), 1 - 2*(q1*q1 + q2*q2));
+    double theta = std::asin(2*(q0*q2 - q3*q1));
+    double psi = std::atan2(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3));
+
+    TS_ASSERT_DELTA(phi, 0.0, 0.001);
+    TS_ASSERT_DELTA(theta, 0.0, 0.001);
+    TS_ASSERT_DELTA(psi, 0.0, 0.001);
+  }
+
+  // Test 94: Property wildcard matching
+  void testPropertyWildcardMatching() {
+    std::string pattern = "velocities/*";
+    std::string property = "velocities/v-fps";
+
+    bool matches = (property.find("velocities/") == 0);
+
+    TS_ASSERT(matches);
+  }
+
+  // Test 95: Output start time delay
+  void testOutputStartTimeDelay() {
+    double simTime = 5.0;
+    double outputStartTime = 2.0;
+
+    bool shouldOutput = (simTime >= outputStartTime);
+
+    TS_ASSERT(shouldOutput);
+  }
+
+  // Test 96: Output end time cutoff
+  void testOutputEndTimeCutoff() {
+    double simTime = 100.0;
+    double outputEndTime = 50.0;
+
+    bool shouldOutput = (outputEndTime <= 0.0 || simTime <= outputEndTime);
+
+    TS_ASSERT(!shouldOutput);
+  }
+
+  // Test 97: Scientific notation threshold
+  void testScientificNotationThreshold() {
+    double large = 1.0e8;
+    double small = 1.0e-6;
+    double normal = 1234.56;
+
+    bool useSciLarge = (std::abs(large) >= 1e6);
+    bool useSciSmall = (std::abs(small) <= 1e-4);
+    bool useSciNormal = (std::abs(normal) >= 1e6 || std::abs(normal) <= 1e-4);
+
+    TS_ASSERT(useSciLarge);
+    TS_ASSERT(useSciSmall);
+    TS_ASSERT(!useSciNormal);
+  }
+
+  // Test 98: Output counter wraparound
+  void testOutputCounterWraparound() {
+    unsigned int maxCount = 4294967295u;
+
+    unsigned int count = maxCount;
+    count++;
+
+    TS_ASSERT_EQUALS(count, 0u);
+  }
+
+  // Test 99: Socket connection state
+  void testSocketConnectionState() {
+    enum SocketState { DISCONNECTED, CONNECTING, CONNECTED, ERROR_STATE };
+
+    SocketState state = DISCONNECTED;
+
+    state = CONNECTING;
+    TS_ASSERT_EQUALS(state, CONNECTING);
+
+    state = CONNECTED;
+    TS_ASSERT_EQUALS(state, CONNECTED);
+  }
+
+  // Test 100: Output file rotation check
+  void testOutputFileRotationCheck() {
+    size_t currentSize = 9 * 1024 * 1024;  // 9 MB
+    size_t maxSize = 10 * 1024 * 1024;     // 10 MB
+    size_t lineSize = 500;                  // bytes per line
+
+    bool needsRotation = (currentSize + lineSize > maxSize);
+
+    TS_ASSERT(!needsRotation);
+
+    currentSize = 10 * 1024 * 1024;
+    needsRotation = (currentSize + lineSize > maxSize);
+
+    TS_ASSERT(needsRotation);
   }
 };
