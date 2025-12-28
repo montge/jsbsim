@@ -922,3 +922,391 @@ public:
     TS_ASSERT_DELTA(contingency_fuel, 50.0, epsilon);  // lbs
   }
 };
+
+/*******************************************************************************
+ * Extended FGFlightPath Tests (25 new tests)
+ ******************************************************************************/
+
+class FGFlightPathExtendedTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Advanced Energy Management Tests
+   ***************************************************************************/
+
+  // Test 76: Specific excess power (Ps)
+  void testSpecificExcessPower() {
+    double thrust = 5000.0;   // lbs
+    double drag = 3000.0;     // lbs
+    double weight = 10000.0;  // lbs
+    double V = 400.0;         // ft/s
+
+    // Ps = (T - D) * V / W
+    double Ps = (thrust - drag) * V / weight;
+
+    TS_ASSERT_DELTA(Ps, 80.0, epsilon);  // ft/s
+  }
+
+  // Test 77: Energy rate from Ps
+  void testEnergyRateFromPs() {
+    double Ps = 80.0;  // ft/s
+    double dt = 10.0;  // seconds
+
+    // Change in energy height
+    double delta_He = Ps * dt;
+
+    TS_ASSERT_DELTA(delta_He, 800.0, epsilon);  // ft
+  }
+
+  // Test 78: Maximum sustained turn performance
+  void testMaxSustainedTurn() {
+    // At sustained turn, Ps = 0 (no energy change)
+    double thrust = 4000.0;
+    double weight = 10000.0;
+    double V = 350.0;
+    double CL = 0.8;
+    double S = 200.0;
+    double rho = 0.002377;
+
+    double q = 0.5 * rho * V * V;
+    double lift = q * S * CL;
+    double n_max = lift / weight;
+
+    TS_ASSERT(n_max > 1.0);
+  }
+
+  // Test 79: Corner speed (max instantaneous turn)
+  void testCornerSpeed() {
+    // Speed for maximum instantaneous turn rate
+    double Vs = 100.0;   // Stall speed ft/s
+    double n_max = 4.0;  // Structural limit
+
+    // Corner speed = Vs * sqrt(n_max)
+    double Vc = Vs * std::sqrt(n_max);
+
+    TS_ASSERT_DELTA(Vc, 200.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Trajectory Optimization Tests
+   ***************************************************************************/
+
+  // Test 80: Constant CL climb
+  void testConstantCLClimb() {
+    double CL = 0.5;
+    double weight = 10000.0;
+    double S = 200.0;
+    double rho = 0.002377;
+
+    // Speed for constant CL
+    double q = weight / (S * CL);
+    double V = std::sqrt(2.0 * q / rho);
+
+    TS_ASSERT(V > 0);
+    TS_ASSERT_DELTA(V, 289.7, 1.0);
+  }
+
+  // Test 81: Minimum time to climb profile
+  void testMinTimeClimbProfile() {
+    // Min time climb at speed for max Ps
+    double V_maxPs = 300.0;  // ft/s
+    double altitude = 10000.0;
+    double Ps = 50.0;  // ft/s average
+
+    double time = altitude / Ps;
+
+    TS_ASSERT_DELTA(time, 200.0, epsilon);  // seconds
+  }
+
+  // Test 82: Cruise climb (constant Mach)
+  void testCruiseClimb() {
+    double mach = 0.78;
+    double a_low = 1000.0;   // Speed of sound at low alt
+    double a_high = 970.0;   // Speed of sound at high alt
+
+    double TAS_low = mach * a_low;
+    double TAS_high = mach * a_high;
+
+    // TAS decreases with altitude at constant Mach
+    TS_ASSERT(TAS_high < TAS_low);
+  }
+
+  /***************************************************************************
+   * Great Circle Navigation Tests
+   ***************************************************************************/
+
+  // Test 83: Great circle distance
+  void testGreatCircleDistance() {
+    // Simplified haversine for small distances
+    double lat1 = 40.0 * DEG_TO_RAD;
+    double lon1 = -74.0 * DEG_TO_RAD;
+    double lat2 = 51.5 * DEG_TO_RAD;
+    double lon2 = 0.0 * DEG_TO_RAD;
+
+    double dlat = lat2 - lat1;
+    double dlon = lon2 - lon1;
+
+    double a = std::sin(dlat/2) * std::sin(dlat/2) +
+               std::cos(lat1) * std::cos(lat2) * std::sin(dlon/2) * std::sin(dlon/2);
+    double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1-a));
+
+    double R = 3440.065;  // Earth radius in nm
+    double distance = R * c;
+
+    TS_ASSERT_DELTA(distance, 3000.0, 100.0);  // ~3000 nm NYC to London
+  }
+
+  // Test 84: Initial great circle heading
+  void testGreatCircleHeading() {
+    double lat1 = 40.0 * DEG_TO_RAD;
+    double lon1 = -74.0 * DEG_TO_RAD;
+    double lat2 = 51.5 * DEG_TO_RAD;
+    double lon2 = 0.0 * DEG_TO_RAD;
+
+    double dlon = lon2 - lon1;
+
+    double x = std::sin(dlon) * std::cos(lat2);
+    double y = std::cos(lat1) * std::sin(lat2) -
+               std::sin(lat1) * std::cos(lat2) * std::cos(dlon);
+
+    double heading = std::atan2(x, y) * RAD_TO_DEG;
+    if (heading < 0) heading += 360.0;
+
+    TS_ASSERT(heading > 40.0 && heading < 70.0);  // Northeast
+  }
+
+  /***************************************************************************
+   * Cost Index Optimization Tests
+   ***************************************************************************/
+
+  // Test 85: Cost index effect on speed
+  void testCostIndexSpeed() {
+    // Higher CI = faster speed (time more valuable)
+    double CI_low = 20.0;
+    double CI_high = 100.0;
+    double V_MRC = 250.0;  // Max range cruise speed
+
+    // Speed increases with CI
+    double V_low = V_MRC + CI_low * 0.2;
+    double V_high = V_MRC + CI_high * 0.2;
+
+    TS_ASSERT(V_high > V_low);
+  }
+
+  // Test 86: Econ speed calculation
+  void testEconSpeed() {
+    double CI = 50.0;  // Cost index
+    double V_MRC = 240.0;
+    double V_MMO = 320.0;
+
+    // Linear interpolation for simplification
+    double econ_speed = V_MRC + (V_MMO - V_MRC) * (CI / 200.0);
+
+    TS_ASSERT(econ_speed > V_MRC);
+    TS_ASSERT(econ_speed < V_MMO);
+    TS_ASSERT_DELTA(econ_speed, 260.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Wind Optimization Tests
+   ***************************************************************************/
+
+  // Test 87: Optimal altitude for wind
+  void testOptimalWindAltitude() {
+    double headwind_low = 30.0;   // At FL350
+    double headwind_mid = 10.0;   // At FL310
+    double headwind_high = 50.0;  // At FL390
+
+    double min_headwind = std::min(std::min(headwind_low, headwind_mid), headwind_high);
+
+    TS_ASSERT_DELTA(min_headwind, 10.0, epsilon);
+  }
+
+  // Test 88: Optimal track deviation for winds
+  void testOptimalTrackDeviation() {
+    double direct_distance = 1000.0;  // nm
+    double direct_headwind = 50.0;    // kts
+    double deviation_distance = 1050.0;  // nm
+    double deviation_headwind = 20.0;    // kts
+    double TAS = 450.0;
+
+    double direct_time = direct_distance / (TAS - direct_headwind);
+    double deviation_time = deviation_distance / (TAS - deviation_headwind);
+
+    // Deviation might be faster despite longer distance
+    TS_ASSERT(deviation_time < direct_time);
+  }
+
+  /***************************************************************************
+   * Step Climb Tests
+   ***************************************************************************/
+
+  // Test 89: Step climb fuel benefit
+  void testStepClimbFuelBenefit() {
+    double fuel_flow_FL350 = 5000.0;  // lbs/hr
+    double fuel_flow_FL370 = 4800.0;  // lbs/hr
+    double flight_time = 4.0;  // hours
+
+    double fuel_350 = fuel_flow_FL350 * flight_time;
+    double fuel_370 = fuel_flow_FL370 * flight_time;
+    double savings = fuel_350 - fuel_370;
+
+    TS_ASSERT_DELTA(savings, 800.0, epsilon);  // lbs
+  }
+
+  // Test 90: Step climb timing
+  void testStepClimbTiming() {
+    // Climb when weight reduces enough
+    double initial_weight = 150000.0;
+    double fuel_burn_rate = 5000.0;  // lbs/hr
+    double weight_for_step = 140000.0;
+
+    double time_to_step = (initial_weight - weight_for_step) / fuel_burn_rate;
+
+    TS_ASSERT_DELTA(time_to_step, 2.0, epsilon);  // hours
+  }
+
+  /***************************************************************************
+   * Approach Energy Tests
+   ***************************************************************************/
+
+  // Test 91: Stabilized approach energy
+  void testStabilizedApproachEnergy() {
+    double V_app = 140.0 * KTS_TO_FPS;
+    double altitude = 1000.0;  // ft
+    double weight = 50000.0;
+
+    // Total energy
+    double KE = 0.5 * (weight / G) * V_app * V_app;
+    double PE = weight * altitude;
+    double total_energy = KE + PE;
+
+    TS_ASSERT(total_energy > 0);
+  }
+
+  // Test 92: Energy to bleed on approach
+  void testEnergyToBleedOnApproach() {
+    double V_high = 180.0 * KTS_TO_FPS;
+    double V_target = 140.0 * KTS_TO_FPS;
+    double mass = 1500.0;  // slugs
+
+    double KE_high = 0.5 * mass * V_high * V_high;
+    double KE_target = 0.5 * mass * V_target * V_target;
+    double energy_to_bleed = KE_high - KE_target;
+
+    TS_ASSERT(energy_to_bleed > 0);
+  }
+
+  /***************************************************************************
+   * Missed Approach Tests
+   ***************************************************************************/
+
+  // Test 93: Missed approach climb gradient
+  void testMissedApproachGradient() {
+    // Minimum 2.5% gradient required
+    double required_gradient = 2.5;  // percent
+    double ROC = 500.0;  // ft/min
+    double GS = 140.0;   // kts
+
+    double GS_fpm = GS * 6076.12 / 60.0;
+    double actual_gradient = (ROC / GS_fpm) * 100.0;
+
+    TS_ASSERT(actual_gradient >= required_gradient);
+  }
+
+  // Test 94: Missed approach fuel burn
+  void testMissedApproachFuelBurn() {
+    double go_around_fuel = 200.0;     // lbs
+    double climb_fuel = 100.0;         // lbs
+    double vectors_fuel = 300.0;       // lbs (15 min at holding speed)
+    double approach_fuel = 50.0;       // lbs
+
+    double total = go_around_fuel + climb_fuel + vectors_fuel + approach_fuel;
+
+    TS_ASSERT_DELTA(total, 650.0, epsilon);  // lbs
+  }
+
+  /***************************************************************************
+   * Performance Degradation Tests
+   ***************************************************************************/
+
+  // Test 95: Engine out ceiling
+  void testEngineOutCeiling() {
+    double two_engine_ceiling = 40000.0;  // ft
+    double engine_out_factor = 0.6;
+
+    double one_engine_ceiling = two_engine_ceiling * engine_out_factor;
+
+    TS_ASSERT_DELTA(one_engine_ceiling, 24000.0, epsilon);
+  }
+
+  // Test 96: Icing effect on performance
+  void testIcingPerformanceEffect() {
+    double clean_drag = 1000.0;   // lbs
+    double ice_penalty = 0.15;    // 15% increase
+
+    double iced_drag = clean_drag * (1.0 + ice_penalty);
+    double drag_increase = iced_drag - clean_drag;
+
+    TS_ASSERT_DELTA(iced_drag, 1150.0, epsilon);
+    TS_ASSERT_DELTA(drag_increase, 150.0, epsilon);
+  }
+
+  // Test 97: High altitude performance loss
+  void testHighAltitudePerformance() {
+    double sea_level_thrust = 20000.0;  // lbs
+    double density_ratio = 0.3;  // At FL400
+
+    double high_alt_thrust = sea_level_thrust * density_ratio;
+
+    TS_ASSERT_DELTA(high_alt_thrust, 6000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Fuel Emergency Tests
+   ***************************************************************************/
+
+  // Test 98: Minimum fuel calculation
+  void testMinimumFuelCalculation() {
+    double distance = 50.0;      // nm to nearest suitable
+    double groundspeed = 200.0;  // kts
+    double fuel_flow = 1000.0;   // lbs/hr
+
+    double time_hrs = distance / groundspeed;
+    double fuel_required = fuel_flow * time_hrs;
+    double reserve = fuel_required * 0.1;
+    double minimum_fuel = fuel_required + reserve;
+
+    TS_ASSERT_DELTA(minimum_fuel, 275.0, 1.0);  // lbs
+  }
+
+  // Test 99: Bingo fuel (return to base)
+  void testBingoFuel() {
+    double distance_to_base = 200.0;  // nm
+    double TAS = 400.0;               // kts
+    double fuel_flow = 2000.0;        // lbs/hr
+    double reserve = 500.0;           // lbs
+
+    double time_hrs = distance_to_base / TAS;
+    double trip_fuel = fuel_flow * time_hrs;
+    double bingo = trip_fuel + reserve;
+
+    TS_ASSERT_DELTA(bingo, 1500.0, epsilon);  // lbs
+  }
+
+  // Test 100: Maximum range profile
+  void testMaxRangeProfile() {
+    // Fly at speed for max L/D, highest efficient altitude
+    double fuel = 10000.0;       // lbs
+    double TSFC = 0.5;           // lb/hr/lb thrust
+    double LD_max = 18.0;        // Best L/D
+    double weight_ratio = 1.2;   // Initial/final weight
+
+    // Simplified Breguet: R = (V/c) * L/D * ln(Wi/Wf)
+    // For max range, V/c should be optimized
+    double range_factor = LD_max * std::log(weight_ratio);
+
+    TS_ASSERT(range_factor > 0);
+    TS_ASSERT_DELTA(range_factor, 3.28, 0.1);
+  }
+};

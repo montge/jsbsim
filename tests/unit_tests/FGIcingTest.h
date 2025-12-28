@@ -1356,3 +1356,386 @@ public:
     TS_ASSERT_DELTA(weight_increase_percent, 2.25, 0.01);  // 2.25% weight increase
   }
 };
+
+/*******************************************************************************
+ * Extended FGIcing Tests (25 new tests)
+ ******************************************************************************/
+
+class FGIcingExtendedTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Advanced Ice Accretion Physics Tests
+   ***************************************************************************/
+
+  // Test 76: Modified inertia parameter for droplet impingement
+  void testModifiedInertiaParameter() {
+    // K = (rho_water * d^2 * V) / (18 * mu * c)
+    double rho_water = 1000.0;        // kg/m^3
+    double d = 20e-6;                 // m (20 μm MVD)
+    double V = 100.0;                 // m/s
+    double mu = 1.8e-5;               // Pa·s (air viscosity)
+    double c = 2.0;                   // m (chord)
+
+    double K = (rho_water * d * d * V) / (18.0 * mu * c);
+
+    TS_ASSERT(K > 0);
+    TS_ASSERT_DELTA(K, 0.0617, 0.001);
+  }
+
+  // Test 77: Stokes number for droplet dynamics
+  void testStokesNumber() {
+    // St = (rho_p * d^2 * V) / (18 * mu * L)
+    double rho_p = 1000.0;            // kg/m^3
+    double d = 30e-6;                 // m (30 μm)
+    double V = 80.0;                  // m/s
+    double mu = 1.8e-5;               // Pa·s
+    double L = 0.1;                   // m (characteristic length)
+
+    double St = (rho_p * d * d * V) / (18.0 * mu * L);
+
+    TS_ASSERT_DELTA(St, 2.22, 0.01);
+    TS_ASSERT(St > 1.0);  // Droplets follow streamlines poorly
+  }
+
+  // Test 78: Weber number for droplet breakup
+  void testWeberNumber() {
+    // We = (rho * V^2 * d) / sigma
+    double rho = 1.225;               // kg/m^3
+    double V = 100.0;                 // m/s
+    double d = 50e-6;                 // m (50 μm SLD)
+    double sigma = 0.073;             // N/m (surface tension)
+
+    double We = (rho * V * V * d) / sigma;
+
+    TS_ASSERT_DELTA(We, 8.39, 0.01);
+  }
+
+  /***************************************************************************
+   * Ice Roughness Correlation Tests
+   ***************************************************************************/
+
+  // Test 79: Sand grain roughness equivalent
+  void testSandGrainRoughnessEquivalent() {
+    // ks_eq = 0.5 * peak_height for ice roughness
+    double peak_height = 0.003;       // m (3 mm peaks)
+    double ks_eq = 0.5 * peak_height;
+
+    TS_ASSERT_DELTA(ks_eq, 0.0015, epsilon);
+  }
+
+  // Test 80: Roughness Reynolds number
+  void testRoughnessReynoldsNumber() {
+    // Re_k = (u_tau * ks) / nu
+    double u_tau = 2.0;               // m/s (friction velocity)
+    double ks = 0.002;                // m (roughness height)
+    double nu = 1.5e-5;               // m^2/s (kinematic viscosity)
+
+    double Re_k = (u_tau * ks) / nu;
+
+    TS_ASSERT_DELTA(Re_k, 266.7, 1.0);
+
+    // Fully rough regime if Re_k > 70
+    bool fully_rough = Re_k > 70.0;
+    TS_ASSERT(fully_rough);
+  }
+
+  // Test 81: Skin friction increase from roughness
+  void testSkinFrictionRoughnessIncrease() {
+    // Cf_rough / Cf_smooth = (1 + 0.32 * (ks/delta)^0.7)
+    double ks = 0.002;                // m
+    double delta = 0.02;              // m (boundary layer thickness)
+    double Cf_smooth = 0.003;
+
+    double ratio = 1.0 + 0.32 * pow(ks / delta, 0.7);
+    double Cf_rough = Cf_smooth * ratio;
+
+    TS_ASSERT_DELTA(ratio, 1.064, 0.01);
+    TS_ASSERT_DELTA(Cf_rough, 0.00319, 0.0001);
+  }
+
+  /***************************************************************************
+   * Ice Shape Prediction Tests
+   ***************************************************************************/
+
+  // Test 82: Ice horn angle prediction
+  void testIceHornAnglePrediction() {
+    // Horn angle related to stagnation point location
+    double alpha = 5.0 * M_PI / 180.0;  // AOA in radians
+    double Mach = 0.4;
+
+    // Simplified horn angle model
+    double horn_angle = 45.0 + 2.0 * alpha * 180.0 / M_PI;
+
+    TS_ASSERT_DELTA(horn_angle, 55.0, 1.0);  // degrees
+  }
+
+  // Test 83: Ice thickness distribution along chord
+  void testIceThicknessDistribution() {
+    // Maximum thickness at stagnation, decreasing aft
+    double t_stag = 0.03;             // m (max thickness at leading edge)
+    double s = 0.1;                   // m (surface distance from stagnation)
+    double s_limit = 0.2;             // m (ice limit location)
+
+    // Exponential decay model
+    double t = t_stag * exp(-3.0 * s / s_limit);
+
+    TS_ASSERT_DELTA(t, 0.00669, 0.001);
+    TS_ASSERT(t < t_stag);
+  }
+
+  // Test 84: Glaze ice water film thickness
+  void testGlazeIceWaterFilmThickness() {
+    // Film thickness from water mass balance
+    double LWC = 0.5;                 // g/m^3
+    double V = 80.0;                  // m/s
+    double E = 0.8;                   // collection efficiency
+    double mu_water = 0.001;          // Pa·s
+    double rho_water = 1000.0;        // kg/m^3
+
+    // Approximate film thickness
+    double water_flux = LWC * V * E / 1000.0;  // kg/(m^2·s)
+    double h_film = pow(3.0 * mu_water * water_flux / (rho_water * 9.81), 1.0/3.0);
+
+    TS_ASSERT(h_film > 0);
+    TS_ASSERT(h_film < 0.01);  // Less than 10 mm (thin film assumption)
+  }
+
+  /***************************************************************************
+   * Thermal Anti-Ice System Tests
+   ***************************************************************************/
+
+  // Test 85: Running wet anti-ice heat transfer
+  void testRunningWetHeatTransfer() {
+    // Heat balance: q_in = q_conv + q_evap + q_runback
+    double h_conv = 500.0;            // W/(m^2·K) heat transfer coefficient
+    double T_surface = 283.15;        // K (10°C)
+    double T_recovery = 263.15;       // K (-10°C)
+    double area = 0.5;                // m^2
+
+    double q_conv = h_conv * (T_surface - T_recovery) * area;
+
+    TS_ASSERT_DELTA(q_conv, 5000.0, 10.0);  // 5 kW
+  }
+
+  // Test 86: Evaporative anti-ice effectiveness
+  void testEvaporativeAntiIceEffectiveness() {
+    // Evaporative system: all water evaporated
+    double water_catch = 0.01;        // kg/s
+    double L_vap = 2.26e6;            // J/kg
+    double q_available = 30000.0;     // W
+
+    double q_required = water_catch * L_vap;
+    double effectiveness = std::min(1.0, q_available / q_required);
+
+    TS_ASSERT_DELTA(q_required, 22600.0, 100.0);
+    TS_ASSERT_DELTA(effectiveness, 1.0, 0.01);  // Fully evaporative
+  }
+
+  // Test 87: Heated zone leading edge extent
+  void testHeatedZoneExtent() {
+    // Required heated zone for running wet operation
+    double s_impingement = 0.08;      // m (impingement limit)
+    double safety_factor = 1.5;
+
+    double s_heated = s_impingement * safety_factor;
+
+    TS_ASSERT_DELTA(s_heated, 0.12, 0.001);  // 12 cm heated zone
+  }
+
+  /***************************************************************************
+   * Electrothermal De-Ice Tests
+   ***************************************************************************/
+
+  // Test 88: Parting strip heat requirement
+  void testPartingStripHeatRequirement() {
+    // Parting strip melts ice interface for shedding
+    double ice_thickness = 0.01;      // m
+    double rho_ice = 917.0;           // kg/m^3
+    double area = 0.02;               // m^2
+    double L_fusion = 334000.0;       // J/kg
+    double cycle_time = 30.0;         // s
+
+    double ice_mass = rho_ice * ice_thickness * area;
+    double energy = ice_mass * L_fusion;
+    double power = energy / cycle_time;
+
+    TS_ASSERT_DELTA(ice_mass, 0.183, 0.001);
+    TS_ASSERT_DELTA(power, 2043.0, 10.0);  // ~2 kW
+  }
+
+  // Test 89: Shed zone sequencing
+  void testShedZoneSequencing() {
+    // Multiple zones heated in sequence
+    int num_zones = 5;
+    double cycle_period = 120.0;      // s
+    double zone_on_time = 20.0;       // s
+
+    double zone_interval = cycle_period / num_zones;
+    double duty_cycle = zone_on_time / zone_interval;
+
+    TS_ASSERT_DELTA(zone_interval, 24.0, epsilon);
+    TS_ASSERT_DELTA(duty_cycle, 0.833, 0.01);
+  }
+
+  // Test 90: Intercycle ice buildup
+  void testIntercycleIceBuildup() {
+    // Ice accumulated between de-ice cycles
+    double accretion_rate = 0.001;    // m/s
+    double cycle_period = 60.0;       // s
+
+    double intercycle_thickness = accretion_rate * cycle_period;
+
+    TS_ASSERT_DELTA(intercycle_thickness, 0.06, 0.001);  // 6 cm
+  }
+
+  /***************************************************************************
+   * Hybrid Ice Protection Tests
+   ***************************************************************************/
+
+  // Test 91: Electro-impulse de-ice force
+  void testElectroImpulseForce() {
+    // Electromagnetic coil generates impulsive force
+    double I_peak = 1000.0;           // A (peak current)
+    double B = 0.5;                   // T (magnetic field)
+    double L = 0.2;                   // m (coil length)
+
+    double F_impulse = B * I_peak * L;
+
+    TS_ASSERT_DELTA(F_impulse, 100.0, epsilon);  // 100 N
+  }
+
+  // Test 92: Ice adhesion vs impulse force
+  void testIceAdhesionVsImpulse() {
+    double sigma_adhesion = 150000.0; // Pa
+    double contact_area = 0.005;      // m^2
+    double F_adhesion = sigma_adhesion * contact_area;
+
+    double F_impulse = 1000.0;        // N
+
+    bool ice_sheds = F_impulse > F_adhesion;
+
+    TS_ASSERT_DELTA(F_adhesion, 750.0, epsilon);
+    TS_ASSERT(ice_sheds);
+  }
+
+  // Test 93: Fluid freezing point depressant
+  void testFluidFreezingPointDepressant() {
+    // TKS fluid (glycol) lowers freezing point
+    double T_freeze_water = 273.15;   // K
+    double glycol_concentration = 0.4;
+
+    // Raoult's law approximation
+    double delta_T = 52.0 * glycol_concentration;  // K depression
+    double T_freeze_mix = T_freeze_water - delta_T;
+
+    TS_ASSERT_DELTA(T_freeze_mix, 252.35, 0.1);  // -20.8°C
+  }
+
+  /***************************************************************************
+   * Windshield Icing Tests
+   ***************************************************************************/
+
+  // Test 94: Windshield heat load
+  void testWindshieldHeatLoad() {
+    // Heat required to keep windshield clear
+    double area = 0.3;                // m^2
+    double h_conv = 200.0;            // W/(m^2·K)
+    double T_surface = 283.15;        // K (10°C)
+    double T_ambient = 253.15;        // K (-20°C)
+
+    double q_heat = h_conv * area * (T_surface - T_ambient);
+
+    TS_ASSERT_DELTA(q_heat, 1800.0, 10.0);  // 1.8 kW
+  }
+
+  // Test 95: Windshield rain repellent effectiveness
+  void testWindshieldRainRepellent() {
+    // Contact angle determines water beading
+    double contact_angle_clean = 70.0;    // degrees
+    double contact_angle_treated = 110.0; // degrees (hydrophobic)
+
+    bool hydrophobic = contact_angle_treated > 90.0;
+
+    TS_ASSERT(hydrophobic);
+    TS_ASSERT(contact_angle_treated > contact_angle_clean);
+  }
+
+  /***************************************************************************
+   * Engine Ice Protection Tests
+   ***************************************************************************/
+
+  // Test 96: Engine anti-ice bleed air penalty
+  void testEngineAntiIceBleedPenalty() {
+    // Bleed air reduces available thrust
+    double thrust_clean = 25000.0;    // N
+    double bleed_fraction = 0.05;     // 5% bleed
+
+    // Thrust loss approximately proportional to bleed
+    double thrust_loss = thrust_clean * bleed_fraction;
+    double thrust_antiice = thrust_clean - thrust_loss;
+
+    TS_ASSERT_DELTA(thrust_loss, 1250.0, epsilon);
+    TS_ASSERT_DELTA(thrust_antiice, 23750.0, epsilon);
+  }
+
+  // Test 97: Inlet lip anti-ice heat requirement
+  void testInletLipAntiIceHeat() {
+    double inlet_circumference = 3.0; // m
+    double lip_width = 0.1;           // m
+    double heat_flux = 20000.0;       // W/m^2
+
+    double heated_area = inlet_circumference * lip_width;
+    double heat_required = heat_flux * heated_area;
+
+    TS_ASSERT_DELTA(heated_area, 0.3, epsilon);
+    TS_ASSERT_DELTA(heat_required, 6000.0, epsilon);  // 6 kW
+  }
+
+  // Test 98: Fan blade ice shedding imbalance
+  void testFanBladeIceShedding() {
+    // Asymmetric shedding causes vibration
+    double ice_mass_1 = 0.5;          // kg on blade 1
+    double ice_mass_2 = 0.0;          // kg on blade 2 (shed)
+    double radius = 0.6;              // m
+    double omega = 500.0;             // rad/s
+
+    double imbalance_force = (ice_mass_1 - ice_mass_2) * radius * omega * omega;
+
+    TS_ASSERT_DELTA(imbalance_force, 75000.0, 100.0);  // 75 kN
+  }
+
+  /***************************************************************************
+   * Certification and Safety Tests
+   ***************************************************************************/
+
+  // Test 99: Appendix C envelope compliance
+  void testAppendixCEnvelope() {
+    // FAR 25 Appendix C icing conditions
+    double LWC = 0.6;                 // g/m^3
+    double MVD = 20.0;                // μm
+    double temp = -10.0;              // °C
+
+    // Continuous maximum envelope
+    bool within_cont_max = (LWC <= 0.8) && (MVD <= 40.0) &&
+                           (temp >= -30.0) && (temp <= 0.0);
+
+    TS_ASSERT(within_cont_max);
+  }
+
+  // Test 100: Ice shape similarity for scaling
+  void testIceShapeSimilarity() {
+    // Modified Ruff parameters for ice shape scaling
+    double K_full = 1.0;              // Full scale inertia parameter
+    double K_model = 1.0;             // Model scale (matched)
+    double Ac_full = 0.5;             // Full scale accumulation
+    double Ac_model = 0.5;            // Model scale (matched)
+
+    // Ice shapes similar if parameters matched
+    double K_error = std::abs(K_full - K_model) / K_full;
+    double Ac_error = std::abs(Ac_full - Ac_model) / Ac_full;
+
+    TS_ASSERT_DELTA(K_error, 0.0, 0.05);
+    TS_ASSERT_DELTA(Ac_error, 0.0, 0.05);
+  }
+};

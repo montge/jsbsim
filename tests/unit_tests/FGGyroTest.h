@@ -1047,3 +1047,320 @@ public:
     TS_ASSERT_DELTA(mean, bias, 0.02);  // Mean should converge to bias
   }
 };
+
+/*******************************************************************************
+ * Extended FGGyro Tests (25 new tests)
+ ******************************************************************************/
+
+class FGGyroExtendedTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * MEMS Gyro Specific Tests
+   ***************************************************************************/
+
+  // Test 76: MEMS gyro resonant frequency
+  void testMEMSResonantFrequency() {
+    double resonantFreq = 10000.0;  // Hz (typical MEMS)
+    double driveFreq = 10000.0;     // Drive at resonance
+
+    double gain = 1.0;  // Maximum at resonance
+    TS_ASSERT_DELTA(driveFreq, resonantFreq, 1.0);
+    TS_ASSERT_DELTA(gain, 1.0, epsilon);
+  }
+
+  // Test 77: MEMS quadrature error
+  void testMEMSQuadratureError() {
+    double driveAmplitude = 10.0;  // um
+    double quadratureCoeff = 0.01;  // Coupling coefficient
+
+    double quadratureError = driveAmplitude * quadratureCoeff;
+    TS_ASSERT_DELTA(quadratureError, 0.1, epsilon);
+  }
+
+  // Test 78: Drive mode amplitude control
+  void testDriveModeAmplitudeControl() {
+    double targetAmplitude = 10.0;
+    double actualAmplitude = 9.8;
+    double Kp = 0.5;
+
+    double correction = Kp * (targetAmplitude - actualAmplitude);
+    TS_ASSERT_DELTA(correction, 0.1, epsilon);
+  }
+
+  /***************************************************************************
+   * Ring Laser Gyro Concepts
+   ***************************************************************************/
+
+  // Test 79: Sagnac effect calculation
+  void testSagnacEffect() {
+    double area = 0.01;           // m^2 (ring area)
+    double wavelength = 633e-9;   // m (HeNe laser)
+    double c = 3e8;               // m/s
+    double omega = 1.0 * DEG_TO_RAD;  // rad/s
+
+    // Beat frequency = 4 * A * omega / (lambda * perimeter)
+    double perimeter = std::sqrt(4 * M_PI * area);
+    double beatFreq = 4 * area * omega / (wavelength * perimeter);
+
+    TS_ASSERT(beatFreq > 0);
+  }
+
+  // Test 80: Lock-in threshold
+  void testLockInThreshold() {
+    double lockInRate = 0.1;  // deg/s (typical RLG lock-in)
+    double measuredRate = 0.05;
+
+    bool lockedIn = std::abs(measuredRate) < lockInRate;
+    TS_ASSERT(lockedIn);
+  }
+
+  // Test 81: Dither mechanism effect
+  void testDitherMechanism() {
+    double ditherFreq = 400.0;     // Hz
+    double ditherAmplitude = 100.0; // arcsec
+    double lockInRate = 0.1;       // deg/s
+
+    // Dither keeps gyro out of lock-in
+    bool ditherActive = ditherAmplitude > 0;
+    TS_ASSERT(ditherActive);
+  }
+
+  /***************************************************************************
+   * Fiber Optic Gyro Concepts
+   ***************************************************************************/
+
+  // Test 82: FOG scale factor
+  void testFOGScaleFactor() {
+    double fiberLength = 1000.0;   // m
+    double fiberDiameter = 0.1;    // m (coil diameter)
+    double wavelength = 1550e-9;   // m
+
+    double area = M_PI * fiberDiameter * fiberDiameter / 4;
+    double numTurns = fiberLength / (M_PI * fiberDiameter);
+    double scaleFactor = 4 * M_PI * numTurns * area / (wavelength * 3e8);
+
+    TS_ASSERT(scaleFactor > 0);
+  }
+
+  // Test 83: FOG phase shift measurement
+  void testFOGPhaseShift() {
+    double rotationRate = 10.0 * DEG_TO_RAD;  // rad/s
+    double sensitivity = 0.1;  // rad/(rad/s)
+
+    double phaseShift = rotationRate * sensitivity;
+    TS_ASSERT(phaseShift > 0);
+  }
+
+  /***************************************************************************
+   * Kalman Filter Integration Tests
+   ***************************************************************************/
+
+  // Test 84: Gyro measurement update in Kalman filter
+  void testKalmanMeasurementUpdate() {
+    double predicted = 10.0;      // Predicted rate
+    double measured = 10.5;       // Measured rate
+    double kalmanGain = 0.3;      // Kalman gain
+
+    double updated = predicted + kalmanGain * (measured - predicted);
+    TS_ASSERT_DELTA(updated, 10.15, epsilon);
+  }
+
+  // Test 85: Gyro bias estimation in Kalman filter
+  void testKalmanBiasEstimation() {
+    double estimatedBias = 0.1;
+    double innovation = 0.2;  // Measurement - prediction
+    double biasGain = 0.01;
+
+    double newBiasEstimate = estimatedBias + biasGain * innovation;
+    TS_ASSERT_DELTA(newBiasEstimate, 0.102, epsilon);
+  }
+
+  // Test 86: Gyro noise covariance
+  void testGyroNoiseCovariance() {
+    double noiseDensity = 0.01;  // deg/s/sqrt(Hz)
+    double bandwidth = 100.0;    // Hz
+
+    double variance = noiseDensity * noiseDensity * bandwidth;
+    double stdDev = std::sqrt(variance);
+
+    TS_ASSERT_DELTA(stdDev, 0.1, epsilon);
+  }
+
+  /***************************************************************************
+   * Attitude Reference System Tests
+   ***************************************************************************/
+
+  // Test 87: Gyro contribution to attitude
+  void testGyroAttitudeContribution() {
+    double gyroRate = 10.0;  // deg/s
+    double dt = 0.01;
+    double attitude = 0.0;
+
+    // Simple integration
+    attitude += gyroRate * dt;
+
+    TS_ASSERT_DELTA(attitude, 0.1, epsilon);
+  }
+
+  // Test 88: Attitude rate limiting
+  void testAttitudeRateLimiting() {
+    double maxRate = 300.0;  // deg/s
+    double commanded = 400.0;
+
+    double limited = std::min(maxRate, std::max(-maxRate, commanded));
+    TS_ASSERT_DELTA(limited, 300.0, epsilon);
+  }
+
+  // Test 89: Quaternion rate from gyro
+  void testQuaternionRateFromGyro() {
+    double p = 0.1, q = 0.05, r = 0.02;  // rad/s
+
+    // Simplified quaternion rate (assumes small angles)
+    double omega_magnitude = std::sqrt(p*p + q*q + r*r);
+    TS_ASSERT(omega_magnitude < 0.2);
+  }
+
+  /***************************************************************************
+   * Flight Control System Integration
+   ***************************************************************************/
+
+  // Test 90: Rate damper input
+  void testRateDamperInput() {
+    double gyroRate = 5.0;  // deg/s
+    double damperGain = 0.5;
+
+    double damperOutput = -damperGain * gyroRate;
+    TS_ASSERT_DELTA(damperOutput, -2.5, epsilon);
+  }
+
+  // Test 91: Rate command comparison
+  void testRateCommandComparison() {
+    double commandedRate = 10.0;  // deg/s
+    double actualRate = 8.0;      // deg/s from gyro
+
+    double rateError = commandedRate - actualRate;
+    TS_ASSERT_DELTA(rateError, 2.0, epsilon);
+  }
+
+  // Test 92: Rate feedback loop
+  void testRateFeedbackLoop() {
+    double Kp = 2.0;
+    double commandedRate = 15.0;
+    double actualRate = 10.0;
+
+    double surfaceCommand = Kp * (commandedRate - actualRate);
+    TS_ASSERT_DELTA(surfaceCommand, 10.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Redundancy and Voting Tests
+   ***************************************************************************/
+
+  // Test 93: Triple redundant gyro voting
+  void testTripleRedundantVoting() {
+    double gyro1 = 10.0;
+    double gyro2 = 10.1;
+    double gyro3 = 10.05;
+
+    // Middle value selection (median of 3)
+    double voted;
+    if ((gyro1 >= gyro2 && gyro1 <= gyro3) || (gyro1 <= gyro2 && gyro1 >= gyro3))
+      voted = gyro1;
+    else if ((gyro2 >= gyro1 && gyro2 <= gyro3) || (gyro2 <= gyro1 && gyro2 >= gyro3))
+      voted = gyro2;
+    else
+      voted = gyro3;
+
+    TS_ASSERT_DELTA(voted, 10.05, epsilon);
+  }
+
+  // Test 94: Failed gyro detection
+  void testFailedGyroDetection() {
+    double gyro1 = 10.0;
+    double gyro2 = 10.1;
+    double gyro3 = 50.0;  // Failed
+
+    double mean = (gyro1 + gyro2 + gyro3) / 3.0;
+    double threshold = 5.0;
+
+    bool gyro3Failed = std::abs(gyro3 - mean) > threshold;
+    TS_ASSERT(gyro3Failed);
+  }
+
+  // Test 95: Gyro disagreement monitor
+  void testGyroDisagreementMonitor() {
+    double gyro1 = 10.0;
+    double gyro2 = 12.0;
+    double disagreementThreshold = 3.0;
+
+    double disagreement = std::abs(gyro1 - gyro2);
+    bool withinTolerance = disagreement < disagreementThreshold;
+
+    TS_ASSERT(withinTolerance);
+  }
+
+  /***************************************************************************
+   * Environmental Effects Tests
+   ***************************************************************************/
+
+  // Test 96: Shock effect on gyro
+  void testShockEffect() {
+    double normalBias = 0.1;
+    double shockMagnitude = 100.0;  // g
+    double shockSensitivity = 0.001;  // deg/s per g
+
+    double biasShift = shockSensitivity * shockMagnitude;
+    double newBias = normalBias + biasShift;
+
+    TS_ASSERT_DELTA(newBias, 0.2, epsilon);
+  }
+
+  // Test 97: Magnetic field sensitivity
+  void testMagneticFieldSensitivity() {
+    double fieldStrength = 50.0;  // uT (Earth's field)
+    double magneticSensitivity = 0.001;  // deg/s per uT
+
+    double biasFromMagnetic = magneticSensitivity * fieldStrength;
+    TS_ASSERT_DELTA(biasFromMagnetic, 0.05, epsilon);
+  }
+
+  // Test 98: Pressure sensitivity
+  void testPressureSensitivity() {
+    double pressureChange = 10000.0;  // Pa (altitude change)
+    double pressureSensitivity = 0.00001;  // deg/s per Pa
+
+    double biasFromPressure = pressureSensitivity * pressureChange;
+    TS_ASSERT_DELTA(biasFromPressure, 0.1, epsilon);
+  }
+
+  /***************************************************************************
+   * Calibration Tests
+   ***************************************************************************/
+
+  // Test 99: Six-position calibration
+  void testSixPositionCalibration() {
+    // Measurements in 6 positions (+X, -X, +Y, -Y, +Z, -Z)
+    double posX = 0.12, negX = -0.08;
+    double posY = 0.11, negY = -0.09;
+    double posZ = 0.10, negZ = -0.10;
+
+    // Bias = average of opposite positions
+    double biasX = (posX + negX) / 2.0;
+    double biasY = (posY + negY) / 2.0;
+    double biasZ = (posZ + negZ) / 2.0;
+
+    TS_ASSERT_DELTA(biasX, 0.02, epsilon);
+    TS_ASSERT_DELTA(biasY, 0.01, epsilon);
+    TS_ASSERT_DELTA(biasZ, 0.0, epsilon);
+  }
+
+  // Test 100: Rate table calibration
+  void testRateTableCalibration() {
+    double appliedRate = 100.0;  // deg/s (known)
+    double measuredRate = 98.5;  // deg/s
+
+    double scaleFactor = appliedRate / measuredRate;
+    TS_ASSERT_DELTA(scaleFactor, 1.0152, 0.001);
+  }
+};

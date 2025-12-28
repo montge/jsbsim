@@ -1065,3 +1065,371 @@ public:
   }
 };
 
+/*******************************************************************************
+ * Extended FGHighAOA Tests (25 new tests)
+ ******************************************************************************/
+
+class FGHighAOAExtendedTest : public CxxTest::TestSuite
+{
+public:
+  /***************************************************************************
+   * Vortex Flow Aerodynamics Tests
+   ***************************************************************************/
+
+  // Test 76: Leading edge vortex lift coefficient
+  void testLEVortexLift() {
+    double alpha = 35.0 * DEG_TO_RAD;
+    double AR = 4.0;  // Aspect ratio
+
+    // Polhamus leading edge suction analogy
+    double Kp = M_PI * AR / 2.0;  // Potential flow constant
+    double Kv = M_PI;  // Vortex lift constant
+
+    double CL_vortex = Kv * std::pow(std::sin(alpha), 2) * std::cos(alpha);
+
+    TS_ASSERT(CL_vortex > 0);
+    TS_ASSERT(CL_vortex < 1.5);
+  }
+
+  // Test 77: Delta wing vortex breakdown
+  void testVortexBreakdown() {
+    double alpha = 30.0 * DEG_TO_RAD;
+    double alpha_breakdown = 25.0 * DEG_TO_RAD;  // Vortex breakdown angle
+
+    bool breakdown_occurred = alpha > alpha_breakdown;
+    TS_ASSERT(breakdown_occurred);
+
+    // After breakdown, lift coefficient drops
+    double CL_pre_breakdown = 1.2;
+    double CL_post_breakdown = 0.8;
+    TS_ASSERT(CL_post_breakdown < CL_pre_breakdown);
+  }
+
+  // Test 78: Strake vortex enhancement
+  void testStrakeVortexEnhancement() {
+    double CL_without_strake = 1.0;
+    double strake_vortex_increment = 0.3;
+
+    double CL_with_strake = CL_without_strake + strake_vortex_increment;
+
+    TS_ASSERT(CL_with_strake > CL_without_strake);
+    TS_ASSERT_DELTA(CL_with_strake, 1.3, epsilon);
+  }
+
+  /***************************************************************************
+   * Post-Stall Gyration Tests
+   ***************************************************************************/
+
+  // Test 79: Post-stall gyration frequency
+  void testPostStallGyrationFrequency() {
+    double Izz = 8000.0;  // slug-ft^2
+    double q_bar = 50.0;   // psf
+    double S = 200.0;      // ft^2
+    double b = 35.0;       // ft
+    double Cn_beta = 0.05; // Reduced at high alpha
+
+    // Approximate yaw oscillation frequency
+    double L_n = q_bar * S * b * Cn_beta;
+    double omega_n = std::sqrt(L_n / Izz);
+
+    TS_ASSERT(omega_n > 0.1);
+    TS_ASSERT(omega_n < 2.0);
+  }
+
+  // Test 80: Tumble mode criterion
+  void testTumbleModeCriterion() {
+    double Iyy = 7000.0;   // Pitch inertia (intermediate)
+    double Ixx = 5000.0;   // Roll inertia
+    double Izz = 10000.0;  // Yaw inertia
+
+    // Tumble prone when Iyy is intermediate between Ixx and Izz
+    bool tumble_prone = (Iyy > Ixx) && (Iyy < Izz) ||
+                        (Iyy < Ixx) && (Iyy > Izz);
+
+    TS_ASSERT(tumble_prone);
+  }
+
+  // Test 81: Falling leaf mode
+  void testFallingLeafMode() {
+    double alpha = 45.0 * DEG_TO_RAD;
+    double Cl_p = 0.0;   // Zero roll damping at high alpha
+    double Cn_r = -0.05; // Reduced yaw damping
+
+    // Falling leaf: oscillating descent without defined spin
+    bool falling_leaf = (std::abs(Cl_p) < 0.1) && (Cn_r < 0);
+
+    TS_ASSERT(falling_leaf);
+  }
+
+  /***************************************************************************
+   * Stall Protection System Tests
+   ***************************************************************************/
+
+  // Test 82: Alpha floor protection limit
+  void testAlphaFloorProtection() {
+    double alpha_current = 16.0 * DEG_TO_RAD;
+    double alpha_floor = 14.0 * DEG_TO_RAD;
+
+    // Alpha floor applies nose-down command
+    bool floor_active = alpha_current > alpha_floor;
+    double pitch_rate_cmd = floor_active ? -0.1 : 0.0;
+
+    TS_ASSERT(floor_active);
+    TS_ASSERT(pitch_rate_cmd < 0);
+  }
+
+  // Test 83: Envelope limiting gain schedule
+  void testEnvelopeLimitingGain() {
+    double alpha = 12.0 * DEG_TO_RAD;
+    double alpha_limit = 15.0 * DEG_TO_RAD;
+    double margin = alpha_limit - alpha;
+
+    // Gain increases as margin decreases
+    double K_envelope = 1.0 / (margin + 0.01);
+
+    TS_ASSERT(K_envelope > 10.0);  // High gain near limit
+  }
+
+  // Test 84: Stall identification from pitch break
+  void testStallIdentificationPitchBreak() {
+    double Cm_alpha_linear = -1.0;
+    double Cm_alpha_measured = -0.3;  // Reduced in stall
+
+    double reduction = (Cm_alpha_linear - Cm_alpha_measured) / Cm_alpha_linear;
+
+    // More than 50% reduction indicates stall
+    bool stall_identified = reduction > 0.5;
+
+    TS_ASSERT(stall_identified);
+    TS_ASSERT_DELTA(reduction, 0.7, 0.01);
+  }
+
+  /***************************************************************************
+   * High-Alpha Roll Rate Tests
+   ***************************************************************************/
+
+  // Test 85: Roll rate capability at high alpha
+  void testRollRateCapabilityHighAlpha() {
+    double Cl_da_normal = 0.15;
+    double alpha = 20.0 * DEG_TO_RAD;
+    double alpha_crit = 15.0 * DEG_TO_RAD;
+
+    // Roll authority degrades past stall
+    double effectiveness = std::max(0.2, std::cos(2.0 * (alpha - alpha_crit)));
+    double Cl_da_high_alpha = Cl_da_normal * effectiveness;
+
+    double p_max_normal = 2.0;  // rad/s
+    double p_max_high_alpha = p_max_normal * Cl_da_high_alpha / Cl_da_normal;
+
+    TS_ASSERT(p_max_high_alpha < p_max_normal);
+  }
+
+  // Test 86: Roll coupling into yaw at high alpha
+  void testRollCouplingYawHighAlpha() {
+    double p = 1.0;  // rad/s roll rate
+    double alpha = 25.0 * DEG_TO_RAD;
+
+    // At high alpha, rolling creates yawing
+    double Cn_p = -0.1 * std::sin(alpha);
+    double yaw_moment = Cn_p * p;
+
+    TS_ASSERT(yaw_moment < 0);  // Adverse yaw
+  }
+
+  // Test 87: Differential aileron at high alpha
+  void testDifferentialAileronHighAlpha() {
+    double da_up = 20.0 * DEG_TO_RAD;
+    double da_down = 10.0 * DEG_TO_RAD;  // Less down aileron
+
+    // Differential reduces adverse yaw
+    double differential_ratio = da_down / da_up;
+
+    TS_ASSERT(differential_ratio < 1.0);
+    TS_ASSERT_DELTA(differential_ratio, 0.5, 0.01);
+  }
+
+  /***************************************************************************
+   * Out-of-Control Recovery Tests
+   ***************************************************************************/
+
+  // Test 88: Pitch rate for nose slice recovery
+  void testNoseSliceRecoveryPitchRate() {
+    double alpha = 25.0 * DEG_TO_RAD;
+    double q = 0.2;  // rad/s pitch rate
+    double alpha_target = 10.0 * DEG_TO_RAD;
+
+    // Time to reduce alpha at current rate
+    double delta_alpha = alpha - alpha_target;
+    double recovery_time = delta_alpha / std::abs(q);
+
+    TS_ASSERT(recovery_time > 0);
+    TS_ASSERT(recovery_time < 2.0);  // Reasonable recovery time
+  }
+
+  // Test 89: Controlled flight after upset
+  void testControlledFlightAfterUpset() {
+    double alpha = 35.0 * DEG_TO_RAD;  // Unusual attitude
+    double alpha_normal = 5.0 * DEG_TO_RAD;
+
+    // Need to reduce alpha to normal flight
+    double alpha_reduction_needed = alpha - alpha_normal;
+
+    // With 0.2 rad/s pitch rate
+    double recovery_time = alpha_reduction_needed / 0.2;
+
+    TS_ASSERT(recovery_time > 1.0);  // Takes some time
+    TS_ASSERT(recovery_time < 5.0);  // But not too long
+  }
+
+  // Test 90: Energy management in recovery
+  void testEnergyManagementRecovery() {
+    double altitude = 5000.0;  // ft
+    double V = 100.0;          // ft/s (low speed in stall)
+    double V_target = 200.0;   // ft/s (normal flight)
+
+    // Trade altitude for airspeed
+    double delta_KE = 0.5 * (V_target * V_target - V * V) / 32.2;
+    double altitude_loss = delta_KE;  // Simplified
+
+    TS_ASSERT(altitude_loss > 0);
+    TS_ASSERT(altitude_loss < altitude);  // Still have altitude margin
+  }
+
+  /***************************************************************************
+   * Forebody/Nose Shape Effects Tests
+   ***************************************************************************/
+
+  // Test 91: Forebody strake yaw control
+  void testForebodyStrakeYawControl() {
+    double delta_strake = 10.0 * DEG_TO_RAD;  // Strake deflection
+    double alpha = 40.0 * DEG_TO_RAD;
+
+    // Forebody strakes effective at high alpha
+    double Cn_strake = 0.05 * delta_strake * (alpha / (45.0 * DEG_TO_RAD));
+
+    TS_ASSERT(Cn_strake > 0);
+    TS_ASSERT(Cn_strake < 0.1);
+  }
+
+  // Test 92: Nose blowing for yaw control
+  void testNoseBlowingYawControl() {
+    double mass_flow = 0.5;  // lbs/s
+    double momentum = mass_flow * 1000.0;  // velocity ft/s
+
+    // Blowing creates asymmetric vortices
+    double Cn_blowing = 0.001 * momentum;
+
+    TS_ASSERT(Cn_blowing > 0);
+  }
+
+  // Test 93: Nose shape effect on departure
+  void testNoseShapeEffect() {
+    double fineness_ratio = 3.0;  // length/diameter
+
+    // Higher fineness ratio better for high alpha
+    bool good_high_alpha = fineness_ratio > 2.5;
+
+    TS_ASSERT(good_high_alpha);
+  }
+
+  /***************************************************************************
+   * Spin Modes Tests
+   ***************************************************************************/
+
+  // Test 94: Flat spin vs steep spin
+  void testFlatVsSteepSpin() {
+    double alpha_flat = 70.0 * DEG_TO_RAD;
+    double alpha_steep = 40.0 * DEG_TO_RAD;
+
+    // Flat spin has higher alpha
+    TS_ASSERT(alpha_flat > alpha_steep);
+
+    // Flat spin harder to recover from
+    double recovery_factor_flat = 0.3;
+    double recovery_factor_steep = 0.8;
+
+    TS_ASSERT(recovery_factor_flat < recovery_factor_steep);
+  }
+
+  // Test 95: Oscillatory spin mode
+  void testOscillatorySpin() {
+    double yaw_rate_max = 1.0;  // rad/s
+    double yaw_rate_min = 0.6;  // rad/s
+    double period = 3.0;  // seconds
+
+    double oscillation_amplitude = (yaw_rate_max - yaw_rate_min) / 2.0;
+
+    TS_ASSERT_DELTA(oscillation_amplitude, 0.2, epsilon);
+    TS_ASSERT(period > 1.0);
+  }
+
+  // Test 96: Cross-coupled spin
+  void testCrossCoupledSpin() {
+    double p = 0.5;  // rad/s roll
+    double q = 0.3;  // rad/s pitch
+    double r = 0.8;  // rad/s yaw
+
+    // Coupled spin involves all three axes
+    double total_rate = std::sqrt(p*p + q*q + r*r);
+
+    TS_ASSERT(total_rate > 0.9);
+    TS_ASSERT_DELTA(total_rate, 0.99, 0.01);
+  }
+
+  /***************************************************************************
+   * Carefree Handling Tests
+   ***************************************************************************/
+
+  // Test 97: Alpha limiter effectiveness
+  void testAlphaLimiter() {
+    double alpha_cmd = 25.0 * DEG_TO_RAD;  // Pilot commands high alpha
+    double alpha_limit = 18.0 * DEG_TO_RAD;
+
+    double alpha_actual = std::min(alpha_cmd, alpha_limit);
+
+    TS_ASSERT_DELTA(alpha_actual, alpha_limit, epsilon);
+  }
+
+  // Test 98: Automatic spin prevention
+  void testAutomaticSpinPrevention() {
+    double alpha = 16.0 * DEG_TO_RAD;
+    double beta = 8.0 * DEG_TO_RAD;
+    double p = 0.8;  // rad/s
+
+    // Spin prevention activates
+    double threshold = 0.5;
+    bool spin_tendency = (p * beta) > threshold * 0.1;
+
+    // System should reduce pro-spin inputs
+    double rudder_reduction = spin_tendency ? 0.5 : 1.0;
+
+    TS_ASSERT(rudder_reduction < 1.0);
+  }
+
+  // Test 99: Load factor limiting at high alpha
+  void testLoadFactorLimitHighAlpha() {
+    double CL_max = 1.5;
+    double CL_current = 1.4;
+    double n_limit = 4.0;
+
+    // Near CL_max, reduce available G
+    double CL_margin = (CL_max - CL_current) / CL_max;
+    double n_available = n_limit * CL_margin;
+
+    TS_ASSERT(n_available < n_limit);
+    TS_ASSERT_DELTA(n_available, 0.267, 0.01);
+  }
+
+  // Test 100: Departure resistance with active controls
+  void testDepartureResistanceActiveControls() {
+    double Cn_beta_bare = 0.05;  // Low bare airframe stability
+    double Cn_beta_augmented = 0.12;  // Augmented with active controls
+
+    // Active controls improve departure resistance
+    double improvement = (Cn_beta_augmented - Cn_beta_bare) / Cn_beta_bare;
+
+    TS_ASSERT(improvement > 1.0);  // More than doubled
+    TS_ASSERT_DELTA(improvement, 1.4, 0.01);
+  }
+};
+
