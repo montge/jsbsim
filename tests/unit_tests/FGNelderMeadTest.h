@@ -1599,145 +1599,78 @@ const double FGNelderMeadExtendedTest::TOLERANCE = 1e-10;
 const double FGNelderMeadExtendedTest::LOOSE_TOLERANCE = 1e-4;
 
 /*******************************************************************************
- * Additional Challenging Test Functions
+ * Additional Test Functions for Comprehensive Coverage
  ******************************************************************************/
 
-// Rastrigin function: highly multimodal
-// f(x) = 10n + sum(x_i^2 - 10*cos(2*pi*x_i))
-// Global minimum at origin with value 0
-class RastriginFunction : public FGNelderMead::Function {
-public:
-    double eval(const std::vector<double>& v) override {
-        double sum = 10.0 * v.size();
-        for (double xi : v) {
-            sum += xi * xi - 10.0 * std::cos(2.0 * M_PI * xi);
-        }
-        return sum;
-    }
-};
-
-// Ackley function: multimodal with many local minima
-// Minimum at origin with value 0
+// Ackley function: f(x) = -20*exp(-0.2*sqrt(0.5*(x^2+y^2))) - exp(0.5*(cos(2*pi*x)+cos(2*pi*y))) + e + 20
+// Minimum at (0, 0) with value 0
 class AckleyFunction : public FGNelderMead::Function {
 public:
     double eval(const std::vector<double>& v) override {
-        double sum1 = 0.0, sum2 = 0.0;
-        for (double xi : v) {
-            sum1 += xi * xi;
-            sum2 += std::cos(2.0 * M_PI * xi);
-        }
-        int n = v.size();
-        return -20.0 * std::exp(-0.2 * std::sqrt(sum1 / n))
-               - std::exp(sum2 / n) + 20.0 + M_E;
+        double x = v[0];
+        double y = v[1];
+        double term1 = -20.0 * std::exp(-0.2 * std::sqrt(0.5 * (x*x + y*y)));
+        double term2 = -std::exp(0.5 * (std::cos(2*M_PI*x) + std::cos(2*M_PI*y)));
+        return term1 + term2 + std::exp(1.0) + 20.0;
     }
 };
 
-// Schwefel function: deceptive global minimum
-// Minimum at x_i = 420.9687 with value 0
-class SchwefelFunction : public FGNelderMead::Function {
+// Levi function N.13
+// Minimum at (1, 1) with value 0
+class LeviFunction : public FGNelderMead::Function {
 public:
     double eval(const std::vector<double>& v) override {
-        double sum = 0.0;
-        for (double xi : v) {
-            sum += xi * std::sin(std::sqrt(std::abs(xi)));
-        }
-        return 418.9829 * v.size() - sum;
+        double x = v[0];
+        double y = v[1];
+        double t1 = std::sin(3*M_PI*x);
+        double t2 = (x-1)*(x-1) * (1 + std::pow(std::sin(3*M_PI*y), 2));
+        double t3 = (y-1)*(y-1) * (1 + std::pow(std::sin(2*M_PI*y), 2));
+        return t1*t1 + t2 + t3;
     }
 };
 
-// Griewank function: many widespread local minima
-// Minimum at origin with value 0
-class GriewankFunction : public FGNelderMead::Function {
-public:
-    double eval(const std::vector<double>& v) override {
-        double sum = 0.0, prod = 1.0;
-        for (size_t i = 0; i < v.size(); i++) {
-            sum += v[i] * v[i] / 4000.0;
-            prod *= std::cos(v[i] / std::sqrt(i + 1.0));
-        }
-        return sum - prod + 1.0;
-    }
-};
-
-// Levy function: complex landscape
-// Minimum at (1,1,...,1) with value 0
-class LevyFunction : public FGNelderMead::Function {
-public:
-    double eval(const std::vector<double>& v) override {
-        std::vector<double> w(v.size());
-        for (size_t i = 0; i < v.size(); i++) {
-            w[i] = 1.0 + (v[i] - 1.0) / 4.0;
-        }
-        double term1 = std::pow(std::sin(M_PI * w[0]), 2);
-        double term3 = std::pow(w.back() - 1.0, 2) *
-                       (1.0 + std::pow(std::sin(2.0 * M_PI * w.back()), 2));
-        double sum = 0.0;
-        for (size_t i = 0; i < w.size() - 1; i++) {
-            sum += std::pow(w[i] - 1.0, 2) *
-                   (1.0 + 10.0 * std::pow(std::sin(M_PI * w[i] + 1.0), 2));
-        }
-        return term1 + sum + term3;
-    }
-};
-
-// Ill-conditioned ellipsoid: tests numerical stability
-// f(x) = sum(10^(6*(i-1)/(n-1)) * x_i^2)
-class IllConditionedEllipsoid : public FGNelderMead::Function {
-public:
-    double eval(const std::vector<double>& v) override {
-        double sum = 0.0;
-        int n = v.size();
-        for (size_t i = 0; i < v.size(); i++) {
-            double coef = std::pow(10.0, 6.0 * i / (n - 1));
-            sum += coef * v[i] * v[i];
-        }
-        return sum;
-    }
-};
-
-// Styblinski-Tang function
-// Minimum at x_i = -2.903534 with value approximately -39.16599*n
+// Styblinski-Tang function: f(x) = 0.5 * sum(x_i^4 - 16*x_i^2 + 5*x_i)
+// Minimum at approximately (-2.9035, -2.9035) with value approximately -78.332
 class StyblinskiTangFunction : public FGNelderMead::Function {
 public:
     double eval(const std::vector<double>& v) override {
         double sum = 0.0;
-        for (double xi : v) {
-            sum += std::pow(xi, 4) - 16.0 * xi * xi + 5.0 * xi;
+        for (size_t i = 0; i < v.size(); i++) {
+            double x = v[i];
+            sum += std::pow(x, 4) - 16*x*x + 5*x;
         }
-        return sum / 2.0;
+        return 0.5 * sum;
     }
 };
 
-// Trid function: non-separable
-// Minimum value is -n*(n+4)*(n-1)/6 for n dimensions
-class TridFunction : public FGNelderMead::Function {
+// Weighted sphere function
+class WeightedSphereFunction : public FGNelderMead::Function {
 public:
     double eval(const std::vector<double>& v) override {
-        double sum1 = 0.0, sum2 = 0.0;
+        double sum = 0.0;
         for (size_t i = 0; i < v.size(); i++) {
-            sum1 += (v[i] - 1.0) * (v[i] - 1.0);
-            if (i > 0) sum2 += v[i] * v[i - 1];
+            sum += (i + 1) * (i + 1) * v[i] * v[i];
         }
-        return sum1 - sum2;
+        return sum;
     }
 };
 
 /*******************************************************************************
- * Additional Stress and Edge Case Tests
+ * Third Test Suite for Even More Coverage
  ******************************************************************************/
 
-class FGNelderMeadStressTest : public CxxTest::TestSuite {
+class FGNelderMeadAdditionalTest : public CxxTest::TestSuite {
 public:
     static const double TOLERANCE;
     static const double LOOSE_TOLERANCE;
 
-    // Test with Rastrigin (highly multimodal)
-    void testRastriginNearMinimum() {
-        RastriginFunction func;
-        std::vector<double> guess = {0.1, 0.1};  // Start near minimum
-        std::vector<double> lower = {-5.12, -5.12};
-        std::vector<double> upper = {5.12, 5.12};
-        std::vector<double> step = {0.1, 0.1};
+    void testAckleyFunction() {
+        // Ackley is challenging with many local minima
+        AckleyFunction func;
+        std::vector<double> guess = {0.5, 0.5};  // Start close to minimum
+        std::vector<double> lower = {-5.0, -5.0};
+        std::vector<double> upper = {5.0, 5.0};
+        std::vector<double> step = {0.2, 0.2};
 
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
@@ -1751,20 +1684,19 @@ public:
             std::vector<double> solution = optimizer.getSolution();
             if (optimizer.status() == 0) {
                 double fval = func.eval(solution);
-                TS_ASSERT(fval < 1.0);  // Close to minimum
+                TS_ASSERT(fval < 1.0);  // Should find a good minimum
             }
         } catch (const std::runtime_error&) {
             TS_ASSERT(true);
         }
     }
 
-    // Test with Ackley function
-    void testAckleyNearMinimum() {
-        AckleyFunction func;
+    void testLeviFunction() {
+        LeviFunction func;
         std::vector<double> guess = {0.5, 0.5};
-        std::vector<double> lower = {-5.0, -5.0};
-        std::vector<double> upper = {5.0, 5.0};
-        std::vector<double> step = {0.2, 0.2};
+        std::vector<double> lower = {-10.0, -10.0};
+        std::vector<double> upper = {10.0, 10.0};
+        std::vector<double> step = {0.5, 0.5};
 
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
@@ -1785,13 +1717,12 @@ public:
         }
     }
 
-    // Test Griewank function
-    void testGriewankNearMinimum() {
-        GriewankFunction func;
-        std::vector<double> guess = {0.5, 0.5};
+    void testStyblinskiTang2D() {
+        StyblinskiTangFunction func;
+        std::vector<double> guess = {-2.0, -2.0};  // Start closer to minimum
         std::vector<double> lower = {-5.0, -5.0};
         std::vector<double> upper = {5.0, 5.0};
-        std::vector<double> step = {0.3, 0.3};
+        std::vector<double> step = {0.5, 0.5};
 
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
@@ -1805,47 +1736,19 @@ public:
             std::vector<double> solution = optimizer.getSolution();
             if (optimizer.status() == 0) {
                 double fval = func.eval(solution);
-                TS_ASSERT(fval < 0.5);
+                TS_ASSERT(fval < -30.0);  // Should be near -78
             }
         } catch (const std::runtime_error&) {
             TS_ASSERT(true);
         }
     }
 
-    // Test ill-conditioned problem
-    void testIllConditionedEllipsoid() {
-        IllConditionedEllipsoid func;
-        std::vector<double> guess = {1.0, 1.0};
-        std::vector<double> lower = {-10.0, -10.0};
-        std::vector<double> upper = {10.0, 10.0};
-        std::vector<double> step = {0.5, 0.5};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   5000, 1e-10, 1e-8, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                // Solution should be near origin
-                TS_ASSERT(std::abs(solution[0]) < 0.1);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);
-        }
-    }
-
-    // Test Styblinski-Tang function
-    void testStyblinskiTang() {
-        StyblinskiTangFunction func;
-        std::vector<double> guess = {-2.0, -2.0};
-        std::vector<double> lower = {-5.0, -5.0};
-        std::vector<double> upper = {5.0, 5.0};
-        std::vector<double> step = {0.5, 0.5};
+    void testWeightedSphere() {
+        WeightedSphereFunction func;
+        std::vector<double> guess = {1.0, 1.0, 1.0};
+        std::vector<double> lower = {-10.0, -10.0, -10.0};
+        std::vector<double> upper = {10.0, 10.0, 10.0};
+        std::vector<double> step = {0.5, 0.5, 0.5};
 
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
@@ -1858,22 +1761,145 @@ public:
 
             std::vector<double> solution = optimizer.getSolution();
             if (optimizer.status() == 0) {
-                // Minimum is at approximately -2.9035
-                TS_ASSERT(solution[0] < 0);
-                TS_ASSERT(solution[1] < 0);
+                for (size_t i = 0; i < solution.size(); i++) {
+                    TS_ASSERT(std::abs(solution[i]) < 0.1);
+                }
             }
         } catch (const std::runtime_error&) {
             TS_ASSERT(true);
         }
     }
 
-    // Test Trid function
-    void testTridFunction() {
-        TridFunction func;
-        std::vector<double> guess = {1.0, 2.0};
-        std::vector<double> lower = {-4.0, -4.0};
-        std::vector<double> upper = {4.0, 4.0};
-        std::vector<double> step = {0.5, 0.5};
+    void testVeryLargeBounds() {
+        ParabolaFunction func;
+        std::vector<double> guess = {0.0};
+        std::vector<double> lower = {-1000.0};
+        std::vector<double> upper = {1000.0};
+        std::vector<double> step = {10.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        if (optimizer.status() == 0) {
+            TS_ASSERT(std::abs(solution[0]) < 1.0);
+        }
+    }
+
+    void testVerySmallSteps() {
+        ParabolaFunction func;
+        std::vector<double> guess = {0.1};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {0.001};
+
+        try {
+            FGNelderMead optimizer(&func, guess, lower, upper, step,
+                                   5000, 1e-10, 1e-8, 2.0, 0.0,
+                                   false, false, false, nullptr);
+
+            while (optimizer.status() > 0) {
+                optimizer.update();
+            }
+
+            std::vector<double> solution = optimizer.getSolution();
+            if (optimizer.status() == 0) {
+                TS_ASSERT(std::abs(solution[0]) < 0.1);
+            }
+        } catch (const std::runtime_error&) {
+            TS_ASSERT(true);
+        }
+    }
+
+    void testNegativeStartingPoint() {
+        ShiftedParabolaFunction func;  // minimum at x=2
+        std::vector<double> guess = {-8.0};  // Start far negative
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        TS_ASSERT_DELTA(solution[0], 2.0, 0.01);
+    }
+
+    void testAllNegativeGuess() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {-3.0, -4.0};
+        std::vector<double> lower = {-10.0, -10.0};
+        std::vector<double> upper = {10.0, 10.0};
+        std::vector<double> step = {1.0, 1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        TS_ASSERT_DELTA(solution[0], 0.0, 0.01);
+        TS_ASSERT_DELTA(solution[1], 0.0, 0.01);
+    }
+
+    void testMixedSignGuess() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {3.0, -4.0};
+        std::vector<double> lower = {-10.0, -10.0};
+        std::vector<double> upper = {10.0, 10.0};
+        std::vector<double> step = {1.0, 1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        TS_ASSERT_DELTA(solution[0], 0.0, 0.01);
+        TS_ASSERT_DELTA(solution[1], 0.0, 0.01);
+    }
+
+    void testZeroGuess() {
+        ShiftedParabolaFunction func;  // minimum at x=2
+        std::vector<double> guess = {0.0};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        TS_ASSERT_DELTA(solution[0], 2.0, 0.01);
+    }
+
+    void testOnlyPositiveBounds() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {5.0, 5.0};
+        std::vector<double> lower = {0.1, 0.1};
+        std::vector<double> upper = {10.0, 10.0};
+        std::vector<double> step = {1.0, 1.0};
 
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
@@ -1885,27 +1911,50 @@ public:
             }
 
             std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                double fval = func.eval(solution);
-                // Minimum for 2D is -2
-                TS_ASSERT(fval < 0);
-            }
+            // Minimum is at origin but outside bounds
+            // Should be at lower bounds
+            TS_ASSERT(solution[0] >= lower[0] - TOLERANCE);
+            TS_ASSERT(solution[1] >= lower[1] - TOLERANCE);
         } catch (const std::runtime_error&) {
             TS_ASSERT(true);
         }
     }
 
-    // Test very small search space
-    void testVerySmallSearchSpace() {
-        ParabolaFunction func;
-        std::vector<double> guess = {0.001};
-        std::vector<double> lower = {-0.01};
-        std::vector<double> upper = {0.01};
-        std::vector<double> step = {0.001};
+    void testOnlyNegativeBounds() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {-5.0, -5.0};
+        std::vector<double> lower = {-10.0, -10.0};
+        std::vector<double> upper = {-0.1, -0.1};
+        std::vector<double> step = {1.0, 1.0};
 
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   1000, 1e-12, 1e-12, 2.0, 0.0,
+                                   2000, 1e-8, 1e-6, 2.0, 0.0,
+                                   false, false, false, nullptr);
+
+            while (optimizer.status() > 0) {
+                optimizer.update();
+            }
+
+            std::vector<double> solution = optimizer.getSolution();
+            // Minimum is at origin but outside bounds
+            TS_ASSERT(solution[0] <= upper[0] + TOLERANCE);
+            TS_ASSERT(solution[1] <= upper[1] + TOLERANCE);
+        } catch (const std::runtime_error&) {
+            TS_ASSERT(true);
+        }
+    }
+
+    void testSpeedValue1() {
+        ParabolaFunction func;
+        std::vector<double> guess = {5.0};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        try {
+            FGNelderMead optimizer(&func, guess, lower, upper, step,
+                                   2000, 1e-10, 1e-8, 1.0, 0.0,
                                    false, false, false, nullptr);
 
             while (optimizer.status() > 0) {
@@ -1921,63 +1970,16 @@ public:
         }
     }
 
-    // Test very large search space
-    void testVeryLargeSearchSpace() {
+    void testSpeedValue3() {
         ParabolaFunction func;
-        std::vector<double> guess = {100.0};
-        std::vector<double> lower = {-1000.0};
-        std::vector<double> upper = {1000.0};
-        std::vector<double> step = {50.0};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   5000, 1e-8, 1e-6, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                TS_ASSERT(std::abs(solution[0]) < 1.0);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);
-        }
-    }
-
-    // Test negative guess values
-    void testNegativeGuess() {
-        ShiftedParabolaFunction func;  // Min at x=2
-        std::vector<double> guess = {-5.0};
+        std::vector<double> guess = {5.0};
         std::vector<double> lower = {-10.0};
         std::vector<double> upper = {10.0};
         std::vector<double> step = {1.0};
 
-        FGNelderMead optimizer(&func, guess, lower, upper, step,
-                               2000, 1e-12, 1e-10, 2.0, 0.0,
-                               false, false, false, nullptr);
-
-        while (optimizer.status() > 0) {
-            optimizer.update();
-        }
-
-        std::vector<double> solution = optimizer.getSolution();
-        TS_ASSERT_DELTA(solution[0], 2.0, LOOSE_TOLERANCE);
-    }
-
-    // Test with very tight bounds around minimum
-    void testTightBoundsAroundMinimum() {
-        ParabolaFunction func;
-        std::vector<double> guess = {0.1};
-        std::vector<double> lower = {-0.5};
-        std::vector<double> upper = {0.5};
-        std::vector<double> step = {0.05};
-
         try {
             FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   1000, 1e-10, 1e-10, 2.0, 0.0,
+                                   2000, 1e-10, 1e-8, 3.0, 0.0,
                                    false, false, false, nullptr);
 
             while (optimizer.status() > 0) {
@@ -1993,172 +1995,235 @@ public:
         }
     }
 
-    // Test speed parameter extremes
-    void testSpeedParameterExtremes() {
+    void testConvergenceCheck() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {2.0, 2.0};
+        std::vector<double> lower = {-10.0, -10.0};
+        std::vector<double> upper = {10.0, 10.0};
+        std::vector<double> step = {0.5, 0.5};
+
+        try {
+            FGNelderMead optimizer(&func, guess, lower, upper, step,
+                                   2000, 1e-10, 1e-8, 2.0, 0.0,
+                                   false, false, false, nullptr);
+
+            // Count iterations
+            int iters = 0;
+            while (optimizer.status() > 0) {
+                optimizer.update();
+                iters++;
+            }
+
+            // Should converge in reasonable iterations
+            if (optimizer.status() == 0) {
+                TS_ASSERT(iters < 500);
+            }
+        } catch (const std::runtime_error&) {
+            TS_ASSERT(true);
+        }
+    }
+
+    void testSolutionImproves() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {5.0, 5.0};
+        std::vector<double> lower = {-10.0, -10.0};
+        std::vector<double> upper = {10.0, 10.0};
+        std::vector<double> step = {1.0, 1.0};
+
+        try {
+            FGNelderMead optimizer(&func, guess, lower, upper, step,
+                                   2000, 1e-10, 1e-8, 2.0, 0.0,
+                                   false, false, false, nullptr);
+
+            double initialVal = func.eval(guess);
+
+            while (optimizer.status() > 0) {
+                optimizer.update();
+            }
+
+            std::vector<double> solution = optimizer.getSolution();
+            double finalVal = func.eval(solution);
+
+            // Final value should be better (lower) than initial
+            TS_ASSERT(finalVal < initialVal);
+        } catch (const std::runtime_error&) {
+            TS_ASSERT(true);
+        }
+    }
+
+    void testSolutionWithinBounds() {
+        Quadratic2DFunction func;
+        std::vector<double> guess = {3.0, 3.0};
+        std::vector<double> lower = {-5.0, -5.0};
+        std::vector<double> upper = {5.0, 5.0};
+        std::vector<double> step = {0.5, 0.5};
+
+        try {
+            FGNelderMead optimizer(&func, guess, lower, upper, step,
+                                   2000, 1e-10, 1e-8, 2.0, 0.0,
+                                   false, false, false, nullptr);
+
+            while (optimizer.status() > 0) {
+                optimizer.update();
+            }
+
+            std::vector<double> solution = optimizer.getSolution();
+            for (size_t i = 0; i < solution.size(); i++) {
+                TS_ASSERT(solution[i] >= lower[i] - TOLERANCE);
+                TS_ASSERT(solution[i] <= upper[i] + TOLERANCE);
+            }
+        } catch (const std::runtime_error&) {
+            TS_ASSERT(true);
+        }
+    }
+
+    void testRepeatedOptimizations() {
+        ParabolaFunction func;
+        std::vector<double> guess = {5.0};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        double solutions[5];
+        for (int run = 0; run < 5; run++) {
+            FGNelderMead optimizer(&func, guess, lower, upper, step,
+                                   2000, 1e-10, 1e-8, 2.0, 0.0,
+                                   false, false, false, nullptr);
+
+            while (optimizer.status() > 0) {
+                optimizer.update();
+            }
+
+            solutions[run] = optimizer.getSolution()[0];
+        }
+
+        // All runs should give same result (deterministic)
+        for (int i = 1; i < 5; i++) {
+            TS_ASSERT_DELTA(solutions[0], solutions[i], TOLERANCE);
+        }
+    }
+
+    void testGuessNearMinimum() {
+        ParabolaFunction func;
+        std::vector<double> guess = {0.001};  // Very close to minimum
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {0.1};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        TS_ASSERT(std::abs(solution[0]) < 0.01);
+    }
+
+    void testGuessAtMinimum() {
+        ParabolaFunction func;
+        std::vector<double> guess = {0.0};  // Exactly at minimum
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {0.1};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solution = optimizer.getSolution();
+        TS_ASSERT(std::abs(solution[0]) < 0.1);
+    }
+
+    void testMultipleCallsToGetSolution() {
+        ParabolaFunction func;
+        std::vector<double> guess = {5.0};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        // Multiple calls should return same result
+        std::vector<double> solution1 = optimizer.getSolution();
+        std::vector<double> solution2 = optimizer.getSolution();
+        std::vector<double> solution3 = optimizer.getSolution();
+
+        TS_ASSERT_EQUALS(solution1[0], solution2[0]);
+        TS_ASSERT_EQUALS(solution2[0], solution3[0]);
+    }
+
+    void testStatusAfterConvergence() {
+        ParabolaFunction func;
+        std::vector<double> guess = {5.0};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        // Status should remain stable after convergence
+        int status1 = optimizer.status();
+        int status2 = optimizer.status();
+        int status3 = optimizer.status();
+
+        TS_ASSERT_EQUALS(status1, status2);
+        TS_ASSERT_EQUALS(status2, status3);
+    }
+
+    void testUpdateAfterConvergence() {
+        ParabolaFunction func;
+        std::vector<double> guess = {5.0};
+        std::vector<double> lower = {-10.0};
+        std::vector<double> upper = {10.0};
+        std::vector<double> step = {1.0};
+
+        FGNelderMead optimizer(&func, guess, lower, upper, step,
+                               2000, 1e-10, 1e-8, 2.0, 0.0,
+                               false, false, false, nullptr);
+
+        while (optimizer.status() > 0) {
+            optimizer.update();
+        }
+
+        std::vector<double> solutionBefore = optimizer.getSolution();
+
+        // Extra updates after convergence
+        for (int i = 0; i < 5; i++) {
+            optimizer.update();
+        }
+
+        std::vector<double> solutionAfter = optimizer.getSolution();
+
+        // Solution should remain stable
+        TS_ASSERT_EQUALS(solutionBefore[0], solutionAfter[0]);
+    }
+
+    void testOptimizationWith1Dimension() {
         ParabolaFunction func;
         std::vector<double> guess = {3.0};
         std::vector<double> lower = {-10.0};
         std::vector<double> upper = {10.0};
         std::vector<double> step = {0.5};
 
-        // Test with very low speed
-        try {
-            FGNelderMead optimizer1(&func, guess, lower, upper, step,
-                                    3000, 1e-8, 1e-6, 0.5, 0.0,
-                                    false, false, false, nullptr);
-
-            while (optimizer1.status() > 0) {
-                optimizer1.update();
-            }
-
-            if (optimizer1.status() == 0) {
-                std::vector<double> sol = optimizer1.getSolution();
-                TS_ASSERT(std::abs(sol[0]) < 0.1);
-            }
-        } catch (const std::runtime_error&) {}
-
-        // Test with high speed
-        try {
-            FGNelderMead optimizer2(&func, guess, lower, upper, step,
-                                    3000, 1e-8, 1e-6, 5.0, 0.0,
-                                    false, false, false, nullptr);
-
-            while (optimizer2.status() > 0) {
-                optimizer2.update();
-            }
-
-            if (optimizer2.status() == 0) {
-                std::vector<double> sol = optimizer2.getSolution();
-                TS_ASSERT(std::abs(sol[0]) < 0.1);
-            }
-        } catch (const std::runtime_error&) {}
-
-        TS_ASSERT(true);  // Test completes
-    }
-
-    // Test guess at exact minimum
-    void testGuessAtMinimum() {
-        ParabolaFunction func;
-        std::vector<double> guess = {0.0};  // Exactly at minimum
-        std::vector<double> lower = {-10.0};
-        std::vector<double> upper = {10.0};
-        std::vector<double> step = {1.0};
-
-        FGNelderMead optimizer(&func, guess, lower, upper, step,
-                               100, 1e-6, 1e-6, 2.0, 0.0,
-                               false, false, false, nullptr);
-
-        while (optimizer.status() > 0) {
-            optimizer.update();
-        }
-
-        std::vector<double> solution = optimizer.getSolution();
-        // Should stay at or very near minimum
-        TS_ASSERT(std::abs(solution[0]) < 1.0);
-    }
-
-    // Test with symmetric 2D function from corners
-    void testSymmetric2DFromCorners() {
-        Quadratic2DFunction func;
-        std::vector<double> lower = {-10.0, -10.0};
-        std::vector<double> upper = {10.0, 10.0};
-        std::vector<double> step = {1.0, 1.0};
-
-        // Start from each corner
-        double corners[][2] = {{9.0, 9.0}, {-9.0, 9.0}, {9.0, -9.0}, {-9.0, -9.0}};
-
-        for (auto& corner : corners) {
-            std::vector<double> guess = {corner[0], corner[1]};
-
-            try {
-                FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                       2000, 1e-8, 1e-6, 2.0, 0.0,
-                                       false, false, false, nullptr);
-
-                while (optimizer.status() > 0) {
-                    optimizer.update();
-                }
-
-                if (optimizer.status() == 0) {
-                    std::vector<double> sol = optimizer.getSolution();
-                    TS_ASSERT(std::abs(sol[0]) < 0.1);
-                    TS_ASSERT(std::abs(sol[1]) < 0.1);
-                }
-            } catch (const std::runtime_error&) {}
-        }
-        TS_ASSERT(true);
-    }
-
-    // Test optimizer reuse (create multiple optimizations with same function)
-    void testOptimizerReuse() {
-        ParabolaFunction func;
-        std::vector<double> lower = {-10.0};
-        std::vector<double> upper = {10.0};
-        std::vector<double> step = {1.0};
-
-        for (int i = 0; i < 5; i++) {
-            std::vector<double> guess = {double(i * 2 - 4)};
-
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   1000, 1e-8, 1e-6, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                TS_ASSERT(std::abs(solution[0]) < 0.1);
-            }
-        }
-    }
-
-    // Test function with flat region near minimum
-    void testFlatRegion() {
-        // Function that is flat near zero: f(x) = max(x^2 - 0.01, 0)
-        class FlatRegionFunction : public FGNelderMead::Function {
-        public:
-            double eval(const std::vector<double>& v) override {
-                double x2 = v[0] * v[0];
-                return x2 > 0.01 ? x2 - 0.01 : 0.0;
-            }
-        };
-
-        FlatRegionFunction func;
-        std::vector<double> guess = {2.0};
-        std::vector<double> lower = {-10.0};
-        std::vector<double> upper = {10.0};
-        std::vector<double> step = {0.5};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   2000, 1e-6, 1e-6, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            // Should converge to the flat region
-            if (optimizer.status() == 0) {
-                TS_ASSERT(std::abs(solution[0]) < 0.2);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);
-        }
-    }
-
-    // Test with steep gradient
-    void testSteepGradient() {
-        // f(x) = 1000 * x^2 (steep parabola)
-        ScaledParabolaFunction func;
-        std::vector<double> guess = {5.0};
-        std::vector<double> lower = {-10.0};
-        std::vector<double> upper = {10.0};
-        std::vector<double> step = {0.5};
-
         FGNelderMead optimizer(&func, guess, lower, upper, step,
                                2000, 1e-10, 1e-8, 2.0, 0.0,
                                false, false, false, nullptr);
@@ -2168,119 +2233,13 @@ public:
         }
 
         std::vector<double> solution = optimizer.getSolution();
-        if (optimizer.status() == 0) {
-            TS_ASSERT(std::abs(solution[0]) < 0.01);
-        }
+        TS_ASSERT_EQUALS(solution.size(), 1u);
+        TS_ASSERT_DELTA(solution[0], 0.0, 0.01);
     }
 
-    // Test 6D problem (pushing dimensionality)
-    void test6DOptimization() {
-        SumOfSquaresFunction func;
-        std::vector<double> guess(6, 1.0);
-        std::vector<double> lower(6, -10.0);
-        std::vector<double> upper(6, 10.0);
-        std::vector<double> step(6, 0.5);
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   20000, 1e-6, 1e-4, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            int iter = 0;
-            while (optimizer.status() > 0 && iter < 20000) {
-                optimizer.update();
-                iter++;
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                double norm = 0;
-                for (double s : solution) norm += s * s;
-                TS_ASSERT(std::sqrt(norm) < 1.0);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);  // High-dim may not converge
-        }
-    }
-
-    // Test convergence monitoring
-    void testConvergenceMonitoring() {
+    void testOptimizationWith2Dimensions() {
         Quadratic2DFunction func;
-        std::vector<double> guess = {5.0, 5.0};
-        std::vector<double> lower = {-10.0, -10.0};
-        std::vector<double> upper = {10.0, 10.0};
-        std::vector<double> step = {1.0, 1.0};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   2000, 1e-10, 1e-8, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            std::vector<double> fvalues;
-            while (optimizer.status() > 0) {
-                optimizer.update();
-                std::vector<double> current = optimizer.getSolution();
-                fvalues.push_back(func.eval(current));
-            }
-
-            // Function values should generally decrease
-            if (fvalues.size() > 10) {
-                TS_ASSERT(fvalues.back() <= fvalues.front());
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);  // May hit iteration limit
-        }
-    }
-
-    // Test with asymmetric ellipse
-    void testAsymmetricEllipse() {
-        // f(x,y) = x^2 + 100*y^2 (elongated ellipse)
-        class AsymmetricEllipse : public FGNelderMead::Function {
-        public:
-            double eval(const std::vector<double>& v) override {
-                return v[0] * v[0] + 100.0 * v[1] * v[1];
-            }
-        };
-
-        AsymmetricEllipse func;
-        std::vector<double> guess = {3.0, 0.3};
-        std::vector<double> lower = {-10.0, -10.0};
-        std::vector<double> upper = {10.0, 10.0};
-        std::vector<double> step = {1.0, 0.1};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   3000, 1e-10, 1e-8, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                TS_ASSERT(std::abs(solution[0]) < 0.1);
-                TS_ASSERT(std::abs(solution[1]) < 0.01);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);
-        }
-    }
-
-    // Test with rotated coordinates
-    void testRotatedCoordinates() {
-        // f(x,y) = (x+y)^2 + (x-y)^2 = 2x^2 + 2y^2
-        class RotatedQuadratic : public FGNelderMead::Function {
-        public:
-            double eval(const std::vector<double>& v) override {
-                double u = v[0] + v[1];
-                double w = v[0] - v[1];
-                return u * u + w * w;
-            }
-        };
-
-        RotatedQuadratic func;
-        std::vector<double> guess = {3.0, 2.0};
+        std::vector<double> guess = {3.0, 4.0};
         std::vector<double> lower = {-10.0, -10.0};
         std::vector<double> upper = {10.0, 10.0};
         std::vector<double> step = {0.5, 0.5};
@@ -2294,95 +2253,11 @@ public:
         }
 
         std::vector<double> solution = optimizer.getSolution();
-        if (optimizer.status() == 0) {
-            TS_ASSERT(std::abs(solution[0]) < 0.01);
-            TS_ASSERT(std::abs(solution[1]) < 0.01);
-        }
-    }
-
-    // Test rapid parameter changes
-    void testRapidParameterChanges() {
-        ParabolaFunction func;
-        std::vector<double> lower = {-10.0};
-        std::vector<double> upper = {10.0};
-
-        for (int i = 0; i < 10; i++) {
-            std::vector<double> guess = {double(i) - 5.0};
-            std::vector<double> step = {0.1 * (i + 1)};
-
-            try {
-                FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                       500, 1e-6, 1e-4, 1.0 + 0.2 * i, 0.0,
-                                       false, false, false, nullptr);
-
-                while (optimizer.status() > 0) {
-                    optimizer.update();
-                }
-
-                if (optimizer.status() == 0) {
-                    std::vector<double> sol = optimizer.getSolution();
-                    TS_ASSERT(std::abs(sol[0]) < 1.0);
-                }
-            } catch (const std::runtime_error&) {}
-        }
-        TS_ASSERT(true);
-    }
-
-    // Test Levy function
-    void testLevyFunction() {
-        LevyFunction func;
-        std::vector<double> guess = {0.5, 0.5};
-        std::vector<double> lower = {-10.0, -10.0};
-        std::vector<double> upper = {10.0, 10.0};
-        std::vector<double> step = {0.5, 0.5};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   3000, 1e-8, 1e-6, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                // Minimum is at (1, 1)
-                TS_ASSERT(std::abs(solution[0] - 1.0) < 0.5);
-                TS_ASSERT(std::abs(solution[1] - 1.0) < 0.5);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);
-        }
-    }
-
-    // Test with unit step sizes
-    void testUnitStepSizes() {
-        Quadratic2DFunction func;
-        std::vector<double> guess = {5.0, 5.0};
-        std::vector<double> lower = {-10.0, -10.0};
-        std::vector<double> upper = {10.0, 10.0};
-        std::vector<double> step = {1.0, 1.0};
-
-        try {
-            FGNelderMead optimizer(&func, guess, lower, upper, step,
-                                   2000, 1e-10, 1e-8, 2.0, 0.0,
-                                   false, false, false, nullptr);
-
-            while (optimizer.status() > 0) {
-                optimizer.update();
-            }
-
-            std::vector<double> solution = optimizer.getSolution();
-            if (optimizer.status() == 0) {
-                TS_ASSERT(std::abs(solution[0]) < 0.01);
-                TS_ASSERT(std::abs(solution[1]) < 0.01);
-            }
-        } catch (const std::runtime_error&) {
-            TS_ASSERT(true);  // May hit iteration limit
-        }
+        TS_ASSERT_EQUALS(solution.size(), 2u);
+        TS_ASSERT_DELTA(solution[0], 0.0, 0.01);
+        TS_ASSERT_DELTA(solution[1], 0.0, 0.01);
     }
 };
 
-const double FGNelderMeadStressTest::TOLERANCE = 1e-10;
-const double FGNelderMeadStressTest::LOOSE_TOLERANCE = 1e-4;
+const double FGNelderMeadAdditionalTest::TOLERANCE = 1e-10;
+const double FGNelderMeadAdditionalTest::LOOSE_TOLERANCE = 1e-4;

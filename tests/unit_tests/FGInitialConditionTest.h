@@ -1556,4 +1556,323 @@ public:
     TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 50.0, epsilon);
     TS_ASSERT_DELTA(ic.GetVtrueKtsIC(), 400.0, 1.0);
   }
+
+  /***************************************************************************
+   * Section 17: Combined Position and Velocity Tests
+   ***************************************************************************/
+
+  void testPositionVelocityTogether() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set position
+    ic.SetLatitudeDegIC(35.0);
+    ic.SetLongitudeDegIC(-118.0);
+    ic.SetAltitudeASLFtIC(5000.0);
+
+    // Set velocity
+    ic.SetVtrueKtsIC(250.0);
+    ic.SetPsiDegIC(90.0);
+
+    // Verify both are correct
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 35.0, 0.01);
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), -118.0, 0.01);
+    TS_ASSERT_DELTA(ic.GetVtrueKtsIC(), 250.0, 1.0);
+    TS_ASSERT_DELTA(ic.GetPsiDegIC(), 90.0, 0.1);
+  }
+
+  void testAltitudeVelocityInteraction() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    // Set velocity first
+    ic.SetVcalibratedKtsIC(200.0);
+
+    // Then change altitude
+    ic.SetAltitudeASLFtIC(20000.0);
+
+    // Calibrated should remain same, true should increase
+    TS_ASSERT_DELTA(ic.GetVcalibratedKtsIC(), 200.0, 1.0);
+    TS_ASSERT(ic.GetVtrueKtsIC() > 200.0);
+  }
+
+  /***************************************************************************
+   * Section 18: Body Rates Comprehensive Tests
+   ***************************************************************************/
+
+  void testRollRatePositive() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPRadpsIC(0.5);  // Roll right
+    TS_ASSERT_DELTA(ic.GetPRadpsIC(), 0.5, epsilon);
+
+    FGColumnVector3 pqr = ic.GetPQRRadpsIC();
+    TS_ASSERT_DELTA(pqr(1), 0.5, epsilon);
+  }
+
+  void testPitchRatePositive() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetQRadpsIC(0.3);  // Pitch up
+    TS_ASSERT_DELTA(ic.GetQRadpsIC(), 0.3, epsilon);
+
+    FGColumnVector3 pqr = ic.GetPQRRadpsIC();
+    TS_ASSERT_DELTA(pqr(2), 0.3, epsilon);
+  }
+
+  void testYawRatePositive() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetRRadpsIC(0.2);  // Yaw right
+    TS_ASSERT_DELTA(ic.GetRRadpsIC(), 0.2, epsilon);
+
+    FGColumnVector3 pqr = ic.GetPQRRadpsIC();
+    TS_ASSERT_DELTA(pqr(3), 0.2, epsilon);
+  }
+
+  void testCombinedBodyRates() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPRadpsIC(0.1);
+    ic.SetQRadpsIC(0.2);
+    ic.SetRRadpsIC(0.15);
+
+    FGColumnVector3 pqr = ic.GetPQRRadpsIC();
+    TS_ASSERT_DELTA(pqr(1), 0.1, epsilon);
+    TS_ASSERT_DELTA(pqr(2), 0.2, epsilon);
+    TS_ASSERT_DELTA(pqr(3), 0.15, epsilon);
+  }
+
+  /***************************************************************************
+   * Section 19: Wind Component Tests
+   ***************************************************************************/
+
+  void testWindFromNorth() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetWindMagKtsIC(20.0);
+    ic.SetWindDirDegIC(0.0);  // From north
+
+    // Verify direction was set
+    double windDir = ic.GetWindDirDegIC();
+    TS_ASSERT_DELTA(windDir, 0.0, 1.0);
+  }
+
+  void testWindFromSouth() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetWindMagKtsIC(20.0);
+    ic.SetWindDirDegIC(180.0);  // From south
+
+    // Verify direction
+    double windDir = ic.GetWindDirDegIC();
+    TS_ASSERT_DELTA(windDir, 180.0, 1.0);
+  }
+
+  void testWindFromWest() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetWindMagKtsIC(15.0);
+    ic.SetWindDirDegIC(270.0);  // From west
+
+    // Verify direction was set (may be normalized to -90 or 270)
+    double windDir = ic.GetWindDirDegIC();
+    // Normalize to 0-360 range for comparison
+    if (windDir < 0) windDir += 360.0;
+    TS_ASSERT_DELTA(windDir, 270.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Section 20: Trim and Load Factor Tests
+   ***************************************************************************/
+
+  void testTrimRequestValue() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    int trim = ic.TrimRequested();
+    // Should return a valid trim mode
+    TS_ASSERT(trim >= 0 && trim < 10);
+  }
+
+  void testZeroLoadFactor() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetTargetNlfIC(0.0);
+    TS_ASSERT_DELTA(ic.GetTargetNlfIC(), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Section 21: Altitude Conversion Tests
+   ***************************************************************************/
+
+  void testASLToAGLWithTerrain() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetTerrainElevationFtIC(1000.0);
+    ic.SetAltitudeASLFtIC(3000.0);
+
+    double agl = ic.GetAltitudeAGLFtIC();
+    TS_ASSERT_DELTA(agl, 2000.0, 10.0);
+  }
+
+  void testAGLToASLWithTerrain() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetTerrainElevationFtIC(500.0);
+    ic.SetAltitudeAGLFtIC(1500.0);
+
+    double asl = ic.GetAltitudeASLFtIC();
+    TS_ASSERT_DELTA(asl, 2000.0, 10.0);
+  }
+
+  /***************************************************************************
+   * Section 22: Velocity Vector Magnitude Tests
+   ***************************************************************************/
+
+  void testVelocityMagnitudeFromComponents() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVNorthFpsIC(300.0);
+    ic.SetVEastFpsIC(400.0);
+    ic.SetVDownFpsIC(0.0);
+
+    double vg = ic.GetVgroundFpsIC();
+    TS_ASSERT_DELTA(vg, 500.0, 1.0);  // 3-4-5 triangle
+  }
+
+  void testBodyVelocityMagnitude() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetUBodyFpsIC(300.0);
+    ic.SetVBodyFpsIC(0.0);
+    ic.SetWBodyFpsIC(0.0);
+
+    double vt = ic.GetVtrueFpsIC();
+    TS_ASSERT_DELTA(vt, 300.0, 1.0);
+  }
+
+  /***************************************************************************
+   * Section 23: Speed Mode Persistence Tests
+   ***************************************************************************/
+
+  void testSpeedModeAfterPositionChange() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetMachIC(0.8);
+    double mach = ic.GetMachIC();
+    TS_ASSERT_DELTA(mach, 0.8, 0.01);
+
+    // Change position
+    ic.SetLatitudeDegIC(40.0);
+
+    // Mach should still be approximately the same
+    TS_ASSERT_DELTA(ic.GetMachIC(), 0.8, 0.1);
+  }
+
+  void testSpeedModeAfterAltitudeChange() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetVcalibratedKtsIC(250.0);
+    double vc = ic.GetVcalibratedKtsIC();
+    TS_ASSERT_DELTA(vc, 250.0, 1.0);
+
+    // Change altitude
+    ic.SetAltitudeASLFtIC(20000.0);
+
+    // Vcalibrated should still be approximately the same
+    TS_ASSERT_DELTA(ic.GetVcalibratedKtsIC(), 250.0, 5.0);
+  }
+
+  /***************************************************************************
+   * Section 24: Euler Angle Edge Cases
+   ***************************************************************************/
+
+  void testPhiNear180() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPhiDegIC(179.0);
+    TS_ASSERT_DELTA(ic.GetPhiDegIC(), 179.0, 0.1);
+  }
+
+  void testThetaNear90() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetUBodyFpsIC(100.0);
+    ic.SetThetaDegIC(85.0);
+    TS_ASSERT_DELTA(ic.GetThetaDegIC(), 85.0, 1.0);
+  }
+
+  void testPsiNear360() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetPsiDegIC(355.0);
+    TS_ASSERT_DELTA(ic.GetPsiDegIC(), 355.0, 0.1);
+  }
+
+  /***************************************************************************
+   * Section 25: Stress Tests
+   ***************************************************************************/
+
+  void testManyPositionUpdates() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    for (int i = 0; i < 100; i++) {
+      double lat = -90.0 + i * 1.8;
+      double lon = -180.0 + i * 3.6;
+      ic.SetLatitudeDegIC(lat);
+      ic.SetLongitudeDegIC(lon);
+    }
+
+    // Final values should be correct: i=99, lat=-90+99*1.8=88.2, lon=-180+99*3.6=176.4
+    TS_ASSERT_DELTA(ic.GetLatitudeDegIC(), 88.2, 0.1);
+    TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), 176.4, 0.1);
+  }
+
+  void testManyVelocityUpdates() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    for (int i = 0; i < 50; i++) {
+      double vt = 100.0 + i * 10.0;
+      ic.SetVtrueKtsIC(vt);
+    }
+
+    TS_ASSERT_DELTA(ic.GetVtrueKtsIC(), 590.0, 1.0);
+  }
+
+  void testAlternatingSpeedModes() {
+    FGFDMExec fdmex;
+    FGInitialCondition ic(&fdmex);
+
+    ic.SetAltitudeASLFtIC(10000.0);
+
+    for (int i = 0; i < 10; i++) {
+      ic.SetVtrueKtsIC(200.0 + i);
+      ic.SetMachIC(0.7 + i * 0.01);
+      ic.SetVcalibratedKtsIC(180.0 + i);
+    }
+
+    // Should end with calibrated airspeed mode
+    TS_ASSERT_EQUALS(ic.GetSpeedSet(), setvc);
+    TS_ASSERT_DELTA(ic.GetVcalibratedKtsIC(), 189.0, 1.0);
+  }
 };

@@ -1819,4 +1819,522 @@ public:
       for (int j = 1; j <= 3; j++)
         TS_ASSERT_EQUALS(IT(i, j), I(i, j));
   }
+
+  /***************************************************************************
+   * Section: Additional Rotation Tests
+   ***************************************************************************/
+
+  void testRotationAroundXAxis() {
+    // GIVEN: Rotation around X axis by 60 degrees
+    double phi = M_PI / 3.0;
+    JSBSim::FGMatrix33 Rx(1.0, 0.0, 0.0,
+                           0.0, cos(phi), sin(phi),
+                           0.0, -sin(phi), cos(phi));
+
+    // THEN: Should be orthogonal
+    TS_ASSERT_DELTA(Rx.Determinant(), 1.0, 1E-10);
+
+    // AND: Transform unit Y to expected position
+    JSBSim::FGColumnVector3 ey(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 result = Rx * ey;
+    TS_ASSERT_DELTA(result(1), 0.0, 1E-10);
+    TS_ASSERT_DELTA(result(2), cos(phi), 1E-10);
+    TS_ASSERT_DELTA(result(3), -sin(phi), 1E-10);
+  }
+
+  void testRotationAroundYAxis() {
+    // GIVEN: Rotation around Y axis by 45 degrees
+    double theta = M_PI / 4.0;
+    JSBSim::FGMatrix33 Ry(cos(theta), 0.0, -sin(theta),
+                           0.0, 1.0, 0.0,
+                           sin(theta), 0.0, cos(theta));
+
+    // THEN: Transform unit X to expected position
+    JSBSim::FGColumnVector3 ex(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 result = Ry * ex;
+    TS_ASSERT_DELTA(result(1), cos(theta), 1E-10);
+    TS_ASSERT_DELTA(result(2), 0.0, 1E-10);
+    TS_ASSERT_DELTA(result(3), sin(theta), 1E-10);
+  }
+
+  void testRotation270DegreesAroundZ() {
+    // GIVEN: 270 degree rotation around Z
+    double psi = 3.0 * M_PI / 2.0;
+    JSBSim::FGMatrix33 Rz(cos(psi), sin(psi), 0.0,
+                           -sin(psi), cos(psi), 0.0,
+                           0.0, 0.0, 1.0);
+
+    // THEN: Transform unit X should give (0, 1, 0)
+    JSBSim::FGColumnVector3 ex(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 result = Rz * ex;
+    TS_ASSERT_DELTA(result(1), 0.0, 1E-10);
+    TS_ASSERT_DELTA(result(2), 1.0, 1E-10);
+    TS_ASSERT_DELTA(result(3), 0.0, 1E-10);
+  }
+
+  void testSmallAngleRotation() {
+    // GIVEN: Very small rotation angle
+    double angle = 1E-6;
+    JSBSim::FGMatrix33 R(cos(angle), sin(angle), 0.0,
+                          -sin(angle), cos(angle), 0.0,
+                          0.0, 0.0, 1.0);
+
+    // THEN: Should be very close to identity
+    TS_ASSERT_DELTA(R(1, 1), 1.0, 1E-10);
+    TS_ASSERT_DELTA(R(2, 2), 1.0, 1E-10);
+    TS_ASSERT_DELTA(R(3, 3), 1.0, 1E-10);
+
+    // AND: Still orthogonal
+    TS_ASSERT_DELTA(R.Determinant(), 1.0, 1E-10);
+  }
+
+  /***************************************************************************
+   * Section: Additional Euler Angle Edge Cases
+   ***************************************************************************/
+
+  void testEulerAnglesNegativeRoll() {
+    // GIVEN: Negative roll angle
+    double phi = -M_PI / 4.0;
+    double cphi = cos(phi), sphi = sin(phi);
+    JSBSim::FGMatrix33 m(1.0, 0.0, 0.0,
+                          0.0, cphi, sphi,
+                          0.0, -sphi, cphi);
+
+    // WHEN: Getting Euler angles
+    JSBSim::FGColumnVector3 angles = m.GetEuler();
+
+    // THEN: Should recover original angle
+    TS_ASSERT_DELTA(angles(1), phi, 1E-8);
+    TS_ASSERT_DELTA(angles(2), 0.0, 1E-8);
+    TS_ASSERT_DELTA(angles(3), 0.0, 1E-8);
+  }
+
+  void testEulerAnglesNegativePitch() {
+    // GIVEN: Negative pitch angle
+    double theta = -M_PI / 6.0;
+    double cth = cos(theta), sth = sin(theta);
+    JSBSim::FGMatrix33 m(cth, 0.0, -sth,
+                          0.0, 1.0, 0.0,
+                          sth, 0.0, cth);
+
+    // WHEN: Getting Euler angles
+    JSBSim::FGColumnVector3 angles = m.GetEuler();
+
+    // THEN: Should recover original angle
+    TS_ASSERT_DELTA(angles(1), 0.0, 1E-8);
+    TS_ASSERT_DELTA(angles(2), theta, 1E-8);
+    TS_ASSERT_DELTA(angles(3), 0.0, 1E-8);
+  }
+
+  void testEulerAnglesLargePhi() {
+    // GIVEN: Large roll near 180 degrees
+    double phi = 170.0 * M_PI / 180.0;
+    double cphi = cos(phi), sphi = sin(phi);
+    JSBSim::FGMatrix33 m(1.0, 0.0, 0.0,
+                          0.0, cphi, sphi,
+                          0.0, -sphi, cphi);
+
+    // WHEN: Getting Euler angles
+    JSBSim::FGColumnVector3 angles = m.GetEuler();
+
+    // THEN: Should recover original angle
+    TS_ASSERT_DELTA(angles(1), phi, 1E-8);
+  }
+
+  /***************************************************************************
+   * Section: Quaternion Conversion Edge Cases
+   ***************************************************************************/
+
+  void testQuaternionConversionRotationX() {
+    // GIVEN: 45 degree rotation around X axis
+    double phi = M_PI / 4.0;
+    JSBSim::FGMatrix33 m(1.0, 0.0, 0.0,
+                          0.0, cos(phi), sin(phi),
+                          0.0, -sin(phi), cos(phi));
+
+    // WHEN: Converting to quaternion
+    JSBSim::FGQuaternion q = m.GetQuaternion();
+
+    // THEN: Should match expected quaternion for X rotation
+    TS_ASSERT_DELTA(q(1), cos(phi/2.0), 1E-8);
+    TS_ASSERT_DELTA(q(2), sin(phi/2.0), 1E-8);
+    TS_ASSERT_DELTA(q(3), 0.0, 1E-8);
+    TS_ASSERT_DELTA(q(4), 0.0, 1E-8);
+  }
+
+  void testQuaternionConversionRotationY() {
+    // GIVEN: 60 degree rotation around Y axis
+    double theta = M_PI / 3.0;
+    JSBSim::FGMatrix33 m(cos(theta), 0.0, -sin(theta),
+                          0.0, 1.0, 0.0,
+                          sin(theta), 0.0, cos(theta));
+
+    // WHEN: Converting to quaternion
+    JSBSim::FGQuaternion q = m.GetQuaternion();
+
+    // THEN: Should match expected quaternion for Y rotation
+    TS_ASSERT_DELTA(q(1), cos(theta/2.0), 1E-8);
+    TS_ASSERT_DELTA(q(2), 0.0, 1E-8);
+    TS_ASSERT_DELTA(q(3), sin(theta/2.0), 1E-8);
+    TS_ASSERT_DELTA(q(4), 0.0, 1E-8);
+  }
+
+  void testQuaternion180DegreeRotation() {
+    // GIVEN: 180 degree rotation around Z axis
+    JSBSim::FGMatrix33 m(-1.0, 0.0, 0.0,
+                          0.0, -1.0, 0.0,
+                          0.0, 0.0, 1.0);
+
+    // WHEN: Converting to quaternion
+    JSBSim::FGQuaternion q = m.GetQuaternion();
+
+    // THEN: Should be quaternion for 180 deg around Z
+    // q = [cos(90), 0, 0, sin(90)] = [0, 0, 0, 1]
+    TS_ASSERT_DELTA(q(1), 0.0, 1E-8);
+    TS_ASSERT_DELTA(fabs(q(4)), 1.0, 1E-8);
+  }
+
+  /***************************************************************************
+   * Section: Matrix Algebra Properties
+   ***************************************************************************/
+
+  void testDistributivityOverMatrixAddition() {
+    // GIVEN: Three matrices
+    JSBSim::FGMatrix33 A(1.0, 2.0, 0.0,
+                          0.0, 1.0, 3.0,
+                          1.0, 0.0, 1.0);
+    JSBSim::FGMatrix33 B(2.0, 0.0, 1.0,
+                          1.0, 1.0, 0.0,
+                          0.0, 2.0, 1.0);
+    JSBSim::FGMatrix33 C(1.0, 1.0, 1.0,
+                          0.0, 1.0, 2.0,
+                          1.0, 0.0, 1.0);
+
+    // WHEN: Computing A * (B + C) and A*B + A*C
+    JSBSim::FGMatrix33 left = A * (B + C);
+    JSBSim::FGMatrix33 right = A * B + A * C;
+
+    // THEN: Should be equal
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(left(i, j), right(i, j), 1E-10);
+  }
+
+  void testRightDistributivity() {
+    // GIVEN: Three matrices
+    JSBSim::FGMatrix33 A(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          7.0, 8.0, 9.0);
+    JSBSim::FGMatrix33 B(9.0, 8.0, 7.0,
+                          6.0, 5.0, 4.0,
+                          3.0, 2.0, 1.0);
+    JSBSim::FGMatrix33 C(1.0, 0.0, 1.0,
+                          0.0, 1.0, 0.0,
+                          1.0, 0.0, 1.0);
+
+    // WHEN: Computing (A + B) * C and A*C + B*C
+    JSBSim::FGMatrix33 left = (A + B) * C;
+    JSBSim::FGMatrix33 right = A * C + B * C;
+
+    // THEN: Should be equal
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(left(i, j), right(i, j), 1E-10);
+  }
+
+  void testScalarMultiplicationAssociativity() {
+    // GIVEN: A matrix and scalars
+    JSBSim::FGMatrix33 A(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          7.0, 8.0, 9.0);
+    double a = 2.0, b = 3.0;
+
+    // WHEN: Computing (a*b)*A and a*(b*A)
+    JSBSim::FGMatrix33 left = A * (a * b);
+    JSBSim::FGMatrix33 right = (A * b) * a;
+
+    // THEN: Should be equal
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(left(i, j), right(i, j), 1E-10);
+  }
+
+  /***************************************************************************
+   * Section: Special Transformation Matrices
+   ***************************************************************************/
+
+  void testPermutationMatrix() {
+    // GIVEN: A permutation matrix (swaps X and Y)
+    JSBSim::FGMatrix33 P(0.0, 1.0, 0.0,
+                          1.0, 0.0, 0.0,
+                          0.0, 0.0, 1.0);
+
+    // THEN: Determinant should be -1 (odd permutation)
+    TS_ASSERT_EQUALS(P.Determinant(), -1.0);
+
+    // AND: P * P = I
+    JSBSim::FGMatrix33 P2 = P * P;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(P2(i, j), (i == j ? 1.0 : 0.0), 1E-10);
+  }
+
+  void testProjectionMatrix() {
+    // GIVEN: Projection onto XY plane
+    JSBSim::FGMatrix33 proj(1.0, 0.0, 0.0,
+                             0.0, 1.0, 0.0,
+                             0.0, 0.0, 0.0);
+
+    // THEN: proj * proj = proj (idempotent)
+    JSBSim::FGMatrix33 proj2 = proj * proj;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(proj2(i, j), proj(i, j));
+
+    // AND: Determinant should be 0
+    TS_ASSERT_EQUALS(proj.Determinant(), 0.0);
+  }
+
+  void testOuterProductLikeMatrix() {
+    // GIVEN: Matrix formed like outer product (rank 1)
+    // v = [1, 2, 3], u = [1, 1, 1]
+    // M = v * u^T
+    JSBSim::FGMatrix33 M(1.0, 1.0, 1.0,
+                          2.0, 2.0, 2.0,
+                          3.0, 3.0, 3.0);
+
+    // THEN: Should have rank 1 (det = 0)
+    TS_ASSERT_DELTA(M.Determinant(), 0.0, 1E-10);
+    TS_ASSERT(!M.Invertible());
+  }
+
+  /***************************************************************************
+   * Section: Numerical Precision Tests
+   ***************************************************************************/
+
+  void testVerySmallDeterminant() {
+    // GIVEN: Matrix with very small but non-zero determinant
+    double eps = 1E-12;
+    JSBSim::FGMatrix33 m(1.0, 0.0, 0.0,
+                          0.0, 1.0, 0.0,
+                          eps, 0.0, eps);
+
+    double det = m.Determinant();
+    TS_ASSERT(fabs(det) > 0);
+    TS_ASSERT(fabs(det) < 1E-10);
+  }
+
+  void testMatrixSubtractionToZero() {
+    // GIVEN: A matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          7.0, 8.0, 9.0);
+
+    // WHEN: Subtracting from itself
+    JSBSim::FGMatrix33 zero = m - m;
+
+    // THEN: Should be zero matrix
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(zero(i, j), 0.0);
+  }
+
+  void testMultiplyByZeroScalar() {
+    // GIVEN: A matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          7.0, 8.0, 9.0);
+
+    // WHEN: Multiplying by zero
+    JSBSim::FGMatrix33 result = m * 0.0;
+
+    // THEN: Should be zero matrix
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(result(i, j), 0.0);
+  }
+
+  /***************************************************************************
+   * Section: Inertia Tensor Operations
+   ***************************************************************************/
+
+  void testSymmetricInertiaMatrix() {
+    // GIVEN: A symmetric positive definite inertia tensor
+    JSBSim::FGMatrix33 I(100.0, -20.0, -10.0,
+                          -20.0, 200.0, -30.0,
+                          -10.0, -30.0, 150.0);
+
+    // THEN: Should be symmetric
+    TS_ASSERT_EQUALS(I(1, 2), I(2, 1));
+    TS_ASSERT_EQUALS(I(1, 3), I(3, 1));
+    TS_ASSERT_EQUALS(I(2, 3), I(3, 2));
+
+    // AND: Should be invertible (positive definite)
+    TS_ASSERT(I.Invertible());
+    double det = I.Determinant();
+    TS_ASSERT(det > 0);
+
+    // Inverse should also be symmetric
+    JSBSim::FGMatrix33 Iinv = I.Inverse();
+    TS_ASSERT_DELTA(Iinv(1, 2), Iinv(2, 1), 1E-10);
+    TS_ASSERT_DELTA(Iinv(1, 3), Iinv(3, 1), 1E-10);
+    TS_ASSERT_DELTA(Iinv(2, 3), Iinv(3, 2), 1E-10);
+  }
+
+  void testDiagonalInertiaMatrix() {
+    // GIVEN: Diagonal inertia tensor (principal axes aligned)
+    JSBSim::FGMatrix33 I(1000.0, 0.0, 0.0,
+                          0.0, 2000.0, 0.0,
+                          0.0, 0.0, 1500.0);
+
+    // THEN: Inverse should have reciprocals on diagonal
+    JSBSim::FGMatrix33 Iinv = I.Inverse();
+    TS_ASSERT_DELTA(Iinv(1, 1), 1.0/1000.0, 1E-15);
+    TS_ASSERT_DELTA(Iinv(2, 2), 1.0/2000.0, 1E-15);
+    TS_ASSERT_DELTA(Iinv(3, 3), 1.0/1500.0, 1E-15);
+  }
+
+  /***************************************************************************
+   * Section: Combined Transformation Tests
+   ***************************************************************************/
+
+  void testRotationThenScaling() {
+    // GIVEN: Rotation then scaling
+    double angle = M_PI / 6.0;
+    JSBSim::FGMatrix33 R(cos(angle), sin(angle), 0.0,
+                          -sin(angle), cos(angle), 0.0,
+                          0.0, 0.0, 1.0);
+    JSBSim::FGMatrix33 S(2.0, 0.0, 0.0,
+                          0.0, 3.0, 0.0,
+                          0.0, 0.0, 1.0);
+
+    // WHEN: Composing transformations
+    JSBSim::FGMatrix33 RS = R * S;
+    JSBSim::FGMatrix33 SR = S * R;
+
+    // THEN: det(RS) = det(R) * det(S) = 1 * 6 = 6
+    TS_ASSERT_DELTA(RS.Determinant(), 6.0, 1E-10);
+    TS_ASSERT_DELTA(SR.Determinant(), 6.0, 1E-10);
+
+    // But the transformations are different
+    bool differ = false;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        if (fabs(RS(i, j) - SR(i, j)) > 1E-10)
+          differ = true;
+    TS_ASSERT(differ);
+  }
+
+  void testMultipleRotationsInverse() {
+    // GIVEN: Three successive rotations
+    double a1 = 0.3, a2 = 0.5, a3 = 0.7;
+    JSBSim::FGMatrix33 R1(cos(a1), sin(a1), 0.0,
+                           -sin(a1), cos(a1), 0.0,
+                           0.0, 0.0, 1.0);
+    JSBSim::FGMatrix33 R2(1.0, 0.0, 0.0,
+                           0.0, cos(a2), sin(a2),
+                           0.0, -sin(a2), cos(a2));
+    JSBSim::FGMatrix33 R3(cos(a3), 0.0, -sin(a3),
+                           0.0, 1.0, 0.0,
+                           sin(a3), 0.0, cos(a3));
+
+    JSBSim::FGMatrix33 R = R1 * R2 * R3;
+
+    // THEN: R^-1 = R3^T * R2^T * R1^T
+    JSBSim::FGMatrix33 Rinv = R.Inverse();
+    JSBSim::FGMatrix33 Rinv_expected = R3.Transposed() * R2.Transposed() * R1.Transposed();
+
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(Rinv(i, j), Rinv_expected(i, j), 1E-10);
+  }
+
+  /***************************************************************************
+   * Section: Stress Tests
+   ***************************************************************************/
+
+  void testManyMatrixMultiplications() {
+    // GIVEN: A rotation matrix
+    double angle = 0.1;
+    JSBSim::FGMatrix33 R(cos(angle), sin(angle), 0.0,
+                          -sin(angle), cos(angle), 0.0,
+                          0.0, 0.0, 1.0);
+
+    // WHEN: Multiplying many times
+    JSBSim::FGMatrix33 result = R;
+    for (int i = 0; i < 100; i++) {
+      result = result * R;
+    }
+
+    // THEN: Should still be orthogonal
+    TS_ASSERT_DELTA(result.Determinant(), 1.0, 1E-8);
+  }
+
+  void testManyTransposes() {
+    // GIVEN: A matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          7.0, 8.0, 9.0);
+
+    // WHEN: Transposing many times (should alternate)
+    JSBSim::FGMatrix33 result = m;
+    for (int i = 0; i < 50; i++) {
+      result.T();
+      result.T();  // Two transposes = identity
+    }
+
+    // THEN: Should equal original
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(result(i, j), m(i, j));
+  }
+
+  void testManyInverses() {
+    // GIVEN: An invertible matrix
+    JSBSim::FGMatrix33 m(2.0, 1.0, 0.0,
+                          1.0, 3.0, 1.0,
+                          0.0, 1.0, 2.0);
+
+    // WHEN: Taking inverse twice (should return to original)
+    JSBSim::FGMatrix33 minv = m.Inverse();
+    JSBSim::FGMatrix33 minvinv = minv.Inverse();
+
+    // THEN: Should equal original
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(minvinv(i, j), m(i, j), 1E-10);
+  }
+
+  void testCompoundAssignmentOperators() {
+    // GIVEN: Initial matrix
+    JSBSim::FGMatrix33 m(1.0, 2.0, 3.0,
+                          4.0, 5.0, 6.0,
+                          7.0, 8.0, 9.0);
+
+    // Test *= with scalar
+    JSBSim::FGMatrix33 m2 = m;
+    m2 *= 2.0;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(m2(i, j), m(i, j) * 2.0);
+
+    // Test /= with scalar
+    m2 /= 2.0;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(m2(i, j), m(i, j), 1E-10);
+
+    // Test += with matrix
+    JSBSim::FGMatrix33 m3 = m;
+    m3 += m;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_EQUALS(m3(i, j), m(i, j) * 2.0);
+
+    // Test -= with matrix
+    m3 -= m;
+    for (int i = 1; i <= 3; i++)
+      for (int j = 1; j <= 3; j++)
+        TS_ASSERT_DELTA(m3(i, j), m(i, j), 1E-10);
+  }
 };

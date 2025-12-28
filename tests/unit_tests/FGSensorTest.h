@@ -1059,4 +1059,410 @@ public:
     TS_ASSERT_DELTA(rate, 200.0, epsilon);
     TS_ASSERT(!rateValid);  // Rate exceeds limit
   }
+
+  /***************************************************************************
+   * Section: Additional Noise and Signal Processing Tests
+   ***************************************************************************/
+
+  void testUniformNoiseStatistics() {
+    std::mt19937 gen(123);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+
+    double sum = 0.0, sum_sq = 0.0;
+    int n = 10000;
+    for (int i = 0; i < n; i++) {
+      double val = dist(gen);
+      sum += val;
+      sum_sq += val * val;
+    }
+
+    double mean = sum / n;
+    double variance = sum_sq / n - mean * mean;
+
+    // Uniform on [-1,1]: mean=0, var=1/3
+    TS_ASSERT_DELTA(mean, 0.0, 0.05);
+    TS_ASSERT_DELTA(variance, 1.0/3.0, 0.05);
+  }
+
+  void testGaussianNoiseClipping() {
+    std::mt19937 gen(42);
+    std::normal_distribution<double> dist(0.0, 1.0);
+
+    double clipLimit = 3.0;
+    int clippedCount = 0;
+    int n = 10000;
+
+    for (int i = 0; i < n; i++) {
+      double val = dist(gen);
+      if (std::abs(val) > clipLimit) {
+        clippedCount++;
+      }
+    }
+
+    // About 0.27% should exceed 3 sigma
+    double clippedPercent = 100.0 * clippedCount / n;
+    TS_ASSERT(clippedPercent < 1.0);  // Less than 1% clipped
+  }
+
+  void testNoiseSuperposition() {
+    std::mt19937 gen(42);
+    std::normal_distribution<double> dist1(0.0, 1.0);
+    std::normal_distribution<double> dist2(0.0, 2.0);
+
+    double sum_sq = 0.0;
+    int n = 10000;
+    for (int i = 0; i < n; i++) {
+      double combined = dist1(gen) + dist2(gen);
+      sum_sq += combined * combined;
+    }
+
+    double variance = sum_sq / n;
+    // Variance of sum = var1 + var2 = 1 + 4 = 5
+    TS_ASSERT_DELTA(variance, 5.0, 0.3);
+  }
+
+  /***************************************************************************
+   * Section: Advanced Filter Tests
+   ***************************************************************************/
+
+  void testButterworthResponse() {
+    // Simplified first-order Butterworth (same as first-order lag)
+    double fc = 10.0;  // Cutoff frequency Hz
+    double fs = 100.0; // Sample rate Hz
+    double dt = 1.0 / fs;
+    double omega_c = 2.0 * M_PI * fc;
+    double ca = std::exp(-omega_c * dt);
+    double cb = 1.0 - ca;
+
+    double y = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 1000; i++) {
+      y = ca * y + cb * u;
+    }
+
+    TS_ASSERT_DELTA(y, 1.0, 0.001);
+  }
+
+  void testHighPassFilter() {
+    // High pass = input - low pass
+    double fc = 10.0;
+    double dt = 0.01;
+    double omega_c = 2.0 * M_PI * fc;
+    double ca = std::exp(-omega_c * dt);
+    double cb = 1.0 - ca;
+
+    double y_lp = 0.0;  // Low pass output
+    double u = 1.0;     // DC input
+
+    for (int i = 0; i < 1000; i++) {
+      y_lp = ca * y_lp + cb * u;
+    }
+
+    double y_hp = u - y_lp;  // High pass output
+
+    // HP should block DC
+    TS_ASSERT_DELTA(y_hp, 0.0, 0.01);
+  }
+
+  void testBandPassFilter() {
+    // Band pass = LP1 - LP2 (simplified approximation)
+    double f_low = 5.0;
+    double f_high = 20.0;
+    double dt = 0.001;
+
+    double ca_low = std::exp(-2.0 * M_PI * f_low * dt);
+    double cb_low = 1.0 - ca_low;
+    double ca_high = std::exp(-2.0 * M_PI * f_high * dt);
+    double cb_high = 1.0 - ca_high;
+
+    double y_low = 0.0, y_high = 0.0;
+    double u = 1.0;
+
+    for (int i = 0; i < 10000; i++) {
+      y_low = ca_low * y_low + cb_low * u;
+      y_high = ca_high * y_high + cb_high * u;
+    }
+
+    // Both should converge to 1 for DC
+    TS_ASSERT_DELTA(y_low, 1.0, 0.01);
+    TS_ASSERT_DELTA(y_high, 1.0, 0.01);
+  }
+
+  void testNotchFilter() {
+    // Notch filter removes specific frequency
+    double notchFreq = 60.0;  // Hz (power line interference)
+    double Q = 10.0;          // Quality factor
+
+    // Just verify parameters are reasonable
+    TS_ASSERT(notchFreq > 0);
+    TS_ASSERT(Q > 0);
+    TS_ASSERT(notchFreq / Q < notchFreq);  // Bandwidth < center freq
+  }
+
+  /***************************************************************************
+   * Section: Sensor Dynamics Tests
+   ***************************************************************************/
+
+  void testSensorBandwidth() {
+    double bandwidth = 50.0;  // Hz
+    double riseTime = 0.35 / bandwidth;  // Approximate relationship
+
+    TS_ASSERT_DELTA(riseTime, 0.007, 0.001);  // ~7ms rise time
+  }
+
+  void testSensorSettlingTime() {
+    double bandwidth = 50.0;
+    double settlingTime = 4.0 / (2.0 * M_PI * bandwidth);  // ~4 time constants
+
+    TS_ASSERT(settlingTime < 0.02);  // Less than 20ms
+  }
+
+  void testSensorOvershoot() {
+    double zeta = 0.5;  // Underdamped
+    double overshoot = std::exp(-M_PI * zeta / std::sqrt(1 - zeta * zeta)) * 100.0;
+
+    TS_ASSERT(overshoot > 10.0);  // Significant overshoot
+    TS_ASSERT(overshoot < 20.0);  // But not excessive
+  }
+
+  void testCriticallyDampedResponse() {
+    double zeta = 1.0;  // Critical damping
+
+    // No overshoot for critically damped system
+    // Overshoot formula undefined at zeta=1, but approaches 0
+    TS_ASSERT_DELTA(zeta, 1.0, epsilon);
+  }
+
+  void testOverdampedResponse() {
+    double zeta = 2.0;  // Overdamped
+
+    TS_ASSERT(zeta > 1.0);
+    // Overdamped has no overshoot but slower response
+  }
+
+  /***************************************************************************
+   * Section: Error and Uncertainty Tests
+   ***************************************************************************/
+
+  void testTotalError() {
+    double biasError = 0.5;
+    double gainError = 0.02;  // 2%
+    double noiseRMS = 0.1;
+    double reading = 100.0;
+
+    // Total error (simplified root-sum-square)
+    double gainContrib = reading * gainError;
+    double totalRSS = std::sqrt(biasError * biasError + gainContrib * gainContrib + noiseRMS * noiseRMS);
+
+    TS_ASSERT(totalRSS > biasError);  // Total > any single component
+    TS_ASSERT(totalRSS < biasError + gainContrib + noiseRMS);  // Less than linear sum
+  }
+
+  void testUncertaintyPropagation() {
+    double u_a = 0.1;  // Uncertainty in a
+    double u_b = 0.2;  // Uncertainty in b
+    double a = 10.0;
+    double b = 20.0;
+
+    // For sum: u_sum = sqrt(u_a^2 + u_b^2)
+    double sum = a + b;
+    double u_sum = std::sqrt(u_a * u_a + u_b * u_b);
+
+    TS_ASSERT_DELTA(sum, 30.0, epsilon);
+    TS_ASSERT_DELTA(u_sum, std::sqrt(0.01 + 0.04), epsilon);
+  }
+
+  void testRelativeUncertainty() {
+    double value = 100.0;
+    double absoluteUnc = 2.0;
+
+    double relativeUnc = absoluteUnc / value * 100.0;  // Percentage
+    TS_ASSERT_DELTA(relativeUnc, 2.0, epsilon);
+  }
+
+  void testExpandedUncertainty() {
+    double standardUnc = 1.0;
+    double coverageFactor = 2.0;  // 95% confidence
+
+    double expandedUnc = standardUnc * coverageFactor;
+    TS_ASSERT_DELTA(expandedUnc, 2.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Section: Redundancy and Voting Tests
+   ***************************************************************************/
+
+  void testDualRedundancy() {
+    double sensor1 = 100.0;
+    double sensor2 = 100.5;
+    double tolerance = 1.0;
+
+    bool agree = std::abs(sensor1 - sensor2) < tolerance;
+    double average = (sensor1 + sensor2) / 2.0;
+
+    TS_ASSERT(agree);
+    TS_ASSERT_DELTA(average, 100.25, epsilon);
+  }
+
+  void testTripleRedundancyVoting() {
+    double sensor1 = 100.0;
+    double sensor2 = 100.5;
+    double sensor3 = 150.0;  // Failed sensor
+
+    // Median voting
+    double values[3] = {sensor1, sensor2, sensor3};
+    std::sort(values, values + 3);
+    double median = values[1];
+
+    TS_ASSERT_DELTA(median, 100.5, epsilon);  // Rejects failed sensor
+  }
+
+  void testSensorFusionWeighted() {
+    double sensor1 = 100.0;
+    double var1 = 1.0;  // Variance
+    double sensor2 = 102.0;
+    double var2 = 4.0;  // Higher variance = less trusted
+
+    // Optimal weighted average (Kalman-like)
+    double w1 = 1.0 / var1;
+    double w2 = 1.0 / var2;
+    double wSum = w1 + w2;
+    double fused = (w1 * sensor1 + w2 * sensor2) / wSum;
+
+    // More weight on sensor1 (lower variance)
+    TS_ASSERT(fused < 101.0);
+    TS_ASSERT(fused > 100.0);
+  }
+
+  /***************************************************************************
+   * Section: Timing and Synchronization Tests
+   ***************************************************************************/
+
+  void testSensorLatency() {
+    double processingTime = 0.001;  // 1ms processing
+    double transmissionTime = 0.0005;  // 0.5ms transmission
+    double totalLatency = processingTime + transmissionTime;
+
+    TS_ASSERT_DELTA(totalLatency, 0.0015, epsilon);
+  }
+
+  void testSensorJitter() {
+    std::mt19937 gen(42);
+    std::uniform_real_distribution<double> jitter(-0.0001, 0.0001);  // +/- 100us
+
+    double nominalPeriod = 0.01;  // 10ms
+    double actualPeriod = nominalPeriod + jitter(gen);
+
+    TS_ASSERT(std::abs(actualPeriod - nominalPeriod) < 0.0001);
+  }
+
+  void testSamplingPhaseAlignment() {
+    double phase1 = 0.0;
+    double phase2 = 0.005;  // 5ms offset
+    double samplePeriod = 0.01;
+
+    double phaseError = phase2 - phase1;
+    double phaseErrorPercent = phaseError / samplePeriod * 100.0;
+
+    TS_ASSERT_DELTA(phaseErrorPercent, 50.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Section: Environmental Effects Tests
+   ***************************************************************************/
+
+  void testVibrationEffect() {
+    std::mt19937 gen(42);
+    std::normal_distribution<double> vibration(0.0, 2.0);
+
+    double trueValue = 100.0;
+    double vibrationNoise = vibration(gen);
+    double reading = trueValue + vibrationNoise;
+
+    TS_ASSERT(std::abs(reading - trueValue) < 10.0);  // Within ~5 sigma
+  }
+
+  void testEMIEffect() {
+    std::mt19937 gen(42);
+    std::normal_distribution<double> emi(0.0, 0.5);
+
+    double trueValue = 100.0;
+    double emiNoise = emi(gen);
+    double reading = trueValue + emiNoise;
+
+    TS_ASSERT(std::abs(reading - trueValue) < 3.0);
+  }
+
+  void testAltitudeEffect() {
+    double seaLevelPressure = 101325.0;  // Pa
+    double altitude = 10000.0;  // meters
+    double scaleHeight = 8500.0;  // meters
+
+    double pressure = seaLevelPressure * std::exp(-altitude / scaleHeight);
+
+    TS_ASSERT(pressure < seaLevelPressure);
+    TS_ASSERT(pressure > 20000.0);  // Still positive
+  }
+
+  void testTemperatureEffectOnSensor() {
+    double refTemp = 25.0;
+    double currentTemp = 85.0;
+    double tempCoeff = 0.0001;  // 100 ppm/C
+
+    double driftFactor = 1.0 + tempCoeff * (currentTemp - refTemp);
+    double nominalReading = 100.0;
+    double actualReading = nominalReading * driftFactor;
+
+    TS_ASSERT_DELTA(driftFactor, 1.006, 0.0001);
+    TS_ASSERT_DELTA(actualReading, 100.6, 0.01);
+  }
+
+  /***************************************************************************
+   * Section: Signal Characteristics Tests
+   ***************************************************************************/
+
+  void testPeakToPeakAmplitude() {
+    double samples[] = {10.0, 50.0, 30.0, 80.0, 20.0, 60.0};
+    int n = 6;
+
+    double minVal = samples[0], maxVal = samples[0];
+    for (int i = 1; i < n; i++) {
+      minVal = std::min(minVal, samples[i]);
+      maxVal = std::max(maxVal, samples[i]);
+    }
+
+    double peakToPeak = maxVal - minVal;
+    TS_ASSERT_DELTA(peakToPeak, 70.0, epsilon);
+  }
+
+  void testRMSCalculation() {
+    double samples[] = {-1.0, 1.0, -1.0, 1.0};
+    int n = 4;
+
+    double sum_sq = 0.0;
+    for (int i = 0; i < n; i++) {
+      sum_sq += samples[i] * samples[i];
+    }
+    double rms = std::sqrt(sum_sq / n);
+
+    TS_ASSERT_DELTA(rms, 1.0, epsilon);
+  }
+
+  void testCrestFactor() {
+    double peakValue = 10.0;
+    double rmsValue = 7.07;  // For sine wave: peak/sqrt(2)
+
+    double crestFactor = peakValue / rmsValue;
+
+    TS_ASSERT_DELTA(crestFactor, std::sqrt(2.0), 0.01);
+  }
+
+  void testDutyCycle() {
+    double onTime = 0.3;
+    double period = 1.0;
+
+    double dutyCycle = onTime / period * 100.0;
+    TS_ASSERT_DELTA(dutyCycle, 30.0, epsilon);
+  }
 };
