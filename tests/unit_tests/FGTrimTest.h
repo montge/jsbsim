@@ -943,4 +943,317 @@ public:
       TS_ASSERT_DELTA(ratio, convergenceRate, 0.01);
     }
   }
+
+  /***************************************************************************
+   * Extended Trim Tests (76-100)
+   ***************************************************************************/
+
+  // Test 76: Crosswind takeoff trim
+  void testCrosswindTakeoffTrim() {
+    double crosswind = 15.0;  // knots
+    double groundSpeed = 60.0;  // knots
+    double crabAngle = std::atan(crosswind / groundSpeed) * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(crabAngle, 14.0, 1.0);  // degrees
+  }
+
+  // Test 77: Sideslip from crosswind
+  void testSideslipFromCrosswind() {
+    double windSpeed = 20.0;  // knots
+    double windAngle = 30.0 * DEG_TO_RAD;  // From the left
+    double TAS = 150.0;  // knots
+
+    double crossComponent = windSpeed * std::sin(windAngle);
+    double beta = std::atan(crossComponent / TAS) * RAD_TO_DEG;
+
+    TS_ASSERT(beta > 0);  // Positive sideslip from left crosswind
+    TS_ASSERT(beta < 10.0);
+  }
+
+  // Test 78: Minimum control speed ground (VMCG)
+  void testVMCGConcept() {
+    double maxRudder = 25.0;  // degrees
+    double engineThrust = 5000.0;  // lbs
+    double armY = 6.0;  // ft
+    double rudderEffectiveness = 2000.0;  // ft-lbs per degree
+
+    double yawMoment = engineThrust * armY;
+    double requiredRudder = yawMoment / rudderEffectiveness;
+
+    bool canControl = requiredRudder <= maxRudder;
+    TS_ASSERT(canControl);
+  }
+
+  // Test 79: Climb gradient at takeoff
+  void testTakeoffClimbGradient() {
+    double thrust = 8000.0;  // lbs
+    double drag = 1500.0;    // lbs
+    double weight = 15000.0; // lbs
+
+    double gradient = (thrust - drag) / weight * 100.0;  // percent
+    TS_ASSERT(gradient > 3.0);  // FAR 25 requires > 2.4% one engine
+  }
+
+  // Test 80: Approach path angle
+  void testApproachPathAngle() {
+    double glideslope = 3.0 * DEG_TO_RAD;  // ILS standard
+    double groundSpeed = 130.0;  // knots
+    double groundSpeedFPS = groundSpeed * 1.688;
+
+    double descentRate = groundSpeedFPS * std::sin(glideslope);
+    double descentRateFPM = descentRate * 60.0;
+
+    TS_ASSERT_DELTA(descentRateFPM, 690.0, 50.0);  // ~700 fpm
+  }
+
+  // Test 81: Flare pitch attitude
+  void testFlarePitchAttitude() {
+    double approachPitch = 2.0;  // degrees
+    double flarePitch = 6.0;     // degrees
+
+    double pitchChange = flarePitch - approachPitch;
+    TS_ASSERT_DELTA(pitchChange, 4.0, epsilon);
+  }
+
+  // Test 82: Stick force per g
+  void testStickForcePerG() {
+    double stickForce = 30.0;  // lbs for 2g
+    double loadFactor = 2.0;
+
+    double forcePerG = stickForce / (loadFactor - 1.0);
+    TS_ASSERT_DELTA(forcePerG, 30.0, 1.0);  // lbs per g
+
+    // FAR 23 requires 20-100 lbs/g for normal category
+    TS_ASSERT(forcePerG >= 20.0);
+    TS_ASSERT(forcePerG <= 100.0);
+  }
+
+  // Test 83: Maneuvering speed
+  void testManeuveringSpeed() {
+    double Vs = 60.0;   // Stall speed (knots)
+    double nLimit = 3.8;  // Limit load factor
+
+    double Va = Vs * std::sqrt(nLimit);
+    TS_ASSERT_DELTA(Va, 117.0, 2.0);  // knots
+  }
+
+  // Test 84: Maximum bank angle for level turn at given speed
+  void testMaxBankForLevelTurn() {
+    double nLimit = 3.8;  // Limit load factor
+    double phi = std::acos(1.0 / nLimit) * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(phi, 74.7, 1.0);  // degrees
+  }
+
+  // Test 85: Minimum turn radius at limit load
+  void testMinTurnRadius() {
+    double V = 200.0;  // ft/s
+    double nLimit = 3.8;
+    double phi = std::acos(1.0 / nLimit);
+
+    double R = V * V / (G * std::tan(phi));
+    TS_ASSERT(R < 400.0);  // ft, tight turn at limit load
+  }
+
+  // Test 86: Spiral dive tendency
+  void testSpiralDiveTendency() {
+    double Clb = -0.1;   // Roll due to sideslip (stable)
+    double Cnb = 0.1;    // Yaw due to sideslip (stable)
+    double Clr = 0.2;    // Roll due to yaw rate
+    double Cnr = -0.1;   // Yaw damping
+
+    // Spiral stability: Clb*Cnr - Cnb*Clr > 0 for stability
+    double spiralParameter = Clb * Cnr - Cnb * Clr;
+    TS_ASSERT(spiralParameter < 0);  // Slightly unstable is common
+  }
+
+  // Test 87: Dutch roll frequency
+  void testDutchRollFrequency() {
+    double Cnb = 0.1;    // Weathercock stability
+    double Iyy = 10000.0;  // Yaw inertia (slug-ft^2)
+    double S = 200.0;    // Wing area
+    double b = 40.0;     // Wingspan
+    double rho = 0.002377;
+    double V = 200.0;
+
+    double qS = 0.5 * rho * V * V * S;
+    double omega = std::sqrt(Cnb * qS * b / Iyy);
+    double freq = omega / (2.0 * M_PI);
+
+    TS_ASSERT(freq > 0.01);  // Hz, small aircraft typically 0.02-1.0 Hz
+  }
+
+  // Test 88: Short period damping
+  void testShortPeriodDamping() {
+    double Cmq = -15.0;  // Pitch damping
+    double Cmalpha = -0.5;
+
+    // Damping ratio proportional to -Cmq / sqrt(-Cmalpha)
+    double dampingFactor = -Cmq / std::sqrt(-Cmalpha);
+    TS_ASSERT(dampingFactor > 10.0);  // Well damped
+  }
+
+  // Test 89: Phugoid period
+  void testPhugoidPeriod() {
+    double V = 200.0;  // ft/s
+
+    // Phugoid period ≈ π*V/(g*sqrt(2))
+    double T = M_PI * V / (G * std::sqrt(2.0));
+    TS_ASSERT_DELTA(T, 13.8, 1.0);  // seconds
+  }
+
+  // Test 90: Roll mode time constant
+  void testRollModeTimeConstant() {
+    double Clp = -0.4;   // Roll damping
+    double Ixx = 5000.0; // Roll inertia
+    double S = 200.0;
+    double b = 40.0;
+    double rho = 0.002377;
+    double V = 200.0;
+
+    double qSb = 0.5 * rho * V * V * S * b;
+    double tau = -Ixx / (Clp * qSb / (2.0 * V));
+
+    TS_ASSERT(tau < 15.0);  // Typical roll time constant range
+  }
+
+  // Test 91: Rudder required for coordinated turn
+  void testRudderForCoordinatedTurn() {
+    double Cnda = 0.01;   // Adverse yaw from aileron
+    double Cndr = -0.08;  // Rudder effectiveness
+    double aileronDeg = 10.0;
+
+    double yawFromAileron = Cnda * aileronDeg;
+    double rudderRequired = -yawFromAileron / Cndr * RAD_TO_DEG;
+
+    TS_ASSERT(rudderRequired > 0);  // Right rudder for right turn
+  }
+
+  // Test 92: Minimum unstick speed
+  void testMinimumUnstickSpeed() {
+    double weight = 10000.0;
+    double S = 200.0;
+    double CLmax = 1.8;
+    double rho = 0.002377;
+
+    double Vmu = std::sqrt(2.0 * weight / (rho * S * CLmax));
+    TS_ASSERT_DELTA(Vmu, 153.0, 5.0);  // ft/s
+  }
+
+  // Test 93: Rotation speed
+  void testRotationSpeed() {
+    double Vmu = 136.0;  // ft/s
+    double Vr = 1.05 * Vmu;  // 5% above Vmu
+
+    TS_ASSERT_DELTA(Vr, 143.0, 2.0);  // ft/s
+  }
+
+  // Test 94: V2 climb speed
+  void testV2ClimbSpeed() {
+    double Vs = 130.0;  // ft/s stall speed
+    double V2 = 1.2 * Vs;  // 20% above stall
+
+    TS_ASSERT_DELTA(V2, 156.0, 1.0);  // ft/s
+  }
+
+  // Test 95: Best angle of climb speed (Vx)
+  void testBestAngleClimbSpeed() {
+    double Vs = 100.0;   // ft/s
+    double Vx = 1.3 * Vs;  // Typical Vx is about 1.3 Vs
+
+    TS_ASSERT_DELTA(Vx, 130.0, 5.0);  // ft/s
+  }
+
+  // Test 96: Best rate of climb speed (Vy)
+  void testBestRateClimbSpeed() {
+    double Vx = 130.0;  // ft/s
+    double Vy = 1.15 * Vx;  // Vy typically higher than Vx
+
+    TS_ASSERT(Vy > Vx);
+    TS_ASSERT_DELTA(Vy, 150.0, 10.0);  // ft/s
+  }
+
+  // Test 97: Holding speed (minimum fuel flow)
+  void testHoldingSpeed() {
+    double weight = 10000.0;
+    double S = 200.0;
+    double rho = 0.002377;
+    double CD0 = 0.025;
+    double K = 0.05;  // Induced drag factor
+
+    // Minimum drag speed: V = sqrt((2*W)/(rho*S)) * (K/(3*CD0))^0.25
+    double Vmd = std::sqrt(2.0 * weight / (rho * S)) * std::pow(K / (3.0 * CD0), 0.25);
+
+    TS_ASSERT(Vmd > 150.0);  // ft/s
+    TS_ASSERT(Vmd < 250.0);
+  }
+
+  // Test 98: Maximum range speed
+  void testMaxRangeSpeed() {
+    double Vmd = 200.0;  // Minimum drag speed
+    double Vmr = Vmd * std::pow(3.0, 0.25);  // 1.316 * Vmd
+
+    TS_ASSERT_DELTA(Vmr, 263.0, 5.0);  // ft/s
+  }
+
+  // Test 99: Maximum endurance speed
+  void testMaxEnduranceSpeed() {
+    double Vmd = 200.0;  // Minimum drag speed
+    double Vme = Vmd / std::pow(3.0, 0.25);  // 0.76 * Vmd
+
+    TS_ASSERT_DELTA(Vme, 152.0, 5.0);  // ft/s
+  }
+
+  // Test 100: Complete trim state verification
+  void testCompleteTrimState() {
+    // Aircraft state
+    double weight = 10000.0;
+    double S = 200.0;
+    double rho = 0.002377;
+    double V = 200.0;
+
+    // Aerodynamic parameters
+    double CLalpha = 5.7;
+    double CD0 = 0.025;
+    double K = 0.05;
+    double Cmalpha = -0.5;
+    double Cmde = -1.5;
+
+    // Calculate trim CL
+    double q = 0.5 * rho * V * V;
+    double CL = weight / (q * S);
+
+    // Calculate alpha from CL
+    double CL0 = 0.2;
+    double alpha = (CL - CL0) / CLalpha;
+    double alphaDeg = alpha * RAD_TO_DEG;
+
+    // Calculate CD and drag
+    double CD = CD0 + K * CL * CL;
+    double drag = q * S * CD;
+
+    // Calculate thrust required
+    double thrustRequired = drag;
+
+    // Calculate elevator for trim
+    double Cm0 = 0.05;
+    double de = -(Cm0 + Cmalpha * alpha) / Cmde;
+    double deDeg = de * RAD_TO_DEG;
+
+    // Verify all trim conditions
+    TS_ASSERT(CL > 0.5);
+    TS_ASSERT(CL < 2.0);
+    TS_ASSERT(alphaDeg > 0);
+    TS_ASSERT(alphaDeg < 15.0);
+    TS_ASSERT(thrustRequired > 0);
+    TS_ASSERT(std::abs(deDeg) < 20.0);
+
+    // Verify lift equals weight
+    double lift = q * S * CL;
+    TS_ASSERT_DELTA(lift, weight, 1.0);
+
+    // Verify static stability
+    TS_ASSERT(Cmalpha < 0);
+    TS_ASSERT(Cmde < 0);
+  }
 };

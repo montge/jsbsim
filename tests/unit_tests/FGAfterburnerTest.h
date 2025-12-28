@@ -1178,4 +1178,272 @@ public:
     bool canEngage = currentSpeed >= minSpeed;
     TS_ASSERT(canEngage);
   }
+
+  /***************************************************************************
+   * Extended Afterburner Tests (77-100)
+   ***************************************************************************/
+
+  // Test 77: AB fuel manifold pressure
+  void testABFuelManifoldPressure() {
+    double pumpPressure = 800.0;  // psi
+    double lineDrop = 50.0;       // psi
+    double manifoldPressure = pumpPressure - lineDrop;
+
+    TS_ASSERT_DELTA(manifoldPressure, 750.0, 0.1);
+    TS_ASSERT(manifoldPressure > 500.0);  // Minimum for atomization
+  }
+
+  // Test 78: AB nozzle exit velocity ratio
+  void testNozzleExitVelocityRatio() {
+    double V_dry = 1500.0;   // ft/s
+    double V_wet = 2200.0;   // ft/s
+
+    double velRatio = V_wet / V_dry;
+    TS_ASSERT_DELTA(velRatio, 1.467, 0.01);
+    TS_ASSERT(velRatio > 1.3);
+  }
+
+  // Test 79: AB combustion chamber length
+  void testCombustionChamberLength() {
+    double residenceTime = 0.01;  // seconds
+    double gasVelocity = 800.0;   // ft/s
+
+    double length = residenceTime * gasVelocity;
+    TS_ASSERT_DELTA(length, 8.0, 0.1);  // feet
+  }
+
+  // Test 80: AB flame stability parameter
+  void testFlameStabilityParameter() {
+    double velocity = 600.0;      // ft/s
+    double flameSpeed = 100.0;    // ft/s
+    double stabRatio = velocity / flameSpeed;
+
+    TS_ASSERT(stabRatio < 10.0);  // Flame stable if ratio < 10
+  }
+
+  // Test 81: AB plume length estimation
+  void testPlumeLengthEstimation() {
+    double exitDiameter = 2.0;    // ft
+    double exitMach = 1.5;
+
+    double plumeLength = exitDiameter * (3.0 + 2.0 * exitMach);
+    TS_ASSERT_DELTA(plumeLength, 12.0, 0.1);
+  }
+
+  // Test 82: AB fuel pump power requirement
+  void testFuelPumpPower() {
+    double fuelFlow = 40000.0 / 3600.0;  // lbs/s
+    double pressureRise = 800.0;          // psi
+    double efficiency = 0.75;
+
+    double power = (fuelFlow * pressureRise * 144.0) / (550.0 * efficiency);
+    TS_ASSERT(power > 0);
+    TS_ASSERT(power < 5000);  // Reasonable HP range for high-flow pump
+  }
+
+  // Test 83: AB nozzle divergence angle
+  void testNozzleDivergenceAngle() {
+    double exitRadius = 1.5;   // ft
+    double throatRadius = 1.0; // ft
+    double length = 2.0;       // ft
+
+    double angle = std::atan((exitRadius - throatRadius) / length) * 180.0 / M_PI;
+    TS_ASSERT_DELTA(angle, 14.04, 0.1);  // degrees
+  }
+
+  // Test 84: AB cooling air requirement
+  void testCoolingAirRequirement() {
+    double T_gas = 2000.0;     // K
+    double T_wall_max = 1200.0; // K
+    double T_cooling = 700.0;   // K
+
+    double coolingEffectiveness = (T_gas - T_wall_max) / (T_gas - T_cooling);
+    TS_ASSERT_DELTA(coolingEffectiveness, 0.615, 0.01);
+  }
+
+  // Test 85: AB fuel distribution uniformity
+  void testFuelDistributionUniformity() {
+    double flows[] = {3000.0, 3100.0, 2900.0, 3050.0, 2950.0, 3000.0};
+    double sum = 0, sumSq = 0;
+    int n = 6;
+
+    for (int i = 0; i < n; i++) sum += flows[i];
+    double mean = sum / n;
+
+    for (int i = 0; i < n; i++) sumSq += (flows[i] - mean) * (flows[i] - mean);
+    double stdDev = std::sqrt(sumSq / n);
+    double cv = stdDev / mean * 100.0;  // Coefficient of variation
+
+    TS_ASSERT(cv < 5.0);  // Less than 5% variation
+  }
+
+  // Test 86: AB bypass duct mixing
+  void testBypassDuctMixing() {
+    double T_core = 1000.0;   // K
+    double T_bypass = 350.0;  // K
+    double BPR = 0.5;         // Low bypass ratio
+
+    double T_mixed = (T_core + BPR * T_bypass) / (1.0 + BPR);
+    TS_ASSERT_DELTA(T_mixed, 783.3, 1.0);
+  }
+
+  // Test 87: AB thrust coefficient variation
+  void testThrustCoefficientVariation() {
+    double Cf_ideal = 1.8;
+    double NPR = 4.0;
+    double gamma = 1.3;
+
+    double Cf_actual = Cf_ideal * (1.0 - 0.02 * (NPR - 3.0));
+    TS_ASSERT(Cf_actual > 1.7);
+    TS_ASSERT(Cf_actual < 1.9);
+  }
+
+  // Test 88: AB igniter spark rate
+  void testIgniterSparkRate() {
+    double sparkRate = 4.0;  // sparks per second
+    double minRate = 2.0;
+
+    TS_ASSERT(sparkRate >= minRate);
+    TS_ASSERT(sparkRate <= 10.0);
+  }
+
+  // Test 89: AB fuel vaporization rate
+  void testFuelVaporizationRate() {
+    double dropletDiameter = 50.0e-6;  // m
+    double T_gas = 1500.0;             // K
+    double vaporizationTime = dropletDiameter * dropletDiameter / (0.001 * T_gas);
+
+    TS_ASSERT(vaporizationTime < 0.01);  // Complete in < 10ms
+  }
+
+  // Test 90: AB nozzle area margin
+  void testNozzleAreaMargin() {
+    double A_required = 1.5;  // sq ft
+    double A_max = 1.8;       // sq ft
+    double margin = (A_max - A_required) / A_required * 100.0;
+
+    TS_ASSERT_DELTA(margin, 20.0, 0.1);
+    TS_ASSERT(margin >= 15.0);  // At least 15% margin
+  }
+
+  // Test 91: AB altitude thrust ratio
+  void testAltitudeThrustRatio() {
+    double thrust_SL = 24000.0;
+    double thrust_36k = thrust_SL * 0.30;  // ~30% at 36,000 ft
+
+    double ratio = thrust_36k / thrust_SL;
+    TS_ASSERT_DELTA(ratio, 0.30, 0.01);
+  }
+
+  // Test 92: AB supersonic operation
+  void testSupersonicOperation() {
+    double mach = 1.8;
+    double ramRatio = 1.0 + 0.2 * mach * mach;
+
+    TS_ASSERT_DELTA(ramRatio, 1.648, 0.01);
+    TS_ASSERT(ramRatio > 1.5);
+  }
+
+  // Test 93: AB transient response time
+  void testTransientResponseTime() {
+    double timeConstant = 0.3;  // seconds
+    double settlingTime = 4.0 * timeConstant;
+
+    TS_ASSERT_DELTA(settlingTime, 1.2, 0.01);
+    TS_ASSERT(settlingTime < 2.0);
+  }
+
+  // Test 94: AB fuel control accuracy
+  void testFuelControlAccuracy() {
+    double commanded = 35000.0;  // lbs/hr
+    double actual = 35350.0;     // lbs/hr
+    double error = std::abs(actual - commanded) / commanded * 100.0;
+
+    TS_ASSERT(error < 2.0);  // Within 2%
+  }
+
+  // Test 95: AB thermal expansion
+  void testThermalExpansion() {
+    double length_cold = 10.0;  // ft
+    double deltaT = 1500.0;     // K
+    double alpha = 12e-6;       // per K
+
+    double expansion = length_cold * alpha * deltaT * 12.0;  // inches
+    TS_ASSERT_DELTA(expansion, 2.16, 0.1);
+  }
+
+  // Test 96: AB material creep limit
+  void testMaterialCreepLimit() {
+    double T_operating = 1100.0;  // K
+    double T_creep_limit = 1200.0; // K
+
+    double margin = (T_creep_limit - T_operating) / T_creep_limit * 100.0;
+    TS_ASSERT(margin > 5.0);  // At least 5% margin
+  }
+
+  // Test 97: AB acoustic instability frequency
+  void testAcousticInstabilityFrequency() {
+    double length = 8.0;      // ft
+    double soundSpeed = 2000.0;  // ft/s in hot gas
+
+    double freq = soundSpeed / (2.0 * length);  // First mode
+    TS_ASSERT_DELTA(freq, 125.0, 1.0);  // Hz
+  }
+
+  // Test 98: AB fuel-air equivalence ratio
+  void testEquivalenceRatio() {
+    double FAR_actual = 0.020;
+    double FAR_stoich = 0.068;
+    double phi = FAR_actual / FAR_stoich;
+
+    TS_ASSERT_DELTA(phi, 0.294, 0.01);
+    TS_ASSERT(phi < 1.0);  // Lean operation
+  }
+
+  // Test 99: AB exit plane pressure ratio
+  void testExitPlanePressureRatio() {
+    double P_exit = 30.0;     // psia
+    double P_ambient = 14.7;  // psia
+
+    double ratio = P_exit / P_ambient;
+    TS_ASSERT_DELTA(ratio, 2.04, 0.01);
+  }
+
+  // Test 100: Complete AB system state
+  void testCompleteABSystemState() {
+    // Define AB operating point
+    double N2 = 98.5;           // percent
+    double throttle = 1.0;
+    double mach = 0.9;
+    double altitude = 20000.0;  // ft
+
+    // AB light-off conditions
+    bool canLightOff = (N2 > 97.0) && (throttle > 0.99);
+    TS_ASSERT(canLightOff);
+
+    // Thrust calculation
+    double milThrust = 15000.0;
+    double maxThrust = 24000.0;
+    double sigma = std::exp(-altitude / 27000.0);
+    double ramEffect = 1.0 + 0.1 * mach;
+
+    double thrust_dry = milThrust * sigma * ramEffect;
+    double thrust_wet = maxThrust * sigma * ramEffect;
+
+    TS_ASSERT(thrust_wet > thrust_dry);
+    TS_ASSERT(thrust_wet / thrust_dry > 1.5);
+
+    // Fuel flow
+    double TSFC_dry = 0.85;
+    double ATSFC_wet = 2.0;
+    double fuelFlow_dry = thrust_dry * TSFC_dry;
+    double fuelFlow_wet = thrust_wet * ATSFC_wet;
+
+    TS_ASSERT(fuelFlow_wet > 3.0 * fuelFlow_dry);
+
+    // Nozzle area
+    double A_dry = 1.0;
+    double A_wet = 1.7;
+    TS_ASSERT(A_wet > A_dry);
+  }
 };

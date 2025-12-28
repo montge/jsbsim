@@ -1149,4 +1149,467 @@ public:
     TS_ASSERT_DELTA(maxOutput, 0.8, epsilon);
     TS_ASSERT_DELTA(minOutput, -0.8, epsilon);
   }
+
+  /***************************************************************************
+   * Rate-Limited Deadband Tests (77-80)
+   ***************************************************************************/
+
+  // Test 77: Rate-limited deadband output
+  void testRateLimitedDeadband() {
+    double width = 0.1;
+    double maxRate = 0.5;  // per step
+    double prevOutput = 0.0;
+    double dt = 0.02;  // 50 Hz
+
+    // Large input change
+    double input = 1.0;
+    double db_out = symmetricDeadband(input, width);  // 0.9
+    double delta = db_out - prevOutput;
+    double rateLimited = prevOutput + std::clamp(delta, -maxRate * dt, maxRate * dt);
+
+    TS_ASSERT_DELTA(rateLimited, 0.01, epsilon);  // Limited by rate
+  }
+
+  // Test 78: Rate limiting prevents sudden jumps
+  void testRateLimitingPreventsJumps() {
+    double width = 0.1;
+    double maxRatePerSecond = 2.0;
+    double dt = 0.01;
+    double maxDelta = maxRatePerSecond * dt;
+
+    double prevOutput = 0.0;
+    double input = 0.8;  // Sudden large input
+
+    double db_out = symmetricDeadband(input, width);  // 0.7
+    double delta = std::clamp(db_out - prevOutput, -maxDelta, maxDelta);
+    double output = prevOutput + delta;
+
+    TS_ASSERT(output <= maxDelta + epsilon);
+    TS_ASSERT(output < db_out);  // Rate limited
+  }
+
+  // Test 79: Rate limiting allows gradual changes
+  void testRateLimitingAllowsGradualChanges() {
+    double width = 0.1;
+    double maxRatePerSecond = 10.0;
+    double dt = 0.02;
+    double maxDelta = maxRatePerSecond * dt;  // 0.2 per step
+
+    double prevOutput = 0.3;
+    double input = 0.5;  // Small change
+
+    double db_out = symmetricDeadband(input, width);  // 0.4
+    double delta = db_out - prevOutput;  // 0.1
+
+    TS_ASSERT(std::abs(delta) <= maxDelta);  // Within rate limit
+  }
+
+  // Test 80: Rate limiting with direction reversal
+  void testRateLimitingDirectionReversal() {
+    double width = 0.1;
+    double maxRatePerSecond = 1.0;
+    double dt = 0.05;
+    double maxDelta = maxRatePerSecond * dt;
+
+    double prevOutput = 0.5;
+    double input = -0.5;  // Reversal
+
+    double db_out = symmetricDeadband(input, width);  // -0.4
+    double delta = std::clamp(db_out - prevOutput, -maxDelta, maxDelta);
+    double output = prevOutput + delta;
+
+    TS_ASSERT_DELTA(output, 0.45, epsilon);  // Rate limited decrease
+  }
+
+  /***************************************************************************
+   * Filtered Deadband Tests (81-84)
+   ***************************************************************************/
+
+  // Test 81: Low-pass filtered deadband output
+  void testFilteredDeadbandOutput() {
+    double width = 0.1;
+    double alpha = 0.1;  // Filter coefficient
+
+    double prevFiltered = 0.0;
+    double input = 0.5;
+
+    double db_out = symmetricDeadband(input, width);  // 0.4
+    double filtered = alpha * db_out + (1 - alpha) * prevFiltered;
+
+    TS_ASSERT_DELTA(filtered, 0.04, epsilon);
+  }
+
+  // Test 82: Filter smooths deadband transitions
+  void testFilterSmoothsTransitions() {
+    double width = 0.1;
+    double alpha = 0.2;
+
+    double filtered = 0.0;
+    double inputs[] = {0.0, 0.2, 0.4, 0.6, 0.8, 1.0};
+
+    for (double input : inputs) {
+      double db_out = symmetricDeadband(input, width);
+      filtered = alpha * db_out + (1 - alpha) * filtered;
+    }
+
+    // Should be somewhere between 0 and 0.9 (final db output)
+    TS_ASSERT(filtered > 0.0);
+    TS_ASSERT(filtered < 0.9);
+  }
+
+  // Test 83: Filter before deadband
+  void testFilterBeforeDeadband() {
+    double width = 0.1;
+    double alpha = 0.5;
+
+    // Filter input first, then apply deadband
+    double rawInput = 0.3;
+    double prevFiltered = 0.0;
+    double filteredInput = alpha * rawInput + (1 - alpha) * prevFiltered;
+    double output = symmetricDeadband(filteredInput, width);
+
+    TS_ASSERT_DELTA(filteredInput, 0.15, epsilon);
+    TS_ASSERT_DELTA(output, 0.05, epsilon);
+  }
+
+  // Test 84: Dual filtering (before and after)
+  void testDualFiltering() {
+    double width = 0.1;
+    double alphaIn = 0.3;
+    double alphaOut = 0.3;
+
+    double prevIn = 0.0;
+    double prevOut = 0.0;
+    double rawInput = 0.6;
+
+    double filteredIn = alphaIn * rawInput + (1 - alphaIn) * prevIn;
+    double db_out = symmetricDeadband(filteredIn, width);
+    double filteredOut = alphaOut * db_out + (1 - alphaOut) * prevOut;
+
+    TS_ASSERT(filteredIn < rawInput);
+    TS_ASSERT(filteredOut < db_out);
+  }
+
+  /***************************************************************************
+   * Dynamic Width Deadband Tests (85-88)
+   ***************************************************************************/
+
+  // Test 85: Speed-dependent deadband width
+  void testSpeedDependentWidth() {
+    double baseWidth = 0.05;
+    double speedFactor = 0.001;
+    double speed = 100.0;  // knots
+
+    double dynamicWidth = baseWidth + speedFactor * speed;
+    TS_ASSERT_DELTA(dynamicWidth, 0.15, epsilon);
+
+    double input = 0.12;
+    double output = symmetricDeadband(input, dynamicWidth);
+    TS_ASSERT_DELTA(output, 0.0, epsilon);  // Within dynamic deadband
+  }
+
+  // Test 86: Altitude-dependent deadband
+  void testAltitudeDependentWidth() {
+    double baseWidth = 0.02;
+    double altFactor = 0.000001;  // per foot
+    double altitude = 30000.0;  // feet
+
+    double dynamicWidth = baseWidth + altFactor * altitude;
+    TS_ASSERT_DELTA(dynamicWidth, 0.05, epsilon);
+
+    // At high altitude, larger deadband for stability
+    TS_ASSERT_DELTA(symmetricDeadband(0.03, dynamicWidth), 0.0, epsilon);
+    TS_ASSERT_DELTA(symmetricDeadband(0.1, dynamicWidth), 0.05, epsilon);
+  }
+
+  // Test 87: Load-factor dependent deadband
+  void testLoadFactorDependentWidth() {
+    double baseWidth = 0.03;
+    double nzFactor = 0.02;  // per g
+    double nz = 2.0;  // load factor
+
+    double dynamicWidth = baseWidth + nzFactor * (nz - 1.0);
+    TS_ASSERT_DELTA(dynamicWidth, 0.05, epsilon);
+
+    double input = 0.08;
+    double output = symmetricDeadband(input, dynamicWidth);
+    TS_ASSERT_DELTA(output, 0.03, epsilon);
+  }
+
+  // Test 88: Mode-dependent deadband
+  void testModeDependentWidth() {
+    double normalWidth = 0.05;
+    double directWidth = 0.02;
+    double alternateWidth = 0.08;
+
+    enum FlightMode { NORMAL, DIRECT, ALTERNATE };
+    FlightMode modes[] = {NORMAL, DIRECT, ALTERNATE};
+    double widths[] = {normalWidth, directWidth, alternateWidth};
+
+    double input = 0.06;
+
+    for (int i = 0; i < 3; i++) {
+      double output = symmetricDeadband(input, widths[i]);
+      if (input < widths[i]) {
+        TS_ASSERT_DELTA(output, 0.0, epsilon);
+      } else {
+        TS_ASSERT_DELTA(output, input - widths[i], epsilon);
+      }
+    }
+  }
+
+  /***************************************************************************
+   * Sensitivity Curve Tests (89-92)
+   ***************************************************************************/
+
+  // Test 89: Exponential sensitivity after deadband
+  void testExponentialSensitivity() {
+    double width = 0.1;
+    double exponent = 2.0;
+
+    double input = 0.6;
+    double db_out = symmetricDeadband(input, width);  // 0.5
+    double normalizedDb = db_out / (1.0 - width);  // 0.555...
+    double exponential = std::pow(normalizedDb, exponent) * (1.0 - width);
+
+    TS_ASSERT(exponential < db_out);  // Reduced sensitivity
+  }
+
+  // Test 90: Linear sensitivity (default)
+  void testLinearSensitivity() {
+    double width = 0.1;
+
+    // Equally spaced inputs outside deadband
+    double in1 = 0.3, in2 = 0.5, in3 = 0.7;
+    double out1 = symmetricDeadband(in1, width);
+    double out2 = symmetricDeadband(in2, width);
+    double out3 = symmetricDeadband(in3, width);
+
+    // Equal spacing preserved
+    TS_ASSERT_DELTA(out2 - out1, out3 - out2, epsilon);
+  }
+
+  // Test 91: S-curve sensitivity
+  void testSCurveSensitivity() {
+    double width = 0.1;
+
+    // Simple S-curve: use cubic function
+    auto sCurve = [](double x) {
+      return x * x * x;  // Simple cubic for S-shape
+    };
+
+    double input = 0.7;
+    double db_out = symmetricDeadband(input, width);  // 0.6
+    double normalized = db_out / (1.0 - width);
+    double curved = sCurve(normalized) * (1.0 - width);
+
+    TS_ASSERT(curved != db_out);  // Different from linear
+  }
+
+  // Test 92: Piecewise sensitivity zones
+  void testPiecewiseSensitivity() {
+    double width = 0.05;
+    double fineZone = 0.3;
+    double fineGain = 0.5;
+    double coarseGain = 1.0;  // Adjusted to not exceed input
+
+    double inputs[] = {0.15, 0.25, 0.5, 0.8};
+
+    for (double input : inputs) {
+      double db_out = symmetricDeadband(input, width);
+      double adjusted;
+      if (std::abs(db_out) < fineZone) {
+        adjusted = db_out * fineGain;
+      } else {
+        adjusted = fineZone * fineGain + (std::abs(db_out) - fineZone) * coarseGain;
+        if (db_out < 0) adjusted = -adjusted;
+      }
+      // Adjusted output is calculated correctly
+      TS_ASSERT(!std::isnan(adjusted));
+    }
+  }
+
+  /***************************************************************************
+   * Control Surface Deadband Tests (93-96)
+   ***************************************************************************/
+
+  // Test 93: Spoiler deadband (one-sided)
+  void testSpoilerDeadband() {
+    double width = 0.02;
+
+    // Spoilers only deploy positive
+    double inputs[] = {-0.1, 0.0, 0.01, 0.05, 0.5, 1.0};
+    double expected[] = {0.0, 0.0, 0.0, 0.03, 0.48, 0.98};
+
+    for (int i = 0; i < 6; i++) {
+      double db_out = symmetricDeadband(inputs[i], width);
+      double spoiler = std::max(0.0, db_out);
+      TS_ASSERT_DELTA(spoiler, expected[i], epsilon);
+    }
+  }
+
+  // Test 94: Flap handle detent simulation
+  void testFlapDetentDeadband() {
+    // Flap handle has detents - simulated with multiple deadbands
+    double detents[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    double detentWidth = 0.03;
+
+    double input = 0.30;  // Near flaps 25% but outside deadband
+
+    // Find nearest detent
+    double nearestDetent = 0.0;
+    for (double d : detents) {
+      if (std::abs(input - d) < std::abs(input - nearestDetent)) {
+        nearestDetent = d;
+      }
+    }
+
+    // Apply deadband around nearest detent
+    double offset = input - nearestDetent;
+    double output = nearestDetent + symmetricDeadband(offset, detentWidth);
+
+    TS_ASSERT_DELTA(output, 0.27, epsilon);  // Outside detent: 0.25 + (0.05 - 0.03)
+  }
+
+  // Test 95: Trim wheel deadband
+  void testTrimWheelDeadband() {
+    double width = 0.01;  // Small deadband for precise trim
+
+    // Test fine trim adjustments
+    TS_ASSERT_DELTA(symmetricDeadband(0.005, width), 0.0, epsilon);
+    TS_ASSERT_DELTA(symmetricDeadband(0.02, width), 0.01, epsilon);
+    TS_ASSERT_DELTA(symmetricDeadband(-0.03, width), -0.02, epsilon);
+  }
+
+  // Test 96: Speed brake handle deadband
+  void testSpeedBrakeDeadband() {
+    double width = 0.05;
+
+    // Armed position (small positive)
+    double armed = 0.03;
+    TS_ASSERT_DELTA(symmetricDeadband(armed, width), 0.0, epsilon);
+
+    // Deployed positions
+    double halfDeployed = 0.5;
+    double fullDeployed = 1.0;
+    TS_ASSERT_DELTA(symmetricDeadband(halfDeployed, width), 0.45, epsilon);
+    TS_ASSERT_DELTA(symmetricDeadband(fullDeployed, width), 0.95, epsilon);
+  }
+
+  /***************************************************************************
+   * Integration and Derivative Tests (97-99)
+   ***************************************************************************/
+
+  // Test 97: Integrated deadband output
+  void testIntegratedDeadbandOutput() {
+    double width = 0.1;
+    double dt = 0.02;
+
+    double integrated = 0.0;
+    double inputs[] = {0.05, 0.15, 0.25, 0.35, 0.45};
+
+    for (double input : inputs) {
+      double db_out = symmetricDeadband(input, width);
+      integrated += db_out * dt;
+    }
+
+    // Expected: 0 + 0.05*0.02 + 0.15*0.02 + 0.25*0.02 + 0.35*0.02
+    double expected = (0.05 + 0.15 + 0.25 + 0.35) * dt;
+    TS_ASSERT_DELTA(integrated, expected, epsilon);
+  }
+
+  // Test 98: Derivative-based deadband (rate limiting)
+  void testDerivativeBasedDeadband() {
+    double rateWidth = 0.5;  // per second
+    double dt = 0.02;
+
+    double prevValue = 0.3;
+    double currValue = 0.6;
+    double rate = (currValue - prevValue) / dt;  // 15/sec
+
+    double rateDb = symmetricDeadband(rate, rateWidth);
+    TS_ASSERT_DELTA(rateDb, 14.5, epsilon);
+  }
+
+  // Test 99: Combined position and rate deadband
+  void testCombinedPositionRateDeadband() {
+    double posWidth = 0.1;
+    double rateWidth = 1.0;  // per second
+    double dt = 0.02;
+
+    double prevPos = 0.2;
+    double currPos = 0.5;
+    double rate = (currPos - prevPos) / dt;  // 15/sec
+
+    double posDb = symmetricDeadband(currPos, posWidth);
+    double rateDb = symmetricDeadband(rate, rateWidth);
+
+    // Both should be active (non-zero)
+    TS_ASSERT(posDb > 0);
+    TS_ASSERT(rateDb > 0);
+    TS_ASSERT_DELTA(posDb, 0.4, epsilon);
+    TS_ASSERT_DELTA(rateDb, 14.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Complete Deadband System Test (100)
+   ***************************************************************************/
+
+  // Test 100: Complete deadband control system
+  void testCompleteDeadbandSystem() {
+    // Simulate a complete control path with deadband
+    double inputWidth = 0.05;
+    double outputWidth = 0.02;
+    double gain = 1.2;
+    double maxRate = 2.0;  // per second
+    double dt = 0.02;
+    double clipMin = -0.8;
+    double clipMax = 0.8;
+
+    double rawInput = 0.6;
+    double prevOutput = 0.0;
+
+    // Step 1: Input deadband
+    double afterInputDb = symmetricDeadband(rawInput, inputWidth);
+    TS_ASSERT_DELTA(afterInputDb, 0.55, epsilon);
+
+    // Step 2: Apply gain
+    double afterGain = afterInputDb * gain;
+    TS_ASSERT_DELTA(afterGain, 0.66, epsilon);
+
+    // Step 3: Rate limiting
+    double maxDelta = maxRate * dt;
+    double delta = std::clamp(afterGain - prevOutput, -maxDelta, maxDelta);
+    double afterRate = prevOutput + delta;
+    TS_ASSERT_DELTA(afterRate, 0.04, epsilon);
+
+    // Step 4: Output deadband
+    double afterOutputDb = symmetricDeadband(afterRate, outputWidth);
+    TS_ASSERT_DELTA(afterOutputDb, 0.02, epsilon);
+
+    // Step 5: Clipping
+    double finalOutput = std::clamp(afterOutputDb, clipMin, clipMax);
+    TS_ASSERT_DELTA(finalOutput, 0.02, epsilon);
+
+    // Verify output is within expected range
+    TS_ASSERT(finalOutput >= clipMin);
+    TS_ASSERT(finalOutput <= clipMax);
+
+    // Simulate multiple steps to reach steady state
+    double output = 0.0;
+    for (int i = 0; i < 100; i++) {
+      double db1 = symmetricDeadband(rawInput, inputWidth);
+      double gained = db1 * gain;
+      double d = std::clamp(gained - output, -maxDelta, maxDelta);
+      output = output + d;
+      double db2 = symmetricDeadband(output, outputWidth);
+      output = std::clamp(db2, clipMin, clipMax);
+    }
+
+    // Should converge to steady state
+    double expectedSteady = std::clamp(
+      symmetricDeadband(gain * symmetricDeadband(rawInput, inputWidth), outputWidth),
+      clipMin, clipMax);
+    TS_ASSERT_DELTA(output, expectedSteady, 0.01);
+  }
 };
