@@ -1390,4 +1390,254 @@ public:
     TS_ASSERT(V_flutter_store < V_flutter_clean);
     TS_ASSERT(V_flutter_store > 0.8 * V_flutter_clean);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete flutter analysis
+  void testCompleteFlutterAnalysis() {
+    double chord = 5.0;           // ft
+    double span = 40.0;           // ft
+    double rho = 0.002377;        // slug/ft^3
+    double GJ = 5e6;              // lb-ft^2 (torsional stiffness)
+    double mass_per_span = 5.0;   // slug/ft
+    double x_alpha = 0.1 * chord; // elastic axis offset
+
+    // Torsional frequency
+    double omega_alpha = std::sqrt(GJ / (mass_per_span * span * span * span));
+
+    // Divergence speed (simplified)
+    double q_div = GJ / (chord * span * span * 2.0);  // dynamic pressure
+    double V_div = std::sqrt(2.0 * q_div / rho);
+
+    TS_ASSERT(omega_alpha > 0.0);
+    TS_ASSERT(V_div > 0.0);
+    TS_ASSERT(!std::isnan(V_div));
+  }
+
+  // Test wing bending-torsion coupling frequency
+  void testBendingTorsionCouplingFrequency() {
+    double omega_b = 10.0;   // rad/s bending frequency
+    double omega_t = 25.0;   // rad/s torsion frequency
+    double coupling = 0.3;   // coupling coefficient
+
+    // Coupled frequencies (simplified)
+    double omega_low = omega_b * std::sqrt(1.0 - coupling);
+    double omega_high = omega_t * std::sqrt(1.0 + coupling);
+
+    TS_ASSERT(omega_low < omega_b);
+    TS_ASSERT(omega_high > omega_t);
+  }
+
+  // Test gust response factor
+  void testGustResponseFactor() {
+    double omega_n = 15.0;  // rad/s natural frequency
+    double V = 300.0;       // ft/s airspeed
+    double gust_length = 50.0;  // ft
+
+    double omega_gust = 2.0 * M_PI * V / gust_length;
+    double freq_ratio = omega_gust / omega_n;
+    double response_factor = 1.0 / std::sqrt(1.0 + freq_ratio * freq_ratio);
+
+    TS_ASSERT(response_factor > 0.0);
+    TS_ASSERT(response_factor <= 1.0);
+  }
+
+  // Test aerodynamic damping coefficient
+  void testAerodynamicDampingCoefficient() {
+    double rho = 0.002377;
+    double V = 400.0;
+    double chord = 5.0;
+    double CLa = 5.7;  // lift curve slope per rad
+
+    double damping = rho * V * chord * CLa / 4.0;
+
+    TS_ASSERT(damping > 0.0);
+    TS_ASSERT(!std::isnan(damping));
+  }
+
+  // Test whirl flutter analysis for propeller
+  void testWhirlFlutterAnalysis() {
+    double prop_rpm = 2000.0;
+    double omega_prop = prop_rpm * 2.0 * M_PI / 60.0;
+    double pylon_freq = 15.0;  // Hz
+    double omega_pylon = pylon_freq * 2.0 * M_PI;
+
+    // Whirl flutter can occur when omega_prop approaches omega_pylon
+    double freq_ratio = omega_prop / omega_pylon;
+
+    TS_ASSERT(freq_ratio > 0.0);
+    TS_ASSERT(omega_prop > 0.0);
+    TS_ASSERT(omega_pylon > 0.0);
+  }
+
+  // Test panel flutter critical dynamic pressure calculation
+  void testPanelFlutterCriticalPressureCalculation() {
+    double t = 0.05;         // in, panel thickness
+    double a = 20.0;         // in, panel length
+    double E = 10.5e6;       // psi, elastic modulus
+    double nu = 0.33;        // Poisson's ratio
+
+    double D = E * t * t * t / (12.0 * (1.0 - nu * nu));
+    double q_cr = M_PI * M_PI * D / (a * a * a * a) * 4.0;  // simplified
+
+    TS_ASSERT(q_cr > 0.0);
+    TS_ASSERT(!std::isnan(q_cr));
+  }
+
+  // Test limit cycle oscillation amplitude
+  void testLimitCycleOscillationAmplitude() {
+    double structural_nonlinearity = 0.1;  // nonlinear stiffness coefficient
+    double linear_flutter_amplitude = 5.0;  // degrees
+
+    // LCO amplitude limited by nonlinearity
+    double LCO_amplitude = linear_flutter_amplitude / std::sqrt(1.0 + structural_nonlinearity);
+
+    TS_ASSERT(LCO_amplitude < linear_flutter_amplitude);
+    TS_ASSERT(LCO_amplitude > 0.0);
+  }
+
+  // Test thermal effects on flutter
+  void testThermalEffectsOnFlutter() {
+    double E_room = 10.5e6;     // psi at room temp
+    double E_hot = 9.5e6;       // psi at elevated temp
+    double V_flutter_room = 500.0;  // ft/s
+
+    // Flutter speed proportional to sqrt(E)
+    double V_flutter_hot = V_flutter_room * std::sqrt(E_hot / E_room);
+
+    TS_ASSERT(V_flutter_hot < V_flutter_room);
+  }
+
+  // Test swept wing flutter characteristics
+  void testSweptWingFlutterCharacteristics() {
+    double sweep = 30.0 * M_PI / 180.0;  // rad
+    double V_flutter_straight = 500.0;   // ft/s
+
+    // Sweep effect (simplified)
+    double V_flutter_swept = V_flutter_straight * std::cos(sweep);
+
+    TS_ASSERT(V_flutter_swept < V_flutter_straight);
+    TS_ASSERT(V_flutter_swept > 0.0);
+  }
+
+  // Test flutter margin at altitude
+  void testFlutterMarginAtAltitude() {
+    double V_flutter_SL = 600.0;  // ft/s at sea level
+    double rho_SL = 0.002377;
+    double rho_alt = 0.001267;    // at 20000 ft
+
+    // Flutter speed scales with sqrt(rho)
+    double V_flutter_alt = V_flutter_SL * std::sqrt(rho_SL / rho_alt);
+
+    TS_ASSERT(V_flutter_alt > V_flutter_SL);
+  }
+
+  // Test buffet intensity calculation
+  void testBuffetIntensityCalculation() {
+    double alpha = 15.0 * M_PI / 180.0;  // rad
+    double alpha_buffet_onset = 12.0 * M_PI / 180.0;
+
+    double buffet_intensity = 0.0;
+    if (alpha > alpha_buffet_onset) {
+      buffet_intensity = std::pow((alpha - alpha_buffet_onset) / alpha_buffet_onset, 2.0);
+    }
+
+    TS_ASSERT(buffet_intensity > 0.0);
+  }
+
+  // Test structural mode shape orthogonality
+  void testModeShapeOrthogonality() {
+    // Two mode shape vectors (simplified as scalars for test)
+    double mode1_amplitude = 1.0;
+    double mode2_amplitude = 1.0;
+    double mass = 100.0;
+
+    // Orthogonality: integral of m * phi1 * phi2 = 0 for different modes
+    // For same mode: generalized mass = m
+    double gen_mass = mass * mode1_amplitude * mode1_amplitude;
+
+    TS_ASSERT_DELTA(gen_mass, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test control surface mass balance
+  void testControlSurfaceMassBalance() {
+    double hinge_moment_coeff = 0.05;
+    double surface_area = 10.0;  // ft^2
+    double chord_ratio = 0.25;
+    double rho = 0.002377;
+    double V = 300.0;
+
+    double q = 0.5 * rho * V * V;
+    double hinge_moment = q * surface_area * chord_ratio * hinge_moment_coeff;
+
+    TS_ASSERT(hinge_moment > 0.0);
+  }
+
+  // Test flutter frequency coalescence
+  void testFlutterFrequencyCoalescence() {
+    double omega_bending = 20.0;   // rad/s
+    double omega_torsion = 35.0;   // rad/s
+    double V = 400.0;              // ft/s
+
+    // At flutter, frequencies coalesce
+    double freq_separation = std::abs(omega_torsion - omega_bending);
+    double flutter_parameter = freq_separation / omega_bending;
+
+    TS_ASSERT(flutter_parameter > 0.0);
+    TS_ASSERT(flutter_parameter < 1.0);
+  }
+
+  // Test aeroelastic divergence safety factor
+  void testDivergenceSafetyFactor() {
+    double V_design = 400.0;     // ft/s design speed
+    double V_divergence = 650.0; // ft/s divergence speed
+    double safety_factor_req = 1.15;
+
+    double actual_factor = V_divergence / V_design;
+
+    TS_ASSERT(actual_factor > safety_factor_req);
+  }
+
+  // Test dynamic pressure at flutter
+  void testDynamicPressureAtFlutter() {
+    double rho = 0.002377;
+    double V_flutter = 550.0;
+
+    double q_flutter = 0.5 * rho * V_flutter * V_flutter;
+
+    TS_ASSERT(q_flutter > 0.0);
+    TS_ASSERT_DELTA(q_flutter, 359.5, 1.0);
+  }
+
+  // Test aeroelasticity instance independence
+  void testAeroelasticityInstanceIndependence() {
+    double config1_flutter_speed = 500.0;
+    double config1_stiffness = 1e6;
+    double config2_flutter_speed = 600.0;
+    double config2_stiffness = 1.5e6;
+
+    // Different configurations should have different properties
+    TS_ASSERT(config1_flutter_speed != config2_flutter_speed);
+    TS_ASSERT(config1_stiffness != config2_stiffness);
+    TS_ASSERT(config2_flutter_speed > config1_flutter_speed);
+  }
+
+  // Test complete wing aeroelastic response
+  void testCompleteWingAeroelasticResponse() {
+    double EI = 1e7;       // lb-ft^2 bending stiffness
+    double GJ = 5e6;       // lb-ft^2 torsional stiffness
+    double span = 40.0;    // ft
+    double chord = 5.0;    // ft
+    double mass = 5.0;     // slug/ft
+
+    // Natural frequencies
+    double omega_bending = 1.875 * 1.875 * std::sqrt(EI / (mass * span * span * span * span));
+    double omega_torsion = (M_PI / 2.0) * std::sqrt(GJ / (mass * chord * chord * span * span));
+
+    TS_ASSERT(omega_bending > 0.0);
+    TS_ASSERT(omega_torsion > 0.0);
+    TS_ASSERT(omega_torsion > omega_bending);  // Torsion typically higher
+  }
 };

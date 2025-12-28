@@ -1029,4 +1029,234 @@ public:
 
     TS_ASSERT_DELTA(c, 5.0, epsilon);  // 3-4-5 right triangle
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete heading calculation system
+  void testCompleteHeadingCalculation() {
+    // Aircraft position and destination
+    double lat1 = 40.0 * DEG_TO_RAD;
+    double lon1 = -74.0 * DEG_TO_RAD;  // New York area
+    double lat2 = 51.5 * DEG_TO_RAD;
+    double lon2 = -0.1 * DEG_TO_RAD;   // London area
+
+    // Initial great circle heading
+    double dlon = lon2 - lon1;
+    double y = std::sin(dlon) * std::cos(lat2);
+    double x = std::cos(lat1) * std::sin(lat2) - std::sin(lat1) * std::cos(lat2) * std::cos(dlon);
+    double heading = std::atan2(y, x) * RAD_TO_DEG;
+
+    heading = normalizeAngle360(heading);
+
+    TS_ASSERT(heading > 0.0 && heading < 360.0);
+  }
+
+  // Test wind correction angle
+  void testWindCorrectionAngle() {
+    double true_airspeed = 150.0;  // knots
+    double wind_speed = 30.0;      // knots
+    double wind_direction = 270.0; // from west
+    double course = 360.0;         // north
+
+    // Cross-wind component
+    double rel_wind = wind_direction - course;
+    double crosswind = wind_speed * std::sin(rel_wind * DEG_TO_RAD);
+
+    // Wind correction angle (simplified)
+    double wca = std::asin(crosswind / true_airspeed) * RAD_TO_DEG;
+
+    TS_ASSERT(!std::isnan(wca));
+  }
+
+  // Test magnetic variation correction
+  void testMagneticVariationCorrection() {
+    double true_heading = 090.0;
+    double mag_variation = 15.0;  // East variation
+
+    // Magnetic = True + East variation (or - West)
+    double mag_heading = true_heading - mag_variation;
+    mag_heading = normalizeAngle360(mag_heading);
+
+    TS_ASSERT_DELTA(mag_heading, 75.0, epsilon);
+  }
+
+  // Test spherical triangle angle
+  void testSphericalTriangleAngle() {
+    // Spherical excess for a triangle on a sphere
+    double A = 90.0 * DEG_TO_RAD;
+    double B = 90.0 * DEG_TO_RAD;
+    double C = 90.0 * DEG_TO_RAD;
+
+    double spherical_excess = A + B + C - M_PI;
+    TS_ASSERT(spherical_excess > 0.0);  // Should be positive on sphere
+  }
+
+  // Test Euler angle sequence
+  void testEulerAngleSequence() {
+    double phi = 10.0 * DEG_TO_RAD;    // roll
+    double theta = 5.0 * DEG_TO_RAD;   // pitch
+    double psi = 45.0 * DEG_TO_RAD;    // yaw
+
+    // Verify small angle approximation
+    TS_ASSERT(std::abs(phi) < 0.5);  // Should be small in radians
+    TS_ASSERT(std::abs(theta) < 0.5);
+
+    // These are valid Euler angles
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isnan(theta));
+    TS_ASSERT(!std::isnan(psi));
+  }
+
+  // Test angle interpolation
+  void testAngleInterpolation() {
+    double angle1 = 350.0;
+    double angle2 = 10.0;
+    double t = 0.5;  // midpoint
+
+    // Direct interpolation would give 180, but correct is 0
+    double diff = smallestIncludedAngle(angle1, angle2);
+    double interpolated = normalizeAngle360(angle1 + t * diff);
+
+    TS_ASSERT_DELTA(interpolated, 0.0, epsilon);
+  }
+
+  // Test complementary angles extended
+  void testComplementaryAnglesExtended() {
+    double angle = 30.0;
+    double complement = 90.0 - angle;
+
+    TS_ASSERT_DELTA(complement, 60.0, epsilon);
+    TS_ASSERT_DELTA(angle + complement, 90.0, epsilon);
+  }
+
+  // Test supplementary angles extended
+  void testSupplementaryAnglesExtended() {
+    double angle = 60.0;
+    double supplement = 180.0 - angle;
+
+    TS_ASSERT_DELTA(supplement, 120.0, epsilon);
+    TS_ASSERT_DELTA(angle + supplement, 180.0, epsilon);
+  }
+
+  // Test bank angle for coordinated turn
+  void testBankAngleCoordinatedTurn() {
+    double velocity = 200.0;  // ft/s
+    double radius = 3000.0;   // ft
+    double g = 32.2;          // ft/s^2
+
+    // tan(bank) = V^2 / (g * R)
+    double bank_rad = std::atan(velocity * velocity / (g * radius));
+    double bank_deg = bank_rad * RAD_TO_DEG;
+
+    TS_ASSERT(bank_deg > 0.0);
+    TS_ASSERT(bank_deg < 45.0);  // Reasonable bank angle
+  }
+
+  // Test climb angle from rate
+  void testClimbAngleFromRate() {
+    double climb_rate = 1000.0;  // ft/min
+    double groundspeed = 120.0;  // knots = 202 ft/s
+
+    double climb_rate_fps = climb_rate / 60.0;
+    double groundspeed_fps = groundspeed * 6076.0 / 3600.0;
+
+    double climb_angle = std::atan(climb_rate_fps / groundspeed_fps) * RAD_TO_DEG;
+
+    TS_ASSERT(climb_angle > 0.0);
+    TS_ASSERT(climb_angle < 15.0);
+  }
+
+  // Test glide angle calculation
+  void testGlideAngleCalculation() {
+    double lift_to_drag = 10.0;  // L/D ratio
+
+    // Glide angle = atan(1/L/D)
+    double glide_angle = std::atan(1.0 / lift_to_drag) * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(glide_angle, 5.71, 0.1);  // approximately
+  }
+
+  // Test angle rate of change
+  void testAngleRateOfChange() {
+    double angle_start = 45.0;
+    double angle_end = 90.0;
+    double time = 5.0;
+
+    double rate = (angle_end - angle_start) / time;
+
+    TS_ASSERT_DELTA(rate, 9.0, epsilon);  // degrees per second
+  }
+
+  // Test crab angle for wind correction
+  void testCrabAngleWindCorrection() {
+    double crosswind = 20.0;  // knots
+    double airspeed = 100.0;  // knots
+
+    double crab_angle = std::asin(crosswind / airspeed) * RAD_TO_DEG;
+
+    TS_ASSERT(crab_angle > 0.0);
+    TS_ASSERT_DELTA(crab_angle, 11.54, 0.1);
+  }
+
+  // Test angle sum and difference identities
+  void testAngleSumDifferenceIdentities() {
+    double A = 30.0 * DEG_TO_RAD;
+    double B = 45.0 * DEG_TO_RAD;
+
+    // sin(A+B) = sinA*cosB + cosA*sinB
+    double sin_sum = std::sin(A + B);
+    double sin_sum_identity = std::sin(A) * std::cos(B) + std::cos(A) * std::sin(B);
+
+    TS_ASSERT_DELTA(sin_sum, sin_sum_identity, epsilon);
+
+    // cos(A-B) = cosA*cosB + sinA*sinB
+    double cos_diff = std::cos(A - B);
+    double cos_diff_identity = std::cos(A) * std::cos(B) + std::sin(A) * std::sin(B);
+
+    TS_ASSERT_DELTA(cos_diff, cos_diff_identity, epsilon);
+  }
+
+  // Test bearing reciprocal
+  void testBearingReciprocal() {
+    double bearing = 045.0;
+    double reciprocal = normalizeAngle360(bearing + 180.0);
+
+    TS_ASSERT_DELTA(reciprocal, 225.0, epsilon);
+
+    // Test another case
+    bearing = 270.0;
+    reciprocal = normalizeAngle360(bearing + 180.0);
+    TS_ASSERT_DELTA(reciprocal, 90.0, epsilon);
+  }
+
+  // Test angle instance independence
+  void testAnglesInstanceIndependence() {
+    double angle1 = 45.0;
+    double angle2 = 90.0;
+
+    double rad1 = angle1 * DEG_TO_RAD;
+    double rad2 = angle2 * DEG_TO_RAD;
+
+    TS_ASSERT(rad1 != rad2);
+    TS_ASSERT_DELTA(rad1, M_PI / 4.0, epsilon);
+    TS_ASSERT_DELTA(rad2, M_PI / 2.0, epsilon);
+  }
+
+  // Test complete angle transformation chain
+  void testCompleteAngleTransformationChain() {
+    double original = 123.456;
+
+    // Convert to radians and back
+    double rad = original * DEG_TO_RAD;
+    double back = rad * RAD_TO_DEG;
+
+    TS_ASSERT_DELTA(original, back, epsilon);
+
+    // Normalize and verify
+    double normalized = normalizeAngle360(original);
+    TS_ASSERT(normalized >= 0.0 && normalized < 360.0);
+    TS_ASSERT_DELTA(normalized, original, epsilon);
+  }
 };

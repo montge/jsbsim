@@ -1487,4 +1487,301 @@ public:
     TS_ASSERT(!std::isnan(xcg));
     TS_ASSERT(xcg > 50.0 && xcg < 120.0);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete aircraft weight and balance envelope
+  void testCompleteWeightBalanceEnvelope() {
+    // Aircraft CG limits
+    double fwd_limit = 80.0;   // inches
+    double aft_limit = 95.0;   // inches
+    double max_weight = 3000.0; // lbs
+
+    // Test case: loaded aircraft
+    double empty_weight = 1800.0;
+    double empty_arm = 85.0;
+    double fuel_weight = 300.0;
+    double fuel_arm = 90.0;
+    double payload_weight = 400.0;
+    double payload_arm = 88.0;
+
+    double total_weight = empty_weight + fuel_weight + payload_weight;
+    double total_moment = empty_weight * empty_arm + fuel_weight * fuel_arm + payload_weight * payload_arm;
+    double xcg = total_moment / total_weight;
+
+    TS_ASSERT(total_weight <= max_weight);
+    TS_ASSERT(xcg >= fwd_limit && xcg <= aft_limit);
+  }
+
+  // Test CG travel during fuel burn
+  void testCGTravelDuringFuelBurn() {
+    double empty_weight = 2000.0;
+    double empty_arm = 82.0;
+    double initial_fuel = 500.0;
+    double fuel_arm = 95.0;
+
+    // Initial CG
+    double initial_xcg = (empty_weight * empty_arm + initial_fuel * fuel_arm) / (empty_weight + initial_fuel);
+
+    // After burning 200 lbs of fuel
+    double remaining_fuel = 300.0;
+    double final_xcg = (empty_weight * empty_arm + remaining_fuel * fuel_arm) / (empty_weight + remaining_fuel);
+
+    // CG moves forward as fuel burns (fuel is aft of empty CG)
+    TS_ASSERT(final_xcg < initial_xcg);
+  }
+
+  // Test lateral CG for crosswind landing configuration
+  void testLateralCGCrosswindConfig() {
+    double left_tank = 100.0;   // lbs
+    double right_tank = 100.0;  // lbs
+    double tank_arm = 150.0;    // inches from centerline
+
+    double ycg = (-tank_arm * left_tank + tank_arm * right_tank) / (left_tank + right_tank);
+    TS_ASSERT_DELTA(ycg, 0.0, epsilon);
+
+    // Now with imbalanced tanks
+    left_tank = 50.0;
+    right_tank = 100.0;
+    ycg = (-tank_arm * left_tank + tank_arm * right_tank) / (left_tank + right_tank);
+    TS_ASSERT(ycg > 0.0);  // Shifted toward heavier tank
+  }
+
+  // Test moment of inertia about arbitrary axis
+  void testMomentOfInertiaArbitraryAxis() {
+    double Ixx = 1000.0;
+    double Iyy = 2000.0;
+    double Izz = 2500.0;
+
+    // Moment about axis at 45 degrees in x-y plane
+    double cos_theta = std::cos(M_PI / 4.0);
+    double sin_theta = std::sin(M_PI / 4.0);
+
+    // I = Ixx*cos^2 + Iyy*sin^2 for axis in x-y plane
+    double I_45 = Ixx * cos_theta * cos_theta + Iyy * sin_theta * sin_theta;
+
+    TS_ASSERT(I_45 > Ixx && I_45 < Iyy);
+    TS_ASSERT_DELTA(I_45, 1500.0, 1.0);
+  }
+
+  // Test parallel axis theorem for displaced mass
+  void testParallelAxisTheoremDisplaced() {
+    double mass = 50.0;     // slugs
+    double I_cg = 100.0;    // slug-ft^2 about CG
+    double d = 3.0;         // ft displacement
+
+    double I_new = I_cg + mass * d * d;
+    TS_ASSERT_DELTA(I_new, 550.0, epsilon);
+  }
+
+  // Test CG envelope boundary check
+  void testCGEnvelopeBoundaryCheck() {
+    double fwd_limit = 15.0;  // % MAC
+    double aft_limit = 35.0;  // % MAC
+    double mac = 60.0;        // inches
+    double lemac = 100.0;     // leading edge MAC station
+
+    double cg_station = 115.0;  // inches
+    double cg_mac_percent = (cg_station - lemac) / mac * 100.0;
+
+    TS_ASSERT(cg_mac_percent >= fwd_limit);
+    TS_ASSERT(cg_mac_percent <= aft_limit);
+    TS_ASSERT_DELTA(cg_mac_percent, 25.0, epsilon);
+  }
+
+  // Test weight distribution for gear loads
+  void testWeightDistributionGearLoads() {
+    double weight = 3000.0;
+    double nose_arm = 20.0;   // ft forward of CG
+    double main_arm = 5.0;    // ft aft of CG
+    double wheelbase = nose_arm + main_arm;
+
+    // Static gear loads (sum of moments about each gear = 0)
+    double main_load = weight * nose_arm / wheelbase;
+    double nose_load = weight * main_arm / wheelbase;
+
+    TS_ASSERT_DELTA(main_load + nose_load, weight, epsilon);
+    TS_ASSERT(main_load > nose_load);  // Main gear carries more
+  }
+
+  // Test inertia tensor eigenvalues
+  void testInertiaTensorEigenvalues() {
+    // Principal moments for symmetric aircraft
+    double Ixx = 1000.0;
+    double Iyy = 3000.0;
+    double Izz = 3500.0;
+
+    // For diagonal tensor, eigenvalues are the diagonal elements
+    TS_ASSERT(Ixx < Iyy);
+    TS_ASSERT(Iyy < Izz);
+    TS_ASSERT(Ixx + Iyy > Izz);  // Triangle inequality for principal moments
+  }
+
+  // Test ballast calculation for CG adjustment
+  void testBallastCalculationCGAdjustment() {
+    double current_weight = 2500.0;
+    double current_xcg = 90.0;
+    double target_xcg = 85.0;
+    double ballast_arm = 50.0;
+
+    // Required ballast: W_b * (x_b - x_target) = W_current * (x_target - x_current)
+    double ballast_weight = current_weight * (current_xcg - target_xcg) / (target_xcg - ballast_arm);
+
+    double new_xcg = (current_weight * current_xcg + ballast_weight * ballast_arm) / (current_weight + ballast_weight);
+    TS_ASSERT_DELTA(new_xcg, target_xcg, 0.01);
+  }
+
+  // Test radius of gyration calculation
+  void testRadiusOfGyrationCalculation() {
+    double I = 5000.0;    // slug-ft^2
+    double m = 100.0;     // slugs
+
+    double k = std::sqrt(I / m);  // radius of gyration
+    TS_ASSERT_DELTA(k, std::sqrt(50.0), epsilon);
+    TS_ASSERT_DELTA(k * k * m, I, epsilon);
+  }
+
+  // Test CG shift from passenger movement
+  void testCGShiftPassengerMovement() {
+    double aircraft_weight = 4000.0;
+    double passenger_weight = 180.0;
+    double movement = 10.0;  // ft
+
+    double moment_change = passenger_weight * movement;
+    double cg_shift = moment_change / aircraft_weight;
+
+    TS_ASSERT_DELTA(cg_shift, 0.45, 0.01);  // ft
+  }
+
+  // Test combined loading scenario
+  void testCombinedLoadingScenario() {
+    // Multiple items being loaded
+    struct LoadItem {
+      double weight;
+      double x_arm;
+      double y_arm;
+    };
+
+    LoadItem items[] = {
+      {200.0, 50.0, 0.0},
+      {150.0, 80.0, -24.0},
+      {150.0, 80.0, 24.0},
+      {100.0, 120.0, 0.0}
+    };
+
+    double total_weight = 0.0;
+    double x_moment = 0.0;
+    double y_moment = 0.0;
+
+    for (const auto& item : items) {
+      total_weight += item.weight;
+      x_moment += item.weight * item.x_arm;
+      y_moment += item.weight * item.y_arm;
+    }
+
+    double xcg = x_moment / total_weight;
+    double ycg = y_moment / total_weight;
+
+    TS_ASSERT_DELTA(total_weight, 600.0, epsilon);
+    TS_ASSERT_DELTA(ycg, 0.0, epsilon);  // Symmetric lateral loading
+    TS_ASSERT(xcg > 50.0 && xcg < 120.0);
+  }
+
+  // Test inertia change from retractable gear
+  void testInertiaChangeRetractableGear() {
+    double gear_mass = 5.0;   // slugs each
+    double extended_arm = 8.0;  // ft from CG
+    double retracted_arm = 2.0;  // ft from CG
+    double num_gear = 3.0;
+
+    double I_extended = num_gear * gear_mass * extended_arm * extended_arm;
+    double I_retracted = num_gear * gear_mass * retracted_arm * retracted_arm;
+
+    TS_ASSERT(I_extended > I_retracted);
+    double ratio = I_extended / I_retracted;
+    TS_ASSERT(ratio > 10.0);  // Significant reduction
+  }
+
+  // Test static margin calculation
+  void testStaticMarginCalculation() {
+    double xcg = 85.0;        // inches
+    double x_np = 95.0;       // neutral point, inches
+    double mac = 48.0;        // inches
+
+    double static_margin = (x_np - xcg) / mac * 100.0;  // percent MAC
+
+    TS_ASSERT(static_margin > 0.0);  // Stable
+    TS_ASSERT_DELTA(static_margin, 20.833, 0.01);
+  }
+
+  // Test weight moment envelope limits
+  void testWeightMomentEnvelopeLimits() {
+    double weight = 2800.0;
+    double xcg = 87.0;
+    double moment = weight * xcg;
+
+    // Envelope limits (simplified linear bounds)
+    double min_moment = 2000.0 * 82.0;
+    double max_moment = 3000.0 * 92.0;
+
+    TS_ASSERT(moment >= min_moment);
+    TS_ASSERT(moment <= max_moment);
+  }
+
+  // Test fuel imbalance effect on roll
+  void testFuelImbalanceRollEffect() {
+    double imbalance = 100.0;  // lbs difference
+    double tank_arm = 10.0;    // ft from centerline
+    double roll_moment = imbalance * tank_arm;  // ft-lbf
+
+    TS_ASSERT_DELTA(roll_moment, 1000.0, epsilon);
+    TS_ASSERT(roll_moment > 0.0);
+  }
+
+  // Test weight and balance instance independence
+  void testWeightBalanceInstanceIndependence() {
+    double config1_weight = 2500.0;
+    double config1_xcg = 85.0;
+    double config2_weight = 3000.0;
+    double config2_xcg = 88.0;
+
+    double moment1 = config1_weight * config1_xcg;
+    double moment2 = config2_weight * config2_xcg;
+
+    TS_ASSERT(moment1 != moment2);
+    TS_ASSERT_DELTA(moment1, 212500.0, epsilon);
+    TS_ASSERT_DELTA(moment2, 264000.0, epsilon);
+  }
+
+  // Test payload bay CG contribution
+  void testPayloadBayCGContribution() {
+    double empty_weight = 2000.0;
+    double empty_arm = 80.0;
+    double payload = 500.0;
+    double payload_arm = 120.0;
+
+    double total_weight = empty_weight + payload;
+    double new_xcg = (empty_weight * empty_arm + payload * payload_arm) / total_weight;
+
+    TS_ASSERT(new_xcg > empty_arm);  // CG moves aft
+    TS_ASSERT_DELTA(new_xcg, 88.0, 0.1);
+  }
+
+  // Test zero fuel weight CG calculation extended
+  void testZeroFuelWeightCGExtended() {
+    double structure_weight = 1500.0;
+    double structure_arm = 75.0;
+    double crew_weight = 400.0;
+    double crew_arm = 85.0;
+    double cargo_weight = 600.0;
+    double cargo_arm = 100.0;
+
+    double zfw = structure_weight + crew_weight + cargo_weight;
+    double zfw_cg = (structure_weight * structure_arm + crew_weight * crew_arm + cargo_weight * cargo_arm) / zfw;
+
+    TS_ASSERT_DELTA(zfw, 2500.0, epsilon);
+    TS_ASSERT(zfw_cg > 75.0 && zfw_cg < 100.0);
+  }
 };

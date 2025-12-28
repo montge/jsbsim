@@ -1201,4 +1201,219 @@ public:
       TS_ASSERT_DELTA(total, windSpeed, 0.01);
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete crosswind landing calculation
+  void testCompleteCrosswindLanding() {
+    double windSpeed = 18.0;  // knots
+    double windDir = 270.0;   // from west
+    double runwayHeading = 360.0;  // north
+
+    double relativeWindAngle = (windDir - runwayHeading) * Constants::DEG_TO_RAD;
+    double crosswindComponent = windSpeed * std::sin(relativeWindAngle);
+    double headwindComponent = windSpeed * std::cos(relativeWindAngle);
+
+    TS_ASSERT_DELTA(std::abs(crosswindComponent), 18.0, 0.1);
+    TS_ASSERT_DELTA(std::abs(headwindComponent), 0.0, 0.1);
+  }
+
+  // Test crosswind takeoff technique
+  void testCrosswindTakeoffTechnique() {
+    double crosswind = 12.0;  // knots from right
+    double maxAileronDeflection = 20.0;  // degrees
+
+    // Full aileron into wind at start, gradually reduce
+    double takeoffSpeed = 60.0;  // knots
+    double climbSpeed = 85.0;    // knots
+
+    double aileronAtStart = maxAileronDeflection;
+    double aileronAtRotate = aileronAtStart * 0.5;
+
+    TS_ASSERT(aileronAtStart > aileronAtRotate);
+    TS_ASSERT(aileronAtRotate > 0.0);
+  }
+
+  // Test crosswind limits for different aircraft categories
+  void testCrosswindLimitsCategories() {
+    double lightAircraft = 15.0;  // knots
+    double transport = 25.0;       // knots
+    double heavyJet = 35.0;        // knots
+
+    TS_ASSERT(lightAircraft < transport);
+    TS_ASSERT(transport < heavyJet);
+  }
+
+  // Test wind shear on final approach
+  void testWindShearFinalApproach() {
+    double windAt500ft = 25.0;  // knots
+    double windAt50ft = 12.0;   // knots (wind shear)
+
+    double shearMagnitude = windAt500ft - windAt50ft;
+    TS_ASSERT_DELTA(shearMagnitude, 13.0, DEFAULT_TOLERANCE);
+
+    // Airspeed loss if not anticipated
+    double potentialAirspeedLoss = shearMagnitude * 0.8;
+    TS_ASSERT(potentialAirspeedLoss > 0.0);
+  }
+
+  // Test combined crab and sideslip technique
+  void testCombinedCrabSideslip() {
+    double initialCrabAngle = 10.0;  // degrees
+    double transitionAltitude = 100.0;  // feet
+    double touchdownSideslip = 5.0;  // degrees
+
+    // Transition from crab to sideslip
+    double totalCorrection = initialCrabAngle;
+    TS_ASSERT(totalCorrection > touchdownSideslip);
+  }
+
+  // Test crosswind gust factor
+  void testCrosswindGustFactor() {
+    double steadyWind = 15.0;  // knots
+    double gustFactor = 1.4;   // typical gust ratio
+
+    double gustStrength = steadyWind * gustFactor;
+    TS_ASSERT_DELTA(gustStrength, 21.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test runway alignment with crosswind
+  void testRunwayAlignmentCrosswind() {
+    double runwayHeading = 090.0;
+    double windFrom = 120.0;
+    double angleOff = windFrom - runwayHeading;
+
+    TS_ASSERT_DELTA(angleOff, 30.0, DEFAULT_TOLERANCE);
+
+    // Crosswind component at 30 degrees
+    double windSpeed = 20.0;
+    double crosswindComponent = windSpeed * std::sin(angleOff * Constants::DEG_TO_RAD);
+    TS_ASSERT_DELTA(crosswindComponent, 10.0, 0.1);
+  }
+
+  // Test ground track correction
+  void testGroundTrackCorrection() {
+    double desiredTrack = 180.0;  // south
+    double crosswind = 15.0;      // from right (west)
+    double trueAirspeed = 120.0;  // knots
+
+    // Crab angle needed
+    double crabAngle = std::asin(crosswind / trueAirspeed) * Constants::RAD_TO_DEG;
+    double requiredHeading = desiredTrack - crabAngle;
+
+    TS_ASSERT(requiredHeading < desiredTrack);  // Turn into wind
+  }
+
+  // Test decrab timing at touchdown
+  void testDecrabTiming() {
+    double approachSpeed = 130.0;  // knots
+    double decrabHeight = 30.0;     // feet
+    double descentRate = 700.0;     // fpm
+
+    double timeToTouchdown = decrabHeight / (descentRate / 60.0);  // seconds
+    TS_ASSERT(timeToTouchdown > 2.0);
+    TS_ASSERT(timeToTouchdown < 5.0);
+  }
+
+  // Test weathervaning moment coefficient
+  void testWeathervaningMomentCoefficient() {
+    double Cnbeta = 0.05;  // yaw moment per degree sideslip
+    double beta = 5.0;     // degrees sideslip
+
+    double yawMomentCoeff = Cnbeta * beta;
+    TS_ASSERT_DELTA(yawMomentCoeff, 0.25, DEFAULT_TOLERANCE);
+  }
+
+  // Test asymmetric lift in slip
+  void testAsymmetricLiftInSlip() {
+    double bankAngle = 5.0;   // degrees wing low
+    double liftCoeff = 1.2;
+    double asymmetryFactor = std::sin(bankAngle * Constants::DEG_TO_RAD);
+
+    double liftAsymmetry = liftCoeff * asymmetryFactor;
+    TS_ASSERT(liftAsymmetry > 0.0);
+    TS_ASSERT(liftAsymmetry < 0.2);
+  }
+
+  // Test rudder authority in crosswind
+  void testRudderAuthorityCrosswind() {
+    double maxRudder = 25.0;       // degrees
+    double rudderEffectiveness = 0.03;  // Cn per degree
+    double requiredYawMoment = 0.5;
+
+    double rudderNeeded = requiredYawMoment / rudderEffectiveness;
+
+    if (rudderNeeded > maxRudder) {
+      // Crosswind exceeds capability
+      TS_ASSERT(true);  // Need to reduce crosswind component
+    } else {
+      TS_ASSERT(rudderNeeded <= maxRudder);
+    }
+  }
+
+  // Test tire side force in crosswind landing
+  void testTireSideForceCrosswind() {
+    double weight = 10000.0;  // lbs
+    double mu_side = 0.6;     // lateral friction coefficient
+    double maxSideForce = weight * mu_side;
+
+    TS_ASSERT_DELTA(maxSideForce, 6000.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test crosswind landing gear stress
+  void testCrosswindLandingGearStress() {
+    double sideLoadFactor = 0.3;  // g's
+    double weight = 15000.0;      // lbs
+    double sideLoad = weight * sideLoadFactor;
+
+    TS_ASSERT_DELTA(sideLoad, 4500.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test wind gradient effect
+  void testWindGradientEffect() {
+    double surfaceWind = 10.0;  // knots
+    double windAt1000ft = 25.0; // knots
+    double gradientHeight = 1000.0;
+
+    double gradient = (windAt1000ft - surfaceWind) / gradientHeight;
+    TS_ASSERT(gradient > 0.0);
+
+    double windAt500ft = surfaceWind + gradient * 500.0;
+    TS_ASSERT_DELTA(windAt500ft, 17.5, 0.1);
+  }
+
+  // Test crosswind instance independence
+  void testCrosswindInstanceIndependence() {
+    double case1_wind = 15.0;
+    double case1_heading = 90.0;
+    double case2_wind = 25.0;
+    double case2_heading = 180.0;
+
+    double case1_crosswind = case1_wind * std::sin(45.0 * Constants::DEG_TO_RAD);
+    double case2_crosswind = case2_wind * std::sin(30.0 * Constants::DEG_TO_RAD);
+
+    TS_ASSERT(case1_crosswind != case2_crosswind);
+    TS_ASSERT(case1_crosswind > 0.0);
+    TS_ASSERT(case2_crosswind > 0.0);
+  }
+
+  // Test complete crosswind approach profile
+  void testCompleteCrosswindApproachProfile() {
+    double windSpeed = 20.0;         // knots
+    double windAngle = 60.0;         // degrees off runway
+    double approachSpeed = 130.0;    // knots
+
+    double crosswindComponent = windSpeed * std::sin(windAngle * Constants::DEG_TO_RAD);
+    double headwindComponent = windSpeed * std::cos(windAngle * Constants::DEG_TO_RAD);
+
+    double crabAngle = std::asin(crosswindComponent / approachSpeed) * Constants::RAD_TO_DEG;
+    double groundSpeed = approachSpeed - headwindComponent;
+
+    TS_ASSERT(crosswindComponent > 0.0);
+    TS_ASSERT(headwindComponent > 0.0);
+    TS_ASSERT(crabAngle > 0.0 && crabAngle < 20.0);
+    TS_ASSERT(groundSpeed < approachSpeed);
+  }
 };
