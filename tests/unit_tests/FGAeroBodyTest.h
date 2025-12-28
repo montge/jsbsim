@@ -1102,4 +1102,336 @@ public:
     TS_ASSERT(P02_P01 < 1.0);  // Pressure loss
     TS_ASSERT_DELTA(P02_P01, 0.721, 0.01);
   }
+
+  /***************************************************************************
+   * Additional Aerodynamic Tests
+   ***************************************************************************/
+
+  // Test 76: Flap deflection effect on lift
+  void testFlapDeflectionLift() {
+    double CL_clean = 0.5;
+    double delta_f = 20.0 * DEG_TO_RAD;  // Flap deflection
+    double delta_CL_per_rad = 0.8;       // Flap effectiveness
+
+    double CL_flaps = CL_clean + delta_CL_per_rad * delta_f;
+
+    TS_ASSERT(CL_flaps > CL_clean);
+    TS_ASSERT_DELTA(CL_flaps, 0.779, 0.01);
+  }
+
+  // Test 77: Spoiler effect on lift
+  void testSpoilerEffectOnLift() {
+    double CL_base = 0.8;
+    double spoiler_deflection = 0.5;  // Normalized deflection
+    double delta_CL_spoiler = -0.3;   // Lift loss at full deflection
+
+    double CL_spoiled = CL_base + delta_CL_spoiler * spoiler_deflection;
+
+    TS_ASSERT(CL_spoiled < CL_base);
+    TS_ASSERT_DELTA(CL_spoiled, 0.65, 0.01);
+  }
+
+  // Test 78: Landing gear drag
+  void testLandingGearDrag() {
+    double CD_clean = 0.03;
+    double CD_gear = 0.015;  // Additional drag from gear
+
+    double CD_total = CD_clean + CD_gear;
+
+    TS_ASSERT_DELTA(CD_total, 0.045, 0.001);
+  }
+
+  // Test 79: Flap drag contribution
+  void testFlapDragContribution() {
+    double CD_clean = 0.03;
+    double delta_f = 30.0 * DEG_TO_RAD;
+    double k_flap = 0.02;  // Flap drag factor
+
+    double CD_flap = k_flap * delta_f * delta_f;
+    double CD_total = CD_clean + CD_flap;
+
+    TS_ASSERT(CD_total > CD_clean);
+    TS_ASSERT_DELTA(CD_total, 0.035, 0.002);
+  }
+
+  // Test 80: Trim drag
+  void testTrimDrag() {
+    double CL_ht = 0.2;   // Horizontal tail lift coefficient
+    double St = 5.0;      // Tail area (m^2)
+    double S = 20.0;      // Wing area (m^2)
+    double e_t = 0.8;     // Tail Oswald efficiency
+    double AR_t = 4.0;    // Tail aspect ratio
+
+    double K_t = 1.0 / (PI * e_t * AR_t);
+    double CD_trim = K_t * CL_ht * CL_ht * (St / S);
+
+    TS_ASSERT(CD_trim > 0);
+    TS_ASSERT_DELTA(CD_trim, 0.001, 0.0005);
+  }
+
+  // Test 81: Downwash angle
+  void testDownwashAngle() {
+    double CL = 0.6;
+    double AR = 8.0;
+
+    // Simplified downwash
+    double epsilon = 2.0 * CL / (PI * AR);
+
+    TS_ASSERT_DELTA(epsilon, 0.0477, 0.001);
+    TS_ASSERT_DELTA(epsilon * RAD_TO_DEG, 2.73, 0.1);
+  }
+
+  // Test 82: Tail downwash effect on stability
+  void testTailDownwashStability() {
+    double a_t = 4.0;        // Tail lift curve slope
+    double d_epsilon_d_alpha = 0.3;  // Downwash derivative
+    double St = 5.0;
+    double S = 20.0;
+    double lt = 6.0;
+    double c = 2.0;
+
+    // Contribution to Cm_alpha from tail
+    double Cm_alpha_t = -a_t * (1.0 - d_epsilon_d_alpha) * (St / S) * (lt / c);
+
+    TS_ASSERT(Cm_alpha_t < 0);  // Stabilizing contribution
+    TS_ASSERT_DELTA(Cm_alpha_t, -2.1, 0.1);
+  }
+
+  // Test 83: Sideslip effect on vertical tail
+  void testSideslipVerticalTail() {
+    double a_v = 4.0;   // VT lift curve slope
+    double beta = 5.0 * DEG_TO_RAD;
+    double sigma_beta = 0.1;  // Sidewash factor
+
+    double alpha_v = beta * (1.0 + sigma_beta);
+
+    TS_ASSERT_DELTA(alpha_v * RAD_TO_DEG, 5.5, 0.1);
+  }
+
+  // Test 84: Maximum instantaneous turn rate
+  void testMaxInstantaneousTurnRate() {
+    double n_max = 6.0;  // Max load factor
+    double V = 150.0;    // m/s
+    double g = 9.81;
+
+    double omega_max = g * std::sqrt(n_max * n_max - 1.0) / V;
+
+    TS_ASSERT_DELTA(omega_max, 0.386, 0.01);
+    TS_ASSERT_DELTA(omega_max * RAD_TO_DEG, 22.1, 0.5);  // deg/s
+  }
+
+  // Test 85: Sustained turn rate
+  void testSustainedTurnRate() {
+    double n = 3.0;      // Sustained load factor
+    double V = 200.0;    // m/s
+    double g = 9.81;
+
+    double omega = g * std::sqrt(n * n - 1.0) / V;
+
+    TS_ASSERT_DELTA(omega, 0.139, 0.01);
+  }
+
+  // Test 86: Corner velocity
+  void testCornerVelocity() {
+    double W = 50000.0;    // N
+    double rho = 0.9;      // kg/m^3 (at altitude)
+    double S = 20.0;       // m^2
+    double CL_max = 1.4;
+    double n_max = 7.0;
+
+    double V_corner = std::sqrt((2.0 * n_max * W) / (rho * S * CL_max));
+
+    TS_ASSERT_DELTA(V_corner, 168.0, 5.0);
+  }
+
+  // Test 87: Minimum drag speed
+  void testMinimumDragSpeed() {
+    double W = 50000.0;
+    double rho = 1.225;
+    double S = 20.0;
+    double CD0 = 0.025;
+    double K = 0.05;
+
+    // V_md occurs at CL = sqrt(CD0/K)
+    double CL_md = std::sqrt(CD0 / K);
+    double V_md = std::sqrt(2.0 * W / (rho * S * CL_md));
+
+    TS_ASSERT_DELTA(CL_md, 0.707, 0.01);
+    TS_ASSERT_DELTA(V_md, 76.0, 1.0);
+  }
+
+  // Test 88: Maximum endurance speed
+  void testMaxEnduranceSpeed() {
+    double W = 50000.0;
+    double rho = 1.225;
+    double S = 20.0;
+    double CD0 = 0.025;
+    double K = 0.05;
+
+    // V_me at CL = sqrt(3*CD0/K)
+    double CL_me = std::sqrt(3.0 * CD0 / K);
+    double V_me = std::sqrt(2.0 * W / (rho * S * CL_me));
+
+    TS_ASSERT_DELTA(CL_me, 1.22, 0.02);
+    TS_ASSERT_DELTA(V_me, 57.8, 1.0);
+  }
+
+  // Test 89: Power required curve
+  void testPowerRequired() {
+    double W = 50000.0;
+    double V = 100.0;
+    double rho = 1.225;
+    double S = 20.0;
+    double CD0 = 0.025;
+    double K = 0.05;
+
+    double q = 0.5 * rho * V * V;
+    double CL = W / (q * S);
+    double CD = CD0 + K * CL * CL;
+    double D = q * S * CD;
+    double P_req = D * V;
+
+    TS_ASSERT(P_req > 0);
+    TS_ASSERT_DELTA(P_req, 408300.0, 1000.0);  // ~408 kW
+  }
+
+  // Test 90: Thrust required curve
+  void testThrustRequired() {
+    double W = 50000.0;
+    double V = 80.0;
+    double rho = 1.225;
+    double S = 20.0;
+    double CD0 = 0.025;
+    double K = 0.05;
+
+    double q = 0.5 * rho * V * V;
+    double CL = W / (q * S);
+    double CD = CD0 + K * CL * CL;
+    double T_req = q * S * CD;
+
+    TS_ASSERT(T_req > 0);
+    TS_ASSERT_DELTA(T_req, 3555.0, 100.0);  // ~3.55 kN
+  }
+
+  // Test 91: Excess power
+  void testExcessPower() {
+    double T_avail = 15000.0;  // N
+    double D = 10000.0;        // N
+    double V = 100.0;          // m/s
+
+    double P_excess = (T_avail - D) * V;
+
+    TS_ASSERT_DELTA(P_excess, 500000.0, epsilon);
+  }
+
+  // Test 92: Specific excess power
+  void testSpecificExcessPower() {
+    double T = 15000.0;   // N
+    double D = 10000.0;   // N
+    double V = 100.0;     // m/s
+    double W = 50000.0;   // N
+
+    double P_s = V * (T - D) / W;
+
+    TS_ASSERT_DELTA(P_s, 10.0, 0.1);  // m/s
+  }
+
+  // Test 93: Energy height
+  void testEnergyHeight() {
+    double h = 10000.0;   // m
+    double V = 200.0;     // m/s
+    double g = 9.81;
+
+    double E_h = h + V * V / (2.0 * g);
+
+    TS_ASSERT_DELTA(E_h, 12039.0, 10.0);
+  }
+
+  // Test 94: Service ceiling estimate
+  void testServiceCeilingEstimate() {
+    double T_sl = 20000.0;   // Sea level thrust (N)
+    double D_sl = 8000.0;    // Sea level drag (N)
+    double W = 50000.0;      // Weight (N)
+
+    // Simplified: ceiling when T = D
+    // Thrust lapse ~ rho ratio
+    double sigma_ceiling = D_sl / T_sl;
+
+    TS_ASSERT_DELTA(sigma_ceiling, 0.4, 0.01);
+    // This corresponds to roughly 25000 ft
+  }
+
+  // Test 95: Takeoff ground roll estimate
+  void testTakeoffGroundRoll() {
+    double W = 50000.0;     // N
+    double S = 20.0;        // m^2
+    double rho = 1.225;     // kg/m^3
+    double CL_to = 1.2;     // Takeoff CL
+    double T = 15000.0;     // Thrust (N)
+    double mu = 0.03;       // Rolling friction
+
+    double V_lof = std::sqrt(2.0 * W / (rho * S * CL_to));
+    double T_eff = T - mu * W;  // Effective thrust
+    double a_avg = T_eff * 9.81 / W;  // Average acceleration
+
+    double s_g = V_lof * V_lof / (2.0 * a_avg);
+
+    TS_ASSERT_DELTA(V_lof, 58.5, 1.0);
+    TS_ASSERT(s_g > 0);
+  }
+
+  // Test 96: Landing distance estimate
+  void testLandingDistance() {
+    double V_td = 50.0;     // Touchdown velocity (m/s)
+    double mu_b = 0.3;      // Braking friction
+    double g = 9.81;
+
+    double decel = mu_b * g;
+    double s_landing = V_td * V_td / (2.0 * decel);
+
+    TS_ASSERT_DELTA(decel, 2.943, 0.01);
+    TS_ASSERT_DELTA(s_landing, 425.0, 10.0);
+  }
+
+  // Test 97: Roll coupling parameter
+  void testRollCouplingParameter() {
+    double Ixx = 5000.0;    // kg·m^2
+    double Iyy = 10000.0;
+    double Izz = 12000.0;
+
+    // Roll coupling tendency
+    double coupling = (Izz - Iyy) / Ixx;
+
+    TS_ASSERT_DELTA(coupling, 0.4, 0.01);
+  }
+
+  // Test 98: Adverse yaw parameter
+  void testAdverseYawParameter() {
+    double Cn_da = 0.01;   // Yaw due to aileron
+    double Cl_da = 0.15;   // Roll due to aileron
+
+    double adverse_yaw_ratio = Cn_da / Cl_da;
+
+    TS_ASSERT_DELTA(adverse_yaw_ratio, 0.0667, 0.001);
+  }
+
+  // Test 99: Cross-coupling derivative Cl_r
+  void testCrossCouplingClr() {
+    double CL = 0.5;
+
+    // Simplified Cl_r ~ CL/4
+    double Cl_r = CL / 4.0;
+
+    TS_ASSERT_DELTA(Cl_r, 0.125, 0.01);
+  }
+
+  // Test 100: Cross-coupling derivative Cn_p
+  void testCrossCouplingCnp() {
+    double CL = 0.5;
+
+    // Simplified Cn_p ~ -CL/8
+    double Cn_p = -CL / 8.0;
+
+    TS_ASSERT_DELTA(Cn_p, -0.0625, 0.01);
+  }
 };

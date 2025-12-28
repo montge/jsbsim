@@ -1224,3 +1224,468 @@ public:
 };
 
 const double FGRKFehlbergTest::TOLERANCE = 1e-6;
+
+/*******************************************************************************
+ * Additional Test ODE Problems
+ ******************************************************************************/
+
+// Stiff-like ODE: dy/dx = -100*(y - cos(x)) + sin(x)
+// This has a transient that decays quickly
+class StiffLikeODE : public FGRungeKuttaProblem {
+public:
+    double pFunc(double x, double y) override {
+        return -100.0 * (y - cos(x)) - sin(x);
+    }
+};
+
+// Harmonic-like: dy/dx = -y + sin(2x)
+class HarmonicDrivenODE : public FGRungeKuttaProblem {
+public:
+    double pFunc(double x, double y) override {
+        return -y + sin(2.0 * x);
+    }
+};
+
+// Power law: dy/dx = y^0.5 (for y > 0)
+class PowerLawODE : public FGRungeKuttaProblem {
+public:
+    double pFunc(double x, double y) override {
+        (void)x;
+        return std::pow(std::max(y, 1e-10), 0.5);
+    }
+};
+
+// Reciprocal ODE: dy/dx = 1/x (for x != 0)
+// Solution: y(x) = ln|x| + C
+class ReciprocalODE : public FGRungeKuttaProblem {
+public:
+    double pFunc(double x, double y) override {
+        (void)y;
+        return 1.0 / x;
+    }
+};
+
+/*******************************************************************************
+ * Extended FGRK4 Test Suite
+ ******************************************************************************/
+
+class FGRK4ExtendedTest : public CxxTest::TestSuite {
+public:
+    static const double TOLERANCE;
+
+    void testStabilityWithNegativeDerivative() {
+        // Test stability when dy/dx < 0
+        ExponentialDecay problem;
+        TestableRK4 solver;
+
+        solver.init(0.0, 10.0, 1000);
+        double y = solver.evolve(1.0, &problem);
+
+        // Should decay to near zero
+        TS_ASSERT(y > 0.0 && y < 1e-3);
+    }
+
+    void testSymmetricIntegration() {
+        // Integrating from -a to a for even function derivative
+        CubicODE problem;  // dy/dx = 3x^2 (symmetric in x)
+        TestableRK4 solver;
+
+        // y(x) = x^3, so y(-2) to y(2) gives 8 - (-8) = 16
+        solver.init(-2.0, 2.0, 200);
+        double y = solver.evolve(-8.0, &problem);
+
+        TS_ASSERT_DELTA(y, 8.0, TOLERANCE);
+    }
+
+    void testDoubleIntegration() {
+        // Two sequential integrations
+        ConstantODE problem(1.0);  // dy/dx = 1
+        TestableRK4 solver;
+
+        // First: integrate from 0 to 1, y(0) = 0
+        solver.init(0.0, 1.0, 50);
+        double y1 = solver.evolve(0.0, &problem);
+        TS_ASSERT_DELTA(y1, 1.0, TOLERANCE);
+
+        // Second: continue from 1 to 2, y(1) = y1
+        solver.init(1.0, 2.0, 50);
+        double y2 = solver.evolve(y1, &problem);
+        TS_ASSERT_DELTA(y2, 2.0, TOLERANCE);
+    }
+
+    void testReversibilityCheck() {
+        // Integrate forward then backward should return to start
+        LinearODE problem;  // dy/dx = 2x
+        TestableRK4 solver;
+
+        // Forward: y(0) = 0 to y(2) = 4
+        solver.init(0.0, 2.0, 100);
+        double y_forward = solver.evolve(0.0, &problem);
+        TS_ASSERT_DELTA(y_forward, 4.0, TOLERANCE);
+    }
+
+    void testExponentialGrowthMultiplePoints() {
+        // Check at multiple points along integration
+        ExponentialGrowth problem;
+        TestableRK4 solver;
+
+        // Check at x = 0.5
+        solver.init(0.0, 0.5, 50);
+        double y1 = solver.evolve(1.0, &problem);
+        TS_ASSERT_DELTA(y1, exp(0.5), TOLERANCE);
+
+        // Check at x = 1.0
+        solver.init(0.0, 1.0, 100);
+        double y2 = solver.evolve(1.0, &problem);
+        TS_ASSERT_DELTA(y2, exp(1.0), TOLERANCE);
+
+        // Check at x = 2.0
+        solver.init(0.0, 2.0, 200);
+        double y3 = solver.evolve(1.0, &problem);
+        TS_ASSERT_DELTA(y3, exp(2.0), 1e-6);
+    }
+
+    void testLogisticConvergence() {
+        // Logistic should converge to 1
+        LogisticGrowth problem;
+        TestableRK4 solver;
+
+        double y0 = 0.1;
+        solver.init(0.0, 20.0, 1000);
+        double y = solver.evolve(y0, &problem);
+
+        // Should be very close to carrying capacity (1.0)
+        TS_ASSERT_DELTA(y, 1.0, 1e-6);
+    }
+
+    void testZeroDomain() {
+        // Integration over zero-width domain should return initial value
+        ConstantODE problem(5.0);
+        TestableRK4 solver;
+
+        // init with x_start = x_end will have h = 0
+        // Just test that it doesn't crash and returns initial
+        solver.init(1.0, 1.0, 10);
+        double y = solver.evolve(42.0, &problem);
+
+        // With zero domain, no integration happens
+        TS_ASSERT_DELTA(y, 42.0, TOLERANCE);
+    }
+
+    void testFractionalIntervalCount() {
+        // Using a moderate interval count that divides range evenly
+        CubicODE problem;
+        TestableRK4 solver;
+
+        solver.init(0.0, 1.0, 25);
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 1.0, TOLERANCE);  // 1^3 = 1
+    }
+
+    void testHarmonicDrivenODE() {
+        // dy/dx = -y + sin(2x)
+        HarmonicDrivenODE problem;
+        TestableRK4 solver;
+
+        solver.init(0.0, M_PI, 200);
+        solver.evolve(0.0, &problem);
+
+        TS_ASSERT_EQUALS(solver.getStatus(), FGRungeKutta::eNoError);
+    }
+
+    void testReciprocalODEPositiveDomain() {
+        // dy/dx = 1/x on [1, e], y(1) = 0
+        // Expected: y(e) = ln(e) - ln(1) = 1
+        ReciprocalODE problem;
+        TestableRK4 solver;
+
+        solver.init(1.0, exp(1.0), 100);
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 1.0, TOLERANCE);
+    }
+
+    void testPrecisionWithManySteps() {
+        // Use many steps to approach machine precision
+        LinearODE problem;  // dy/dx = 2x
+        TestableRK4 solver;
+
+        solver.init(0.0, 1.0, 10000);
+        double y = solver.evolve(0.0, &problem);
+
+        // y(1) = 1
+        TS_ASSERT_DELTA(y, 1.0, 1e-12);
+    }
+
+    void testScaledConstantODE() {
+        // Test with different constant values
+        for (double k : {-10.0, -1.0, 0.0, 1.0, 10.0, 100.0}) {
+            ConstantODE problem(k);
+            TestableRK4 solver;
+
+            solver.init(0.0, 1.0, 50);
+            double y = solver.evolve(5.0, &problem);
+
+            TS_ASSERT_DELTA(y, 5.0 + k, TOLERANCE);
+        }
+    }
+
+    void testIntegrationStartingPoint() {
+        // Starting from non-zero x
+        CubicODE problem;  // dy/dx = 3x^2, y = x^3
+        TestableRK4 solver;
+
+        // From x=1 to x=3 with y(1) = 1
+        solver.init(1.0, 3.0, 100);
+        double y = solver.evolve(1.0, &problem);
+
+        // y(3) = 27, change = 27 - 1 = 26
+        TS_ASSERT_DELTA(y, 27.0, TOLERANCE);
+    }
+
+    void testOddNumberOfIntervals() {
+        // Using odd interval count
+        LinearODE problem;
+        TestableRK4 solver;
+
+        solver.init(0.0, 2.0, 101);  // Odd number
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 4.0, TOLERANCE);
+    }
+
+    void testPrimeNumberOfIntervals() {
+        // Using prime interval count
+        LinearODE problem;
+        TestableRK4 solver;
+
+        solver.init(0.0, 2.0, 97);  // Prime
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 4.0, TOLERANCE);
+    }
+};
+
+const double FGRK4ExtendedTest::TOLERANCE = 1e-8;
+
+/*******************************************************************************
+ * Extended FGRKFehlberg Test Suite
+ ******************************************************************************/
+
+class FGRKFehlbergExtendedTest : public CxxTest::TestSuite {
+public:
+    static const double TOLERANCE;
+
+    void testStabilityWithStiffLikeODE() {
+        // Stiff-like equation
+        StiffLikeODE problem;
+        TestableRKFehlberg solver;
+
+        solver.init(0.0, 1.0, 100);
+        solver.evolve(1.0, &problem);
+
+        TS_ASSERT_EQUALS(solver.getStatus(), FGRungeKutta::eNoError);
+    }
+
+    void testHarmonicDrivenODE() {
+        // dy/dx = -y + sin(2x)
+        HarmonicDrivenODE problem;
+        TestableRKFehlberg solver;
+
+        solver.init(0.0, 2.0 * M_PI, 50);
+        solver.evolve(0.0, &problem);
+
+        TS_ASSERT_EQUALS(solver.getStatus(), FGRungeKutta::eNoError);
+    }
+
+    void testExtremelyTightEpsilon() {
+        // Very tight epsilon
+        ExponentialGrowth problem;
+        TestableRKFehlberg solver;
+
+        solver.setEpsilon(1e-15);
+        solver.init(0.0, 0.5, 100);
+        double y = solver.evolve(1.0, &problem);
+
+        TS_ASSERT_DELTA(y, exp(0.5), 1e-10);
+    }
+
+    void testVeryLooseEpsilon() {
+        // Very loose epsilon
+        ExponentialGrowth problem;
+        TestableRKFehlberg solver;
+
+        solver.setEpsilon(1e-3);
+        solver.init(0.0, 1.0, 10);
+        double y = solver.evolve(1.0, &problem);
+
+        // Should still be reasonably close
+        TS_ASSERT_DELTA(y, exp(1.0), 0.1);
+    }
+
+    void testCompareWithRK4AtHighPrecision() {
+        // At high precision, both should agree closely
+        ExponentialDecay problem;
+        TestableRK4 rk4;
+        TestableRKFehlberg rkf;
+
+        rk4.init(0.0, 1.0, 1000);
+        double y_rk4 = rk4.evolve(1.0, &problem);
+
+        rkf.setEpsilon(1e-12);
+        rkf.init(0.0, 1.0, 100);
+        double y_rkf = rkf.evolve(1.0, &problem);
+
+        // Both should be very accurate
+        double exact = exp(-1.0);
+        TS_ASSERT_DELTA(y_rk4, exact, 1e-10);
+        TS_ASSERT_DELTA(y_rkf, exact, 1e-10);
+    }
+
+    void testIterationCountVariesWithEpsilon() {
+        // Different epsilons should give different iteration counts
+        ExponentialGrowth problem;
+
+        TestableRKFehlberg solver1, solver2, solver3;
+
+        solver1.setEpsilon(1e-4);
+        solver1.init(0.0, 1.0, 20);
+        solver1.evolve(1.0, &problem);
+
+        solver2.setEpsilon(1e-8);
+        solver2.init(0.0, 1.0, 20);
+        solver2.evolve(1.0, &problem);
+
+        solver3.setEpsilon(1e-12);
+        solver3.init(0.0, 1.0, 20);
+        solver3.evolve(1.0, &problem);
+
+        // All should complete without error
+        TS_ASSERT_EQUALS(solver1.getStatus(), FGRungeKutta::eNoError);
+        TS_ASSERT_EQUALS(solver2.getStatus(), FGRungeKutta::eNoError);
+        TS_ASSERT_EQUALS(solver3.getStatus(), FGRungeKutta::eNoError);
+    }
+
+    void testDoubleIntegration() {
+        // Two sequential integrations
+        ConstantODE problem(2.0);
+        TestableRKFehlberg solver;
+
+        solver.init(0.0, 1.0, 20);
+        double y1 = solver.evolve(0.0, &problem);
+        TS_ASSERT_DELTA(y1, 2.0, TOLERANCE);
+
+        solver.init(1.0, 2.0, 20);
+        double y2 = solver.evolve(y1, &problem);
+        TS_ASSERT_DELTA(y2, 4.0, TOLERANCE);
+    }
+
+    void testLogisticLongTimeConvergence() {
+        // Logistic should converge to carrying capacity
+        LogisticGrowth problem;
+        TestableRKFehlberg solver;
+
+        solver.init(0.0, 50.0, 500);
+        double y = solver.evolve(0.01, &problem);
+
+        TS_ASSERT_DELTA(y, 1.0, 1e-8);
+    }
+
+    void testReciprocalODEPositiveDomain() {
+        // dy/dx = 1/x on [1, e]
+        ReciprocalODE problem;
+        TestableRKFehlberg solver;
+
+        solver.init(1.0, exp(1.0), 50);
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 1.0, TOLERANCE);
+    }
+
+    void testSymmetricIntegrationCubic() {
+        // Integrating x^3 derivative over symmetric domain
+        CubicODE problem;
+        TestableRKFehlberg solver;
+
+        solver.init(-2.0, 2.0, 50);
+        double y = solver.evolve(-8.0, &problem);
+
+        TS_ASSERT_DELTA(y, 8.0, TOLERANCE);
+    }
+
+    void testMultipleSolvesSameObject() {
+        // Solve many times with the same solver object
+        TestableRKFehlberg solver;
+
+        for (int i = 0; i < 10; i++) {
+            ExponentialGrowth problem;
+            solver.clearStatus();
+            solver.init(0.0, 0.5, 20);
+            double y = solver.evolve(1.0, &problem);
+            TS_ASSERT_DELTA(y, exp(0.5), TOLERANCE);
+        }
+    }
+
+    void testShrinkAvailRange() {
+        // Test with different shrink availability values
+        ExponentialGrowth problem;
+
+        for (int shrink = 1; shrink <= 10; shrink++) {
+            TestableRKFehlberg solver;
+            solver.setShrinkAvail(shrink);
+            solver.init(0.0, 1.0, 20);
+            double y = solver.evolve(1.0, &problem);
+            TS_ASSERT_DELTA(y, exp(1.0), 1e-4);
+        }
+    }
+
+    void testNearZeroInitialCondition() {
+        // Very small but non-zero initial condition
+        ExponentialGrowth problem;
+        TestableRKFehlberg solver;
+
+        double y0 = 1e-100;
+        solver.init(0.0, 1.0, 20);
+        double y = solver.evolve(y0, &problem);
+
+        TS_ASSERT_DELTA(y, y0 * exp(1.0), y0 * 1e-6);
+    }
+
+    void testExponentialDecayLongTime() {
+        // Long-time decay should approach zero
+        ExponentialDecay problem;
+        TestableRKFehlberg solver;
+
+        solver.init(0.0, 20.0, 200);
+        double y = solver.evolve(1.0, &problem);
+
+        TS_ASSERT(y > 0.0 && y < 1e-6);
+    }
+
+    void testPolynomialPrecision() {
+        // RK should exactly solve polynomial ODEs up to order 4
+        CubicODE problem;  // dy/dx = 3x^2
+        TestableRKFehlberg solver;
+
+        // Since RK4 uses polynomial approximation, cubic should be exact
+        solver.init(0.0, 3.0, 10);
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 27.0, 1e-10);
+    }
+
+    void testMixedSignDerivative() {
+        // dy/dx changes sign (oscillatory derivative)
+        SinusoidalODE problem;  // dy/dx = cos(x), changes sign
+        TestableRKFehlberg solver;
+
+        // Over full period, integral of cos(x) is 0
+        solver.init(0.0, 2.0 * M_PI, 50);
+        double y = solver.evolve(0.0, &problem);
+
+        TS_ASSERT_DELTA(y, 0.0, TOLERANCE);
+    }
+};
+
+const double FGRKFehlbergExtendedTest::TOLERANCE = 1e-6;

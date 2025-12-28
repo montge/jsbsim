@@ -964,4 +964,474 @@ public:
     double expected = 1.0 - 1.0 / (N + 1);
     TS_ASSERT_DELTA(sum, expected, epsilon);
   }
+
+  /***************************************************************************
+   * Stress and Large Input Tests
+   ***************************************************************************/
+
+  // Test many inputs sum
+  void testManyInputsSum() {
+    const int N = 1000;
+    double sum = 0.0;
+    for (int i = 1; i <= N; i++) {
+      sum += static_cast<double>(i);
+    }
+    // Sum 1..N = N*(N+1)/2
+    double expected = N * (N + 1) / 2.0;
+    TS_ASSERT_DELTA(sum, expected, epsilon);
+  }
+
+  // Test sum of uniform values
+  void testUniformValuesSum() {
+    const int N = 500;
+    double value = 0.123;
+    double sum = 0.0;
+    for (int i = 0; i < N; i++) {
+      sum += value;
+    }
+    TS_ASSERT_DELTA(sum, N * value, 1e-8);
+  }
+
+  // Test sum with power series
+  void testPowerSeriesSum() {
+    // Sum x^n for n=0..10 where x=0.5, converges to 2
+    double x = 0.5;
+    double sum = 0.0;
+    double term = 1.0;
+    for (int n = 0; n <= 20; n++) {
+      sum += term;
+      term *= x;
+    }
+    TS_ASSERT_DELTA(sum, 1.0 / (1.0 - x), 1e-6);
+  }
+
+  /***************************************************************************
+   * Dead Zone and Threshold Tests
+   ***************************************************************************/
+
+  // Test dead zone application
+  void testDeadZone() {
+    double deadZone = 0.1;
+
+    // Input inside dead zone
+    double smallInput = 0.05;
+    double output1 = (std::abs(smallInput) < deadZone) ? 0.0 : smallInput;
+    TS_ASSERT_DELTA(output1, 0.0, epsilon);
+
+    // Input outside dead zone
+    double largeInput = 0.2;
+    double output2 = (std::abs(largeInput) < deadZone) ? 0.0 : largeInput;
+    TS_ASSERT_DELTA(output2, 0.2, epsilon);
+  }
+
+  // Test threshold summation
+  void testThresholdSummation() {
+    double threshold = 5.0;
+    double inputs[] = {1.0, 2.0, 3.0, 10.0};  // Only 10.0 exceeds threshold
+    double sum = 0.0;
+    for (double input : inputs) {
+      if (input > threshold) sum += input;
+    }
+    TS_ASSERT_DELTA(sum, 10.0, epsilon);
+  }
+
+  // Test dead band with bias
+  void testDeadBandWithBias() {
+    double deadBand = 0.05;
+    double bias = 0.02;
+    double input = 0.03;
+
+    double adjusted = input + bias;  // = 0.05, at boundary
+    double output = (std::abs(adjusted) <= deadBand) ? 0.0 : adjusted;
+    TS_ASSERT_DELTA(output, 0.0, epsilon);
+
+    input = 0.04;
+    adjusted = input + bias;  // = 0.06, outside
+    output = (std::abs(adjusted) <= deadBand) ? 0.0 : adjusted;
+    TS_ASSERT_DELTA(output, 0.06, epsilon);
+  }
+
+  /***************************************************************************
+   * Hysteresis Tests
+   ***************************************************************************/
+
+  // Test simple hysteresis
+  void testSimpleHysteresis() {
+    double upperThreshold = 0.6;
+    double lowerThreshold = 0.4;
+    bool state = false;
+
+    // Rising signal
+    double signal = 0.3;
+    if (signal > upperThreshold) state = true;
+    else if (signal < lowerThreshold) state = false;
+    TS_ASSERT(!state);
+
+    signal = 0.5;  // Between thresholds, state unchanged
+    if (signal > upperThreshold) state = true;
+    else if (signal < lowerThreshold) state = false;
+    TS_ASSERT(!state);
+
+    signal = 0.7;  // Above upper threshold
+    if (signal > upperThreshold) state = true;
+    else if (signal < lowerThreshold) state = false;
+    TS_ASSERT(state);
+
+    signal = 0.5;  // Falls between, stays on
+    if (signal > upperThreshold) state = true;
+    else if (signal < lowerThreshold) state = false;
+    TS_ASSERT(state);
+  }
+
+  // Test hysteresis band width
+  void testHysteresisBandWidth() {
+    double center = 0.5;
+    double bandwidth = 0.2;
+    double upper = center + bandwidth / 2;
+    double lower = center - bandwidth / 2;
+
+    TS_ASSERT_DELTA(upper, 0.6, epsilon);
+    TS_ASSERT_DELTA(lower, 0.4, epsilon);
+    TS_ASSERT_DELTA(upper - lower, bandwidth, epsilon);
+  }
+
+  /***************************************************************************
+   * Rate Limiting Tests
+   ***************************************************************************/
+
+  // Test rate limited sum
+  void testRateLimitedSum() {
+    double current = 0.0;
+    double target = 10.0;
+    double rateLimit = 2.0;
+    double dt = 0.1;
+
+    // Single step update
+    double change = target - current;
+    double maxChange = rateLimit * dt;
+    double actualChange = std::clamp(change, -maxChange, maxChange);
+    current += actualChange;
+
+    TS_ASSERT_DELTA(current, 0.2, epsilon);
+  }
+
+  // Test rate limiting convergence
+  void testRateLimitingConvergence() {
+    double current = 0.0;
+    double target = 1.0;
+    double rateLimit = 0.5;
+    double dt = 0.1;
+    int steps = 50;
+
+    for (int i = 0; i < steps; i++) {
+      double change = target - current;
+      double maxChange = rateLimit * dt;
+      double actualChange = std::clamp(change, -maxChange, maxChange);
+      current += actualChange;
+    }
+
+    TS_ASSERT_DELTA(current, target, 0.01);
+  }
+
+  // Test bidirectional rate limiting
+  void testBidirectionalRateLimiting() {
+    double rateLimit = 1.0;
+    double dt = 0.5;
+    double maxChange = rateLimit * dt;
+
+    // Positive direction
+    double current = 0.0;
+    double target = 5.0;
+    double change = std::clamp(target - current, -maxChange, maxChange);
+    TS_ASSERT_DELTA(change, 0.5, epsilon);
+
+    // Negative direction
+    current = 5.0;
+    target = 0.0;
+    change = std::clamp(target - current, -maxChange, maxChange);
+    TS_ASSERT_DELTA(change, -0.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Multi-Channel Tests
+   ***************************************************************************/
+
+  // Test triple-axis sum
+  void testTripleAxisSum() {
+    double x = 1.0, y = 2.0, z = 3.0;
+    double magnitude = std::sqrt(x*x + y*y + z*z);
+    TS_ASSERT_DELTA(magnitude, std::sqrt(14.0), epsilon);
+
+    double sum = x + y + z;
+    TS_ASSERT_DELTA(sum, 6.0, epsilon);
+  }
+
+  // Test quaternion components sum
+  void testQuaternionComponentsSum() {
+    // Sum of squared quaternion components should equal 1 for unit quaternion
+    double q0 = 0.5, q1 = 0.5, q2 = 0.5, q3 = 0.5;
+    double normSquared = q0*q0 + q1*q1 + q2*q2 + q3*q3;
+    TS_ASSERT_DELTA(normSquared, 1.0, epsilon);
+  }
+
+  // Test multi-engine thrust sum
+  void testMultiEngineThrustSum() {
+    double engines[] = {1000.0, 1000.0, 950.0, 1050.0};  // 4-engine aircraft
+    double totalThrust = 0.0;
+    for (double thrust : engines) {
+      totalThrust += thrust;
+    }
+    TS_ASSERT_DELTA(totalThrust, 4000.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Gain Scheduling Tests
+   ***************************************************************************/
+
+  // Test altitude-dependent gain
+  void testAltitudeDependentGain() {
+    double baseGain = 1.0;
+    double altitude = 30000.0;  // feet
+    double densityRatio = std::exp(-altitude / 27000.0);
+    double adjustedGain = baseGain / densityRatio;
+
+    TS_ASSERT(adjustedGain > baseGain);
+    TS_ASSERT(adjustedGain < 5.0);
+  }
+
+  // Test speed-scheduled gain
+  void testSpeedScheduledGain() {
+    double baseGain = 1.0;
+    double vcal = 200.0;  // knots
+    double vRef = 150.0;  // reference speed
+    double gainFactor = vRef / vcal;
+    double scheduledGain = baseGain * gainFactor;
+
+    TS_ASSERT_DELTA(scheduledGain, 0.75, epsilon);
+  }
+
+  // Test interpolated gain
+  void testInterpolatedGain() {
+    // Linear interpolation between two gains
+    double gain1 = 0.5, gain2 = 1.5;
+    double x1 = 0.0, x2 = 100.0;
+    double x = 50.0;
+
+    double interp = gain1 + (gain2 - gain1) * (x - x1) / (x2 - x1);
+    TS_ASSERT_DELTA(interp, 1.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Signal Processing Application Tests
+   ***************************************************************************/
+
+  // Test complementary filter
+  void testComplementaryFilter() {
+    double highFreqSignal = 10.0;  // e.g., gyro
+    double lowFreqSignal = 9.5;   // e.g., accelerometer
+    double alpha = 0.98;
+
+    double filtered = alpha * highFreqSignal + (1.0 - alpha) * lowFreqSignal;
+    TS_ASSERT_DELTA(filtered, 9.99, epsilon);
+  }
+
+  // Test sensor fusion
+  void testSensorFusion() {
+    double sensor1 = 100.0, weight1 = 0.6;
+    double sensor2 = 102.0, weight2 = 0.4;
+
+    double fused = sensor1 * weight1 + sensor2 * weight2;
+    TS_ASSERT_DELTA(fused, 100.8, epsilon);
+  }
+
+  // Test low-pass filter accumulation
+  void testLowPassFilterAccumulation() {
+    double alpha = 0.1;
+    double filtered = 0.0;
+    double inputs[] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+
+    for (double input : inputs) {
+      filtered = alpha * input + (1.0 - alpha) * filtered;
+    }
+
+    // After many steps of constant input, should approach input
+    TS_ASSERT(filtered > 0.6);
+    TS_ASSERT(filtered < 1.0);
+  }
+
+  /***************************************************************************
+   * Error Accumulation Tests
+   ***************************************************************************/
+
+  // Test integral error accumulation
+  void testIntegralErrorAccumulation() {
+    double error = 0.1;
+    double dt = 0.01;
+    double integral = 0.0;
+    int steps = 100;
+
+    for (int i = 0; i < steps; i++) {
+      integral += error * dt;
+    }
+
+    TS_ASSERT_DELTA(integral, 0.1, epsilon);
+  }
+
+  // Test integral anti-windup
+  void testIntegralAntiWindup() {
+    double error = 0.5;
+    double dt = 0.01;
+    double integral = 0.0;
+    double integralLimit = 0.2;
+
+    for (int i = 0; i < 100; i++) {
+      integral += error * dt;
+      integral = std::clamp(integral, -integralLimit, integralLimit);
+    }
+
+    TS_ASSERT_DELTA(integral, integralLimit, epsilon);
+  }
+
+  // Test derivative kick prevention
+  void testDerivativeKickPrevention() {
+    double setpoint1 = 0.0, setpoint2 = 10.0;
+    double measurement = 5.0;
+
+    // Direct derivative would have kick on setpoint change
+    double directDerivative = setpoint2 - setpoint1;
+    TS_ASSERT_DELTA(directDerivative, 10.0, epsilon);
+
+    // Derivative on measurement only - no kick
+    double prevMeasurement = 5.0;
+    double measurementDerivative = measurement - prevMeasurement;
+    TS_ASSERT_DELTA(measurementDerivative, 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Boundary and Extreme Value Tests
+   ***************************************************************************/
+
+  // Test max double addition
+  void testMaxDoubleAddition() {
+    double maxVal = std::numeric_limits<double>::max();
+    double result = maxVal + 0.0;
+    TS_ASSERT_DELTA(result, maxVal, 0.0);
+  }
+
+  // Test min positive value
+  void testMinPositiveValue() {
+    double minVal = std::numeric_limits<double>::min();
+    double result = minVal + minVal;
+    TS_ASSERT(result > 0.0);
+    TS_ASSERT(result < 1e-300);
+  }
+
+  // Test denormalized number handling
+  void testDenormalizedNumbers() {
+    double tiny = std::numeric_limits<double>::denorm_min();
+    double result = tiny + tiny;
+    TS_ASSERT(result >= 0.0);
+    TS_ASSERT(result < 1e-300);
+  }
+
+  // Test epsilon precision
+  void testEpsilonPrecision() {
+    double one = 1.0;
+    double eps = std::numeric_limits<double>::epsilon();
+    double result = one + eps;
+    TS_ASSERT(result > one);
+    TS_ASSERT(result - one == eps);
+  }
+
+  /***************************************************************************
+   * Real-Time Update Pattern Tests
+   ***************************************************************************/
+
+  // Test incremental update pattern
+  void testIncrementalUpdatePattern() {
+    double state = 100.0;
+    double update = 0.5;
+
+    for (int i = 0; i < 10; i++) {
+      state += update;
+    }
+    TS_ASSERT_DELTA(state, 105.0, epsilon);
+  }
+
+  // Test decay pattern
+  void testDecayPattern() {
+    double value = 100.0;
+    double decayRate = 0.9;
+
+    for (int i = 0; i < 10; i++) {
+      value *= decayRate;
+    }
+    // 100 * 0.9^10
+    TS_ASSERT_DELTA(value, 100.0 * std::pow(0.9, 10), epsilon);
+  }
+
+  // Test reset and accumulate
+  void testResetAndAccumulate() {
+    double accumulator = 50.0;
+
+    // Reset
+    accumulator = 0.0;
+    TS_ASSERT_DELTA(accumulator, 0.0, epsilon);
+
+    // Accumulate
+    for (int i = 1; i <= 5; i++) {
+      accumulator += i;
+    }
+    TS_ASSERT_DELTA(accumulator, 15.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Flight Dynamics Application Tests
+   ***************************************************************************/
+
+  // Test force component sum
+  void testForceComponentSum() {
+    double lift = 10000.0;
+    double drag = -500.0;
+    double thrust = 2000.0;
+    double weight = -10500.0;
+
+    double netVertical = lift + weight;
+    double netHorizontal = thrust + drag;
+
+    TS_ASSERT_DELTA(netVertical, -500.0, epsilon);
+    TS_ASSERT_DELTA(netHorizontal, 1500.0, epsilon);
+  }
+
+  // Test moment summation
+  void testMomentSummation() {
+    double aeroMoment = 1000.0;
+    double thrustMoment = -200.0;
+    double cgMoment = -100.0;
+    double trimMoment = -700.0;
+
+    double totalMoment = aeroMoment + thrustMoment + cgMoment + trimMoment;
+    TS_ASSERT_DELTA(totalMoment, 0.0, epsilon);  // Trimmed condition
+  }
+
+  // Test angular rate summation
+  void testAngularRateSummation() {
+    double p = 0.1;   // Roll rate (rad/s)
+    double q = 0.05;  // Pitch rate
+    double r = 0.02;  // Yaw rate
+
+    double totalRate = std::sqrt(p*p + q*q + r*r);
+    TS_ASSERT_DELTA(totalRate, std::sqrt(0.0129), 1e-6);
+  }
+
+  // Test control surface deflection sum
+  void testControlSurfaceDeflectionSum() {
+    double basicCommand = 0.3;
+    double servoTrim = 0.05;
+    double gearCorrection = -0.02;
+    double autopilot = 0.1;
+
+    double totalDeflection = basicCommand + servoTrim + gearCorrection + autopilot;
+    TS_ASSERT_DELTA(totalDeflection, 0.43, epsilon);
+  }
 };

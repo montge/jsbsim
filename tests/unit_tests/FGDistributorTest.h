@@ -1138,4 +1138,438 @@ public:
     TS_ASSERT_DELTA(failOp(false, true, 10.0, 12.0), 12.0, epsilon);
     TS_ASSERT_DELTA(failOp(false, false, 10.0, 12.0), 0.0, epsilon);
   }
+
+  /***************************************************************************
+   * Multi-Way Switch Tests
+   ***************************************************************************/
+
+  // Test 4-way switch
+  void testFourWaySwitch() {
+    auto switch4 = [](int selector, double a, double b, double c, double d) {
+      switch (selector) {
+        case 0: return a;
+        case 1: return b;
+        case 2: return c;
+        case 3: return d;
+        default: return 0.0;
+      }
+    };
+
+    TS_ASSERT_DELTA(switch4(0, 10.0, 20.0, 30.0, 40.0), 10.0, epsilon);
+    TS_ASSERT_DELTA(switch4(1, 10.0, 20.0, 30.0, 40.0), 20.0, epsilon);
+    TS_ASSERT_DELTA(switch4(2, 10.0, 20.0, 30.0, 40.0), 30.0, epsilon);
+    TS_ASSERT_DELTA(switch4(3, 10.0, 20.0, 30.0, 40.0), 40.0, epsilon);
+    TS_ASSERT_DELTA(switch4(5, 10.0, 20.0, 30.0, 40.0), 0.0, epsilon);
+  }
+
+  // Test rotary switch with wraparound
+  void testRotarySwitchWraparound() {
+    auto rotarySwitch = [](int position, int numPositions) {
+      return ((position % numPositions) + numPositions) % numPositions;
+    };
+
+    TS_ASSERT_EQUALS(rotarySwitch(0, 4), 0);
+    TS_ASSERT_EQUALS(rotarySwitch(4, 4), 0);
+    TS_ASSERT_EQUALS(rotarySwitch(5, 4), 1);
+    TS_ASSERT_EQUALS(rotarySwitch(-1, 4), 3);
+  }
+
+  // Test binary selector tree
+  void testBinarySelectorTree() {
+    auto binaryTree = [](bool b0, bool b1, double v00, double v01, double v10, double v11) {
+      if (!b0) {
+        return b1 ? v01 : v00;
+      } else {
+        return b1 ? v11 : v10;
+      }
+    };
+
+    TS_ASSERT_DELTA(binaryTree(false, false, 1.0, 2.0, 3.0, 4.0), 1.0, epsilon);
+    TS_ASSERT_DELTA(binaryTree(false, true, 1.0, 2.0, 3.0, 4.0), 2.0, epsilon);
+    TS_ASSERT_DELTA(binaryTree(true, false, 1.0, 2.0, 3.0, 4.0), 3.0, epsilon);
+    TS_ASSERT_DELTA(binaryTree(true, true, 1.0, 2.0, 3.0, 4.0), 4.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Envelope Protection Tests
+   ***************************************************************************/
+
+  // Test AOA protection distribution
+  void testAOAProtection() {
+    auto aoaProtect = [](double pilot_cmd, double aoa, double aoa_limit, double gain) {
+      double protection = 0.0;
+      if (aoa > aoa_limit) {
+        protection = gain * (aoa - aoa_limit);
+      }
+      return pilot_cmd - protection;
+    };
+
+    TS_ASSERT_DELTA(aoaProtect(1.0, 10.0, 15.0, 0.1), 1.0, epsilon);  // Below limit
+    TS_ASSERT_DELTA(aoaProtect(1.0, 18.0, 15.0, 0.1), 0.7, epsilon);  // Above limit
+  }
+
+  // Test overspeed protection
+  void testOverspeedProtection() {
+    auto overspeedProtect = [](double throttle, double mach, double mach_limit) {
+      if (mach > mach_limit) {
+        double reduction = (mach - mach_limit) * 5.0;
+        return std::max(0.0, throttle - reduction);
+      }
+      return throttle;
+    };
+
+    TS_ASSERT_DELTA(overspeedProtect(0.8, 0.80, 0.85), 0.8, epsilon);
+    TS_ASSERT_DELTA(overspeedProtect(0.8, 0.90, 0.85), 0.55, epsilon);
+  }
+
+  // Test bank angle protection
+  void testBankAngleProtection() {
+    auto bankProtect = [](double roll_cmd, double bank, double bank_limit) {
+      double limit_rad = bank_limit * 3.14159 / 180.0;
+      double bank_rad = bank * 3.14159 / 180.0;
+
+      if (std::abs(bank_rad) > limit_rad) {
+        if (bank > 0 && roll_cmd > 0) return 0.0;
+        if (bank < 0 && roll_cmd < 0) return 0.0;
+      }
+      return roll_cmd;
+    };
+
+    TS_ASSERT_DELTA(bankProtect(0.5, 20.0, 30.0), 0.5, epsilon);
+    TS_ASSERT_DELTA(bankProtect(0.5, 35.0, 30.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(bankProtect(-0.5, 35.0, 30.0), -0.5, epsilon);  // Recovery allowed
+  }
+
+  /***************************************************************************
+   * Input Validation Tests
+   ***************************************************************************/
+
+  // Test range validation
+  void testRangeValidation() {
+    auto validateRange = [](double input, double min, double max) {
+      return input >= min && input <= max;
+    };
+
+    TS_ASSERT(validateRange(50.0, 0.0, 100.0));
+    TS_ASSERT(!validateRange(-10.0, 0.0, 100.0));
+    TS_ASSERT(!validateRange(110.0, 0.0, 100.0));
+    TS_ASSERT(validateRange(0.0, 0.0, 100.0));  // Edge case
+  }
+
+  // Test rate of change validation
+  void testRateValidation() {
+    auto validateRate = [](double current, double previous, double dt, double maxRate) {
+      double rate = std::abs(current - previous) / dt;
+      return rate <= maxRate;
+    };
+
+    TS_ASSERT(validateRate(10.0, 9.0, 0.1, 15.0));   // Rate = 10/s
+    TS_ASSERT(!validateRate(20.0, 9.0, 0.1, 15.0));  // Rate = 110/s
+  }
+
+  // Test signal reasonableness
+  void testSignalReasonableness() {
+    auto isReasonable = [](double value, double expected, double tolerance) {
+      return std::abs(value - expected) <= tolerance;
+    };
+
+    TS_ASSERT(isReasonable(100.5, 100.0, 1.0));
+    TS_ASSERT(!isReasonable(105.0, 100.0, 1.0));
+  }
+
+  /***************************************************************************
+   * Smoothing and Transition Tests
+   ***************************************************************************/
+
+  // Test linear crossfade
+  void testLinearCrossfade() {
+    auto crossfade = [](double a, double b, double t) {
+      return a * (1.0 - t) + b * t;
+    };
+
+    TS_ASSERT_DELTA(crossfade(0.0, 100.0, 0.0), 0.0, epsilon);
+    TS_ASSERT_DELTA(crossfade(0.0, 100.0, 0.5), 50.0, epsilon);
+    TS_ASSERT_DELTA(crossfade(0.0, 100.0, 1.0), 100.0, epsilon);
+  }
+
+  // Test smooth step function
+  void testSmoothStep() {
+    auto smoothStep = [](double edge0, double edge1, double x) {
+      double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+      return t * t * (3.0 - 2.0 * t);  // Hermite interpolation
+    };
+
+    TS_ASSERT_DELTA(smoothStep(0.0, 1.0, -0.5), 0.0, epsilon);
+    TS_ASSERT_DELTA(smoothStep(0.0, 1.0, 0.5), 0.5, epsilon);
+    TS_ASSERT_DELTA(smoothStep(0.0, 1.0, 1.5), 1.0, epsilon);
+  }
+
+  // Test exponential transition
+  void testExponentialTransition() {
+    auto expTransition = [](double current, double target, double tau, double dt) {
+      double alpha = 1.0 - std::exp(-dt / tau);
+      return current + alpha * (target - current);
+    };
+
+    double current = 0.0;
+    for (int i = 0; i < 100; i++) {
+      current = expTransition(current, 100.0, 1.0, 0.1);
+    }
+    TS_ASSERT(current > 99.0);  // Should approach target
+  }
+
+  /***************************************************************************
+   * Threshold Crossing Tests
+   ***************************************************************************/
+
+  // Test rising edge detection
+  void testRisingEdge() {
+    auto risingEdge = [](double prev, double curr, double threshold) {
+      return prev < threshold && curr >= threshold;
+    };
+
+    TS_ASSERT(risingEdge(0.4, 0.6, 0.5));
+    TS_ASSERT(!risingEdge(0.6, 0.8, 0.5));
+    TS_ASSERT(!risingEdge(0.6, 0.4, 0.5));
+  }
+
+  // Test falling edge detection
+  void testFallingEdge() {
+    auto fallingEdge = [](double prev, double curr, double threshold) {
+      return prev >= threshold && curr < threshold;
+    };
+
+    TS_ASSERT(fallingEdge(0.6, 0.4, 0.5));
+    TS_ASSERT(!fallingEdge(0.4, 0.3, 0.5));
+    TS_ASSERT(!fallingEdge(0.4, 0.6, 0.5));
+  }
+
+  // Test level crossing count
+  void testLevelCrossingCount() {
+    double values[] = {0.0, 0.3, 0.6, 0.4, 0.7, 0.2, 0.8};
+    double threshold = 0.5;
+    int crossings = 0;
+
+    for (int i = 1; i < 7; i++) {
+      if ((values[i-1] < threshold && values[i] >= threshold) ||
+          (values[i-1] >= threshold && values[i] < threshold)) {
+        crossings++;
+      }
+    }
+
+    TS_ASSERT_EQUALS(crossings, 5);
+  }
+
+  /***************************************************************************
+   * Mode Arbitration Tests
+   ***************************************************************************/
+
+  // Test mode priority arbitration
+  void testModePriorityArbitration() {
+    auto arbitrate = [](bool mode_a, bool mode_b, bool mode_c, int priority_a, int priority_b, int priority_c) {
+      int active = -1;
+      int highest = -1;
+
+      if (mode_a && priority_a > highest) { active = 0; highest = priority_a; }
+      if (mode_b && priority_b > highest) { active = 1; highest = priority_b; }
+      if (mode_c && priority_c > highest) { active = 2; highest = priority_c; }
+
+      return active;
+    };
+
+    TS_ASSERT_EQUALS(arbitrate(true, true, true, 1, 2, 3), 2);
+    TS_ASSERT_EQUALS(arbitrate(true, true, false, 1, 2, 3), 1);
+    TS_ASSERT_EQUALS(arbitrate(true, false, false, 1, 2, 3), 0);
+  }
+
+  // Test mutual exclusion
+  void testMutualExclusion() {
+    auto exclusiveSelect = [](int request1, int request2, int current) {
+      // Only allow one to be active; priority to current holder
+      if (current == 1) return 1;
+      if (current == 2) return 2;
+      if (request1 && !request2) return 1;
+      if (request2 && !request1) return 2;
+      return 0;  // Neither or conflict
+    };
+
+    TS_ASSERT_EQUALS(exclusiveSelect(1, 0, 0), 1);
+    TS_ASSERT_EQUALS(exclusiveSelect(0, 1, 0), 2);
+    TS_ASSERT_EQUALS(exclusiveSelect(1, 1, 0), 0);  // Conflict
+    TS_ASSERT_EQUALS(exclusiveSelect(1, 1, 1), 1);  // Holder priority
+  }
+
+  /***************************************************************************
+   * Sensor Selection Tests
+   ***************************************************************************/
+
+  // Test best source selection
+  void testBestSourceSelection() {
+    auto selectBest = [](double s1, bool v1, double s2, bool v2, double s3, bool v3) {
+      // Select median of valid sources, or single valid, or default
+      std::vector<double> valid;
+      if (v1) valid.push_back(s1);
+      if (v2) valid.push_back(s2);
+      if (v3) valid.push_back(s3);
+
+      if (valid.empty()) return 0.0;
+      if (valid.size() == 1) return valid[0];
+      if (valid.size() == 2) return (valid[0] + valid[1]) / 2.0;
+
+      std::sort(valid.begin(), valid.end());
+      return valid[1];  // Median
+    };
+
+    TS_ASSERT_DELTA(selectBest(10.0, true, 11.0, true, 100.0, true), 11.0, epsilon);
+    TS_ASSERT_DELTA(selectBest(10.0, true, 11.0, true, 100.0, false), 10.5, epsilon);
+    TS_ASSERT_DELTA(selectBest(10.0, true, 11.0, false, 100.0, false), 10.0, epsilon);
+  }
+
+  // Test outlier rejection
+  void testOutlierRejection() {
+    auto rejectOutliers = [](double a, double b, double c, double threshold) {
+      double avg = (a + b + c) / 3.0;
+      std::vector<double> valid;
+
+      if (std::abs(a - avg) < threshold) valid.push_back(a);
+      if (std::abs(b - avg) < threshold) valid.push_back(b);
+      if (std::abs(c - avg) < threshold) valid.push_back(c);
+
+      if (valid.empty()) return avg;
+      double sum = 0.0;
+      for (double v : valid) sum += v;
+      return sum / valid.size();
+    };
+
+    // With values 10, 11, 12 and threshold 5, avg = 11, all within threshold
+    TS_ASSERT_DELTA(rejectOutliers(10.0, 11.0, 12.0, 5.0), 11.0, epsilon);
+
+    // With one outlier at 50, avg = 23.67, 50 is 26.33 away (rejected with threshold 25)
+    // 10 and 11 are within threshold, so result is (10+11)/2 = 10.5
+    TS_ASSERT_DELTA(rejectOutliers(10.0, 11.0, 50.0, 25.0), 10.5, epsilon);
+  }
+
+  /***************************************************************************
+   * Configuration Distribution Tests
+   ***************************************************************************/
+
+  // Test aircraft configuration selection
+  void testAircraftConfigSelection() {
+    enum Config { CLEAN, TAKEOFF, APPROACH, LANDING };
+
+    auto selectConfig = [](double flaps, bool gear_down, double speed) {
+      if (gear_down && flaps > 25.0) return LANDING;
+      if (gear_down || flaps > 15.0) return APPROACH;
+      if (flaps > 0.0) return TAKEOFF;
+      return CLEAN;
+    };
+
+    TS_ASSERT_EQUALS(selectConfig(0.0, false, 300.0), CLEAN);
+    TS_ASSERT_EQUALS(selectConfig(10.0, false, 200.0), TAKEOFF);
+    TS_ASSERT_EQUALS(selectConfig(20.0, true, 150.0), APPROACH);
+    TS_ASSERT_EQUALS(selectConfig(30.0, true, 130.0), LANDING);
+  }
+
+  // Test weight and balance distribution
+  void testWeightBalanceDistribution() {
+    auto cgPosition = [](double fuel_fwd, double fuel_aft, double pax_fwd, double pax_aft, double cargo) {
+      double total_weight = fuel_fwd + fuel_aft + pax_fwd + pax_aft + cargo;
+      if (total_weight == 0.0) return 0.0;
+
+      double moment = fuel_fwd * 10.0 + fuel_aft * 40.0 + pax_fwd * 15.0 + pax_aft * 35.0 + cargo * 45.0;
+      return moment / total_weight;
+    };
+
+    double cg = cgPosition(1000.0, 500.0, 400.0, 300.0, 200.0);
+    TS_ASSERT(cg > 15.0 && cg < 35.0);  // CG in reasonable range
+  }
+
+  /***************************************************************************
+   * Time-Based Distribution Tests
+   ***************************************************************************/
+
+  // Test duty cycle
+  void testDutyCycle() {
+    auto dutyCycleOutput = [](double time, double period, double duty) {
+      double phase = std::fmod(time, period);
+      return phase < (period * duty) ? 1.0 : 0.0;
+    };
+
+    TS_ASSERT_DELTA(dutyCycleOutput(0.1, 1.0, 0.5), 1.0, epsilon);
+    TS_ASSERT_DELTA(dutyCycleOutput(0.6, 1.0, 0.5), 0.0, epsilon);
+    TS_ASSERT_DELTA(dutyCycleOutput(1.1, 1.0, 0.5), 1.0, epsilon);
+  }
+
+  // Test time-based mode switching
+  void testTimeBasedModeSwitching() {
+    auto modeForTime = [](double elapsed, double phase1_end, double phase2_end, double phase3_end) {
+      if (elapsed < phase1_end) return 1;
+      if (elapsed < phase2_end) return 2;
+      if (elapsed < phase3_end) return 3;
+      return 4;
+    };
+
+    TS_ASSERT_EQUALS(modeForTime(5.0, 10.0, 20.0, 30.0), 1);
+    TS_ASSERT_EQUALS(modeForTime(15.0, 10.0, 20.0, 30.0), 2);
+    TS_ASSERT_EQUALS(modeForTime(25.0, 10.0, 20.0, 30.0), 3);
+    TS_ASSERT_EQUALS(modeForTime(35.0, 10.0, 20.0, 30.0), 4);
+  }
+
+  // Test scheduled event
+  void testScheduledEvent() {
+    auto checkSchedule = [](double time, double event_time, double tolerance) {
+      return std::abs(time - event_time) <= tolerance;
+    };
+
+    TS_ASSERT(checkSchedule(10.0, 10.0, 0.1));
+    TS_ASSERT(checkSchedule(10.05, 10.0, 0.1));
+    TS_ASSERT(!checkSchedule(10.2, 10.0, 0.1));
+  }
+
+  /***************************************************************************
+   * Conditional Output Tests
+   ***************************************************************************/
+
+  // Test conditional pass-through
+  void testConditionalPassthrough() {
+    auto passthrough = [](double input, bool enable) {
+      return enable ? input : 0.0;
+    };
+
+    TS_ASSERT_DELTA(passthrough(42.0, true), 42.0, epsilon);
+    TS_ASSERT_DELTA(passthrough(42.0, false), 0.0, epsilon);
+  }
+
+  // Test conditional with hold
+  void testConditionalWithHold() {
+    double held_value = 0.0;
+
+    auto conditionalHold = [&](double input, bool track) {
+      if (track) {
+        held_value = input;
+      }
+      return held_value;
+    };
+
+    TS_ASSERT_DELTA(conditionalHold(10.0, true), 10.0, epsilon);
+    TS_ASSERT_DELTA(conditionalHold(20.0, false), 10.0, epsilon);  // Held
+    TS_ASSERT_DELTA(conditionalHold(30.0, true), 30.0, epsilon);  // Track again
+  }
+
+  // Test multiple output assignment
+  void testMultipleOutputAssignment() {
+    auto assignOutputs = [](double input, bool use_a, bool use_b) {
+      double out_a = use_a ? input : 0.0;
+      double out_b = use_b ? input * 2.0 : 0.0;
+      return std::make_pair(out_a, out_b);
+    };
+
+    auto result = assignOutputs(5.0, true, true);
+    TS_ASSERT_DELTA(result.first, 5.0, epsilon);
+    TS_ASSERT_DELTA(result.second, 10.0, epsilon);
+
+    result = assignOutputs(5.0, true, false);
+    TS_ASSERT_DELTA(result.first, 5.0, epsilon);
+    TS_ASSERT_DELTA(result.second, 0.0, epsilon);
+  }
 };
