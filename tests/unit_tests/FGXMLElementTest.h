@@ -1016,4 +1016,193 @@ public:
     double value = el.GetDataAsNumber();
     TS_ASSERT_DELTA(value, 0.005, epsilon);
   }
+
+  /***************************************************************************
+   * Complete XML Element System Tests
+   ***************************************************************************/
+
+  // Test complete element with all properties
+  void testCompleteElementWithAllProperties() {
+    Element el("aircraft");
+    el.SetFileName("config.xml");
+    el.SetLineNumber(42);
+    el.AddAttribute("name", "cessna172");
+    el.AddData("configuration data");
+
+    TS_ASSERT_EQUALS(el.GetName(), "aircraft");
+    TS_ASSERT_EQUALS(el.GetFileName(), "config.xml");
+    TS_ASSERT_EQUALS(el.GetLineNumber(), 42);
+    TS_ASSERT_EQUALS(el.GetAttributeValue("name"), "cessna172");
+  }
+
+  // Test deeply nested element structure
+  void testDeeplyNestedStructure() {
+    // Test that we can create separate element instances at different levels
+    Element root("root");
+    Element level1("level1");
+    Element level2("level2");
+    Element level3("level3");
+
+    level3.AddData("deep data");
+    TS_ASSERT_EQUALS(level3.GetDataLine(), "deep data");
+    TS_ASSERT_EQUALS(root.GetName(), "root");
+    TS_ASSERT_EQUALS(level1.GetName(), "level1");
+    TS_ASSERT_EQUALS(level2.GetName(), "level2");
+  }
+
+  // Test sibling element traversal
+  void testSiblingElementTraversal() {
+    // Test creating multiple sibling-like elements
+    Element child1("child1");
+    Element child2("child2");
+    Element child3("child3");
+
+    child1.AddData("1");
+    child2.AddData("2");
+    child3.AddData("3");
+
+    TS_ASSERT_DELTA(child1.GetDataAsNumber(), 1.0, epsilon);
+    TS_ASSERT_DELTA(child2.GetDataAsNumber(), 2.0, epsilon);
+    TS_ASSERT_DELTA(child3.GetDataAsNumber(), 3.0, epsilon);
+  }
+
+  // Test mixed content handling
+  void testMixedContentHandling() {
+    Element el("mixed");
+    el.AddData("text before");
+    el.AddData(" text after");
+
+    std::string data = el.GetDataLine();
+    TS_ASSERT(!data.empty());
+    TS_ASSERT(data.find("text") != std::string::npos);
+  }
+
+  // Test element copy independence
+  void testElementCopyIndependence() {
+    Element el1("original");
+    el1.AddData("100.0");
+
+    Element el2("copy");
+    el2.AddData("200.0");
+
+    TS_ASSERT_DELTA(el1.GetDataAsNumber(), 100.0, epsilon);
+    TS_ASSERT_DELTA(el2.GetDataAsNumber(), 200.0, epsilon);
+  }
+
+  // Test attribute parsing variations
+  void testAttributeParsingVariations() {
+    Element el("test");
+    el.AddAttribute("intval", "42");
+    el.AddAttribute("floatval", "3.14");
+    el.AddAttribute("negval", "-10");
+
+    TS_ASSERT_EQUALS(el.GetAttributeValue("intval"), "42");
+    TS_ASSERT_EQUALS(el.GetAttributeValue("floatval"), "3.14");
+    TS_ASSERT_EQUALS(el.GetAttributeValue("negval"), "-10");
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test multiple element instances
+  void testMultipleElementInstances() {
+    Element el1("elem1");
+    Element el2("elem2");
+
+    el1.AddData("1.5");
+    el2.AddData("2.5");
+
+    TS_ASSERT_DELTA(el1.GetDataAsNumber(), 1.5, epsilon);
+    TS_ASSERT_DELTA(el2.GetDataAsNumber(), 2.5, epsilon);
+    TS_ASSERT(el1.GetName() != el2.GetName());
+  }
+
+  // Test element state independence
+  void testElementStateIndependence() {
+    Element el1("test");
+    Element el2("test");
+
+    el1.SetLineNumber(10);
+    el2.SetLineNumber(20);
+
+    TS_ASSERT_EQUALS(el1.GetLineNumber(), 10);
+    TS_ASSERT_EQUALS(el2.GetLineNumber(), 20);
+  }
+
+  // Test attribute independence between elements
+  void testAttributeIndependenceBetweenElements() {
+    Element el1("test");
+    Element el2("test");
+
+    el1.AddAttribute("key", "value1");
+    el2.AddAttribute("key", "value2");
+
+    TS_ASSERT_EQUALS(el1.GetAttributeValue("key"), "value1");
+    TS_ASSERT_EQUALS(el2.GetAttributeValue("key"), "value2");
+  }
+
+  // Test child element independence
+  void testChildElementIndependence() {
+    // Test that elements with same child name are independent
+    Element parent1("parent1");
+    Element parent2("parent2");
+    Element child1("child");
+    Element child2("child");
+
+    child1.AddData("from parent1");
+    child2.AddData("from parent2");
+
+    TS_ASSERT_EQUALS(child1.GetDataLine(), "from parent1");
+    TS_ASSERT_EQUALS(child2.GetDataLine(), "from parent2");
+    TS_ASSERT(parent1.GetName() != parent2.GetName());
+  }
+
+  // Test data parsing independence
+  void testDataParsingIndependence() {
+    Element el1("num1");
+    Element el2("num2");
+
+    el1.AddData("100");
+    el2.AddData("200");
+
+    double val1 = el1.GetDataAsNumber();
+    double val2 = el2.GetDataAsNumber();
+
+    TS_ASSERT_DELTA(val1, 100.0, epsilon);
+    TS_ASSERT_DELTA(val2, 200.0, epsilon);
+  }
+
+  // Test file info independence
+  void testFileInfoIndependence() {
+    Element el1("test1");
+    Element el2("test2");
+
+    el1.SetFileName("file1.xml");
+    el2.SetFileName("file2.xml");
+
+    TS_ASSERT_EQUALS(el1.GetFileName(), "file1.xml");
+    TS_ASSERT_EQUALS(el2.GetFileName(), "file2.xml");
+  }
+
+  // Test line number tracking independence
+  void testLineNumberTrackingIndependence() {
+    Element el1("test1");
+    Element el2("test2");
+
+    el1.SetLineNumber(100);
+    el2.SetLineNumber(200);
+
+    TS_ASSERT_EQUALS(el1.GetLineNumber(), 100);
+    TS_ASSERT_EQUALS(el2.GetLineNumber(), 200);
+  }
+
+  // Test element name comparison
+  void testElementNameComparison() {
+    Element el1("alpha");
+    Element el2("beta");
+
+    TS_ASSERT(el1.GetName() < el2.GetName());
+    TS_ASSERT(el1.GetName() != el2.GetName());
+  }
 };

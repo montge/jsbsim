@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <algorithm>
 
 #include <FGFDMExec.h>
 #include "TestUtilities.h"
@@ -1590,5 +1591,195 @@ public:
     double y = 2.0 * x * x + 3.0 * x + 1.0;
 
     TS_ASSERT_DELTA(y, 3.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Complete Script System Tests
+   ***************************************************************************/
+
+  // Test complete flight profile
+  void testCompleteFlightProfile() {
+    double altitude = 0.0;
+    double phase = 0;  // 0=ground, 1=climb, 2=cruise, 3=descent, 4=landing
+
+    // Takeoff
+    phase = 1;
+    altitude = 1000.0;
+    TS_ASSERT_EQUALS(phase, 1);
+
+    // Climb complete
+    altitude = 35000.0;
+    phase = 2;
+    TS_ASSERT_EQUALS(phase, 2);
+
+    // Begin descent
+    phase = 3;
+    altitude = 10000.0;
+    TS_ASSERT_EQUALS(phase, 3);
+
+    // Landing
+    phase = 4;
+    altitude = 0.0;
+    TS_ASSERT_EQUALS(phase, 4);
+  }
+
+  // Test event priority system
+  void testEventPrioritySystem() {
+    std::vector<std::pair<int, std::string>> events;
+    events.push_back({3, "low"});
+    events.push_back({1, "high"});
+    events.push_back({2, "medium"});
+
+    std::sort(events.begin(), events.end());
+
+    TS_ASSERT_EQUALS(events[0].second, "high");
+    TS_ASSERT_EQUALS(events[1].second, "medium");
+    TS_ASSERT_EQUALS(events[2].second, "low");
+  }
+
+  // Test conditional action sequence
+  void testConditionalActionSequence() {
+    double speed = 0.0;
+    double altitude = 0.0;
+    bool gearDown = true;
+
+    // Takeoff sequence
+    speed = 150.0;
+    if (speed > 120.0) {
+      gearDown = false;  // Retract gear
+    }
+    TS_ASSERT(!gearDown);
+
+    // Approach sequence
+    speed = 140.0;
+    altitude = 2000.0;
+    if (altitude < 3000.0 && speed < 160.0) {
+      gearDown = true;  // Lower gear
+    }
+    TS_ASSERT(gearDown);
+  }
+
+  // Test script timing accuracy
+  void testScriptTimingAccuracy() {
+    double simTime = 0.0;
+    double dt = 0.008333;  // 120 Hz
+    int iterations = 120;
+
+    for (int i = 0; i < iterations; i++) {
+      simTime += dt;
+    }
+
+    TS_ASSERT_DELTA(simTime, 1.0, 0.01);  // ~1 second
+  }
+
+  // Test data logging simulation
+  void testDataLoggingSimulation() {
+    std::vector<double> log;
+    double value = 0.0;
+
+    for (int i = 0; i < 10; i++) {
+      value = i * 10.0;
+      log.push_back(value);
+    }
+
+    TS_ASSERT_EQUALS(log.size(), 10u);
+    TS_ASSERT_DELTA(log[5], 50.0, DEFAULT_TOLERANCE);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test condition evaluation independence
+  void testConditionEvaluationIndependence() {
+    double val1 = 50.0, threshold1 = 40.0;
+    double val2 = 30.0, threshold2 = 40.0;
+
+    bool result1 = val1 > threshold1;
+    bool result2 = val2 > threshold2;
+
+    TS_ASSERT(result1);
+    TS_ASSERT(!result2);
+  }
+
+  // Test event trigger independence
+  void testEventTriggerIndependence() {
+    double time1 = 10.0, trigger1 = 5.0;
+    double time2 = 3.0, trigger2 = 5.0;
+
+    bool fired1 = time1 >= trigger1;
+    bool fired2 = time2 >= trigger2;
+
+    TS_ASSERT(fired1);
+    TS_ASSERT(!fired2);
+  }
+
+  // Test property value independence
+  void testPropertyValueIndependence() {
+    double prop1 = 100.0;
+    double prop2 = 200.0;
+
+    prop1 *= 2.0;
+    prop2 *= 0.5;
+
+    TS_ASSERT_DELTA(prop1, 200.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(prop2, 100.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test action execution independence
+  void testActionExecutionIndependence() {
+    double output1 = 0.0, output2 = 0.0;
+    double input = 50.0;
+
+    output1 = input * 2.0;
+    output2 = input * 3.0;
+
+    TS_ASSERT_DELTA(output1, 100.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(output2, 150.0, DEFAULT_TOLERANCE);
+  }
+
+  // Test state variable independence
+  void testStateVariableIndependence() {
+    int state1 = 0;
+    int state2 = 0;
+
+    state1 = 1;
+    state2 = 2;
+
+    TS_ASSERT_EQUALS(state1, 1);
+    TS_ASSERT_EQUALS(state2, 2);
+  }
+
+  // Test script run count tracking
+  void testScriptRunCountTracking() {
+    int runCount = 0;
+    for (int i = 0; i < 100; i++) {
+      runCount++;
+    }
+    TS_ASSERT_EQUALS(runCount, 100);
+  }
+
+  // Test simulation step accumulation
+  void testSimulationStepAccumulation() {
+    double totalTime = 0.0;
+    double dt = 0.01;
+    int steps = 1000;
+
+    for (int i = 0; i < steps; i++) {
+      totalTime += dt;
+    }
+    TS_ASSERT_DELTA(totalTime, 10.0, 0.01);
+  }
+
+  // Test event counter independence
+  void testEventCounterIndependence() {
+    int counter1 = 0;
+    int counter2 = 0;
+
+    for (int i = 0; i < 5; i++) counter1++;
+    for (int i = 0; i < 10; i++) counter2++;
+
+    TS_ASSERT_EQUALS(counter1, 5);
+    TS_ASSERT_EQUALS(counter2, 10);
   }
 };

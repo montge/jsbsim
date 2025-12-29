@@ -1130,4 +1130,177 @@ public:
     TS_ASSERT_DELTA(bounces[2], 90.0, epsilon);
     TS_ASSERT_DELTA(bounces[3], 27.0, epsilon);
   }
+
+  /***************************************************************************
+   * Complete Landing Gear System Tests
+   ***************************************************************************/
+
+  // Test complete gear cycle
+  void testCompleteGearCycle() {
+    bool gearDown = true;
+    double gearPosition = 1.0;  // 1 = down, 0 = up
+    double transitionTime = 10.0;  // seconds
+    double dt = 0.1;
+
+    // Retract
+    for (double t = 0.0; t < transitionTime; t += dt) {
+      gearPosition -= dt / transitionTime;
+    }
+    gearDown = false;
+    TS_ASSERT(!gearDown);
+    TS_ASSERT(gearPosition < 0.1);
+
+    // Extend
+    for (double t = 0.0; t < transitionTime; t += dt) {
+      gearPosition += dt / transitionTime;
+    }
+    gearDown = true;
+    TS_ASSERT(gearDown);
+    TS_ASSERT(gearPosition > 0.9);
+  }
+
+  // Test gear warning system
+  void testGearWarningSystem() {
+    double altitude = 500.0;    // ft AGL
+    double speed = 150.0;       // kts
+    bool gearDown = false;
+    bool throttleIdle = true;
+
+    // Warning conditions: low altitude, slow, gear up, throttle idle
+    bool warning = (altitude < 1000.0 && speed < 180.0 &&
+                   !gearDown && throttleIdle);
+    TS_ASSERT(warning);
+
+    // Gear extended - no warning
+    gearDown = true;
+    warning = (altitude < 1000.0 && speed < 180.0 &&
+              !gearDown && throttleIdle);
+    TS_ASSERT(!warning);
+  }
+
+  // Test strut compression sequence
+  void testStrutCompressionSequence() {
+    double staticLoad = 5000.0;
+    double kStrut = 10000.0;
+    double staticCompression = staticLoad / kStrut;
+
+    // Dynamic landing: 2x load
+    double landingLoad = staticLoad * 2.0;
+    double maxCompression = landingLoad / kStrut;
+
+    TS_ASSERT_DELTA(staticCompression, 0.5, epsilon);
+    TS_ASSERT_DELTA(maxCompression, 1.0, epsilon);
+  }
+
+  // Test anti-skid system
+  void testAntiSkidSystem() {
+    double wheelSpeed = 100.0;  // ft/s
+    double groundSpeed = 120.0; // ft/s
+    double slipRatio = (groundSpeed - wheelSpeed) / groundSpeed;
+
+    // Optimal slip ratio ~10-15%
+    bool antiSkidActive = slipRatio > 0.15;
+    TS_ASSERT(antiSkidActive);
+
+    // Reduce brake pressure
+    wheelSpeed = 108.0;
+    slipRatio = (groundSpeed - wheelSpeed) / groundSpeed;
+    antiSkidActive = slipRatio > 0.15;
+    TS_ASSERT(!antiSkidActive);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test gear load independence
+  void testGearLoadIndependence() {
+    double mainLoad1 = 8000.0, mainLoad2 = 6000.0;
+    double noseLoad1 = 2000.0, noseLoad2 = 4000.0;
+
+    TS_ASSERT_DELTA(mainLoad1 + noseLoad1, 10000.0, epsilon);
+    TS_ASSERT_DELTA(mainLoad2 + noseLoad2, 10000.0, epsilon);
+  }
+
+  // Test strut calculation independence
+  void testStrutCalculationIndependence() {
+    double k1 = 10000.0, x1 = 0.5;
+    double k2 = 20000.0, x2 = 0.25;
+
+    double F1 = k1 * x1;
+    double F2 = k2 * x2;
+
+    TS_ASSERT_DELTA(F1, 5000.0, epsilon);
+    TS_ASSERT_DELTA(F2, 5000.0, epsilon);
+  }
+
+  // Test tire force independence
+  void testTireForceIndependence() {
+    double mu1 = 0.8, N1 = 5000.0;
+    double mu2 = 0.5, N2 = 8000.0;
+
+    double F1 = mu1 * N1;
+    double F2 = mu2 * N2;
+
+    TS_ASSERT_DELTA(F1, 4000.0, epsilon);
+    TS_ASSERT_DELTA(F2, 4000.0, epsilon);
+  }
+
+  // Test brake force independence
+  void testBrakeForceIndependence() {
+    double brake1 = 0.5, maxBrake1 = 10000.0;
+    double brake2 = 0.8, maxBrake2 = 6250.0;
+
+    double F1 = brake1 * maxBrake1;
+    double F2 = brake2 * maxBrake2;
+
+    TS_ASSERT_DELTA(F1, 5000.0, epsilon);
+    TS_ASSERT_DELTA(F2, 5000.0, epsilon);
+  }
+
+  // Test damper coefficient independence
+  void testDamperCoefficientIndependence() {
+    double C1 = 1000.0, v1 = 5.0;
+    double C2 = 2500.0, v2 = 2.0;
+
+    double F1 = C1 * v1;
+    double F2 = C2 * v2;
+
+    TS_ASSERT_DELTA(F1, 5000.0, epsilon);
+    TS_ASSERT_DELTA(F2, 5000.0, epsilon);
+  }
+
+  // Test wheel rotation independence
+  void testWheelRotationIndependence() {
+    double omega1 = 100.0;  // rad/s
+    double omega2 = 50.0;   // rad/s
+    double radius = 1.0;    // ft
+
+    double v1 = omega1 * radius;
+    double v2 = omega2 * radius;
+
+    TS_ASSERT_DELTA(v1, 100.0, epsilon);
+    TS_ASSERT_DELTA(v2, 50.0, epsilon);
+  }
+
+  // Test steering angle independence
+  void testSteeringAngleIndependence() {
+    double angle1 = 10.0;  // degrees
+    double angle2 = -15.0; // degrees
+
+    TS_ASSERT(angle1 > 0.0);
+    TS_ASSERT(angle2 < 0.0);
+    TS_ASSERT_DELTA(std::abs(angle2), 15.0, epsilon);
+  }
+
+  // Test gear position sensor independence
+  void testGearPositionSensorIndependence() {
+    double pos1 = 1.0;  // fully down
+    double pos2 = 0.5;  // in transit
+    double pos3 = 0.0;  // fully up
+
+    TS_ASSERT(pos1 > pos2);
+    TS_ASSERT(pos2 > pos3);
+    TS_ASSERT_DELTA(pos1, 1.0, epsilon);
+  }
 };

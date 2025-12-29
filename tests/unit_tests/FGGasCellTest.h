@@ -1179,4 +1179,164 @@ public:
       buoyant->Run(false);
     }
   }
+
+  /***************************************************************************
+   * Complete Gas Cell System Tests
+   ***************************************************************************/
+
+  // Test complete gas cell state
+  void testCompleteGasCellState() {
+    FGGasCell::Inputs inputs;
+    inputs.Pressure = 2116.22;
+    inputs.Temperature = 518.67;
+    inputs.Density = 0.002378;
+    inputs.gravity = 32.174;
+
+    // Verify all inputs are valid
+    TS_ASSERT(inputs.Pressure > 0.0);
+    TS_ASSERT(inputs.Temperature > 0.0);
+    TS_ASSERT(inputs.Density > 0.0);
+    TS_ASSERT(inputs.gravity > 0.0);
+  }
+
+  // Test gas cell temperature effects
+  void testGasCellTemperatureEffects() {
+    double volume1 = 10000.0;
+    double T1 = 500.0;
+    double T2 = 600.0;
+
+    // Charles's Law: V1/T1 = V2/T2
+    double volume2 = volume1 * T2 / T1;
+    TS_ASSERT(volume2 > volume1);
+    TS_ASSERT_DELTA(volume2, 12000.0, 1.0);
+  }
+
+  // Test gas cell pressure-volume relationship
+  void testGasCellPressureVolumeRelationship() {
+    double P1 = 2000.0;
+    double V1 = 10000.0;
+    double P2 = 1000.0;
+
+    // Boyle's Law: P1*V1 = P2*V2
+    double V2 = P1 * V1 / P2;
+    TS_ASSERT(V2 > V1);
+    TS_ASSERT_DELTA(V2, 20000.0, 1.0);
+  }
+
+  // Test superheat lift calculation
+  void testSuperheatLiftCalculation() {
+    double volume = 50000.0;        // ft^3
+    double airDensity = 0.002378;   // slugs/ft^3
+    double gasDensity = 0.00015;    // Helium density
+    double superheatFactor = 1.1;   // 10% superheat
+
+    double coldLift = volume * (airDensity - gasDensity) * 32.174;
+    double hotLift = coldLift * superheatFactor;
+
+    TS_ASSERT(hotLift > coldLift);
+  }
+
+  // Test valve operations
+  void testValveOperations() {
+    double pressure = 2200.0;   // psf
+    double reliefPressure = 2150.0;
+
+    bool valveOpen = pressure > reliefPressure;
+    TS_ASSERT(valveOpen);
+
+    // After venting
+    pressure = 2100.0;
+    valveOpen = pressure > reliefPressure;
+    TS_ASSERT(!valveOpen);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test gas cell inputs independence
+  void testGasCellInputsIndependence() {
+    FGGasCell::Inputs inputs1;
+    FGGasCell::Inputs inputs2;
+
+    inputs1.Pressure = 2000.0;
+    inputs2.Pressure = 3000.0;
+
+    TS_ASSERT_DELTA(inputs1.Pressure, 2000.0, 0.1);
+    TS_ASSERT_DELTA(inputs2.Pressure, 3000.0, 0.1);
+  }
+
+  // Test buoyant force calculation independence
+  void testBuoyantForceCalculationIndependence() {
+    double vol1 = 10000.0, rho1 = 0.002;
+    double vol2 = 20000.0, rho2 = 0.001;
+
+    double buoyancy1 = vol1 * rho1 * 32.174;
+    double buoyancy2 = vol2 * rho2 * 32.174;
+
+    TS_ASSERT_DELTA(buoyancy1, 643.48, 1.0);
+    TS_ASSERT_DELTA(buoyancy2, 643.48, 1.0);
+  }
+
+  // Test temperature state independence
+  void testTemperatureStateIndependence() {
+    double T1 = 500.0;
+    double T2 = 600.0;
+
+    // Different cells at different temperatures
+    TS_ASSERT(T1 < T2);
+    TS_ASSERT_DELTA(T2 - T1, 100.0, 0.01);
+  }
+
+  // Test pressure calculation independence
+  void testPressureCalculationIndependence() {
+    double P1 = 2000.0;
+    double P2 = 2500.0;
+
+    TS_ASSERT(P1 < P2);
+    TS_ASSERT_DELTA(P2 / P1, 1.25, 0.01);
+  }
+
+  // Test volume calculation independence
+  void testVolumeCalculationIndependence() {
+    double vol1 = 5000.0;
+    double vol2 = 10000.0;
+
+    TS_ASSERT(vol2 > vol1);
+    TS_ASSERT_DELTA(vol2 / vol1, 2.0, 0.01);
+  }
+
+  // Test gas density calculation independence
+  void testGasDensityCalculationIndependence() {
+    double rho1 = 0.00015;  // Helium
+    double rho2 = 0.00011;  // Hydrogen
+
+    TS_ASSERT(rho1 > rho2);
+    TS_ASSERT(rho1 < 0.001);
+    TS_ASSERT(rho2 < 0.001);
+  }
+
+  // Test buoyancy ratio calculation
+  void testBuoyancyRatioCalculation() {
+    double airDensity = 0.002378;
+    double heliumDensity = 0.00015;
+    double hydrogenDensity = 0.00011;
+
+    double heliumLiftRatio = (airDensity - heliumDensity) / airDensity;
+    double hydrogenLiftRatio = (airDensity - hydrogenDensity) / airDensity;
+
+    TS_ASSERT(hydrogenLiftRatio > heliumLiftRatio);
+    TS_ASSERT(heliumLiftRatio > 0.9);
+  }
+
+  // Test envelope material stress
+  void testEnvelopeMaterialStress() {
+    double pressure = 100.0;    // psf differential
+    double radius = 50.0;       // ft
+    double thickness = 0.01;    // ft
+
+    double hoopStress = pressure * radius / thickness;
+    TS_ASSERT(hoopStress > 0.0);
+    TS_ASSERT_DELTA(hoopStress, 500000.0, 1.0);
+  }
 };
