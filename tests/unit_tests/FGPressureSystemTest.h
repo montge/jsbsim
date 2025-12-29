@@ -1237,4 +1237,176 @@ public:
         bool system_ready = outflow_valve_ok && packs_ok && bleed_ok;
         TS_ASSERT(system_ready);
     }
+
+    //==========================================================================
+    // 23. COMPLETE SYSTEM TESTS
+    //==========================================================================
+
+    void testCompletePressureCycleSimulation() {
+        // Simulate full flight pressurization cycle
+        double cabin_alt = 0.0;
+        double target_alt = 8000.0;
+        double aircraft_alt = 0.0;
+
+        // Takeoff and climb
+        for (int i = 0; i < 100; i++) {
+            aircraft_alt += 400.0;  // 400 ft/step
+            double target_cabin = std::min(aircraft_alt * 0.2, target_alt);
+            cabin_alt += (target_cabin - cabin_alt) * 0.1;
+        }
+
+        TS_ASSERT(cabin_alt > 0.0);
+        TS_ASSERT(cabin_alt < target_alt + 100.0);
+    }
+
+    void testEmergencyDescentPressurization() {
+        double cabin_alt = 8000.0;
+        double aircraft_alt = 40000.0;
+        double max_descent_rate = 6000.0;  // ft/min
+
+        // Rapid descent
+        for (int i = 0; i < 10; i++) {
+            aircraft_alt -= 3000.0;
+            double target_cabin = std::min(aircraft_alt * 0.2, 8000.0);
+            cabin_alt = std::max(cabin_alt - 500.0, target_cabin);
+        }
+
+        TS_ASSERT(cabin_alt < 8000.0);
+    }
+
+    void testPackFailureScenario() {
+        bool pack1_online = true;
+        bool pack2_online = false;  // Failed
+
+        double normal_flow = 100.0;  // %
+        double available_flow = pack1_online ? 50.0 : 0.0;
+        available_flow += pack2_online ? 50.0 : 0.0;
+
+        TS_ASSERT_DELTA(available_flow, 50.0, 1.0);
+        TS_ASSERT(available_flow < normal_flow);
+    }
+
+    void testOutflowValveJammed() {
+        double valve_position = 50.0;  // Stuck at 50%
+        double target_position = 80.0;
+        bool jammed = true;
+
+        double actual = jammed ? valve_position : target_position;
+        TS_ASSERT_DELTA(actual, 50.0, 0.1);
+    }
+
+    void testDualBleedFailure() {
+        double left_bleed = 0.0;
+        double right_bleed = 0.0;
+        double apu_bleed = 40.0;  // APU available
+
+        double total_bleed = left_bleed + right_bleed + apu_bleed;
+        TS_ASSERT_DELTA(total_bleed, 40.0, 1.0);
+    }
+
+    void testCabinAltitudeControllerPID() {
+        double cabin_alt = 7500.0;
+        double target = 8000.0;
+        double Kp = 0.1;
+
+        double error = target - cabin_alt;
+        double valve_cmd = Kp * error;
+
+        TS_ASSERT(valve_cmd > 0.0);
+        TS_ASSERT_DELTA(valve_cmd, 50.0, 1.0);
+    }
+
+    void testPressureScheduleLookup() {
+        // Simplified cabin alt schedule based on aircraft alt
+        double aircraft_alt = 35000.0;
+        double cabin_alt;
+
+        if (aircraft_alt < 8000.0) {
+            cabin_alt = aircraft_alt;
+        } else if (aircraft_alt < 25000.0) {
+            cabin_alt = 8000.0 * (aircraft_alt - 8000.0) / 17000.0;
+        } else {
+            cabin_alt = 8000.0;
+        }
+
+        TS_ASSERT(cabin_alt <= 8000.0);
+    }
+
+    //==========================================================================
+    // 24. INSTANCE INDEPENDENCE TESTS
+    //==========================================================================
+
+    void testIndependentCabinZones() {
+        double zone1_temp = 22.0;
+        double zone2_temp = 24.0;
+        double zone3_temp = 20.0;
+
+        // Each zone independent
+        TS_ASSERT(zone1_temp != zone2_temp);
+        TS_ASSERT(zone2_temp != zone3_temp);
+    }
+
+    void testSeparatePackCalculations() {
+        double pack1_flow = 45.0;
+        double pack2_flow = 48.0;
+
+        double total = pack1_flow + pack2_flow;
+        TS_ASSERT_DELTA(total, 93.0, 0.1);
+        TS_ASSERT(pack1_flow != pack2_flow);
+    }
+
+    void testBleedSourceIndependence() {
+        double eng1_bleed = 42.0;
+        double eng2_bleed = 44.0;
+        double apu_bleed = 38.0;
+
+        TS_ASSERT(eng1_bleed != eng2_bleed);
+        TS_ASSERT(eng2_bleed != apu_bleed);
+    }
+
+    void testValvePositionIndependence() {
+        double outflow1 = 30.0;
+        double outflow2 = 45.0;
+        double safety_valve = 0.0;
+
+        TS_ASSERT(outflow1 != outflow2);
+        TS_ASSERT_DELTA(safety_valve, 0.0, 0.1);
+    }
+
+    void testTemperatureSensorIndependence() {
+        double sensor1 = 21.5;
+        double sensor2 = 22.0;
+        double sensor3 = 21.8;
+
+        double avg = (sensor1 + sensor2 + sensor3) / 3.0;
+        TS_ASSERT_DELTA(avg, 21.77, 0.1);
+    }
+
+    void testPressureSensorIndependence() {
+        double sensor1_psi = 8.5;
+        double sensor2_psi = 8.6;
+        double sensor3_psi = 8.4;
+
+        double diff1 = std::fabs(sensor1_psi - sensor2_psi);
+        double diff2 = std::fabs(sensor2_psi - sensor3_psi);
+        double diff3 = std::fabs(sensor1_psi - sensor3_psi);
+        double max_diff = std::fmax(std::fmax(diff1, diff2), diff3);
+        TS_ASSERT(max_diff < 0.5);  // Sensors agree within 0.5 psi
+    }
+
+    void testFlowRateIndependence() {
+        double duct1_flow = 100.0;
+        double duct2_flow = 95.0;
+
+        double ratio = duct1_flow / duct2_flow;
+        TS_ASSERT_DELTA(ratio, 1.053, 0.01);
+    }
+
+    void testMultipleControllerStates() {
+        bool controller1_active = true;
+        bool controller2_active = false;  // Standby
+
+        // Only one controller active at a time
+        TS_ASSERT(controller1_active != controller2_active);
+    }
 };

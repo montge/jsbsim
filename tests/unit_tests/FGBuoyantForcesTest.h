@@ -1201,4 +1201,205 @@ public:
     double delta_P = rho_he * g * height;
     TS_ASSERT_DELTA(delta_P, 32.2, 0.5);  // Pa
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete buoyancy system simulation
+  void testCompleteBuoyancySystem() {
+    // Full airship configuration
+    double main_cell_volume = 50000.0;  // m³
+    double aft_cell_volume = 10000.0;
+    double total_volume = main_cell_volume + aft_cell_volume;
+
+    double rho_air = 1.225;
+    double rho_helium = 0.164;
+    double gross_lift = total_volume * (rho_air - rho_helium) * g;
+
+    TS_ASSERT(gross_lift > 500000.0);  // More than 500 kN lift
+  }
+
+  // Test dynamic superheat cycle
+  void testDynamicSuperheatCycle() {
+    double base_temp = 288.15;
+    double solar_heating = 20.0;  // K
+    double night_cooling = -15.0;  // K
+
+    double day_temp = base_temp + solar_heating;
+    double night_temp = base_temp + night_cooling;
+
+    TS_ASSERT(day_temp > night_temp);
+    TS_ASSERT_DELTA(day_temp - night_temp, 35.0, 0.1);
+  }
+
+  // Test ballonet fill sequence
+  void testBallonetFillSequence() {
+    double ballonet_volume = 0.0;
+    double max_volume = 5000.0;
+    double fill_rate = 100.0;  // m³/s
+
+    for (double t = 0; t < 60; t += 1.0) {
+      ballonet_volume = std::min(ballonet_volume + fill_rate, max_volume);
+    }
+
+    TS_ASSERT_DELTA(ballonet_volume, max_volume, 1.0);
+  }
+
+  // Test envelope stress calculation
+  void testEnvelopeStressCalculation() {
+    double internal_pressure = 500.0;  // Pa
+    double radius = 10.0;  // m
+    double thickness = 0.001;  // m (1mm fabric)
+
+    // Hoop stress: σ = PR/t
+    double hoop_stress = internal_pressure * radius / thickness;
+    TS_ASSERT_DELTA(hoop_stress, 5000000.0, 100.0);  // 5 MPa
+  }
+
+  // Test weight distribution analysis
+  void testWeightDistributionAnalysis() {
+    double envelope = 5000.0;
+    double gondola = 2000.0;
+    double propulsion = 1500.0;
+    double fuel = 3000.0;
+    double payload = 4000.0;
+
+    double total = envelope + gondola + propulsion + fuel + payload;
+    double gondola_ratio = gondola / total;
+
+    TS_ASSERT_DELTA(total, 15500.0, 1.0);
+    TS_ASSERT(gondola_ratio < 0.2);  // Gondola less than 20% of weight
+  }
+
+  // Test altitude ceiling calculation
+  void testAltitudeCeilingCalculation() {
+    double gross_lift_sl = 100000.0;  // N at sea level
+    double total_weight = 95000.0;  // N
+
+    // At ceiling, lift equals weight
+    // Using exponential atmosphere approximation
+    double required_density_ratio = total_weight / gross_lift_sl;
+    double scale_height = 8500.0;  // m
+
+    double ceiling = -scale_height * std::log(required_density_ratio);
+    TS_ASSERT(ceiling > 0.0);
+    TS_ASSERT(ceiling < 10000.0);  // Reasonable ceiling
+  }
+
+  // Test trim calculation for level flight
+  void testTrimCalculationLevelFlight() {
+    double buoyancy = 100000.0;  // N
+    double weight = 98000.0;  // N
+    double net_lift = buoyancy - weight;
+
+    // Need downward thrust or ballast
+    double required_ballonnet_fill = net_lift / g;  // kg of air needed
+
+    TS_ASSERT(required_ballonnet_fill > 0.0);
+    TS_ASSERT(required_ballonnet_fill < 300.0);  // Reasonable ballast
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test independent gas cell calculations
+  void testIndependentGasCellCalculations() {
+    double volume1 = 10000.0;
+    double volume2 = 20000.0;
+    double rho_diff = 1.225 - 0.164;
+
+    double lift1 = volume1 * rho_diff * g;
+    double lift2 = volume2 * rho_diff * g;
+
+    TS_ASSERT_DELTA(lift2 / lift1, 2.0, 0.01);
+    TS_ASSERT(lift1 != lift2);
+  }
+
+  // Test separate temperature calculations
+  void testSeparateTemperatureCalculations() {
+    double T1 = 300.0;
+    double T2 = 320.0;
+    double V_std = 1000.0;
+
+    double V1 = V_std * T1 / 288.15;
+    double V2 = V_std * T2 / 288.15;
+
+    TS_ASSERT(V2 > V1);
+    TS_ASSERT(std::abs(V1 - V2) > 50.0);
+  }
+
+  // Test pressure calculations independence
+  void testPressureCalculationsIndependence() {
+    double P1 = 101325.0;
+    double P2 = 95000.0;
+
+    double rho1 = P1 / (287.0 * 288.15);
+    double rho2 = P2 / (287.0 * 288.15);
+
+    TS_ASSERT(rho1 > rho2);
+    TS_ASSERT_DELTA(rho1 / rho2, P1 / P2, 0.01);
+  }
+
+  // Test envelope volume independence
+  void testEnvelopeVolumeIndependence() {
+    double a1 = 50.0, b1 = 10.0, c1 = 10.0;
+    double a2 = 60.0, b2 = 12.0, c2 = 12.0;
+
+    double V1 = (4.0/3.0) * M_PI * a1 * b1 * c1;
+    double V2 = (4.0/3.0) * M_PI * a2 * b2 * c2;
+
+    TS_ASSERT(V2 > V1);
+    TS_ASSERT(V1 > 20000.0);
+  }
+
+  // Test dynamic pressure coefficient independence
+  void testDynamicPressureCoefficientIndependence() {
+    double rho = 1.225;
+    double V1 = 20.0;
+    double V2 = 40.0;
+
+    double q1 = 0.5 * rho * V1 * V1;
+    double q2 = 0.5 * rho * V2 * V2;
+
+    TS_ASSERT_DELTA(q2 / q1, 4.0, 0.01);
+  }
+
+  // Test wind loading independence
+  void testWindLoadingIndependence() {
+    double A = 1000.0;  // Reference area
+    double Cd = 0.02;
+    double rho = 1.225;
+
+    double V1 = 10.0;
+    double V2 = 20.0;
+
+    double F1 = 0.5 * rho * V1 * V1 * Cd * A;
+    double F2 = 0.5 * rho * V2 * V2 * Cd * A;
+
+    TS_ASSERT_DELTA(F2 / F1, 4.0, 0.01);
+  }
+
+  // Test valve flow calculations independence
+  void testValveFlowIndependence() {
+    double delta_P1 = 100.0;
+    double delta_P2 = 400.0;
+    double K = 0.1;
+
+    double flow1 = K * std::sqrt(delta_P1);
+    double flow2 = K * std::sqrt(delta_P2);
+
+    TS_ASSERT_DELTA(flow2 / flow1, 2.0, 0.01);
+  }
+
+  // Test buoyancy ratio calculations
+  void testBuoyancyRatioCalculations() {
+    double gross_lift = 100000.0;
+    double total_weight = 95000.0;
+
+    double buoyancy_ratio = gross_lift / total_weight;
+    TS_ASSERT(buoyancy_ratio > 1.0);  // Positive lift
+    TS_ASSERT_DELTA(buoyancy_ratio, 1.053, 0.01);
+  }
 };

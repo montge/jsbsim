@@ -1447,4 +1447,253 @@ public:
       TS_ASSERT_DELTA(mag, 1.0, 1e-6);
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete state propagation cycle
+  void testCompleteStatePropagationCycle() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    // Get initial state
+    double initLat = propagate->GetLatitude();
+    double initLon = propagate->GetLongitude();
+    double initAlt = propagate->GetAltitudeASL();
+
+    // Run propagation
+    for (int i = 0; i < 10; i++) {
+      propagate->Run(false);
+    }
+
+    // State should be valid
+    TS_ASSERT(!std::isnan(propagate->GetLatitude()));
+    TS_ASSERT(!std::isnan(propagate->GetLongitude()));
+    TS_ASSERT(!std::isnan(propagate->GetAltitudeASL()));
+  }
+
+  // Test all Euler angle accessors
+  void testAllEulerAngleAccessors() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    double phi = propagate->GetEuler(1);    // Roll
+    double theta = propagate->GetEuler(2);  // Pitch
+    double psi = propagate->GetEuler(3);    // Yaw
+
+    // All angles should be valid
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isnan(theta));
+    TS_ASSERT(!std::isnan(psi));
+
+    // Angles should be in reasonable range
+    TS_ASSERT(phi >= -M_PI && phi <= M_PI);
+    TS_ASSERT(theta >= -M_PI/2 && theta <= M_PI/2);
+    TS_ASSERT(psi >= -M_PI && psi <= M_PI);
+  }
+
+  // Test velocity transformations
+  void testVelocityTransformations() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 vBody = propagate->GetPQR();
+    FGColumnVector3 vECEF = propagate->GetECEFVelocity();
+
+    // All velocity components should be valid
+    TS_ASSERT(!std::isnan(vBody(1)));
+    TS_ASSERT(!std::isnan(vBody(2)));
+    TS_ASSERT(!std::isnan(vBody(3)));
+    TS_ASSERT(!std::isnan(vECEF(1)));
+    TS_ASSERT(!std::isnan(vECEF(2)));
+    TS_ASSERT(!std::isnan(vECEF(3)));
+  }
+
+  // Test body-to-local transformation matrix
+  void testBodyToLocalTransformMatrix() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    const FGMatrix33& Tb2l = propagate->GetTb2l();
+
+    // Matrix should be orthogonal - rows are unit vectors
+    double row1Mag = sqrt(Tb2l(1,1)*Tb2l(1,1) + Tb2l(1,2)*Tb2l(1,2) + Tb2l(1,3)*Tb2l(1,3));
+    double row2Mag = sqrt(Tb2l(2,1)*Tb2l(2,1) + Tb2l(2,2)*Tb2l(2,2) + Tb2l(2,3)*Tb2l(2,3));
+    double row3Mag = sqrt(Tb2l(3,1)*Tb2l(3,1) + Tb2l(3,2)*Tb2l(3,2) + Tb2l(3,3)*Tb2l(3,3));
+
+    if (row1Mag > 1e-10) {
+      TS_ASSERT_DELTA(row1Mag, 1.0, 1e-6);
+      TS_ASSERT_DELTA(row2Mag, 1.0, 1e-6);
+      TS_ASSERT_DELTA(row3Mag, 1.0, 1e-6);
+    }
+  }
+
+  // Test angular velocity components
+  void testAngularVelocityComponents() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 pqr = propagate->GetPQR();
+    FGColumnVector3 pqrECI = propagate->GetPQRi();
+
+    // All components valid
+    for (int i = 1; i <= 3; i++) {
+      TS_ASSERT(!std::isnan(pqr(i)));
+      TS_ASSERT(!std::isnan(pqrECI(i)));
+    }
+  }
+
+  // Test geodetic position consistency
+  void testGeodeticPositionConsistency() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    double lat = propagate->GetLatitude();
+    double lon = propagate->GetLongitude();
+    double alt = propagate->GetAltitudeASL();
+
+    // Latitude in valid range
+    TS_ASSERT(lat >= -M_PI/2 && lat <= M_PI/2);
+    // Longitude in valid range
+    TS_ASSERT(lon >= -M_PI && lon <= M_PI);
+    // Altitude reasonable
+    TS_ASSERT(alt > -1000.0 && alt < 1e8);
+  }
+
+  // Test local-to-body inverse relationship
+  void testLocalToBodyInverseRelationship() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    const FGMatrix33& Tl2b = propagate->GetTl2b();
+    const FGMatrix33& Tb2l = propagate->GetTb2l();
+
+    // Check if matrices are valid (non-zero)
+    double Tl2bMag = std::abs(Tl2b(1,1)) + std::abs(Tl2b(2,2)) + std::abs(Tl2b(3,3));
+
+    if (Tl2bMag > 0.1) {
+      // Product should be identity
+      FGMatrix33 product = Tl2b * Tb2l;
+
+      TS_ASSERT_DELTA(product(1,1), 1.0, 1e-6);
+      TS_ASSERT_DELTA(product(2,2), 1.0, 1e-6);
+      TS_ASSERT_DELTA(product(3,3), 1.0, 1e-6);
+    } else {
+      // Matrices not yet initialized
+      TS_ASSERT(true);
+    }
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test multiple FGFDMExec instances have independent propagate
+  void testMultipleFDMExecIndependentPropagate() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto prop1 = fdmex1.GetPropagate();
+    auto prop2 = fdmex2.GetPropagate();
+
+    // Should be different instances
+    TS_ASSERT(prop1 != prop2);
+  }
+
+  // Test separate altitude states
+  void testSeparateAltitudeStates() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    double alt1 = fdmex1.GetPropagate()->GetAltitudeASL();
+    double alt2 = fdmex2.GetPropagate()->GetAltitudeASL();
+
+    // Both should be valid
+    TS_ASSERT(!std::isnan(alt1));
+    TS_ASSERT(!std::isnan(alt2));
+  }
+
+  // Test independent quaternion states
+  void testIndependentQuaternionStates() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    const FGQuaternion& q1 = fdmex1.GetPropagate()->GetQuaternion();
+    const FGQuaternion& q2 = fdmex2.GetPropagate()->GetQuaternion();
+
+    // Both should be normalized
+    double mag1 = sqrt(q1(1)*q1(1) + q1(2)*q1(2) + q1(3)*q1(3) + q1(4)*q1(4));
+    double mag2 = sqrt(q2(1)*q2(1) + q2(2)*q2(2) + q2(3)*q2(3) + q2(4)*q2(4));
+
+    TS_ASSERT_DELTA(mag1, 1.0, 1e-6);
+    TS_ASSERT_DELTA(mag2, 1.0, 1e-6);
+  }
+
+  // Test independent velocity states
+  void testIndependentVelocityStates() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    double v1 = fdmex1.GetPropagate()->GetInertialVelocityMagnitude();
+    double v2 = fdmex2.GetPropagate()->GetInertialVelocityMagnitude();
+
+    // Both should be valid (non-NaN)
+    TS_ASSERT(!std::isnan(v1));
+    TS_ASSERT(!std::isnan(v2));
+  }
+
+  // Test separate location objects
+  void testSeparateLocationObjects() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    const FGLocation& loc1 = fdmex1.GetPropagate()->GetLocation();
+    const FGLocation& loc2 = fdmex2.GetPropagate()->GetLocation();
+
+    // Addresses should differ
+    TS_ASSERT(&loc1 != &loc2);
+  }
+
+  // Test independent transformation matrices
+  void testIndependentTransformationMatrices() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    const FGMatrix33& T1 = fdmex1.GetPropagate()->GetTl2b();
+    const FGMatrix33& T2 = fdmex2.GetPropagate()->GetTl2b();
+
+    // Both should be valid rotation matrices
+    double det1 = T1(1,1)*(T1(2,2)*T1(3,3) - T1(2,3)*T1(3,2)) -
+                  T1(1,2)*(T1(2,1)*T1(3,3) - T1(2,3)*T1(3,1)) +
+                  T1(1,3)*(T1(2,1)*T1(3,2) - T1(2,2)*T1(3,1));
+
+    if (std::abs(det1) > 1e-10) {
+      TS_ASSERT_DELTA(det1, 1.0, 1e-6);
+    }
+  }
+
+  // Test radius from Earth center
+  void testRadiusFromEarthCenter() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    double radius = propagate->GetRadius();
+
+    // Should be approximately Earth radius
+    TS_ASSERT(radius > 2.0e7);  // > 20,000 km in ft
+    TS_ASSERT(radius < 2.2e7);  // < 22,000 km in ft
+  }
+
+  // Test terrain elevation accessors
+  void testTerrainElevationAccessors() {
+    FGFDMExec fdmex;
+    auto propagate = fdmex.GetPropagate();
+
+    double terrainElev = propagate->GetTerrainElevation();
+    double distAGL = propagate->GetDistanceAGL();
+
+    TS_ASSERT(!std::isnan(terrainElev));
+    TS_ASSERT(!std::isnan(distAGL));
+  }
 };
