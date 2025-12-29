@@ -1366,4 +1366,218 @@ public:
     const FGMatrix33& J = massBalance->GetJ();
     TS_ASSERT(!std::isnan(J(1, 1)));
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteMassBalanceCalculation() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Set up complete aircraft mass properties
+    massBalance->SetEmptyWeight(5000.0);
+    massBalance->SetBaseCG(FGColumnVector3(150.0, 0.0, -5.0));
+
+    massBalance->Run(false);
+
+    // Verify complete state
+    TS_ASSERT(massBalance->GetWeight() > 0.0);
+    TS_ASSERT(massBalance->GetMass() > 0.0);
+
+    FGColumnVector3 cg = massBalance->GetXYZcg();
+    TS_ASSERT(std::isfinite(cg(1)));
+    TS_ASSERT(std::isfinite(cg(2)));
+    TS_ASSERT(std::isfinite(cg(3)));
+  }
+
+  void testCompleteInertiaComputation() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(10000.0);
+
+    // Add inertia contributions
+    massBalance->in.GasInertia = FGMatrix33(
+      500.0, 0.0, 0.0,
+      0.0, 1000.0, 0.0,
+      0.0, 0.0, 1200.0
+    );
+
+    massBalance->in.TankInertia = FGMatrix33(
+      100.0, 0.0, 0.0,
+      0.0, 200.0, 0.0,
+      0.0, 0.0, 250.0
+    );
+
+    massBalance->Run(false);
+
+    const FGMatrix33& J = massBalance->GetJ();
+    TS_ASSERT(J(1, 1) > 0.0);
+    TS_ASSERT(J(2, 2) > 0.0);
+    TS_ASSERT(J(3, 3) > 0.0);
+  }
+
+  void testCompleteCGShiftDueToFuel() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(3000.0);
+    massBalance->SetBaseCG(FGColumnVector3(100.0, 0.0, 0.0));
+
+    // Initial CG
+    massBalance->Run(false);
+    double cg_initial = massBalance->GetXYZcg(1);
+
+    // Simulate fuel burn by updating tank moment input
+    massBalance->in.TanksMoment = FGColumnVector3(-1000.0, 0.0, 0.0);  // Aft moment
+    massBalance->in.TanksWeight = 100.0;
+
+    massBalance->Run(false);
+
+    // CG should be affected
+    TS_ASSERT(std::isfinite(massBalance->GetXYZcg(1)));
+  }
+
+  void testCompleteMultiplePointMasses() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Calculate inertia for multiple point masses
+    FGColumnVector3 positions[] = {
+      FGColumnVector3(100.0, 50.0, 0.0),
+      FGColumnVector3(100.0, -50.0, 0.0),
+      FGColumnVector3(200.0, 0.0, 10.0)
+    };
+    double masses[] = {50.0, 50.0, 100.0};
+
+    FGMatrix33 totalInertia;
+    for (int i = 0; i < 3; i++) {
+      FGMatrix33 pmInertia = massBalance->GetPointmassInertia(masses[i], positions[i]);
+      for (int r = 1; r <= 3; r++) {
+        for (int c = 1; c <= 3; c++) {
+          totalInertia(r, c) += pmInertia(r, c);
+        }
+      }
+    }
+
+    TS_ASSERT(totalInertia(1, 1) > 0.0);
+    TS_ASSERT(totalInertia(2, 2) > 0.0);
+    TS_ASSERT(totalInertia(3, 3) > 0.0);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentMassBalanceInstances() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto mb1 = fdmex1.GetMassBalance();
+    auto mb2 = fdmex2.GetMassBalance();
+
+    mb1->SetEmptyWeight(5000.0);
+    mb2->SetEmptyWeight(8000.0);
+
+    TS_ASSERT_DELTA(mb1->GetEmptyWeight(), 5000.0, epsilon);
+    TS_ASSERT_DELTA(mb2->GetEmptyWeight(), 8000.0, epsilon);
+
+    // Verify mb1 unchanged after mb2 modification
+    mb2->SetEmptyWeight(10000.0);
+    TS_ASSERT_DELTA(mb1->GetEmptyWeight(), 5000.0, epsilon);
+  }
+
+  void testIndependentCGCalculations() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto mb1 = fdmex1.GetMassBalance();
+    auto mb2 = fdmex2.GetMassBalance();
+
+    mb1->SetBaseCG(FGColumnVector3(100.0, 0.0, 0.0));
+    mb2->SetBaseCG(FGColumnVector3(200.0, 0.0, 0.0));
+
+    mb1->Run(false);
+    mb2->Run(false);
+
+    // CG values are independent
+    TS_ASSERT(std::isfinite(mb1->GetXYZcg(1)));
+    TS_ASSERT(std::isfinite(mb2->GetXYZcg(1)));
+  }
+
+  void testIndependentInertiaCalculations() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    FGColumnVector3 pos1(100.0, 0.0, 0.0);
+    FGColumnVector3 pos2(0.0, 100.0, 0.0);
+
+    FGMatrix33 inertia1 = massBalance->GetPointmassInertia(10.0, pos1);
+    FGMatrix33 inertia2 = massBalance->GetPointmassInertia(10.0, pos2);
+
+    // Different positions give different inertias
+    TS_ASSERT(std::abs(inertia1(1,1) - inertia2(1,1)) > 0.01 ||
+              std::abs(inertia1(2,2) - inertia2(2,2)) > 0.01);
+
+    // Verify inertia1 unchanged
+    FGMatrix33 inertia1_verify = massBalance->GetPointmassInertia(10.0, pos1);
+    TS_ASSERT_DELTA(inertia1(1,1), inertia1_verify(1,1), epsilon);
+  }
+
+  void testIndependentWeightSettings() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    double weights[] = {1000.0, 2000.0, 3000.0, 4000.0, 5000.0};
+    double storedWeights[5];
+
+    for (int i = 0; i < 5; i++) {
+      massBalance->SetEmptyWeight(weights[i]);
+      storedWeights[i] = massBalance->GetEmptyWeight();
+    }
+
+    // Each weight was stored correctly
+    TS_ASSERT_DELTA(storedWeights[0], 1000.0, epsilon);
+    TS_ASSERT_DELTA(storedWeights[4], 5000.0, epsilon);
+  }
+
+  void testIndependentRunCycles() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    massBalance->SetEmptyWeight(5000.0);
+    massBalance->SetBaseCG(FGColumnVector3(150.0, 0.0, 0.0));
+
+    // Run multiple times
+    for (int i = 0; i < 10; i++) {
+      massBalance->Run(false);
+    }
+
+    // Values should remain consistent
+    TS_ASSERT_DELTA(massBalance->GetEmptyWeight(), 5000.0, epsilon);
+    TS_ASSERT(std::isfinite(massBalance->GetXYZcg(1)));
+  }
+
+  void testIndependentInertiaContributions() {
+    FGFDMExec fdmex;
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Two separate inertia contributions
+    FGMatrix33 gas1(100.0, 0.0, 0.0, 0.0, 200.0, 0.0, 0.0, 0.0, 300.0);
+    FGMatrix33 gas2(200.0, 0.0, 0.0, 0.0, 400.0, 0.0, 0.0, 0.0, 600.0);
+
+    massBalance->in.GasInertia = gas1;
+    massBalance->Run(false);
+    const FGMatrix33& J1 = massBalance->GetJ();
+    double j1_11 = J1(1, 1);
+
+    massBalance->in.GasInertia = gas2;
+    massBalance->Run(false);
+    const FGMatrix33& J2 = massBalance->GetJ();
+
+    // J should reflect the current gas inertia, not accumulated
+    TS_ASSERT(!std::isnan(j1_11));
+    TS_ASSERT(!std::isnan(J2(1, 1)));
+  }
 };

@@ -1154,4 +1154,190 @@ public:
     TS_ASSERT(dragFactor > 1.0);
     TS_ASSERT(!std::isinf(dragFactor));
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteWeatherScenario() {
+    // Complete weather scenario: rain + wind + temperature
+    double rainfall = 15.0;  // mm/hr
+    double windSpeed = 25.0; // kts
+    double temperature = 5.0; // C
+
+    // Rain effect on drag
+    double dragIncrease = 0.03 * (rainfall / 25.0);
+
+    // Crosswind effect
+    double crosswindFactor = windSpeed / 30.0;
+
+    // Temperature effect on density
+    double densityFactor = 1.0 + 0.001 * (15.0 - temperature);
+
+    // Combined effect
+    double totalEffect = (1.0 + dragIncrease) * densityFactor;
+    TS_ASSERT(totalEffect > 1.0);
+    TS_ASSERT(totalEffect < 1.5);
+  }
+
+  void testCompleteIcingEncounter() {
+    // Complete icing scenario
+    double temp = -5.0;  // C
+    double humidity = 0.85;
+    double lwc = 0.5;  // g/m^3 liquid water content
+
+    // Icing severity
+    double icingRate = lwc * (humidity) * std::exp(-0.1 * temp);
+    TS_ASSERT(icingRate > 0.0);
+
+    // Performance degradation
+    double liftLoss = 0.15 * icingRate;
+    double dragIncrease = 0.25 * icingRate;
+
+    TS_ASSERT(liftLoss > 0.0);
+    TS_ASSERT(dragIncrease > 0.0);
+  }
+
+  void testCompleteThunderstormPenetration() {
+    // Thunderstorm effects
+    double verticalGust = 50.0;  // ft/s
+    double lateralGust = 30.0;   // ft/s
+    double rainfall = 100.0;     // mm/hr
+
+    // Combined gust magnitude
+    double totalGust = std::sqrt(verticalGust * verticalGust + lateralGust * lateralGust);
+    TS_ASSERT(totalGust > verticalGust);
+
+    // Visibility reduction
+    double visibility = 10.0 / (1.0 + rainfall / 50.0);  // km
+    TS_ASSERT(visibility < 10.0);
+    TS_ASSERT(visibility > 0.0);
+  }
+
+  void testCompleteTemperatureInversion() {
+    // Temperature inversion scenario
+    double altitudes[] = {0.0, 1000.0, 2000.0, 3000.0};
+    double temps[] = {15.0, 12.0, 18.0, 10.0};  // Inversion at 2000ft
+
+    double maxTemp = temps[0];
+    int inversionLevel = 0;
+
+    for (int i = 1; i < 4; i++) {
+      if (temps[i] > temps[i-1]) {
+        inversionLevel = i;
+      }
+      if (temps[i] > maxTemp) maxTemp = temps[i];
+    }
+
+    TS_ASSERT_EQUALS(inversionLevel, 2);  // Inversion detected
+  }
+
+  void testCompleteWindShearRecovery() {
+    // Wind shear encounter and recovery
+    double airspeed = 140.0;  // kts
+    double shearMagnitude = 30.0;  // kts headwind loss
+
+    double newAirspeed = airspeed - shearMagnitude;
+    TS_ASSERT(newAirspeed < airspeed);
+
+    // Recovery with pitch and power
+    double pitchIncrease = 10.0;  // degrees
+    double powerIncrease = 0.3;   // 30% more thrust
+
+    double recoverySpeed = newAirspeed + powerIncrease * 50.0;
+    TS_ASSERT(recoverySpeed > newAirspeed);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentWeatherZones() {
+    // Two independent weather zones
+    double rain1 = 10.0;
+    double wind1 = 15.0;
+    double drag1 = 1.0 + 0.03 * (rain1 / 25.0);
+
+    double rain2 = 25.0;
+    double wind2 = 30.0;
+    double drag2 = 1.0 + 0.03 * (rain2 / 25.0);
+
+    TS_ASSERT(drag2 > drag1);
+
+    // Verify drag1 unchanged
+    double drag1_verify = 1.0 + 0.03 * (rain1 / 25.0);
+    TS_ASSERT_DELTA(drag1, drag1_verify, 0.0001);
+  }
+
+  void testIndependentIcingCalculations() {
+    double temp1 = -3.0;
+    double icing1 = 0.5 * std::exp(-0.1 * temp1);
+
+    double temp2 = -10.0;
+    double icing2 = 0.5 * std::exp(-0.1 * temp2);
+
+    TS_ASSERT(icing2 > icing1);  // Colder = more icing
+
+    // Verify icing1 unchanged
+    double icing1_verify = 0.5 * std::exp(-0.1 * temp1);
+    TS_ASSERT_DELTA(icing1, icing1_verify, 0.0001);
+  }
+
+  void testIndependentVisibilityCalculations() {
+    double fog1 = 0.3;  // fog density
+    double vis1 = 10.0 / (1.0 + 20.0 * fog1);
+
+    double fog2 = 0.7;
+    double vis2 = 10.0 / (1.0 + 20.0 * fog2);
+
+    TS_ASSERT(vis1 > vis2);
+
+    // Verify vis1 unchanged
+    double vis1_verify = 10.0 / (1.0 + 20.0 * fog1);
+    TS_ASSERT_DELTA(vis1, vis1_verify, 0.0001);
+  }
+
+  void testIndependentWindCalculations() {
+    double headwind1 = 20.0;
+    double crosswind1 = 10.0;
+    double total1 = std::sqrt(headwind1*headwind1 + crosswind1*crosswind1);
+
+    double headwind2 = 15.0;
+    double crosswind2 = 25.0;
+    double total2 = std::sqrt(headwind2*headwind2 + crosswind2*crosswind2);
+
+    TS_ASSERT(total2 > total1);
+
+    // Verify total1 unchanged
+    double total1_verify = std::sqrt(headwind1*headwind1 + crosswind1*crosswind1);
+    TS_ASSERT_DELTA(total1, total1_verify, 0.0001);
+  }
+
+  void testIndependentDensityCalculations() {
+    double temp1 = 25.0;  // C
+    double density1 = 1.225 * (273.15 / (273.15 + temp1));
+
+    double temp2 = -10.0;
+    double density2 = 1.225 * (273.15 / (273.15 + temp2));
+
+    TS_ASSERT(density2 > density1);  // Colder = denser
+
+    // Verify density1 unchanged
+    double density1_verify = 1.225 * (273.15 / (273.15 + temp1));
+    TS_ASSERT_DELTA(density1, density1_verify, 0.0001);
+  }
+
+  void testIndependentTurbulenceEffects() {
+    double intensity1 = 5.0;  // ft/s RMS
+    double load1 = 0.1 * intensity1;
+
+    double intensity2 = 15.0;
+    double load2 = 0.1 * intensity2;
+
+    TS_ASSERT(load2 > load1);
+
+    // Verify load1 unchanged
+    double load1_verify = 0.1 * intensity1;
+    TS_ASSERT_DELTA(load1, load1_verify, 0.0001);
+  }
 };

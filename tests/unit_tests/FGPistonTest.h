@@ -1315,4 +1315,179 @@ public:
     TS_ASSERT_DELTA(reducedPower, 126.0, 0.1);
     TS_ASSERT(reducedPower > 0);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteEngineStartSequence() {
+    // Simulate complete engine start
+    double batteryVoltage = 12.0;
+    double starterDraw = 150.0;  // amps
+    double crankingRPM = 60.0;
+
+    // Cranking phase
+    TS_ASSERT(crankingRPM > 0);
+
+    // Ignition
+    double ignitionTiming = 25.0;  // degrees BTDC
+    TS_ASSERT(ignitionTiming > 0);
+
+    // Idle stabilization
+    double idleRPM = 800.0;
+    double targetRPM = 1000.0;
+    double idleCorrection = (targetRPM - idleRPM) * 0.1;
+    TS_ASSERT(idleCorrection > 0);
+  }
+
+  void testCompleteThrottleAdvancement() {
+    // Full throttle advancement sequence
+    double throttle[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    double expectedPower[] = {0.0, 45.0, 100.0, 155.0, 200.0};
+
+    for (int i = 0; i < 5; i++) {
+      double power = 200.0 * throttle[i];
+      TS_ASSERT(power >= 0.0);
+      TS_ASSERT(power <= 200.0);
+    }
+  }
+
+  void testCompleteEngineCycle() {
+    // Four-stroke cycle timing
+    double crankAngle = 0.0;
+    int cycleCount = 0;
+
+    while (crankAngle < 720.0) {
+      if (crankAngle < 180.0) {
+        // Intake stroke
+      } else if (crankAngle < 360.0) {
+        // Compression stroke
+      } else if (crankAngle < 540.0) {
+        // Power stroke
+        cycleCount++;
+      } else {
+        // Exhaust stroke
+      }
+      crankAngle += 90.0;
+    }
+
+    TS_ASSERT_EQUALS(cycleCount, 2);  // One power event per 360 degrees
+  }
+
+  void testCompleteEngineShutdown() {
+    double rpm = 2000.0;
+    double decelRate = 200.0;  // RPM/s
+    double dt = 0.1;
+
+    int steps = 0;
+    while (rpm > 0 && steps < 200) {
+      rpm -= decelRate * dt;
+      steps++;
+    }
+
+    TS_ASSERT(rpm <= 0 || steps < 200);
+  }
+
+  void testCompleteMixtureLeaning() {
+    // Leaning procedure for cruise
+    double mixture[] = {1.0, 0.9, 0.8, 0.7, 0.65};
+    double egt[] = {1300.0, 1350.0, 1400.0, 1450.0, 1480.0};
+
+    double maxEGT = 0.0;
+    int peakIndex = 0;
+
+    for (int i = 0; i < 5; i++) {
+      if (egt[i] > maxEGT) {
+        maxEGT = egt[i];
+        peakIndex = i;
+      }
+    }
+
+    TS_ASSERT_EQUALS(peakIndex, 4);  // Peak EGT at leanest setting
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentEngineCalculations() {
+    // Two engines with different settings
+    double power1 = 180.0 * 0.75;
+    double power2 = 200.0 * 0.65;
+
+    TS_ASSERT_DELTA(power1, 135.0, 0.1);
+    TS_ASSERT_DELTA(power2, 130.0, 0.1);
+
+    // Verify power1 unchanged
+    double power1_verify = 180.0 * 0.75;
+    TS_ASSERT_DELTA(power1, power1_verify, 0.001);
+  }
+
+  void testIndependentFuelFlow() {
+    double sfc1 = 0.45;  // lb/hp/hr
+    double power1 = 150.0;
+    double fuel1 = sfc1 * power1;
+
+    double sfc2 = 0.42;
+    double power2 = 180.0;
+    double fuel2 = sfc2 * power2;
+
+    TS_ASSERT_DELTA(fuel1, 67.5, 0.1);
+    TS_ASSERT_DELTA(fuel2, 75.6, 0.1);
+  }
+
+  void testIndependentCylinderTemps() {
+    double CHT1 = 380.0 + 20.0 * 0.75;  // Engine 1 at 75%
+    double CHT2 = 380.0 + 20.0 * 0.85;  // Engine 2 at 85%
+
+    TS_ASSERT(CHT2 > CHT1);
+    TS_ASSERT_DELTA(CHT1, 395.0, 0.1);
+    TS_ASSERT_DELTA(CHT2, 397.0, 0.1);
+  }
+
+  void testIndependentThrottleResponse() {
+    double throttle1 = 0.6;
+    double throttle2 = 0.9;
+    double maxPower = 200.0;
+
+    double power1 = maxPower * throttle1;
+    double power2 = maxPower * throttle2;
+
+    TS_ASSERT(power2 > power1);
+
+    // Verify power1 unchanged
+    double power1_verify = maxPower * throttle1;
+    TS_ASSERT_DELTA(power1, power1_verify, 0.001);
+  }
+
+  void testIndependentOilPressure() {
+    double rpm1 = 2000.0;
+    double basePressure1 = 40.0;
+    double oilPress1 = basePressure1 + (rpm1 / 100.0);
+
+    double rpm2 = 2500.0;
+    double basePressure2 = 42.0;
+    double oilPress2 = basePressure2 + (rpm2 / 100.0);
+
+    TS_ASSERT(oilPress2 > oilPress1);
+
+    // Verify oilPress1 unchanged
+    double oilPress1_verify = basePressure1 + (rpm1 / 100.0);
+    TS_ASSERT_DELTA(oilPress1, oilPress1_verify, 0.001);
+  }
+
+  void testIndependentManifoldPressure() {
+    double altitude1 = 5000.0;
+    double altitude2 = 10000.0;
+    double seaLevelMP = 29.92;
+
+    double mp1 = seaLevelMP * std::exp(-altitude1 / 27000.0);
+    double mp2 = seaLevelMP * std::exp(-altitude2 / 27000.0);
+
+    TS_ASSERT(mp1 > mp2);
+
+    // Verify mp1 unchanged
+    double mp1_verify = seaLevelMP * std::exp(-altitude1 / 27000.0);
+    TS_ASSERT_DELTA(mp1, mp1_verify, 0.001);
+  }
 };

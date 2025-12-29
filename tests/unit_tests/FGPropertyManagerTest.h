@@ -1090,4 +1090,182 @@ public:
     node->setStringValue("test123value");
     TS_ASSERT_EQUALS(node->getStringValue(), std::string("test123value"));
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompletePropertyTree() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Build a complete property tree
+    pm->GetNode("aircraft/type", true)->setStringValue("cessna172");
+    pm->GetNode("aircraft/weight", true)->setDoubleValue(2300.0);
+    pm->GetNode("aircraft/cg/x", true)->setDoubleValue(42.0);
+    pm->GetNode("aircraft/cg/y", true)->setDoubleValue(0.0);
+    pm->GetNode("aircraft/cg/z", true)->setDoubleValue(-10.0);
+
+    TS_ASSERT_EQUALS(pm->GetNode("aircraft/type")->getStringValue(), std::string("cessna172"));
+    TS_ASSERT_DELTA(pm->GetNode("aircraft/weight")->getDoubleValue(), 2300.0, 0.001);
+    TS_ASSERT_DELTA(pm->GetNode("aircraft/cg/x")->getDoubleValue(), 42.0, 0.001);
+  }
+
+  void testCompletePropertyUpdate() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto node = pm->GetNode("sim/altitude", true);
+    node->setDoubleValue(0.0);
+
+    // Simulate climbing
+    for (int i = 1; i <= 100; i++) {
+      node->setDoubleValue(i * 100.0);
+    }
+
+    TS_ASSERT_DELTA(node->getDoubleValue(), 10000.0, 0.001);
+  }
+
+  void testCompletePropertyHierarchy() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Create deep hierarchy
+    pm->GetNode("level1/level2/level3/level4/level5/value", true)->setIntValue(42);
+
+    auto node = pm->GetNode("level1/level2/level3/level4/level5/value", false);
+    TS_ASSERT(node != nullptr);
+    TS_ASSERT_EQUALS(node->getIntValue(), 42);
+  }
+
+  void testCompleteMultiTypeTree() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Mix of types in tree
+    pm->GetNode("data/name", true)->setStringValue("test");
+    pm->GetNode("data/count", true)->setIntValue(100);
+    pm->GetNode("data/ratio", true)->setDoubleValue(0.75);
+    pm->GetNode("data/active", true)->setBoolValue(true);
+
+    TS_ASSERT_EQUALS(pm->GetNode("data/name")->getStringValue(), std::string("test"));
+    TS_ASSERT_EQUALS(pm->GetNode("data/count")->getIntValue(), 100);
+    TS_ASSERT_DELTA(pm->GetNode("data/ratio")->getDoubleValue(), 0.75, 0.001);
+    TS_ASSERT(pm->GetNode("data/active")->getBoolValue());
+  }
+
+  void testCompletePropertyEnumeration() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Create multiple sibling nodes
+    for (int i = 0; i < 10; i++) {
+      std::string path = "siblings/child" + std::to_string(i);
+      pm->GetNode(path, true)->setIntValue(i * 10);
+    }
+
+    // Verify all exist
+    for (int i = 0; i < 10; i++) {
+      std::string path = "siblings/child" + std::to_string(i);
+      auto node = pm->GetNode(path, false);
+      TS_ASSERT(node != nullptr);
+      TS_ASSERT_EQUALS(node->getIntValue(), i * 10);
+    }
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentPropertyManagers() {
+    auto pm1 = std::make_shared<FGPropertyManager>();
+    auto pm2 = std::make_shared<FGPropertyManager>();
+
+    pm1->GetNode("shared/value", true)->setIntValue(100);
+    pm2->GetNode("shared/value", true)->setIntValue(200);
+
+    // Each manager has its own value
+    TS_ASSERT_EQUALS(pm1->GetNode("shared/value")->getIntValue(), 100);
+    TS_ASSERT_EQUALS(pm2->GetNode("shared/value")->getIntValue(), 200);
+
+    // Changing pm2 doesn't affect pm1
+    pm2->GetNode("shared/value")->setIntValue(300);
+    TS_ASSERT_EQUALS(pm1->GetNode("shared/value")->getIntValue(), 100);
+  }
+
+  void testIndependentNodeModification() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto node1 = pm->GetNode("test/node1", true);
+    auto node2 = pm->GetNode("test/node2", true);
+
+    node1->setIntValue(111);
+    node2->setIntValue(222);
+
+    // Modifying node2 doesn't affect node1
+    node2->setIntValue(333);
+    TS_ASSERT_EQUALS(node1->getIntValue(), 111);
+    TS_ASSERT_EQUALS(node2->getIntValue(), 333);
+  }
+
+  void testIndependentTreeBranches() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    pm->GetNode("branch1/leaf", true)->setDoubleValue(1.5);
+    pm->GetNode("branch2/leaf", true)->setDoubleValue(2.5);
+
+    // Branches are independent
+    TS_ASSERT_DELTA(pm->GetNode("branch1/leaf")->getDoubleValue(), 1.5, 0.001);
+    TS_ASSERT_DELTA(pm->GetNode("branch2/leaf")->getDoubleValue(), 2.5, 0.001);
+
+    // Modify one branch
+    pm->GetNode("branch2/leaf")->setDoubleValue(3.5);
+    TS_ASSERT_DELTA(pm->GetNode("branch1/leaf")->getDoubleValue(), 1.5, 0.001);
+  }
+
+  void testIndependentTypeHandling() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    auto intNode = pm->GetNode("types/int", true);
+    auto dblNode = pm->GetNode("types/dbl", true);
+    auto strNode = pm->GetNode("types/str", true);
+
+    intNode->setIntValue(42);
+    dblNode->setDoubleValue(3.14159);
+    strNode->setStringValue("hello");
+
+    // All values preserved independently
+    TS_ASSERT_EQUALS(intNode->getIntValue(), 42);
+    TS_ASSERT_DELTA(dblNode->getDoubleValue(), 3.14159, 0.00001);
+    TS_ASSERT_EQUALS(strNode->getStringValue(), std::string("hello"));
+  }
+
+  void testIndependentUpdateSequence() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    std::vector<SGPropertyNode_ptr> nodes;
+    for (int i = 0; i < 5; i++) {
+      nodes.push_back(pm->GetNode("seq/node" + std::to_string(i), true));
+      nodes[i]->setIntValue(i);
+    }
+
+    // Update in reverse order
+    for (int i = 4; i >= 0; i--) {
+      nodes[i]->setIntValue(i * 100);
+    }
+
+    // All nodes have updated values
+    for (int i = 0; i < 5; i++) {
+      TS_ASSERT_EQUALS(nodes[i]->getIntValue(), i * 100);
+    }
+  }
+
+  void testIndependentNodeCreation() {
+    auto pm = std::make_shared<FGPropertyManager>();
+
+    // Create nodes in random order
+    pm->GetNode("order/c", true)->setIntValue(3);
+    pm->GetNode("order/a", true)->setIntValue(1);
+    pm->GetNode("order/b", true)->setIntValue(2);
+
+    // All nodes accessible regardless of creation order
+    TS_ASSERT_EQUALS(pm->GetNode("order/a")->getIntValue(), 1);
+    TS_ASSERT_EQUALS(pm->GetNode("order/b")->getIntValue(), 2);
+    TS_ASSERT_EQUALS(pm->GetNode("order/c")->getIntValue(), 3);
+  }
 };
