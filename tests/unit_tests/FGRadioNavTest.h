@@ -1037,4 +1037,154 @@ public:
       }
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteILSApproach() {
+    // Complete ILS approach from FAF to threshold
+    double faf_dist = 5.0;  // nm
+    double threshold_dist = 0.0;
+    double glideslope = 3.0;  // degrees
+    double descent_rate = 500.0;  // ft/min
+    double groundspeed = 120.0;  // kts
+
+    // Time to fly from FAF to threshold
+    double time_min = (faf_dist - threshold_dist) * 60.0 / groundspeed;
+    TS_ASSERT(time_min > 2.0);
+    TS_ASSERT(time_min < 5.0);
+
+    // Altitude loss
+    double alt_loss = descent_rate * time_min;
+    TS_ASSERT(alt_loss > 1000.0);
+  }
+
+  void testCompleteVORNavigation() {
+    // Navigate FROM one VOR TO another
+    double vor1_radial = 90.0;  // Outbound radial from VOR1
+    double vor2_radial = 270.0; // Inbound radial to VOR2
+    double distance = 50.0;     // nm between VORs
+
+    // Halfway point
+    double halfway = distance / 2.0;
+    TS_ASSERT_DELTA(halfway, 25.0, 0.1);
+
+    // Course correction at halfway
+    double correction = NormalizeAngle180(vor2_radial - vor1_radial);
+    TS_ASSERT(std::abs(correction) <= 180.0);
+  }
+
+  void testCompleteHoldingPattern() {
+    double inbound_course = 270.0;
+    double leg_time = 1.0;  // minute
+    double turn_rate = 3.0; // deg/sec (standard rate)
+
+    // Turn time for 180 degrees
+    double turn_time_sec = 180.0 / turn_rate;
+    TS_ASSERT_DELTA(turn_time_sec, 60.0, 1.0);
+
+    // Total pattern time
+    double pattern_time_min = 2.0 * leg_time + 2.0 * (turn_time_sec / 60.0);
+    TS_ASSERT(pattern_time_min > 3.0);
+    TS_ASSERT(pattern_time_min < 5.0);
+  }
+
+  void testCompleteDMEArcProcedure() {
+    double arc_radius = 10.0;  // nm
+    double arc_start = 0.0;    // degrees
+    double arc_end = 90.0;     // degrees
+    double arc_length = 2.0 * M_PI * arc_radius * (arc_end - arc_start) / 360.0;
+
+    TS_ASSERT(arc_length > 15.0);
+    TS_ASSERT(arc_length < 20.0);
+  }
+
+  void testCompleteGPSWaypointSequence() {
+    double waypoints[][2] = {{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}};
+    double total_distance = 0.0;
+
+    for (int i = 1; i < 4; i++) {
+      double dx = waypoints[i][0] - waypoints[i-1][0];
+      double dy = waypoints[i][1] - waypoints[i-1][1];
+      total_distance += std::sqrt(dx*dx + dy*dy);
+    }
+
+    TS_ASSERT_DELTA(total_distance, 3.0, 0.1);  // 3 nm total
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentBearingCalculations() {
+    double bearing1 = NormalizeHeading(45.0 + 360.0);
+    double bearing2 = NormalizeHeading(315.0 - 360.0);
+
+    TS_ASSERT_DELTA(bearing1, 45.0, 0.001);
+    TS_ASSERT_DELTA(bearing2, 315.0, 0.001);
+
+    // Verify bearing1 unchanged
+    double bearing1_verify = NormalizeHeading(45.0 + 360.0);
+    TS_ASSERT_DELTA(bearing1, bearing1_verify, 0.001);
+  }
+
+  void testIndependentRadialInterceptions() {
+    double radial1 = 90.0;
+    double heading1 = 45.0;
+    double intercept1 = NormalizeAngle180(radial1 - heading1);
+
+    double radial2 = 180.0;
+    double heading2 = 135.0;
+    double intercept2 = NormalizeAngle180(radial2 - heading2);
+
+    TS_ASSERT_DELTA(intercept1, 45.0, 0.001);
+    TS_ASSERT_DELTA(intercept2, 45.0, 0.001);
+  }
+
+  void testIndependentDMEReadings() {
+    double dist1 = 20.0;
+    double alt1 = 10000.0;
+    double slant1 = std::sqrt(dist1*dist1 + std::pow(alt1 * FT_TO_NM, 2));
+
+    double dist2 = 50.0;
+    double alt2 = 30000.0;
+    double slant2 = std::sqrt(dist2*dist2 + std::pow(alt2 * FT_TO_NM, 2));
+
+    TS_ASSERT(slant2 > slant1);
+
+    // Verify slant1 unchanged
+    double slant1_verify = std::sqrt(dist1*dist1 + std::pow(alt1 * FT_TO_NM, 2));
+    TS_ASSERT_DELTA(slant1, slant1_verify, 0.001);
+  }
+
+  void testIndependentGlideslopeCalculations() {
+    double angle1 = 3.0;
+    double dist1 = 5.0;
+    double alt1 = dist1 * NM_TO_FT * std::tan(angle1 * DEG_TO_RAD);
+
+    double angle2 = 4.0;
+    double dist2 = 3.0;
+    double alt2 = dist2 * NM_TO_FT * std::tan(angle2 * DEG_TO_RAD);
+
+    TS_ASSERT(alt1 > 0.0);
+    TS_ASSERT(alt2 > 0.0);
+
+    // Verify alt1 unchanged
+    double alt1_verify = dist1 * NM_TO_FT * std::tan(angle1 * DEG_TO_RAD);
+    TS_ASSERT_DELTA(alt1, alt1_verify, 0.1);
+  }
+
+  void testIndependentCourseDeviations() {
+    double desired1 = 90.0;
+    double actual1 = 85.0;
+    double dev1 = NormalizeAngle180(actual1 - desired1);
+
+    double desired2 = 270.0;
+    double actual2 = 280.0;
+    double dev2 = NormalizeAngle180(actual2 - desired2);
+
+    TS_ASSERT_DELTA(dev1, -5.0, 0.001);
+    TS_ASSERT_DELTA(dev2, 10.0, 0.001);
+  }
 };

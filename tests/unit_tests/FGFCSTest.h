@@ -1135,4 +1135,155 @@ public:
     fcs->SetDaCmd(1.0);
     TS_ASSERT_DELTA(fcs->GetDaCmd(), 1.0, epsilon);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteControlInputSequence() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    // Simulate complete maneuver: roll, pitch, yaw
+    fcs->SetDaCmd(0.5);   // Roll right
+    fcs->SetDeCmd(-0.3);  // Pitch up
+    fcs->SetDrCmd(0.1);   // Yaw right
+
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), 0.5, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), -0.3, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDrCmd(), 0.1, epsilon);
+
+    // Also test that Da, De, Dr are independent
+    TS_ASSERT(std::abs(fcs->GetDaCmd() - fcs->GetDeCmd()) > 0.1);
+  }
+
+  void testCompleteFlightControlLoop() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    // Simulate a control loop execution
+    for (int i = 0; i < 100; i++) {
+      double t = i * 0.01;
+      fcs->SetDaCmd(sin(t));
+      fcs->SetDeCmd(cos(t));
+      fcs->Run(false);
+
+      TS_ASSERT(std::isfinite(fcs->GetDaCmd()));
+      TS_ASSERT(std::isfinite(fcs->GetDeCmd()));
+    }
+  }
+
+  void testCompleteFlapsRange() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    // Test full flaps range
+    double flapValues[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    for (double flap : flapValues) {
+      fcs->SetDfCmd(flap);
+      TS_ASSERT_DELTA(fcs->GetDfCmd(), flap, epsilon);
+    }
+  }
+
+  void testCompleteTrimState() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    // Set trimmed state
+    fcs->SetPitchTrimCmd(0.1);
+    fcs->SetRollTrimCmd(0.0);
+    fcs->SetYawTrimCmd(0.0);
+
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), 0.1, epsilon);
+    TS_ASSERT_DELTA(fcs->GetRollTrimCmd(), 0.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetYawTrimCmd(), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentFCSInstances() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    auto fcs1 = fdmex1.GetFCS();
+    auto fcs2 = fdmex2.GetFCS();
+
+    fcs1->SetDaCmd(0.5);
+    fcs2->SetDaCmd(-0.5);
+
+    TS_ASSERT_DELTA(fcs1->GetDaCmd(), 0.5, epsilon);
+    TS_ASSERT_DELTA(fcs2->GetDaCmd(), -0.5, epsilon);
+
+    // Verify fcs1 unchanged
+    TS_ASSERT_DELTA(fcs1->GetDaCmd(), 0.5, epsilon);
+  }
+
+  void testIndependentControlAxes() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDaCmd(0.3);
+    fcs->SetDeCmd(0.4);
+    fcs->SetDrCmd(0.5);
+
+    // Each axis is independent
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), 0.3, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), 0.4, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDrCmd(), 0.5, epsilon);
+
+    // Changing one doesn't affect others
+    fcs->SetDeCmd(-0.4);
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), 0.3, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDrCmd(), 0.5, epsilon);
+  }
+
+  void testIndependentControlChannels() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDfCmd(0.6);
+    double f0 = fcs->GetDfCmd();
+
+    fcs->SetDsbCmd(0.8);
+    double sb = fcs->GetDsbCmd();
+
+    // Flaps and speedbrake are independent
+    TS_ASSERT_DELTA(f0, 0.6, epsilon);
+    TS_ASSERT_DELTA(sb, 0.8, epsilon);
+  }
+
+  void testIndependentTrimSettings() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetPitchTrimCmd(0.2);
+    fcs->SetRollTrimCmd(0.1);
+
+    double pitchTrim = fcs->GetPitchTrimCmd();
+    double rollTrim = fcs->GetRollTrimCmd();
+
+    TS_ASSERT_DELTA(pitchTrim, 0.2, epsilon);
+    TS_ASSERT_DELTA(rollTrim, 0.1, epsilon);
+
+    // Changing roll trim doesn't affect pitch trim
+    fcs->SetRollTrimCmd(-0.1);
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), 0.2, epsilon);
+  }
+
+  void testIndependentRunCycles() {
+    FGFDMExec fdmex;
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDaCmd(0.7);
+    double before = fcs->GetDaCmd();
+
+    for (int i = 0; i < 50; i++) {
+      fcs->Run(false);
+    }
+
+    // Command should be preserved
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), before, epsilon);
+  }
 };

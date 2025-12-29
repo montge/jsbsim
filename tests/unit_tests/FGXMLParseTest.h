@@ -1526,4 +1526,195 @@ public:
     TS_ASSERT(tableData != nullptr);
     TS_ASSERT(tableData->GetNumDataLines() > 0);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteAircraftConfigParsing() {
+    FGXMLParse parser;
+    std::string xml = "<fdm_config name=\"c172\" version=\"2.0\">"
+                      "<fileheader>"
+                      "<author>Test Author</author>"
+                      "<filecreationdate>2024-01-01</filecreationdate>"
+                      "</fileheader>"
+                      "<metrics>"
+                      "<wingspan unit=\"FT\">36.1</wingspan>"
+                      "<chord unit=\"FT\">4.9</chord>"
+                      "</metrics>"
+                      "</fdm_config>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetName(), "fdm_config");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("name"), "c172");
+
+    Element* metrics = doc->FindElement("metrics");
+    TS_ASSERT(metrics != nullptr);
+
+    Element* wingspan = metrics->FindElement("wingspan");
+    TS_ASSERT(wingspan != nullptr);
+    TS_ASSERT_DELTA(wingspan->GetDataAsNumber(), 36.1, 0.01);
+  }
+
+  void testCompleteSystemsParsing() {
+    FGXMLParse parser;
+    std::string xml = "<system name=\"fuel\">"
+                      "<channel name=\"left\">"
+                      "<summer name=\"total\">"
+                      "<input>propulsion/tank[0]/contents-lbs</input>"
+                      "<input>propulsion/tank[1]/contents-lbs</input>"
+                      "</summer>"
+                      "</channel>"
+                      "</system>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* channel = doc->FindElement("channel");
+    TS_ASSERT(channel != nullptr);
+    Element* summer = channel->FindElement("summer");
+    TS_ASSERT(summer != nullptr);
+    TS_ASSERT_EQUALS(summer->GetNumElements("input"), 2u);
+  }
+
+  void testCompleteNestedElementAccess() {
+    FGXMLParse parser;
+    std::string xml = "<root><a><b><c><d>value</d></c></b></a></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    Element* a = doc->FindElement("a");
+    TS_ASSERT(a != nullptr);
+    Element* b = a->FindElement("b");
+    TS_ASSERT(b != nullptr);
+    Element* c = b->FindElement("c");
+    TS_ASSERT(c != nullptr);
+    Element* d = c->FindElement("d");
+    TS_ASSERT(d != nullptr);
+    TS_ASSERT_EQUALS(d->GetDataLine(), "value");
+  }
+
+  void testCompleteAttributeValueTypes() {
+    FGXMLParse parser;
+    std::string xml = "<elem int=\"42\" float=\"3.14\" bool=\"true\" str=\"hello\"/>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("int"), "42");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("float"), "3.14");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("bool"), "true");
+    TS_ASSERT_EQUALS(doc->GetAttributeValue("str"), "hello");
+  }
+
+  void testCompleteDocumentTraversal() {
+    FGXMLParse parser;
+    std::string xml = "<root><child1>a</child1><child2>b</child2><child3>c</child3></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    TS_ASSERT(doc != nullptr);
+
+    int childCount = 0;
+    Element* child = doc->GetElement();
+    while (child) {
+      childCount++;
+      child = doc->GetNextElement();
+    }
+
+    TS_ASSERT_EQUALS(childCount, 3);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentParserInstances() {
+    FGXMLParse parser1;
+    FGXMLParse parser2;
+
+    std::string xml1 = "<doc1>data1</doc1>";
+    std::string xml2 = "<doc2>data2</doc2>";
+
+    Element* doc1 = parseXMLString(xml1, parser1);
+    Element* doc2 = parseXMLString(xml2, parser2);
+
+    TS_ASSERT(doc1 != nullptr);
+    TS_ASSERT(doc2 != nullptr);
+    TS_ASSERT_EQUALS(doc1->GetName(), "doc1");
+    TS_ASSERT_EQUALS(doc2->GetName(), "doc2");
+  }
+
+  void testIndependentDocumentModification() {
+    FGXMLParse parser;
+
+    parser.reset();
+    std::string xml1 = "<elem>value1</elem>";
+    Element* doc1 = parseXMLString(xml1, parser);
+    std::string val1 = doc1->GetDataLine();
+
+    parser.reset();
+    std::string xml2 = "<elem>value2</elem>";
+    Element* doc2 = parseXMLString(xml2, parser);
+    std::string val2 = doc2->GetDataLine();
+
+    TS_ASSERT_EQUALS(val1, "value1");
+    TS_ASSERT_EQUALS(val2, "value2");
+  }
+
+  void testIndependentElementQueries() {
+    FGXMLParse parser;
+    std::string xml = "<root><a>1</a><b>2</b></root>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    Element* a = doc->FindElement("a");
+    Element* b = doc->FindElement("b");
+
+    TS_ASSERT(a != nullptr);
+    TS_ASSERT(b != nullptr);
+    TS_ASSERT_EQUALS(a->GetDataLine(), "1");
+    TS_ASSERT_EQUALS(b->GetDataLine(), "2");
+
+    // Query a again
+    Element* a2 = doc->FindElement("a");
+    TS_ASSERT_EQUALS(a2->GetDataLine(), "1");
+  }
+
+  void testIndependentAttributeAccess() {
+    FGXMLParse parser;
+    std::string xml = "<elem attr1=\"val1\" attr2=\"val2\"/>";
+
+    Element* doc = parseXMLString(xml, parser);
+
+    std::string v1 = doc->GetAttributeValue("attr1");
+    std::string v2 = doc->GetAttributeValue("attr2");
+
+    TS_ASSERT_EQUALS(v1, "val1");
+    TS_ASSERT_EQUALS(v2, "val2");
+
+    // Access attr1 again
+    std::string v1_again = doc->GetAttributeValue("attr1");
+    TS_ASSERT_EQUALS(v1_again, "val1");
+  }
+
+  void testIndependentNumericParsing() {
+    FGXMLParse parser;
+
+    parser.reset();
+    std::string xml1 = "<val>123.45</val>";
+    Element* doc1 = parseXMLString(xml1, parser);
+    double n1 = doc1->GetDataAsNumber();
+
+    parser.reset();
+    std::string xml2 = "<val>678.90</val>";
+    Element* doc2 = parseXMLString(xml2, parser);
+    double n2 = doc2->GetDataAsNumber();
+
+    TS_ASSERT_DELTA(n1, 123.45, epsilon);
+    TS_ASSERT_DELTA(n2, 678.90, epsilon);
+  }
 };

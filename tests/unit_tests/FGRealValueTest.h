@@ -902,4 +902,114 @@ public:
     TS_ASSERT(neg_zero.GetValue() == 0.0);
     TS_ASSERT(pos_zero.GetValue() == 0.0);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteValueRange() {
+    // Test values across wide range
+    double values[] = {-1e10, -1000.0, -1.0, 0.0, 1.0, 1000.0, 1e10};
+
+    for (double v : values) {
+      FGRealValue rv(v);
+      TS_ASSERT_DELTA(rv.GetValue(), v, std::abs(v) * 1e-10 + 1e-15);
+    }
+  }
+
+  void testCompleteValueOperations() {
+    FGRealValue rv1(100.0);
+    FGRealValue rv2(50.0);
+
+    double sum = rv1.GetValue() + rv2.GetValue();
+    double diff = rv1.GetValue() - rv2.GetValue();
+    double prod = rv1.GetValue() * rv2.GetValue();
+    double quot = rv1.GetValue() / rv2.GetValue();
+
+    TS_ASSERT_DELTA(sum, 150.0, 1e-10);
+    TS_ASSERT_DELTA(diff, 50.0, 1e-10);
+    TS_ASSERT_DELTA(prod, 5000.0, 1e-10);
+    TS_ASSERT_DELTA(quot, 2.0, 1e-10);
+  }
+
+  void testCompletePrecisionPreservation() {
+    double preciseValue = 3.141592653589793;
+    FGRealValue rv(preciseValue);
+
+    TS_ASSERT_DELTA(rv.GetValue(), preciseValue, 1e-15);
+  }
+
+  void testCompleteSpecialValueHandling() {
+    // Test various special numeric patterns
+    FGRealValue tiny(1e-300);
+    FGRealValue large(1e300);
+
+    TS_ASSERT(tiny.GetValue() > 0.0);
+    TS_ASSERT(large.GetValue() > 0.0);
+    TS_ASSERT(tiny.GetValue() < large.GetValue());
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentValueInstances() {
+    FGRealValue rv1(100.0);
+    FGRealValue rv2(200.0);
+
+    TS_ASSERT_DELTA(rv1.GetValue(), 100.0, 1e-10);
+    TS_ASSERT_DELTA(rv2.GetValue(), 200.0, 1e-10);
+
+    // Creating rv2 doesn't affect rv1
+    TS_ASSERT_DELTA(rv1.GetValue(), 100.0, 1e-10);
+  }
+
+  void testIndependentNegativeValues() {
+    FGRealValue neg(-42.5);
+    FGRealValue pos(42.5);
+
+    TS_ASSERT_DELTA(neg.GetValue(), -42.5, 1e-10);
+    TS_ASSERT_DELTA(pos.GetValue(), 42.5, 1e-10);
+    TS_ASSERT_DELTA(neg.GetValue() + pos.GetValue(), 0.0, 1e-10);
+  }
+
+  void testIndependentArrayOfValues() {
+    FGRealValue values[5] = {
+      FGRealValue(1.0),
+      FGRealValue(2.0),
+      FGRealValue(3.0),
+      FGRealValue(4.0),
+      FGRealValue(5.0)
+    };
+
+    for (int i = 0; i < 5; i++) {
+      TS_ASSERT_DELTA(values[i].GetValue(), static_cast<double>(i + 1), 1e-10);
+    }
+  }
+
+  void testIndependentScaledValues() {
+    FGRealValue base(10.0);
+    double v1 = base.GetValue() * 2.0;
+    double v2 = base.GetValue() * 3.0;
+
+    TS_ASSERT_DELTA(v1, 20.0, 1e-10);
+    TS_ASSERT_DELTA(v2, 30.0, 1e-10);
+
+    // Base value unchanged
+    TS_ASSERT_DELTA(base.GetValue(), 10.0, 1e-10);
+  }
+
+  void testIndependentFractionalValues() {
+    FGRealValue half(0.5);
+    FGRealValue quarter(0.25);
+    FGRealValue eighth(0.125);
+
+    TS_ASSERT_DELTA(half.GetValue(), 0.5, 1e-15);
+    TS_ASSERT_DELTA(quarter.GetValue(), 0.25, 1e-15);
+    TS_ASSERT_DELTA(eighth.GetValue(), 0.125, 1e-15);
+
+    // Sum should be 0.875
+    double sum = half.GetValue() + quarter.GetValue() + eighth.GetValue();
+    TS_ASSERT_DELTA(sum, 0.875, 1e-15);
+  }
 };
