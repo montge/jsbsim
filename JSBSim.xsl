@@ -613,7 +613,7 @@
                                                                       <xsl:value-of select="location/y"/>,
                                                                       <xsl:value-of select="location/z"/>] (Unit: <xsl:value-of select="location/@unit"/>)<br/>
                                          <b>Thruster</b>: [Defined in file: <xsl:value-of select="thruster/@file"/>.xml]
-                                                                      
+
                                     </td>
                                     </tr>
                                 </xsl:for-each>

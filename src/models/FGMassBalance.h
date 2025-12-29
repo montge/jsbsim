@@ -77,9 +77,9 @@ CLASS DOCUMENTATION
         ixz =  integral( x * z * dm ),
         iyz =  integral( y * z * dm ).
     default is negated_crossproduct_inertia = "true".
-    We strongly recommend defining negated_crossproduct_inertia = "false", 
-    which is consistent with the specifications in the field of flight dynamics. 
-    
+    We strongly recommend defining negated_crossproduct_inertia = "false",
+    which is consistent with the specifications in the field of flight dynamics.
+
     <h3>Configuration File Format for \<mass_balance> Section:</h3>
 @code{.xml}
     <mass_balance negated_crossproduct_inertia="true|false">
@@ -99,7 +99,7 @@ CLASS DOCUMENTATION
             <form shape="{tube | cylinder | sphere | ball}">
                <radius unit="{IN | FT | M}"> {number} </radius>
                <length unit="{IN | FT | M}"> {number} </length>
-            </form> 
+            </form>
             <weight unit="{LBS | KG}"> {number} </weight>
             <location name="{string}" unit="{IN | FT | M}">
                 <x> {number} </x>
@@ -110,7 +110,7 @@ CLASS DOCUMENTATION
         ... other point masses ...]
     </mass_balance>
 @endcode
-    
+
     @see Stevens and Lewis, "Flight Control & Simulation"
     @see Bernard Etkin, " Dynamics Of Atmosferic Flight"
     @see https://en.wikipedia.org/wiki/Moment_of_inertia#Inertia_tensor
@@ -197,7 +197,7 @@ public:
   const FGMatrix33& GetJinv(void) const {return mJinv;}
   void SetAircraftBaseInertias(const FGMatrix33& BaseJ) {baseJ = BaseJ;}
   void GetMassPropertiesReport(int i);
-  
+
   struct Inputs {
     double GasMass;
     double TanksWeight;

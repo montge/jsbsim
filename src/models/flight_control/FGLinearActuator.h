@@ -44,19 +44,19 @@ FORWARD DECLARATIONS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
 namespace JSBSim {
-    
+
 class Element;
-    
+
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  CLASS DOCUMENTATION
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
-    
+
 /** Models a flight control system summing component.
 
     Linear actuators typically operate by conversion of rotary motion into
     linear motion. The linear_actuator component is described in the Wikipedia
     link: https://en.wikipedia.org/wiki/Linear_actuator.
-    
+
     Linear actuators converts a rotation into a linear movement or a multiturn
     rotation. For the conversion it is necessary to declare a module that is
     defined by the difference of the maximum and minimum value Input.
@@ -83,7 +83,7 @@ class Element;
     - versus: Direction of rotation if fixed. The versus allows to obtain a
               mechanism similar to the tick of a clock. The default value
               is 0.
-    
+
     If the value is zero, the verse is automatically obtained according to
     variation of the input data.
 
@@ -229,7 +229,7 @@ public:
 
   /// The execution method for this FCS component.
   bool Run(void) override;
-        
+
 private:
   FGParameter_ptr ptrSet;
   bool set = true;

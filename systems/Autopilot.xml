@@ -24,19 +24,19 @@
   Description:
 
   This file contains general purpose autopilot functions for JSBSim aircraft.
-  
+
   Usage
   =====
-  
+
   This file contains algorithms that depend on parameters calculated in the
   file, GNCUtilities.xml, which should be included prior to the inclusion of
   this file, e.g.,
-  
+
   <system file="GNCUtilities"/>
 
   <system file="Autopilot"/>
-   
-  Inputs: 
+
+  Inputs:
 
     [Declared Interface Parameters]
     ap/roll-attitude-mode - This should be set to 0 for wings level or to 1
@@ -58,7 +58,7 @@
 
   <property> ap/roll-attitude-mode </property>
   <property> ap/autopilot-roll-on  </property>
-  
+
   <!-- Initial constants (can be overridden in the aircraft file) -->
 
   <property value="0.524"> guidance/roll-angle-limit </property>
@@ -107,7 +107,7 @@
     <switch name="ap/roll-attitude-selector">
       <description>
         This component selects whether to use a roll angle of "0" - which
-        is a wings-level attitude - or to use the roll angle commanded by the 
+        is a wings-level attitude - or to use the roll angle commanded by the
         ap/limited-roll-angle-rad component, above, which is used to acquire
         and hold a heading.
         Set ap/roll-attitude-mode to 1 for roll angle hold,
@@ -118,7 +118,7 @@
         ap/roll-attitude-mode eq 1
       </test>
     </switch>
-    
+
     <summer name="ap/limited-roll-angle-error">
       <description>
         This component computes the error between the calculated target roll
@@ -145,7 +145,7 @@
       <input>guidance/roll-rate-limit</input>
       <gain>2.0</gain>
     </pure_gain>
-    
+
     <deadband name="ap/roll-rate-saturation">
       <input> ap/roll-rate-pid-control </input>
       <width> ap/total-limited-roll-rate </width>

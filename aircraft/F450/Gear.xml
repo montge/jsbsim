@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <ground_reactions>
 	<!-- This is a fake point, JSBSim struggles with a 4-point ground trim -->
-	<contact name="Front_Center" type="BOGEY"> 
+	<contact name="Front_Center" type="BOGEY">
 		<location unit="M">
 			<x> -0.1016 </x>
 			<y> 0.0 </y>

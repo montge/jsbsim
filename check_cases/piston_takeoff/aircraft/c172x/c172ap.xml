@@ -36,7 +36,7 @@
   <property>ap/throttle-cmd-norm</property>
 
 <!-- INITIAL GAIN VALUES -->
-  
+
   <property value="0.5"> ap/hdg-roll-err-c1 </property>
   <property value="50.0"> ap/roll-pid-kp </property>
   <property value="5.0"> ap/roll-pid-ki </property>

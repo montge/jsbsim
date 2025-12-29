@@ -3,12 +3,12 @@
   <!--
     This file contains plot descriptions for the ground_reactions data logged by JSBSim
     when the aerosurfaces flag is turned ON.
-    
+
     These are the *typical* variables logged by JSBSim with the ground_reactions flag set to ON.
     The exact parameter names include the specific contact point name, followed by more
     descriptive names. The list below assumes that a representative contact point name is
     "Nose Gear",
-    
+
     Nose Gear WOW
     Nose Gear stroke (ft)
     Nose Gear stroke velocity (ft/sec)

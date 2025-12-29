@@ -117,4 +117,3 @@ Test suites SHALL include documentation describing test purpose and coverage.
 - **THEN** it SHALL include a comment or docstring describing:
   - What behavior is being tested
   - Expected inputs and outputs
-

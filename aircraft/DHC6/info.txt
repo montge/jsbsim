@@ -70,4 +70,3 @@ Flaps Extended Speed Maximum 103 KIAS for flap extension up to and including
 10°, maximum 93 KIAS for flap extension beyond 10°, both speeds quoted are for
 post Mod 6/1395 aircraft. Mod 6/1395 cut in at SN 290 and can be retrofitted
 to earlier production aircraft.
-

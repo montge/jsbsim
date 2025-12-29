@@ -8,7 +8,7 @@
         /SH79/, eqns. 13-16.
 
         The system is adjustable via 'ap/afcs/adj/*' properties, it
-        offers basic altitude- and heading-hold features, but can 
+        offers basic altitude- and heading-hold features, but can
         also be turned into a pure 'Rate-Damper' (or SAS, 'Stability
         Augmentation System').
 
@@ -24,7 +24,7 @@
 
 
         SH79: Shaugnessy, J. D., Deaux, Thomas N., and Yenni, Kenneth R.;
-              Development and Validation of a Piloted Simulation of a 
+              Development and Validation of a Piloted Simulation of a
               Helicopter and External Sling Load - NASA TP-1285; 1979
 
       ===================================================================  -->
@@ -336,4 +336,3 @@
   </channel>
 
 </system>
-

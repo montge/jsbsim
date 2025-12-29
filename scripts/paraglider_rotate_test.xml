@@ -25,7 +25,7 @@
       </notify>
     </event>
 
-    <event name="Rotate">     
+    <event name="Rotate">
       <condition>simulation/sim-time-sec ge 2.0</condition>
       <set name="fcs/aileron-cmd-norm" value="1.0" action="FG_RAMP" tc="0.5"/>
       <notify>
@@ -40,8 +40,8 @@
         <property>accelerations/vdot-ft_sec2</property>
         <property>accelerations/wdot-ft_sec2</property>
         <property>velocities/vg-fps</property>
-      </notify>     
-    </event>                  
+      </notify>
+    </event>
 
     <event name="Rotate">
       <condition>simulation/sim-time-sec ge 4.7</condition>
@@ -86,4 +86,3 @@
   </run>
 
 </runscript>
-

@@ -3,7 +3,7 @@
 <!--
    raw approximation of the Pratt & Whitney T73 or Pratt & Whitney JFTD12 family
    4,500 shp each
- -->    
+ -->
 <turbine_engine name="pratt_n_whitney_t73">
   <milthrust> 20160.00 </milthrust> <!-- estimate via *= 2.24 -->
   <bypassratio>     0.0   </bypassratio>

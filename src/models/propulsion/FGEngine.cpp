@@ -111,7 +111,7 @@ unsigned int FGEngine::GetSourceTank(unsigned int i) const
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-double FGEngine::GetThrust(void) const 
+double FGEngine::GetThrust(void) const
 {
   return Thruster->GetThrust();
 }

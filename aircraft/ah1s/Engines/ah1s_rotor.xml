@@ -10,7 +10,7 @@
   <liftcurveslope>                        6.0 </liftcurveslope>
   <flappingmoment unit="SLUG*FT2">     1382.0 </flappingmoment> <!-- mass approx. 8.57 slug -->
   <twist>                              -0.175 </twist>
-  <massmoment>                           85.0 </massmoment> <!-- SLUG*FT, estimated from mass --> 
+  <massmoment>                           85.0 </massmoment> <!-- SLUG*FT, estimated from mass -->
   <tiplossfactor>                         1.0 </tiplossfactor>
   <polarmoment unit="SLUG*FT2">        2900.0 </polarmoment>
   <inflowlag>                            0.09 </inflowlag>

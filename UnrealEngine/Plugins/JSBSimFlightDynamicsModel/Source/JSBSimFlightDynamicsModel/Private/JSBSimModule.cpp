@@ -11,7 +11,7 @@
 
 void FJSBSimModule::StartupModule()
 {
-	
+
 }
 
 void FJSBSimModule::ShutdownModule()
@@ -19,6 +19,6 @@ void FJSBSimModule::ShutdownModule()
 }
 
 #undef LOCTEXT_NAMESPACE
-	
+
 IMPLEMENT_MODULE(FJSBSimModule, JSBSimFlightDynamicsModel)
 DEFINE_LOG_CATEGORY(LogJSBSim);

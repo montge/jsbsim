@@ -12,12 +12,12 @@
 // modify it under the terms of the GNU Lesser General Public
 // License as published by the Free Software Foundation; either
 // version 2.1 of the License, or (at your option) any later version.
-// 
+//
 // This library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 // Lesser General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Lesser General Public
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
@@ -204,7 +204,7 @@ float const Light::_vtail_area_t[1][5] =
 };
 
 float const Light::_vtail_arm_t[1][5] =
-{ 
+{
     { 0.60f, 0.50f, 0.50f, 0.50f, 0.50f }
 };
 
@@ -225,7 +225,7 @@ float const Light::_roskam_t[1][5][3] =
 };
 
 float const Light::_eyept_loc_t[1][5][3] =
-{ 
+{
     {
         { 0.19f,   0.00f,  9.00f },
         { 0.13f, -18.00f, 45.00f },
@@ -306,4 +306,3 @@ float const Light::_Cnda_t[1][5] =
 };
 
 } /* namespace Aeromatic */
-

@@ -24,7 +24,7 @@
       <set name="propulsion/starter_cmd" value="1"/>
       <notify/>
     </event>
- 
+
     <event name="Climb">
       <condition>
         aero/qbar-psf  ge  17.0

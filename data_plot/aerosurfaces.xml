@@ -3,9 +3,9 @@
   <!--
     This file contains plot descriptions for the aerosurfaces data logged by JSBSim
     when the aerosurfaces flag is turned ON.
-    
+
     These are the variables logged by JSBSim with the aerosurfaces flag set to ON
-    
+
     Aileron Command (norm)
     Elevator Command (norm)
     Rudder Command (norm)
@@ -60,5 +60,5 @@
       <parameter axis="y2">Flap Position (deg)</parameter>
     </plot>
   </page>
-  
+
 </plotset>

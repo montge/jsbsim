@@ -59,7 +59,7 @@ CLASS DOCUMENTATION
 /** Encapsulates the Buoyant forces calculations.
     This class owns and contains the list of force/coefficients that define the
     Buoyant properties of an air vehicle.
-    
+
     Here's an example of a gas cell specification:
 
     @code
@@ -77,12 +77,12 @@ CLASS DOCUMENTATION
         <x_radius unit="M"> 22.86 </x_radius>
         <y_radius unit="M">  4.55 </y_radius>
         <z_radius unit="M">  4.55 </z_radius>
-        <max_overpressure unit="PA"> 340.0 </max_overpressure> 
+        <max_overpressure unit="PA"> 340.0 </max_overpressure>
         <valve_coefficient unit="M4*SEC/KG"> 0.015 </valve_coefficient>
       </gas_cell>
-      
+
       ... {other gas cells} ...
-      
+
     </buoyant_forces>
     @endcode
 
@@ -109,7 +109,7 @@ public:
 
   /** Runs the Buoyant forces model; called by the Executive
       Can pass in a value indicating if the executive is directing the simulation to Hold.
-      @param Holding if true, the executive has been directed to hold the sim from 
+      @param Holding if true, the executive has been directed to hold the sim from
                      advancing time. Some models may ignore this flag, such as the Input
                      model, which may need to be active to listen on a socket for the
                      "Resume" command to be given.

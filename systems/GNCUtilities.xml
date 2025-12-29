@@ -22,7 +22,7 @@
             June 20 2013 (update)
   Function: Calculates useful GNC values
 
-  Inputs: 
+  Inputs:
     position/lat-gc-rad (geocentric latitude in radians)
     position/long-gc-rad (longitude in radians)
 

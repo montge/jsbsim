@@ -57,14 +57,14 @@ CLASS DOCUMENTATION
     by specifying any/all of the following additional effects that can be
     applied to the actuator. In order of application to the input signal,
     these are:
-    
+
     - System lag (input lag, really)
     - Rate limiting
     - Deadband
     - Hysteresis (mechanical hysteresis)
     - Bias (mechanical bias)
     - Position limiting ("hard stops")
-    
+
     There are also several malfunctions that can be applied to the actuator
     by setting a property to true or false (or 1 or 0).
 
@@ -74,7 +74,7 @@ CLASS DOCUMENTATION
     <rate_limit> element is supplied with a "sense" attribute of either
     "incr[easing]" or "decr[easing]" then the actuator is limited to the
     provided numeric or property value) exactly as provided.
-    
+
     Lag filter's numerical integration assumes that the lag parameter is
     constant. So a continuously varying parameter via a property will introduce
     a non negligible error that will accumulate as the simulation progresses.
@@ -150,7 +150,7 @@ public:
   bool GetFailHardover(void) const {return fail_hardover;}
   bool GetFailStuck(void) const {return fail_stuck;}
   bool IsSaturated(void) const {return saturated;}
-  
+
 private:
   //double span;
   double bias;

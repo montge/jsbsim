@@ -114,7 +114,7 @@ If the type is ABSOLUTE, then the noise number times the random number is added
 to the input signal instead of being multiplied against it as with the PERCENT
 type of noise.
 
-If a noise element is specified, then a property will be created, named 
+If a noise element is specified, then a property will be created, named
 name/randomseed if the name contains a path separator '/' or fcs/name/randomseed
 if the name does not contain a path separator. Which allows a user to specify a
 random seed to be used for the noise generation.

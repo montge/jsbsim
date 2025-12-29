@@ -10,7 +10,7 @@
   <property value="0.0">systems/hook/tailhook-offset-y-in</property>
   <property value="-28.0">systems/hook/tailhook-offset-z-in</property>
   <property value="-8.0">systems/hook/tailhook-pos-deg</property>
-  
+
 
   <channel name="Hook">
 

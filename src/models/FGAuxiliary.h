@@ -241,7 +241,7 @@ public:
   double GetVt            (void) const { return Vt;         }
 
   /** Gets the ground speed in feet per second.
-      The magnitude is the square root of the sum of the squares (RSS) of the 
+      The magnitude is the square root of the sum of the squares (RSS) of the
       vehicle north and east velocity components.
       @return The magnitude of the vehicle velocity in the horizontal plane. */
   double GetVground       (void) const { return Vground;    }

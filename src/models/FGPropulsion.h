@@ -76,7 +76,7 @@ CLASS DOCUMENTATION
           ... see FGEngine, FGThruster, and class for engine type ...
         </engine>
         ... more engines ...
-        <tank type="{FUEL | OXIDIZER}"> 
+        <tank type="{FUEL | OXIDIZER}">
           ... see FGTank ...
         </tank>
         ... more tanks ...
@@ -107,7 +107,7 @@ public:
       The initial plan for the FGPropulsion class calls for Run() to be executed,
       calculating the power available from the engine.
       Can pass in a value indicating if the executive is directing the simulation to Hold.
-      @param Holding if true, the executive has been directed to hold the sim from 
+      @param Holding if true, the executive has been directed to hold the sim from
                      advancing time. Some models may ignore this flag, such as the Input
                      model, which may need to be active to listen on a socket for the
                      "Resume" command to be given.

@@ -42,7 +42,7 @@
       </notify>
     </event>
 
-    <event name="Set_Takeoff_Power">    
+    <event name="Set_Takeoff_Power">
       <description>Move throttle to full for take-off.</description>
       <condition>propulsion/engine[0]/n2 ge 60.0</condition>
       <delay>5.0</delay>
@@ -63,20 +63,20 @@
       </notify>
     </event>
 
-    <event name="Rotate">     
-    <condition>velocities/vc-kts ge 170</condition>    
-    <set name="fcs/elevator-cmd-norm" value="0.1" action="FG_RAMP" tc="1.0"></set>            
+    <event name="Rotate">
+    <condition>velocities/vc-kts ge 170</condition>
+    <set name="fcs/elevator-cmd-norm" value="0.1" action="FG_RAMP" tc="1.0"></set>
     <notify>
        <property>velocities/vc-kts</property>
        <property>position/h-agl-ft</property>
-       <property>aero/alpha-deg</property>           
+       <property>aero/alpha-deg</property>
        <property>gear/gear-pos-norm</property>
-       </notify>     
-    </event>                  
+       </notify>
+    </event>
 
-    <event name="Set_Climb_Elevator">    
-      <condition>simulation/sim-time-sec  ge  80</condition> 
-      <set name="fcs/elevator-cmd-norm" value="0.1" action="FG_RAMP" tc="5.0"></set>            
+    <event name="Set_Climb_Elevator">
+      <condition>simulation/sim-time-sec  ge  80</condition>
+      <set name="fcs/elevator-cmd-norm" value="0.1" action="FG_RAMP" tc="5.0"></set>
       <notify>
         <property>propulsion/engine[0]/n2</property>
         <property>propulsion/engine[1]/n2</property>
@@ -87,9 +87,8 @@
         <property>propulsion/engine[2]/thrust-lbs</property>
         <property>propulsion/engine[3]/thrust-lbs</property>
         <property>velocities/vc-kts</property>
-       </notify> 
-    </event>         
+       </notify>
+    </event>
   </run>
 
 </runscript>
-

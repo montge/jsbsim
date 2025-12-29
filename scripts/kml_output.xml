@@ -14,10 +14,10 @@
 
   The first row containing the column headers should be removed, too, for
   use in Google Earth (edit GroundTrack2.kml in the above example).
-  
+
   Then, you can concatenate the Pre- and Post-fix files to make a complete
   KML file you can drop into Google Earth:
-  
+
   cat Prefix.kml GroundTrack2.kml Postfix.kml > FinalGroundTrack.kml
 
 

@@ -26,15 +26,15 @@
      Air Screw 1350 RPM
      Left Hand Tractor
  -->
- <minmp unit="INHG">         10.0 </minmp> 
- <maxmp unit="INHG">         27.9 </maxmp> 
+ <minmp unit="INHG">         10.0 </minmp>
+ <maxmp unit="INHG">         27.9 </maxmp>
  <displacement unit="IN3"> 452.39 </displacement>
- <!--bsfc>          0.37 </bsfc--> 
- <maxhp>        85.50 </maxhp> 
+ <!--bsfc>          0.37 </bsfc-->
+ <maxhp>        85.50 </maxhp>
  <bore unit="IN"> 4.0 </bore>
  <stroke unit="IN"> 6.0 </stroke>
  <cylinders> 6 </cylinders>
- <compression-ratio> 5.1 </compression-ratio> 
+ <compression-ratio> 5.1 </compression-ratio>
  <cycles>         4.0 </cycles>
  <idlerpm>      300.0 </idlerpm>
  <maxrpm>      1350.0 </maxrpm>

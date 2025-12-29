@@ -28,11 +28,11 @@ class TestTurbulenceGustStop(JSBSimTestCase):
     BASELINE_WIND_EAST  = 6
     BASELINE_WIND_DOWN  = 7
 
-    def setUp(self, *args): 
+    def setUp(self, *args):
         super().setUp(*args)
 
         self.fdm = self.create_fdm()
-        self.fdm.load_model('A4') 
+        self.fdm.load_model('A4')
 
         # Set engine running
         self.fdm['propulsion/engine[0]/set-running'] = 1
@@ -44,7 +44,7 @@ class TestTurbulenceGustStop(JSBSimTestCase):
         self.fdm.run_ic()
 
         self.fdm['simulation/do_simple_trim'] = 1
-        
+
         # Set baseline NED wind
         self.fdm["atmosphere/wind-north-fps"] = self.BASELINE_WIND_NORTH
         self.fdm["atmosphere/wind-east-fps"] = self.BASELINE_WIND_EAST

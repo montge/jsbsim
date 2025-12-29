@@ -13,9 +13,9 @@
 
        Note:
          When developing a new helicopter fdm you should run the rotor
-         in constant-speed mode (by setting ExternalRPM to -1 and 
+         in constant-speed mode (by setting ExternalRPM to -1 and
          manipulate propulsion/engine[x]/x-rpm-dict accordingly).
-         Implement the governor as last step, otherwise chances are high 
+         Implement the governor as last step, otherwise chances are high
          that a bad governor might spoil a good model.
 
       =================================================================  -->
@@ -54,7 +54,7 @@
         <min>  0.00 </min>
         <max>  1.00 </max>
       </clipto>
-      <output>fcs/throttle-pos-norm</output> 
+      <output>fcs/throttle-pos-norm</output>
     </pid>
   </channel>
 

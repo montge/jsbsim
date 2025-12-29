@@ -53,8 +53,8 @@ namespace JSBSim {
 CLASS DOCUMENTATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-/** Models the 1976 U.S. Standard Atmosphere, with the ability to modify the 
-    temperature and pressure. A base feature of the model is the temperature 
+/** Models the 1976 U.S. Standard Atmosphere, with the ability to modify the
+    temperature and pressure. A base feature of the model is the temperature
     profile that is stored as an FGTable object with this data:
 
 @code
@@ -74,7 +74,7 @@ GeoMet Alt    Temp      GeoPot Alt  GeoMet Alt
 The pressure is calculated at lower altitudes through the use of two equations
 that are presented in the U.S. Standard Atmosphere document (see references).
 Density, kinematic viscosity, speed of sound, etc., are all calculated based
-on various constants and temperature and pressure. At higher altitudes (above 
+on various constants and temperature and pressure. At higher altitudes (above
 86 km (282152 ft) a different and more complicated method of calculating
 pressure is used.
 
@@ -134,7 +134,7 @@ public:
   /// @return The STANDARD temperature at sea level in degrees Rankine.
   virtual double GetStdTemperatureSL() const { return StdSLtemperature; }
 
-  /// Returns the ratio of the standard temperature at the supplied altitude 
+  /// Returns the ratio of the standard temperature at the supplied altitude
   /// over the standard sea level temperature.
   virtual double GetStdTemperatureRatio(double h) const { return GetStdTemperature(h)/StdSLtemperature; }
 
@@ -184,7 +184,7 @@ public:
 
   /// Sets a Sea Level temperature delta that is ramped out by 86 km.
   /// The value of the delta is used to calculate a delta gradient that is
-  /// applied to the temperature at all altitudes below 86 km (282152 ft). 
+  /// applied to the temperature at all altitudes below 86 km (282152 ft).
   /// For instance, if a temperature of 20 degrees F is supplied, the delta
   /// gradient would be 20/282152 - or, about 7.09E-5 degrees/ft. At sea level,
   /// the full 20 degrees would be added to the standard temperature,
@@ -307,11 +307,11 @@ protected:
   /// This function is also called to initialize the lapse rate vector.
   void CalculateLapseRates();
 
-  /// Calculate (or recalculate) the atmospheric pressure breakpoints at the 
+  /// Calculate (or recalculate) the atmospheric pressure breakpoints at the
   /// altitudes in the standard temperature table.
   void CalculatePressureBreakpoints(double SLpress);
 
-  /// Calculate the atmospheric density breakpoints at the 
+  /// Calculate the atmospheric density breakpoints at the
   /// altitudes in the standard temperature table.
   void CalculateStdDensityBreakpoints();
 

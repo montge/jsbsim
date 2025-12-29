@@ -912,7 +912,7 @@ public:
             double Vn = m_fdm->GetPropagate()->GetVel(1);
             double Vndot = (m_fdm->GetPropagate()->GetTb2l()*m_fdm->GetAccelerations()->GetUVWdot())(1);
             double Ve = m_fdm->GetPropagate()->GetVel(2);
-            double Vedot = (m_fdm->GetPropagate()->GetTb2l()*m_fdm->GetAccelerations()->GetUVWdot())(2); 
+            double Vedot = (m_fdm->GetPropagate()->GetTb2l()*m_fdm->GetAccelerations()->GetUVWdot())(2);
 
             //dCOG/dt = dCOG/dVe*dVe/dt + dCOG/dVn*dVn/dt
             return Vn/(Vn*Vn+Ve*Ve)*Vedot - Ve/(Vn*Vn+Ve*Ve)*Vndot;

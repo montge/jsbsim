@@ -62,24 +62,24 @@ void FJSBSimMovementCompVisualizer::DrawVisualization(const UActorComponent* Com
 	// Make sure we are ready to visualize this component
 	if (!MovementComponent->IsReadyForCompVisualizer)
 	{
-		// We must call PrepareModelForCompVisualizer(), but this is not a const method, and then can't be called using the MovementComponent pointer above. 
-		// Trick - Grab an editable pointer to if from the owner... 
+		// We must call PrepareModelForCompVisualizer(), but this is not a const method, and then can't be called using the MovementComponent pointer above.
+		// Trick - Grab an editable pointer to if from the owner...
 		UJSBSimMovementComponent* EditableMovementComponent = Cast<UJSBSimMovementComponent>(Owner->GetComponentByClass(UJSBSimMovementComponent::StaticClass()));
 		if (EditableMovementComponent)
 		{
-			EditableMovementComponent->PrepareModelForCompVisualizer(); 
+			EditableMovementComponent->PrepareModelForCompVisualizer();
 		}
 	}
-	
+
 	// Draw visualization helpers
 	if (Owner)
 	{
-		// Update Locations 
+		// Update Locations
 		StructuralFrameWorldLocation = Owner->GetTransform().TransformPosition(MovementComponent->StructuralFrameOrigin);
 		CGWorldLocation = Owner->GetTransform().TransformPosition(MovementComponent->CGLocalPosition);
 		EPWorldLocation = Owner->GetTransform().TransformPosition(MovementComponent->EPLocalPosition);
 		VRPWorldLocation = Owner->GetTransform().TransformPosition(MovementComponent->VRPLocalPosition);
-		 
+
 		// UE Actor Origin - Blue
 		PDI->DrawPoint(Owner->GetActorLocation(), FLinearColor::Blue, 10, SDPG_World);
 
@@ -89,12 +89,12 @@ void FJSBSimMovementCompVisualizer::DrawVisualization(const UActorComponent* Com
 		// Gravity Center
 		PDI->DrawPoint(CGWorldLocation, FLinearColor::Yellow, 10, SDPG_World);
 
-		// EyePoint 
+		// EyePoint
 		PDI->DrawPoint(EPWorldLocation, FLinearColor::Green, 10, SDPG_World);
 
 		// Visual Reference Point
 		PDI->DrawPoint(VRPWorldLocation, FLinearColor::Blue, 10, SDPG_World);
-		 
+
 		for (FGear Gear : MovementComponent->Gears)
 		{
 			FVector GearWorldLocation = Owner->GetTransform().TransformPosition(Gear.RelativeLocation);

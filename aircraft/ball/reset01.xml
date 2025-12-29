@@ -15,4 +15,3 @@
   <winddir unit="DEG">     0.0  </winddir>
   <vwind unit="FT/SEC">    0.0  </vwind>
 </initialize>
-

@@ -83,7 +83,7 @@ void FGNelderMead::update()
     {
         try
         {
-            m_cost[vertex] = eval(m_simplex[vertex]);   
+            m_cost[vertex] = eval(m_simplex[vertex]);
         }
         catch (...)
         {
@@ -196,7 +196,7 @@ void FGNelderMead::update()
 
 
     // costs
-    
+
     try
     {
         // try inversion

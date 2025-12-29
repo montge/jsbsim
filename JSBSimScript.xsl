@@ -53,25 +53,25 @@
                                   </xsl:if>
                                   <xsl:if test="@action">
                                       <xsl:if test="@action = 'FG_STEP'">
-                                          via step 
+                                          via step
                                       </xsl:if>
                                       <xsl:if test="@action = 'FG_EXP'">
-                                          via exponential input 
+                                          via exponential input
                                       </xsl:if>
                                       <xsl:if test="@action = 'FG_RAMP'">
-                                          via ramp input 
+                                          via ramp input
                                       </xsl:if>
                                       <xsl:if test="@tc">
-                                          over <xsl:value-of select="@tc"/> seconds 
+                                          over <xsl:value-of select="@tc"/> seconds
                                       </xsl:if>
                                   </xsl:if>
                                   </li>
                               </xsl:for-each>
                             </ul>
                             </xsl:if>
-                            
+
                             </xsl:if> <!-- Actions -->
-                            
+
                             <xsl:if test="notify">
                                 When this event is triggered, a notification message will be shown
                                 <xsl:if test="notify/property">

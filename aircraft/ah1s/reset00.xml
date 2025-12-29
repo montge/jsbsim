@@ -15,7 +15,7 @@
       JSBSim logfile:
         <output name='localhost' type='FLIGHTGEAR' port='45577' protocol='UDP' rate='25'/>
 
-      FlightGear:    
+      FlightGear:
         add '-\-native-fdm=socket,in,25,127.0.0.1,45577,udp' to your start options.
 
       -->

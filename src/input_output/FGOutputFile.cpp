@@ -96,9 +96,9 @@ bool FGOutputFile::Load(Element* el)
 {
   if (!FGOutputType::Load(el))
     return false;
-  
+
   SetOutputName(el->GetAttributeValue("name"));
-  
+
   return true;
 }
 

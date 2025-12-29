@@ -30,7 +30,7 @@ mkdir -p $UNREAL_PLUGIN_INCLUDE_FOLDER
 # Copy headers
 rsync -avm --include='*.h' --include='*.hpp' --include='*.hxx' -f 'hide,! */' src/ UnrealEngine/Plugins/JSBSimFlightDynamicsModel/Source/ThirdParty/JSBSim/Include/
 
-echo "Copying JSBSim library to Unreal plugin folder: 
+echo "Copying JSBSim library to Unreal plugin folder:
 $UNREAL_PLUGIN_LIB_FOLDER"
 # make the unreal plugin thirdparty/jsbsim/lib folder
 mkdir -p $UNREAL_PLUGIN_LIB_FOLDER
@@ -39,7 +39,7 @@ mkdir -p $UNREAL_PLUGIN_LIB_FOLDER
 # cp ./build/src/libJSBSim.a $UNREAL_PLUGIN_LIB_FOLDER/.
 cp ./build/src/*.so $UNREAL_PLUGIN_LIB_FOLDER/.
 
-echo "Copying JSBSim resources to Unreal plugin folder: 
+echo "Copying JSBSim resources to Unreal plugin folder:
 $UNREAL_PLUGIN_RESOURCES_FOLDER"
 # make the unreal plugin resources folder
 mkdir -p $UNREAL_PLUGIN_RESOURCES_FOLDER

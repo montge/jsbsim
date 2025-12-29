@@ -8,7 +8,7 @@ $version = 0.96;
 // erator. The front-end is aeromatic.html.          *
 //                                                   *
 // July 2003, David P. Culp, davidculp2@comcast.net  *
-//                                                   * 
+//                                                   *
 //****************************************************
 // Updated: 29 Sep 2003, DPC - added high alpha/beta drag
 // Updated:  5 Sep 2003, DPC - added prop transport
@@ -67,7 +67,7 @@ $ft_to_in = 12;
 $m_to_ft = 3.281;
 $kg_to_lbs = 2.205;
 
-if ($ac_units == 1) { 
+if ($ac_units == 1) {
   $ac_weight      *= $kg_to_lbs;
   $ac_wingspan    *= $m_to_ft;
   $ac_length      *= $m_to_ft;
@@ -83,7 +83,7 @@ if ($ac_units == 1) {
 //***** METRICS ***************************************
 
 // first, estimate wing loading in psf
-switch($ac_type) { 
+switch($ac_type) {
   case 0: $ac_wingloading = 7.0;   break;  // glider
   case 1: $ac_wingloading = 14.0;  break;  // light single
   case 2: $ac_wingloading = 29.0;  break;  // light twin
@@ -149,7 +149,7 @@ if ($ac_htailarm == 0) {
     case 7: $ac_htailarm = $ac_length * 0.45; break;
     case 8: $ac_htailarm = $ac_length * 0.45; break;
     case 9: $ac_htailarm = $ac_length * 0.50; break;
-   
+
     }
   }
 
@@ -202,7 +202,7 @@ if ($ac_emptyweight == 0) {
     case 9:  $ac_emptyweight = $ac_weight * .60; break;
     }
   }
-  
+
 //***** MOMENTS OF INERTIA ******************************
 
 if(($ac_ixx == 0) && ($ac_iyy == 0) && ($ac_izz == 0)) {
@@ -360,32 +360,32 @@ else
 // forward fuselage engines
 if ($ac_enginelayout == 0) {
   $leftmost = ($ac_numengines * -20) + 20;
-  for( $i=0; $i<$ac_numengines; $i++) {   
+  for( $i=0; $i<$ac_numengines; $i++) {
       $ac_englocx[$i] = 36.0;
       $ac_englocy[$i] = $leftmost + ($i * 40);
-      $ac_englocz[$i] = 0; 
+      $ac_englocz[$i] = 0;
      }
 }
 
 // mid fuselage engines
 if ($ac_enginelayout == 1) {
   $leftmost = ($ac_numengines * -20) + 20;
-  for( $i=0; $i<$ac_numengines; $i++) {   
+  for( $i=0; $i<$ac_numengines; $i++) {
       $ac_englocx[$i] = $ac_cglocx;
       $ac_englocy[$i] = $leftmost + ($i * 40);
-      $ac_englocz[$i] = -12.0; 
+      $ac_englocz[$i] = -12.0;
      }
-} 
+}
 
 // aft fuselage engines
 if ($ac_enginelayout == 2) {
   $leftmost = ($ac_numengines * -20) + 20;
-  for($i=0; $i<$ac_numengines; $i++) {   
+  for($i=0; $i<$ac_numengines; $i++) {
       $ac_englocx[$i] = ($ac_length * $ft_to_in) - 60.0;
       $ac_englocy[$i] = $leftmost + ($i * 40);
-      $ac_englocz[$i] = 0; 
+      $ac_englocz[$i] = 0;
      }
-} 
+}
 
 // wing engines (odd one goes in middle)
 if ($ac_enginelayout == 3) {
@@ -394,18 +394,18 @@ if ($ac_enginelayout == 3) {
   for($i=0; $i<$halfcount; $i++) {                 //left wing
       $ac_englocx[$i] = $ac_cglocx;
       $ac_englocy[$i] = $ac_wingspan * -2.0;       //span/-2/3*12
-      $ac_englocz[$i] = -40; 
-     }    
+      $ac_englocz[$i] = -40;
+     }
   for($j=$i; $j<$halfcount+$remainder; $j++) {     //center
       $ac_englocx[$j] = $ac_cglocx;
       $ac_englocy[$j] = 0;
-      $ac_englocz[$j] = -20; 
-     }    
+      $ac_englocz[$j] = -20;
+     }
   for($k=$j; $k<$ac_numengines; $k++) {            //right wing
       $ac_englocx[$k] = $ac_cglocx;
       $ac_englocy[$k] = $ac_wingspan * 2.0;        //span/2/3*12
-      $ac_englocz[$k] = -40; 
-     }    
+      $ac_englocz[$k] = -40;
+     }
   }
 
 // wing and tail engines
@@ -415,39 +415,39 @@ if ($ac_enginelayout == 4) {
   for($i=0; $i<$halfcount; $i++) {                 //left wing
       $ac_englocx[$i] = $ac_cglocx;
       $ac_englocy[$i] = $ac_wingspan * -2.0;       //span/-2/3*12
-      $ac_englocz[$i] = -40; 
-     }    
+      $ac_englocz[$i] = -40;
+     }
   for($j=$i; $j<$halfcount+$remainder; $j++) {     //center
       $ac_englocx[$j] = $ac_length - 60;
       $ac_englocy[$j] = 0;
-      $ac_englocz[$j] = 60; 
-     }    
+      $ac_englocz[$j] = 60;
+     }
   for($k=$j; $i<$ac_numengines; $i++) {            //right wing
       $ac_englocx[$k] = $ac_cglocx;
-      $ac_englocy[$k] = $ac_wingspan * 2.0;        //span/2/3*12 
-      $ac_englocz[$k] = -40; 
-     }    
+      $ac_englocy[$k] = $ac_wingspan * 2.0;        //span/2/3*12
+      $ac_englocz[$k] = -40;
+     }
   }
 
-// wing and nose engines      
+// wing and nose engines
 if ($ac_enginelayout == 5) {
   $halfcount = intval( $ac_numengines / 2 );
   $remainder = $ac_numengines - ($halfcount * 2);
   for($i=0; $i<$halfcount; $i++) {                 //left wing
       $ac_englocx[$i] = $ac_cglocx;
       $ac_englocy[$i] = $ac_wingspan * -2.0;       //span/-2/3*12
-      $ac_englocz[$i] = -40; 
-     }    
+      $ac_englocz[$i] = -40;
+     }
   for($j=$i; $j<$halfcount+$remainder; $j++) {     //center
       $ac_englocx[$j] = 36.0;
       $ac_englocy[$j] = 0;
-      $ac_englocz[$j] = 0; 
-     }    
+      $ac_englocz[$j] = 0;
+     }
   for($k=$j; $i<$ac_numengines; $i++) {            //right wing
       $ac_englocx[$k] = $ac_cglocx;
       $ac_englocy[$k] = $ac_wingspan * 2.0;        //span/2/3*12
-      $ac_englocz[$k] = -40; 
-     }    
+      $ac_englocz[$k] = -40;
+     }
   }
 
 // thruster goes where engine is
@@ -508,7 +508,7 @@ $ac_payloadlocx = $ac_cglocx;
 $ac_payloadlocy = $ac_cglocy;
 $ac_payloadlocz = $ac_cglocz;
 $ac_payload = $ac_weight - $ac_emptyweight - $ac_fuelweight;
- 
+
 //***** LIFT ****************************************
 
 // estimate slope of lift curve based on airplane type
@@ -791,7 +791,7 @@ switch($ac_type) {                   // adverse yaw
   }
 
 // get the server date/time
-$date_string = date('Y-m-d');  
+$date_string = date('Y-m-d');
 
 //************************************************
 //*                                              *
@@ -811,7 +811,7 @@ print("  <filecreationdate>$date_string</filecreationdate>\n");
 print("  <version>\$Revision: 1.20 $</version>\n");
 print("  <description> Models a $ac_name. </description>\n");
 print(" </fileheader>\n\n");
- 
+
 print("<!--\n  File:     $ac_name.xml\n");
 print("  Inputs:\n");
 print("    name:          $ac_name\n");
@@ -836,28 +836,28 @@ else
   print("    wing area:     $ac_wingarea sq-ft\n");
 switch($ac_geartype) {
   case 0: print("    gear type:     tricycle\n"); break;
-  case 1: print("    gear type:     taildragger\n"); break; 
+  case 1: print("    gear type:     taildragger\n"); break;
 }
 print("    castering:     $ac_castering\n");
 switch($ac_gearretract) {
   case 0: print("    retractable?:  no\n"); break;
-  case 1: print("    retractable?:  yes\n"); break; 
+  case 1: print("    retractable?:  yes\n"); break;
 }
 print("    # engines:     $ac_numengines\n");
 switch($ac_enginetype) {
-  case 0: print("    engine type:   piston\n"); break; 
-  case 1: print("    engine type:   turbine\n"); break; 
-  case 2: print("    engine type:   turboprop\n"); break; 
-  case 3: print("    engine type:   rocket\n"); break; 
+  case 0: print("    engine type:   piston\n"); break;
+  case 1: print("    engine type:   turbine\n"); break;
+  case 2: print("    engine type:   turboprop\n"); break;
+  case 3: print("    engine type:   rocket\n"); break;
   case 4: print("    engine type:   electric\n"); break;
 }
 switch($ac_enginelayout) {
-  case 0: print("    engine layout: forward fuselage\n"); break; 
-  case 1: print("    engine layout: middle fuselage\n"); break; 
-  case 2: print("    engine layout: aft fuselage\n"); break; 
-  case 3: print("    engine layout: wings\n"); break; 
-  case 4: print("    engine layout: wings and tail\n"); break; 
-  case 5: print("    engine layout: wings and nose\n"); break; 
+  case 0: print("    engine layout: forward fuselage\n"); break;
+  case 1: print("    engine layout: middle fuselage\n"); break;
+  case 2: print("    engine layout: aft fuselage\n"); break;
+  case 3: print("    engine layout: wings\n"); break;
+  case 4: print("    engine layout: wings and tail\n"); break;
+  case 5: print("    engine layout: wings and nose\n"); break;
 }
 if($ac_yawdamper)
   print("    yaw damper?    yes\n");
@@ -870,8 +870,8 @@ print( "    CL-alpha:      $ac_CLalpha per radian\n");
 print( "    CL-0:          $ac_CL0\n");
 print( "    CL-max:        $ac_CLmax\n");
 print( "    CD-0:          $ac_CD0\n");
-print( "    K:             $ac_K\n"); 
-print("\n-->\n\n"); 
+print( "    K:             $ac_K\n");
+print("\n-->\n\n");
 
 //***** METRICS **********************************
 
@@ -947,7 +947,7 @@ if($ac_type == 0) {  // if this is a glider
   print("    <brake_group>NONE</brake_group>\n");
   print("    <retractable>$ac_retract</retractable>\n");
   print("  </contact>\n\n");
-  
+
   print("  <contact type=\"BOGEY\" name=\"RIGHT_MAIN\">\n");
   print("    <location unit=\"IN\">\n");
   printf("     <x> %6.2f </x>\n", $ac_gearlocx_main);
@@ -1040,7 +1040,7 @@ if($ac_type == 0) {  // if this is a glider
     print("   <brake_group>LEFT</brake_group>\n");
     print("   <retractable>$ac_retract</retractable>\n");
     print("  </contact>\n\n");
-  
+
     print("  <contact type=\"BOGEY\" name=\"RIGHT_MAIN\">\n");
     print("   <location unit=\"IN\">\n");
     printf("     <x> %6.2f </x>\n", $ac_gearlocx_main);
@@ -1099,7 +1099,7 @@ if($ac_type == 0) {  // if this is a glider
     printf("    <dynamic_friction> %2.2f </dynamic_friction>\n", 1.0);
     printf("    <spring_coeff unit=\"LBS/FT\">      %8.2f </spring_coeff>\n", $ac_gearspring_main);
     printf("    <damping_coeff unit=\"LBS/FT/SEC\"> %8.2f </damping_coeff>\n", $ac_gearspring_main);
-    print("  </contact>\n\n");  
+    print("  </contact>\n\n");
  }
 print(" </ground_reactions>\n\n");
 
@@ -1305,7 +1305,7 @@ if($ac_yawdamper == 1) {
   print("        <max>  0.35 </max>\n");
   print("      </range>\n");
   print("      <output>fcs/rudder-pos-rad</output>\n");
-  print("   </aerosurface_scale>\n\n"); 
+  print("   </aerosurface_scale>\n\n");
   }
   else {
    print("   <aerosurface_scale name=\"Rudder Control\">\n");
@@ -1315,7 +1315,7 @@ if($ac_yawdamper == 1) {
    print("        <max>  0.35 </max>\n");
    print("      </range>\n");
    print("      <output>fcs/rudder-pos-rad</output>\n");
-   print("   </aerosurface_scale>\n\n"); 
+   print("   </aerosurface_scale>\n\n");
   }
 
 print("   <aerosurface_scale name=\"rudder normalization\">\n");
@@ -1330,7 +1330,7 @@ print("        <max>  1 </max>\n");
 print("      </range>\n");
 print("      <output>fcs/rudder-pos-norm</output>\n");
 print("   </aerosurface_scale>\n\n");
-  
+
 print("  </channel>\n\n");
 print("  <channel name=\"Flaps\">\n");
 
@@ -1442,7 +1442,7 @@ print("      </product>\n");
 print("    </function>\n\n");
 
 $ac_dCLflap_per_deg = $ac_dCLflaps / 30.0;
-print("    <function name=\"aero/force/Lift_flap\">\n"); 
+print("    <function name=\"aero/force/Lift_flap\">\n");
 print("       <description>Delta Lift due to flaps</description>\n");
 print("       <product>\n");
 print("           <property>aero/qbar-psf</property>\n");
@@ -1452,7 +1452,7 @@ printf("           <value> %6.5f </value>\n", $ac_dCLflap_per_deg);
 print("       </product>\n");
 print("    </function>\n\n");
 
-print("    <function name=\"aero/force/Lift_speedbrake\">\n"); 
+print("    <function name=\"aero/force/Lift_speedbrake\">\n");
 print("       <description>Delta Lift due to speedbrake</description>\n");
 print("       <product>\n");
 print("           <property>aero/qbar-psf</property>\n");
@@ -1462,7 +1462,7 @@ print("           <value>$ac_dCLspeedbrake</value>\n");
 print("       </product>\n");
 print("    </function>\n\n");
 
-print("    <function name=\"aero/force/Lift_elevator\">\n"); 
+print("    <function name=\"aero/force/Lift_elevator\">\n");
 print("       <description>Lift due to Elevator Deflection</description>\n");
 print("       <product>\n");
 print("           <property>aero/qbar-psf</property>\n");
@@ -1478,7 +1478,7 @@ print("  </axis>\n\n");
 
 print("  <axis name=\"DRAG\">\n\n");
 
-print("    <function name=\"aero/force/Drag_basic\">\n"); 
+print("    <function name=\"aero/force/Drag_basic\">\n");
 print("       <description>Drag at zero lift</description>\n");
 print("       <product>\n");
 print("          <property>aero/qbar-psf</property>\n");
@@ -1488,16 +1488,16 @@ print("            <independentVar lookup=\"row\">aero/alpha-rad</independentVar
 print("            <tableData>\n");
 print( "             -1.57    1.500\n");
 $ac_CD02 = $ac_CD0 * 1.3;
-printf("             -0.26    %4.3f\n", $ac_CD02);   
+printf("             -0.26    %4.3f\n", $ac_CD02);
 printf("              0.00    %4.3f\n", $ac_CD0);
-printf("              0.26    %4.3f\n", $ac_CD02);   
+printf("              0.26    %4.3f\n", $ac_CD02);
 print( "              1.57    1.500\n");
 print("            </tableData>\n");
 print("          </table>\n");
 print("       </product>\n");
 print("    </function>\n\n");
 
-print("    <function name=\"aero/force/Drag_induced\">\n"); 
+print("    <function name=\"aero/force/Drag_induced\">\n");
 print("       <description>Induced drag</description>\n");
 print("         <product>\n");
 print("           <property>aero/qbar-psf</property>\n");
@@ -1507,7 +1507,7 @@ print("           <value>$ac_K</value>\n");
 print("         </product>\n");
 print("    </function>\n\n");
 
-print("    <function name=\"aero/force/Drag_mach\">\n"); 
+print("    <function name=\"aero/force/Drag_mach\">\n");
 print("       <description>Drag due to mach</description>\n");
 print("        <product>\n");
 print("          <property>aero/qbar-psf</property>\n");
@@ -1525,7 +1525,7 @@ print("        </product>\n");
 print("    </function>\n\n");
 
 $ac_CDflaps_per_deg = $ac_CDflaps / 30.0;
-print("    <function name=\"aero/force/Drag_flap\">\n"); 
+print("    <function name=\"aero/force/Drag_flap\">\n");
 print("       <description>Drag due to flaps</description>\n");
 print("         <product>\n");
 print("           <property>aero/qbar-psf</property>\n");
@@ -1536,7 +1536,7 @@ print("         </product>\n");
 print("    </function>\n\n");
 
 if($ac_gearretract == 1) {
-  print("    <function name=\"aero/force/Drag_gear\">\n"); 
+  print("    <function name=\"aero/force/Drag_gear\">\n");
   print("       <description>Drag due to gear</description>\n");
   print("         <product>\n");
   print("           <property>aero/qbar-psf</property>\n");
@@ -1547,7 +1547,7 @@ if($ac_gearretract == 1) {
   print("    </function>\n\n");
 }
 
-print("    <function name=\"aero/force/Drag_speedbrake\">\n"); 
+print("    <function name=\"aero/force/Drag_speedbrake\">\n");
 print("       <description>Drag due to speedbrakes</description>\n");
 print("         <product>\n");
 print("           <property>aero/qbar-psf</property>\n");
@@ -1557,7 +1557,7 @@ print("           <value>$ac_CDspeedbrake</value>\n");
 print("         </product>\n");
 print("    </function>\n\n");
 
-print("    <function name=\"aero/force/Drag_beta\">\n"); 
+print("    <function name=\"aero/force/Drag_beta\">\n");
 print("       <description>Drag due to sideslip</description>\n");
 print("       <product>\n");
 print("          <property>aero/qbar-psf</property>\n");
@@ -1567,16 +1567,16 @@ print("            <independentVar lookup=\"row\">aero/beta-rad</independentVar>
 print("            <tableData>\n");
 print( "              -1.57    1.230\n");
 $ac_CDb26 = $ac_CDbeta * 0.25;  // CD at beta of 0.26 radians
-printf("              -0.26    %4.3f\n", $ac_CDb26);   
+printf("              -0.26    %4.3f\n", $ac_CDb26);
 printf("               0.00    0.000\n");
-printf("               0.26    %4.3f\n", $ac_CDb26);   
+printf("               0.26    %4.3f\n", $ac_CDb26);
 print( "               1.57    1.230\n");
 print("            </tableData>\n");
 print("          </table>\n");
 print("       </product>\n");
 print("    </function>\n\n");
 
-print("    <function name=\"aero/force/Drag_elevator\">\n"); 
+print("    <function name=\"aero/force/Drag_elevator\">\n");
 print("       <description>Drag due to Elevator Deflection</description>\n");
 print("       <product>\n");
 print("           <property>aero/qbar-psf</property>\n");

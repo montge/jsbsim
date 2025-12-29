@@ -9,7 +9,7 @@
   Date:     January 2009
   Function: Calculates useful GNC values
 
-  Inputs: 
+  Inputs:
     position/lat-gc-rad (geocentric latitude in radians)
     position/long-gc-rad (longitude in radians)
 
@@ -32,7 +32,7 @@
   The calculations, below, implement the Haversine formulas to calculate
   heading and distance to a set of lat/long coordinates from the current
   position. The latitude and longitude are expected to be in radian units
-  and are measured from the 0 meridian and the equator, with positive 
+  and are measured from the 0 meridian and the equator, with positive
   longitude being east from there, and positive latitude being north.
 
   The basic equations are:
@@ -49,21 +49,21 @@
   =====
 
   To use this system, include it in a <system> element as follows:
-  
+
   <system file="GNCUtilities"/>
-  
+
   Prior to including including the above system, you will want to create
   another system in which you set the target lat/lon (in radians). The
   waypoint latitude and longitude properties are mentioned above
   (Declared Interface Parameters):
-  
+
     guidance/target_wp_latitude_rad
     guidance/target_wp_longitude_rad
 
   The outputs from the AP Waypoint Heading Director channel are the heading
   to the waypoint from the current location, and the distance to the waypoint
   from the current position,
-  
+
     fcs/wp-distance
     fcs/wp-heading-rad
 
@@ -155,7 +155,7 @@
           </product>
         </sum>
       </function>
-    </fcs_function> 
+    </fcs_function>
 
     <fcs_function name="guidance/wp-distance">
       <!--
@@ -183,7 +183,7 @@
           <value> 21144000 </value> <!-- radius of the Earth in feet -->
         </product>
       </function>
-    </fcs_function> 
+    </fcs_function>
 
     <summer name="guidance/heading-to-waypoint-positive">
       <input> guidance/heading-to-waypoint-rad </input>
@@ -213,20 +213,20 @@
   the current heading. The sense of the rotation to get to that angle is also
   calculated (positive 1 for a clockwise rotation, negative 1 for counter-
   clockwise).
-  
+
   The inputs to this channel are the interface parameters declared below:
 
   Inputs:
-  
+
     navigation/actual-heading-rad
     ap/specified-heading-rad
     ap/heading-selector-switch
-  
+
   Outputs:
-  
+
     ap/angle-to-heading-rad
     ap/angle-to-heading-sense (+/- 1)
-  
+
   The angle to the heading is calculated as follows:
 
   Given an angle phi:
@@ -263,9 +263,9 @@
   set to anything other than "1". If the heading selector switch is set to "1",
   then whatever heading is copied into ap/specified-heading-rad will be used.
   Note that the term "heading" can refer to ground track, compass heading,
-  magnetic heading, or whatever. One simply needs to make sure that the 
-  spedified heading and the value copied into actual heading refer to the 
-  same type of heading. Note that the waypoint heading will always be the 
+  magnetic heading, or whatever. One simply needs to make sure that the
+  spedified heading and the value copied into actual heading refer to the
+  same type of heading. Note that the waypoint heading will always be the
   compass heading to the given waypoint lat/lon.
 -->
 
@@ -287,7 +287,7 @@
         <cos><p> navigation/actual-heading-rad </p></cos>
       </function>
     </fcs_function>
-  
+
     <fcs_function name="guidance/y1">
       <function>
         <sin><p> navigation/actual-heading-rad </p></sin>
@@ -299,7 +299,7 @@
         <cos><p> guidance/selected_target_heading </p></cos>
       </function>
     </fcs_function>
-  
+
     <fcs_function name="guidance/y2">
       <function>
         <sin><p> guidance/selected_target_heading </p></sin>

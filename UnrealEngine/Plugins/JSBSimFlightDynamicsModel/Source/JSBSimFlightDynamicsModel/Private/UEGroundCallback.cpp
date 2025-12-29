@@ -31,6 +31,6 @@ double UEGroundCallback::GetAGLevel(const FGLocation& location, FGLocation& cont
 
 double UEGroundCallback::GetAGLevel(double t, const FGLocation& location, FGLocation& contact, FGColumnVector3& normal, FGColumnVector3& vel, FGColumnVector3& angularVel) const
 {
-	// Don't care about time here... 
+	// Don't care about time here...
 	return GetAGLevel(location, contact, normal, vel, angularVel);
 }

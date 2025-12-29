@@ -32,7 +32,7 @@
           follow accordingly, minimizing input requirements.
 
        b) compensation for the torque change - lateral, and anti-torque changes
-          should give proper counter moments. 
+          should give proper counter moments.
 
      Both tasks can't be fullfilled with simple contol mixing, the compromise in
      this system is biased towards dynamic compensation of the collective input.
@@ -130,7 +130,7 @@
          Setup for interactive use
        ================================== -->
 
-  <!-- 
+  <!--
       Collective input, provide more 'bits' for the intermediate range, 0 for
       unmodified input, 1 for more sensitivity.
   -->
@@ -449,4 +449,3 @@
   </channel>
 
 </system>
-

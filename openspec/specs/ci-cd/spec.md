@@ -81,4 +81,3 @@ Pre-commit SHALL include standard code quality hooks for common issues.
 - **WHEN** staged YAML files contain syntax errors
 - **THEN** the YAML check hook fails
 - **AND** the developer sees the syntax error location
-

@@ -74,11 +74,11 @@ CLASS DOCUMENTATION
          <min> {number} </min>
          <max> {number} </max>
        </hysteresis_limits>
-       <aero_ref_pt_shift_x>  
+       <aero_ref_pt_shift_x>
          <function>
            {function contents}
-         </function> 
-       </aero_ref_pt_shift_x>  
+         </function>
+       </aero_ref_pt_shift_x>
        <function>
          {function contents}
        </function>
@@ -124,7 +124,7 @@ public:
 
   /** Runs the Aerodynamics model; called by the Executive
       Can pass in a value indicating if the executive is directing the simulation to Hold.
-      @param Holding if true, the executive has been directed to hold the sim from 
+      @param Holding if true, the executive has been directed to hold the sim from
                      advancing time. Some models may ignore this flag, such as the Input
                      model, which may need to be active to listen on a socket for the
                      "Resume" command to be given.

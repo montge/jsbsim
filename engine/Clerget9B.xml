@@ -9,7 +9,7 @@
     power:          130 hp
     augmented?      no
     injected?       no
-    
+
     the clerget 130hp 9b is as follows:
 
 no. of cylinders...........................9
@@ -64,7 +64,7 @@ SRC: http://www.theaerodrome.com/forum/2001/10278-clerget-9b-fuel-consumption.ht
   <maxthrottle>    1.0 </maxthrottle><!-- Deprecated -->
   <minthrottle>    0.1 </minthrottle><!-- Deprecated -->
   <sparkfaildrop>  0.17 </sparkfaildrop>
-  
+
   <volumetric-efficiency> 0.673 </volumetric-efficiency>
 <!-- Optional items that affect engine performance -->
  <!-- Defining <bsfc> over-rides the built-in horsepower calculations -->
@@ -72,7 +72,7 @@ SRC: http://www.theaerodrome.com/forum/2001/10278-clerget-9b-fuel-consumption.ht
  <stroke unit="IN">  6.2992  </stroke>
  <bore unit="IN">    4.72441 </bore>
  <cylinders>         9.0  </cylinders>
- <compression-ratio> 4.0 </compression-ratio> 
- 
- 
+ <compression-ratio> 4.0 </compression-ratio>
+
+
 </piston_engine>

@@ -99,7 +99,7 @@ For example,
   input. However if a better estimation can be determined for the derivative,
   you can provide its value to the PID controller via the property supplied in
   pvdot.
-  
+
   kp      - Proportional constant, default value 0.
   ki      - Integrative constant, default value 0.
   kd      - Derivative constant, default value 0.

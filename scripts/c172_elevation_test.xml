@@ -5,7 +5,7 @@
     name="C172-01A takeoff elevation test">
   <!--
     This run is for testing the C172 at different takeoff elevations.
-    
+
     The run begins with the brakes set on all wheels. The engine is started
     and the heading hold autopilot mode is set. At 2.0 seconds the brakes are
     released and the rollout begins. The flaps are set to 32%, which is

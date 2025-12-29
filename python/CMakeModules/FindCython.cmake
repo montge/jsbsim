@@ -43,4 +43,3 @@ include( FindPackageHandleStandardArgs )
 FIND_PACKAGE_HANDLE_STANDARD_ARGS( Cython REQUIRED_VARS CYTHON_EXECUTABLE )
 
 mark_as_advanced( CYTHON_EXECUTABLE )
-

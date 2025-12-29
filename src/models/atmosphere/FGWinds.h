@@ -335,7 +335,7 @@ public:
   virtual void EndGustDuration(double dur) {oneMinusCosineGust.gustProfile.endDuration = dur;}
   /// Specifies the magnitude of the gust in feet/second.
   virtual void GustMagnitude(double mag) {oneMinusCosineGust.magnitude = mag;}
-  /** Specifies the frame that the gust direction vector components are specified in. The 
+  /** Specifies the frame that the gust direction vector components are specified in. The
       body frame is defined with the X direction forward, and the Y direction positive out
       the right wing. The wind frame is defined with the X axis pointing into the velocity
       vector, the Z axis perpendicular to the X axis, in the aircraft XZ plane, and the Y
@@ -425,4 +425,3 @@ private:
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #endif
-

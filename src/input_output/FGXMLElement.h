@@ -128,7 +128,7 @@ CLASS DOCUMENTATION
     - HP = horsepower
     - HR = hour
     - L = liter
-    - GAL = gallon (U.S. liquid) 
+    - GAL = gallon (U.S. liquid)
 
     @author Jon S. Berndt
 */
@@ -282,7 +282,7 @@ public:
       @return the data value for the named element as a bool, or false if the
               data is missing. Zero will be false, while any other number will be true. */
   bool FindElementValueAsBoolean(const std::string& el="");
-  
+
   /** Searches for the named element and converts and returns the data belonging to it.
       This function allows the data belonging to a named element to be returned
       as a double. If no element is found, HUGE_VAL is returned. If no

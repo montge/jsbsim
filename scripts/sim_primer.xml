@@ -7,9 +7,9 @@
 
 
 <runscript
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-    xsi:noNamespaceSchemaLocation="http://jsbsim.sf.net/JSBSimScript.xsd" 
-    name="sim primer"> 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="http://jsbsim.sf.net/JSBSimScript.xsd"
+    name="sim primer">
 
   <use aircraft="ah1s" initialize="reset00"/>
 

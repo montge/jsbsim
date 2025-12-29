@@ -62,7 +62,7 @@ public:
     float v_down;               // down/vertical velocity in local/body frame, fps
     float v_body_u;             // ECEF velocity in body axis
     float v_body_v;             // ECEF velocity in body axis
-    float v_body_w;             // ECEF velocity in body axis 
+    float v_body_w;             // ECEF velocity in body axis
 
     // Accelerations
     float A_X_pilot;    // X accel in body frame ft/sec^2
@@ -74,7 +74,7 @@ public:
     float slip_deg;    // slip ball deflection
 
     // Pressure
-    
+
     // Engine status
     uint32_t num_engines;       // Number of valid engines
     uint32_t eng_state[FG_MAX_ENGINES];// Engine state (off, cranking, running)

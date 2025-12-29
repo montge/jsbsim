@@ -26,7 +26,7 @@ itt_delay [-] time constant for ITT change
 -->
 <!--
   File:     Allison YT40-A-16.xml
-  Author:   
+  Author:
 -->
 
 <turboprop_engine name="Allison YT40-A-16 ">
@@ -88,4 +88,4 @@ itt_delay [-] time constant for ITT change
     </tableData>
   </table>
 
-</turboprop_engine> 
+</turboprop_engine>

@@ -22,7 +22,7 @@
   <augmented>      0 </augmented>
   <augmethod>      1 </augmethod>
   <injected>       0 </injected>
-  
+
  <function name="IdleThrust">
   <table>
    <independentVar lookup="row">velocities/mach</independentVar>

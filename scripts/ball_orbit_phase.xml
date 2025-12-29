@@ -7,14 +7,14 @@
   <run start="0.0" end="11000" dt="0.005">
     <description>
       Integrators
-      
+
       0: No integrator (Freeze)
       1: Rectangular Euler
       2: Trapezoidal
       3: Adams Bashforth 2
       4: Adams Bashforth 3
       5: Adams Bashforth 4
-      
+
     </description>
     <property value="3"> simulation/integrator/rate/rotational </property>
     <property value="3"> simulation/integrator/rate/translational </property>

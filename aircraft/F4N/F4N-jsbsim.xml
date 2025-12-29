@@ -225,8 +225,8 @@
  <system file="catapult"/>
  <system file="BLC"/>
 <!-- <system file="refuel"/> -->
- <system file="gear"/> 
- <system file="flaps"/> 
+ <system file="gear"/>
+ <system file="flaps"/>
  <system file="speedbrakes"/>
  <system file="FCS-pitch"/>
  <system file="FCS-roll"/>

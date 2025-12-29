@@ -26,7 +26,7 @@
   <maxrpm>1260</maxrpm>
   <ct_factor> 1.2 </ct_factor>
   <cp_factor> 0.95 </cp_factor>
- 
+
   <table name="C_THRUST" type="internal">
       <tableData>
                  15      25      35      45      55      65

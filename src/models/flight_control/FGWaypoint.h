@@ -55,7 +55,7 @@ class Element;
 CLASS DOCUMENTATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-/** Models a Waypoint object. 
+/** Models a Waypoint object.
     The waypoint_heading component returns the heading to a specified waypoint
     lat/long from another specified point.
     The waypoint_distance component returns the distance between

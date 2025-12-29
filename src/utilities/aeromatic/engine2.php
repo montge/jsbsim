@@ -8,7 +8,7 @@ $version = 0.83;
 // erator. The front-end is aeromatic.html.          *
 //                                                   *
 // June 2003, David P. Culp, davidculp2@comcast.net  *
-//                                                   * 
+//                                                   *
 //****************************************************
 // Updated: 16 Oct 2003, DPC, new SimTurbine support
 // Updated: 20 Dec 2004, DPC, new XML version 2.0
@@ -55,13 +55,13 @@ switch($ac_enginetype) {
   case 1: print("    type:           turbine\n"); break;
   case 2: print("    type:           turboprop\n"); break;
   case 3: print("    type:           rocket\n"); break;
-  }  
+  }
 switch($ac_enginetype) {
   case 0: print("    power:          $ac_enginepower hp\n"); break;
   case 1: print("    thrust:         $ac_enginepower lb\n"); break;
   case 2: print("    power:          $ac_enginepower hp\n"); break;
   case 3: print("    thrust:         $ac_enginepower lb\n"); break;
-  }  
+  }
 if($ac_augmented)
   print("    augmented?      yes\n");
 else
@@ -70,7 +70,7 @@ if($ac_injected)
   print("    injected?       yes\n");
 else
   print("    injected?       no\n");
-print("-->\n\n"); 
+print("-->\n\n");
 
 switch ($ac_enginetype) {
   case 0: MakePiston(); break;
@@ -130,7 +130,7 @@ function MakeTurbine() {
     $ac_maxthrust = $ac_enginepower;
   }
 
-  print("<turbine_engine name=\"$ac_enginename\">\n");  
+  print("<turbine_engine name=\"$ac_enginename\">\n");
   printf("  <milthrust>%8.1f </milthrust>\n", $ac_enginepower);
   if ($ac_augmented) {
   printf("  <maxthrust>%8.1f </maxthrust>\n", $ac_maxthrust);
@@ -160,8 +160,8 @@ function MakeTurbine() {
 
   print("  <function name=\"IdleThrust\">\n");
   print("   <table>\n");
-  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");  
-  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");  
+  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");
+  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");
   print("    <tableData>\n");
   print("         -10000     0     10000   20000   30000   40000   50000   60000\n");
   print("     0.0  0.0430  0.0488  0.0528  0.0694  0.0899  0.1183  0.1467  0\n");
@@ -176,8 +176,8 @@ function MakeTurbine() {
 
   print("  <function name=\"MilThrust\">\n");
   print("   <table>\n");
-  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");  
-  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");  
+  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");
+  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");
   print("    <tableData>\n");
   print("          -10000       0   10000   20000   30000   40000   50000   60000\n");
   print("     0.0   1.2600  1.0000  0.7400  0.5340  0.3720  0.2410  0.1490  0\n");
@@ -195,8 +195,8 @@ function MakeTurbine() {
  if ($ac_augmented) {
   print("  <function name=\"AugThrust\">\n");
   print("   <table>\n");
-  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");  
-  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");  
+  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");
+  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");
   print("    <tableData>\n");
   print("           -10000       0   10000   20000   30000   40000   50000   60000\n");
   print("     0.0    1.1816  1.0000  0.8184  0.6627  0.5280  0.3756  0.2327  0\n");
@@ -221,8 +221,8 @@ function MakeTurbine() {
  if ($ac_injected) {
   print("  <function name=\"Injection\">\n");
   print("   <table>\n");
-  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");  
-  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");  
+  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");
+  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");
   print("    <tableData>\n");
   print("            0       50000\n");
   print("     0.0    1.2000  1.2000\n");
@@ -250,7 +250,7 @@ if(($ac_engineunits == 0) || ($ac_engineunits == 1)) {
   $ac_enginepower *= 2.24;
   }
 
-  print("<turbine_engine name=\"$ac_enginename\">\n");  
+  print("<turbine_engine name=\"$ac_enginename\">\n");
   printf("  <milthrust>%8.1f </milthrust>\n", $ac_enginepower);
   print("  <bypassratio>     0.0  </bypassratio>\n");
   print("  <tsfc>            0.55 </tsfc>\n");
@@ -265,8 +265,8 @@ if(($ac_engineunits == 0) || ($ac_engineunits == 1)) {
 
   print("  <function name=\"IdleThrust\">\n");
   print("   <table>\n");
-  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");  
-  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");  
+  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");
+  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");
   print("    <tableData>\n");
   print("         -10000       0   10000   20000   30000   40000   50000\n");
   print("     0.0  0.0430  0.0488  0.0528  0.0694  0.0899  0.1183  0.0\n");
@@ -281,8 +281,8 @@ if(($ac_engineunits == 0) || ($ac_engineunits == 1)) {
 
   print("  <function name=\"MilThrust\">\n");
   print("   <table>\n");
-  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");  
-  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");  
+  print("    <independentVar lookup=\"row\">velocities/mach</independentVar>\n");
+  print("    <independentVar lookup=\"column\">atmosphere/density-altitude</independentVar>\n");
   print("    <tableData>\n");
   print("         -10000       0   10000   20000   30000   40000   50000\n");
   print("     0.0  1.1260  1.0000  0.7400  0.5340  0.3720  0.2410  0.0\n");

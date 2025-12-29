@@ -10,16 +10,16 @@
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-  
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-  
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-  
+
 -->
 <!--
   File:     eng_PegasusXc.xml
@@ -30,7 +30,7 @@ Selected informative quotes from
 "Flying Empires  Short 'C' class Empire flying boats",
 Brian Cassidy, Queens Parade Press, 1996-2004. ISBN 0-9529298-2-1
 [Cassidy:2004:FE]
-    
+
   "The Pegasus engine data plates were fixed on the port side panel
   below the fore and aft level. The information on the plates read:
   Take off 2475 rpm. maximum +4 1/4 lb. sq. in.
@@ -50,7 +50,7 @@ Brian Cassidy, Queens Parade Press, 1996-2004. ISBN 0-9529298-2-1
   sleeve-valve engine and was fitted to the eight S.30 'boats. Both
   types of engine were geared down to turn the airscrew at half
   crankshaft speed, through Farman type reduction gearing."
-  (pp.91) 
+  (pp.91)
 
   "The starters were Rotax-Eclipse E 160R direct-cranking starters, capable
   of turning the crankshaft over at 25 to 30 rev. per min."
@@ -71,7 +71,7 @@ Brian Cassidy, Queens Parade Press, 1996-2004. ISBN 0-9529298-2-1
   (pp.167)
 
   "Fuel consumptions varied between individual aircraft. In practice, `normal'
-  four engine fuel consumptions ranged from as little as 107.5 gal. per hr. 
+  four engine fuel consumptions ranged from as little as 107.5 gal. per hr.
   (484 litres per hr.), to 119.9 gal. per hr. (540 litre per hr.). A good
   average consumption was considered to be 115 gal. per hr. (518 litre per hr.).
   The upper limit of acceptable consumption was set at 141 gal. per hr. (631
@@ -99,7 +99,7 @@ Flight Magazine November 5, 1936:
 
 Flight Magazine November 12, 1936:
   Bore:                   146 mm
-  Stroke:                 190.5 mm 
+  Stroke:                 190.5 mm
   Reduction gear:         0.5
   Normal crankshaft RPM:  2,250
   Rated altitude:         4,500 ft
@@ -174,10 +174,10 @@ http://theflyingboatforum.forumlaunch.net/viewtopic.php?f=19&t=897
         propulsion/engine[#]/starter-running-norm
  -->
  <starter-torque unit="LB*FT">368</starter-torque>
- <starter-rpm>800</starter-rpm>            
- 
+ <starter-rpm>800</starter-rpm>
+
  <function name="propulsion/engine[#]/starter-max-power-W">
-  <product> 
+  <product>
    <max> <!-- k_torque -->
     <value>0.0</value>
     <difference>

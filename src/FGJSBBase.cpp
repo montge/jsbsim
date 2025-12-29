@@ -91,4 +91,3 @@ string FGJSBBase::CreateIndexedPropertyName(const string& Property, int index)
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 } // namespace JSBSim
-

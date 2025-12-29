@@ -89,7 +89,7 @@
         <property>velocities/vt-fps</property>
         <property>velocities/mach</property>
         <property>velocities/vg-fps</property>
-      
+
       </notify>
     </event>
 

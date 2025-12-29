@@ -307,7 +307,7 @@ public:
       @param target_latitude the target geodetic latitude in radians
       @return The geodetic distance in feet between the two locations */
   double GetDistanceTo(double target_longitude, double target_latitude) const;
-  
+
   /** Get the heading that should be followed from the current location to
       a given location along the shortest path. Earth curvature is taken into
       account.

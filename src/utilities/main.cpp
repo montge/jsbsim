@@ -541,4 +541,3 @@ void plot(DataFile& df, string Title, string xTitle, string yTitle, int XID, vec
 
   disfin();
 }
-

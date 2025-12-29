@@ -5,7 +5,7 @@
     name="Trim in Cruise configuration">
 
   <description>
-    Trimmed at altitude/airspeed in Cruise configuration, 
+    Trimmed at altitude/airspeed in Cruise configuration,
     run for 1 second
 
       Author:
@@ -13,22 +13,22 @@
     Holy Cows, Inc.
     billg@holycows.net
     December 2010
-    
+
       Modified by:
     Guilherme Lima da Silva
-    ATS aerothermalsolutions.co 
-    aerospace@ats4i.com 
+    ATS aerothermalsolutions.co
+    aerospace@ats4i.com
     May 2021
-    
-  </description>          
+
+  </description>
 
   <use aircraft="global5000" initialize="airborne"/>
 
   <run start="0" end="2" dt="0.00833333">
-  
+
       <property value="0"> simulation/notify-time-trigger </property>
 
-    <!-- 
+    <!--
 	  Specify the initial conditions for the test if
 	  different than in the initialize script, and
 	  trim the aircraft.
@@ -39,14 +39,14 @@
 	  <set name="ic/h-sl-ft" value="30000.0"/>
       <set name="simulation/do_simple_trim" value="1"/>
     </event>
- 
+
       <event name="Repeating Notify" persistent="true">
       <description>Output message at 1 second interval, starting after
                    trimming is completed.
       </description>
       <notify>
         <property>position/h-agl-ft</property>
-        <property>velocities/mach</property>  
+        <property>velocities/mach</property>
         <property>propulsion/engine[0]/n2</property>
         <property>propulsion/engine[1]/n2</property>
         <property>propulsion/engine[0]/thrust-lbs</property>
@@ -65,7 +65,7 @@
 
       <set name="simulation/notify-time-trigger" value="1" type="FG_DELTA"/>
       <notify/>
-      
+
     </event>
 
   </run>

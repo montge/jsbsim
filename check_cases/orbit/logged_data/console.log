@@ -43,7 +43,7 @@ Use this model for development purposes ONLY!!!
     Empty Weight: 50.000000 lbm
     CG (x, y, z): 0.000000 , 0.000000 , 0.000000
 
-  Ground Reactions: 
+  Ground Reactions:
     BOGEY CONTACT
       Location: 0.000000 , 0.000000 , 0.000000
       Spring Constant:  10000.000000
@@ -62,10 +62,10 @@ Use this model for development purposes ONLY!!!
       fcs/parachute_reef_pos_norm (initial value: 0.000000)
 
 
-  External Reactions: 
-    Function: 
+  External Reactions:
+    Function:
     parachute
-    Frame: 
+    Frame:
     Location: (12.000000, 0.000000, 0.000000)
 
   Propulsion:
@@ -87,7 +87,7 @@ Use this model for development purposes ONLY!!!
   Mass Properties Report (English units: lbf, in, slug-ft^2)
                                       Weight    CG-X    CG-Y    CG-Z         Ixx         Iyy         Izz
     Base Vehicle                        50.0     0.0     0.0     0.0        20.0        10.0        10.0
-                                                                                                        
+
     Total:                              50.0     0.0     0.0     0.0        20.0        10.0        10.0
 
 End of vehicle configuration loading.

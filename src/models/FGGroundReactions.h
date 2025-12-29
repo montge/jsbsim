@@ -57,7 +57,7 @@ CLASS DOCUMENTATION
 
 /** Manages ground reactions modeling. Maintains a list of landing gear and
     ground contact points, all instances of FGLGear.  Sums their forces and
-    moments so that these may be provided to FGPropagate.  Parses the 
+    moments so that these may be provided to FGPropagate.  Parses the
     \<ground_reactions> section of the aircraft configuration file.
  <h3>Configuration File Format of \<ground_reactions> Section:</h3>
 @code{.xml}
@@ -67,7 +67,7 @@ CLASS DOCUMENTATION
         </contact>
         ... {more contacts}
     </ground_reactions>
-@endcode   
+@endcode
 
 
   */
@@ -84,7 +84,7 @@ public:
   bool InitModel(void) override;
   /** Runs the Ground Reactions model; called by the Executive
       Can pass in a value indicating if the executive is directing the simulation to Hold.
-      @param Holding if true, the executive has been directed to hold the sim from 
+      @param Holding if true, the executive has been directed to hold the sim from
                      advancing time. Some models may ignore this flag, such as the Input
                      model, which may need to be active to listen on a socket for the
                      "Resume" command to be given.

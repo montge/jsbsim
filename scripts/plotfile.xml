@@ -13,7 +13,7 @@
       </scale>
       <parameter axis="x">Longitude (deg)</parameter>
       <parameter axis="y">Latitude (deg)</parameter>
-   </plot> 
+   </plot>
    <plot>
      <title>Temperature Profile</title>
       <label axis="x">Temperature (R)</label>

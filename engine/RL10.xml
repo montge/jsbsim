@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
-<!-- 
+<!--
   Vacuum Isp     445
-  Sea Level Isp  
+  Sea Level Isp
   Pc            610 psia
   Thrust        22,300 lbs Vac
   MR            5.5:1 (O:F)
-  Design altitude 
+  Design altitude
 -->
 <rocket_engine name="RL-10">
   <isp>                   445  </isp>

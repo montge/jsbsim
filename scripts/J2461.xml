@@ -98,7 +98,7 @@
       <set name="forces/hold-down" value="0"/>
       <notify/>
     </event>
-    
+
     <event name="Vehicle state:" persistent="true">
       <description>Output message at 10 second intervals</description>
       <notify>

@@ -57,7 +57,7 @@ CLASS DOCUMENTATION
 ### Configuration File Format
 
 ~~~{.xml}
-<sense> {1 | -1} </sense> 
+<sense> {1 | -1} </sense>
 <p_factor> {number} </p_factor>
 <propeller name="{string}" version="{string}">
   <ixx> {number} </ixx>
@@ -111,7 +111,7 @@ CLASS DOCUMENTATION
     \<maxpitch>      - Maximum blade pitch angle.
     \<minrpm>        - Minimum rpm target for constant speed propeller.
     \<maxrpm>        - Maximum rpm target for constant speed propeller.
-    \<constspeed>    - 1 = constant speed mode, 0 = manual pitch mode. 
+    \<constspeed>    - 1 = constant speed mode, 0 = manual pitch mode.
     \<reversepitch>  - Blade pitch angle for reverse.
     \<sense>         - Direction of rotation (1=clockwise as viewed from cockpit,
                         -1=anti-clockwise as viewed from cockpit). Sense is
@@ -214,7 +214,7 @@ public:
   void SetPFactor(double pf) {P_Factor = pf;}
 
   /// Sets propeller into constant speed mode, or manual pitch mode
-  void SetConstantSpeed(int mode) {ConstantSpeed = mode;} 
+  void SetConstantSpeed(int mode) {ConstantSpeed = mode;}
 
   /// Sets coefficient of thrust multiplier
   void SetCtFactor(double ctf) {CtFactor = ctf;}
@@ -232,10 +232,10 @@ public:
   double GetPitch(void) const     { return Pitch;         }
 
   /// Retrieves the RPMs of the propeller
-  double GetRPM(void) const       { return RPM;           } 
+  double GetRPM(void) const       { return RPM;           }
 
   /// Calculates the RPMs of the engine based on gear ratio
-  double GetEngineRPM(void) const { return RPM * GearRatio;  } 
+  double GetEngineRPM(void) const { return RPM * GearRatio;  }
 
   /// Retrieves the propeller moment of inertia
   double GetIxx(void) const       { return Ixx;           }
@@ -344,4 +344,3 @@ private:
 }
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #endif
-

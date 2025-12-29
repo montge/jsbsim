@@ -10,8 +10,8 @@ public class JSBSim : ModuleRules
         Type = ModuleType.External;
 
         bool bJSBSimSupported = Target.Platform == UnrealTargetPlatform.Win64 ||
-                                Target.Platform == UnrealTargetPlatform.Mac || 
-                                Target.Platform == UnrealTargetPlatform.Linux || 
+                                Target.Platform == UnrealTargetPlatform.Mac ||
+                                Target.Platform == UnrealTargetPlatform.Linux ||
                                 Target.Platform == UnrealTargetPlatform.Android;
 
         if (Target.Platform == UnrealTargetPlatform.Win64)
@@ -61,10 +61,10 @@ public class JSBSim : ModuleRules
 
         string libExt = Target.Platform == UnrealTargetPlatform.Mac ? "dylib" : "so";
         LibPath = CheckForFile(LibPath, $"libJSBSim.{libExt}");
-        
+
         PublicAdditionalLibraries.Add(LibPath);
         RuntimeDependencies.Add(LibPath);
-        
+
         if (Target.Platform == UnrealTargetPlatform.Android)
         {
             string PluginPath = Utils.MakePathRelativeTo(ModuleDirectory, Target.RelativeEnginePath);
@@ -76,12 +76,12 @@ public class JSBSim : ModuleRules
     {
         string filePath = Path.Combine(path, file);
 
-        if (File.Exists(filePath)) 
+        if (File.Exists(filePath))
         {
             System.Console.WriteLine($"JSBSim Path Check OK: {filePath}");
             return filePath;
         }
-        
+
         string Err = $"{file} not found at {path}";
         System.Console.WriteLine(Err);
 

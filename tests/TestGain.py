@@ -52,7 +52,7 @@ class TestGain(JSBSimTestCase):
                                    0.707*v)
             self.assertAlmostEqual(fdm['test/gain-property-inverted-input-sign'],
                                    0.707*v)
-            
+
         fdm.run()
 
 

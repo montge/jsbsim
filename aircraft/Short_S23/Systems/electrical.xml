@@ -9,16 +9,16 @@
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-  
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-  
+
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-  
+
 -->
 <system name="electrical">
 
@@ -66,7 +66,7 @@
         4         9  4A   24V    48W   Chart table, mail room, ...
         5        10 12A   24V   126W   Fwd and centre cabin roof, mooring comp.
         5        11 12A   24V   204W   Prom. and aft cabin and freight room roof
-        6        12  4A   24V    20W   Port navigation light 
+        6        12  4A   24V    20W   Port navigation light
         6        13  4A   24V    30W   Tail and Starboard navigation light
                  14  4A   12V    30W   Signalling lamp
                  F   4A                Dynamo field
@@ -932,7 +932,7 @@
  </channel>
 
  <!-- ======================================================================
-      Main switchbox fuse 3 circuit - anchor and steaming lights 
+      Main switchbox fuse 3 circuit - anchor and steaming lights
  -->
  <channel name="Anchor and steaming lights">
 
@@ -1162,7 +1162,7 @@
  </channel>
 
  <!-- ======================================================================
-      Main switchbox switch 4, fuse 7 circuits - Fore, Corridor, Centre cabins. 
+      Main switchbox switch 4, fuse 7 circuits - Fore, Corridor, Centre cabins.
  -->
  <channel name="Main switchbox switch 4 fuse 7">
 
@@ -1207,7 +1207,7 @@
  </channel>
 
  <!-- ======================================================================
-      Main switchbox switch 4, fuse 9 circuits - Flight deck aft lights 
+      Main switchbox switch 4, fuse 9 circuits - Flight deck aft lights
  -->
  <documentation>
   Fuse 9 lighting circuits from [Short:RN-3-1-37] page 175:

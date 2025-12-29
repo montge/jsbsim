@@ -45,7 +45,7 @@
   <property> ap/alpha_hold     </property>
 
 <!-- INITIAL GAIN VALUES -->
-  
+
   <property value="0.5"> ap/hdg-roll-err-c1 </property>
   <property value="50.0"> ap/roll-pid-kp </property>
   <property value="5.0"> ap/roll-pid-ki </property>
@@ -322,8 +322,8 @@ PITCH CHANNEL
     <gain> -1.0 </gain>
     <output> ap/elevator_cmd </output>
   </pure_gain>
-  
-  
+
+
 </channel>
 
 <channel name="Alpha hold">
@@ -336,7 +336,7 @@ PITCH CHANNEL
       <max> 5</max>
     </clipto>
   </summer>
-  
+
   <switch name="aero/ap-alpha-hold-switch">
     <default value="0.0"/>
     <test value="aero/alpha-error">
@@ -382,7 +382,7 @@ PITCH CHANNEL
       <max> 1.0 </max>
     </clipto>
   </summer>
-  
+
 </channel>
 
 </autopilot>

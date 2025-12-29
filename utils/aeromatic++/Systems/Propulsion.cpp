@@ -1045,4 +1045,3 @@ float const TurbopropEngine::_eng_pwr_t[6][13] =
 };
 
 } /* namespace Aeromatic */
-

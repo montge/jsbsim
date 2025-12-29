@@ -6,7 +6,7 @@
  * 20041227
  *
  * The NRLMSISE-00 model was developed by Mike Picone, Alan Hedin, and
- * Doug Drob. They also wrote a NRLMSISE-00 distribution package in 
+ * Doug Drob. They also wrote a NRLMSISE-00 distribution package in
  * FORTRAN which is available at
  * http://uap-www.nrl.navy.mil/models_web/msis/msis_home.htm
  *

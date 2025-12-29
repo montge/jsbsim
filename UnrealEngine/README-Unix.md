@@ -26,7 +26,7 @@ make -j4
 
 ### For Linux
 Make sure to install the following package `clang libc++-dev libc++1-x libc++abi1-x libc++abi-x-dev`. Where (x) is the version number of your distribution.
-On Ubuntu 23.04 it was `libc++ 1.15, libc++abi1-15`. 
+On Ubuntu 23.04 it was `libc++ 1.15, libc++abi1-15`.
 
 ```bash
 mkdir build

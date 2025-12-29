@@ -50,7 +50,7 @@ namespace JSBSim {
 CLASS DOCUMENTATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-/** Models a rocket nozzle. 
+/** Models a rocket nozzle.
 
 <h3>Configuration File Format:</h3>
 
@@ -67,7 +67,7 @@ CLASS DOCUMENTATION
     <b>area</b> -    Nozzle area at the exit plane.
 </pre>
 
-    All parameters MUST be specified.  
+    All parameters MUST be specified.
     @author Jon S. Berndt
 */
 

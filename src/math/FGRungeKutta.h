@@ -50,7 +50,7 @@ CLASS DOCUMENTATION
    are a standard for solving ordinary differential equation (ODE) initial
    value problems. The code follows closely  the description given on
    Wikipedia, see http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods.
-   
+
    For more powerfull routines see GNU Scientific Library (GSL)
    or GNU Plotutils 'ode'.
 */

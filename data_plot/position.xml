@@ -5,7 +5,7 @@
   <!--
     This file contains plot descriptions for the position data logged by JSBSim
     when the position flag is turned ON.
-    
+
     These are the variables logged by JSBSim with the position flag set to ON
 
       Altitude ASL (ft)

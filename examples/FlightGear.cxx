@@ -138,7 +138,7 @@ private:
 };
 
 // FG uses a squared normalized magnitude for turbulence
-// this lookup table maps fg's severity levels 
+// this lookup table maps fg's severity levels
 // none(0), light(1/3), moderate(2/3) and severe(3/3)
 // to the POE table indexes 0, 3, 4 and 7
 class FGTurbulenceSeverityTable : public FGTable {
@@ -335,7 +335,7 @@ FGJSBsim::FGJSBsim( double dt )
     ab_brake_engaged = fgGetNode("/autopilot/autobrake/engaged", true);
     ab_brake_left_pct = fgGetNode("/autopilot/autobrake/brake-left-output", true);
     ab_brake_right_pct = fgGetNode("/autopilot/autobrake/brake-right-output", true);
-    
+
     altitude = fgGetNode("/position/altitude-ft");
     temperature = fgGetNode("/environment/temperature-degc",true);
     pressure = fgGetNode("/environment/pressure-inhg",true);
@@ -608,16 +608,16 @@ bool FGJSBsim::copy_to_JSBsim()
     double parking_brake = globals->get_controls()->get_brake_parking();
     double left_brake = globals->get_controls()->get_brake_left();
     double right_brake = globals->get_controls()->get_brake_right();
-    
+
     if (ab_brake_engaged->getBoolValue()) {
       left_brake = ab_brake_left_pct->getDoubleValue();
-      right_brake = ab_brake_right_pct->getDoubleValue(); 
+      right_brake = ab_brake_right_pct->getDoubleValue();
     }
-    
+
     FCS->SetLBrake(FMAX(left_brake, parking_brake));
     FCS->SetRBrake(FMAX(right_brake, parking_brake));
-    
-    
+
+
     FCS->SetCBrake( 0.0 );
     // FCS->SetCBrake( globals->get_controls()->get_brake(2) );
 
@@ -1394,7 +1394,7 @@ static double angle_diff(double a, double b)
 {
     double diff = fabs(a - b);
     if (diff > 180) diff = 360 - diff;
-    
+
     return diff;
 }
 
@@ -1407,7 +1407,7 @@ static void check_hook_solution(const FGColumnVector3& ground_normal_body, doubl
 	cos_fis[*points] = cos_fi_guess;
 	fis[*points] = atan2(sin_fi_guess, cos_fi_guess) * SG_RADIANS_TO_DEGREES;
 	(*points)++;
-    } 
+    }
 }
 
 
@@ -1428,15 +1428,15 @@ void FGJSBsim::update_external_forces(double t_off)
     const FGMatrix33& Tl2b = Propagate->GetTl2b();
     const FGLocation& Location = Propagate->GetLocation();
     const FGMatrix33& Tec2l = Location.GetTec2l();
-        
+
     double hook_area[4][3];
-    
+
     FGColumnVector3 hook_root_body = MassBalance->StructuralToBody(hook_root_struct);
     FGColumnVector3 hook_root = Location.LocalToLocation(Tb2l *   hook_root_body);
     hook_area[1][0] = hook_root(1);
     hook_area[1][1] = hook_root(2);
     hook_area[1][2] = hook_root(3);
-    
+
     hook_length = fgGetDouble("/fdm/jsbsim/systems/hook/tailhook-length-ft", 6.75);
     double fi_min = fgGetDouble("/fdm/jsbsim/systems/hook/tailhook-pos-min-deg", -18);
     double fi_max = fgGetDouble("/fdm/jsbsim/systems/hook/tailhook-pos-max-deg", 30);
@@ -1446,8 +1446,8 @@ void FGJSBsim::update_external_forces(double t_off)
 
     FGColumnVector3 hook_tip_body = hook_root_body;
     hook_tip_body(1) -= hook_length * cos_fi;
-    hook_tip_body(3) += hook_length * sin_fi;    
-    
+    hook_tip_body(3) += hook_length * sin_fi;
+
     double contact[3];
     double ground_normal[3];
     double ground_vel[3];
@@ -1475,22 +1475,22 @@ void FGJSBsim::update_external_forces(double t_off)
 		// and rearrange to get a quadratic with coeffs:
         	double a = sqr(hook_length) * (sqr(ground_normal_body(1)) + sqr(ground_normal_body(3)));
         	double b = 2 * E * ground_normal_body(3) * hook_length;
-        	double c = sqr(E) - sqr(ground_normal_body(1) * hook_length);	
+        	double c = sqr(E) - sqr(ground_normal_body(1) * hook_length);
 
         	double disc = sqr(b) - 4 * a * c;
         	if (disc >= 0) {
 		    double delta = sqrt(disc) / (2 * a);
-		
+
 		    // allow 4 solutions for safety, should never happen
 		    double sin_fis[4];
 		    double cos_fis[4];
 		    double fis[4];
 		    int points = 0;
-		
+
         	    double sin_fi_guess = -b / (2 * a) - delta;
 		    check_hook_solution(ground_normal_body, E, hook_length, sin_fi_guess, sin_fis, cos_fis, fis, &points);
 		    check_hook_solution(ground_normal_body, E, hook_length, sin_fi_guess + 2 * delta, sin_fis, cos_fis, fis, &points);
-		
+
 		    if (points == 2) {
 			double diff1 = angle_diff(fi, fis[0]);
 			double diff2 = angle_diff(fi, fis[1]);
@@ -1525,7 +1525,7 @@ void FGJSBsim::update_external_forces(double t_off)
             if (cos_fi < 0) cos_fi = -cos_fi;
             sin_fi = sqrt(1 - sqr(cos_fi));
             fi = atan2(sin_fi, cos_fi) * SG_RADIANS_TO_DEGREES;
-        
+
             fgSetDouble("/fdm/jsbsim/external_reactions/hook/x", -cos_fi);
             fgSetDouble("/fdm/jsbsim/external_reactions/hook/y", 0);
             fgSetDouble("/fdm/jsbsim/external_reactions/hook/z", sin_fi);
@@ -1554,7 +1554,7 @@ void FGJSBsim::update_external_forces(double t_off)
                 got_wire = true;
         }
     }
-    
+
     // save actual position as old position ...
     last_hook_tip[0] = hook_area[0][0];
     last_hook_tip[1] = hook_area[0][1];
@@ -1562,7 +1562,6 @@ void FGJSBsim::update_external_forces(double t_off)
     last_hook_root[0] = hook_area[1][0];
     last_hook_root[1] = hook_area[1][1];
     last_hook_root[2] = hook_area[1][2];
-    
+
     fgSetDouble("/fdm/jsbsim/systems/hook/tailhook-pos-deg", fi);
 }
-

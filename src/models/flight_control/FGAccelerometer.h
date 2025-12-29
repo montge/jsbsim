@@ -143,7 +143,7 @@ private:
   FGColumnVector3 vLocation;
   FGColumnVector3 vRadius;
   FGColumnVector3 vAccel;
-  
+
   void Debug(int from) override;
 };
 }

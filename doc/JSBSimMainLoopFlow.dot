@@ -13,10 +13,10 @@ digraph G {
     Inertial [fillcolor=green];
     Atmosphere [fillcolor=green];
     Winds [fillcolor=green];
-    "Control Systems"; 
+    "Control Systems";
     Propulsion [fillcolor=gold];
     MassBalance;
-    Aerodynamics [fillcolor=gold]; 
+    Aerodynamics [fillcolor=gold];
     GroundReactions [fillcolor=gold];
     ExternalReactions [fillcolor=gold];
     BuoyantForces [fillcolor=gold];
@@ -27,12 +27,12 @@ digraph G {
   };
 
   Executive  [shape = box, fillcolor=yellow, style=filled];
-  
+
   /* Order of execution of main loop models */
   {
   node [shape = box, fillcolor=grey, style=filled, group=model];
   Propagate ->
-  Input ->  
+  Input ->
   Inertial ->
   Atmosphere ->
   Winds ->
@@ -55,7 +55,7 @@ digraph G {
     Winds;
     Inertial;
   };
-  
+
   subgraph cluster1 {
     label="Force Models";
     Propulsion; Aerodynamics; GroundReactions; ExternalReactions; BuoyantForces;

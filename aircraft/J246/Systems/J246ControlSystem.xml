@@ -6,7 +6,7 @@
   <channel name="Mode 0: Vertical Rise">
 
     <!-- This is a simple PID controller to maintain zero pitch and yaw rate
-             during the vertical rise phase when the roll angle is being adjusted 
+             during the vertical rise phase when the roll angle is being adjusted
              to the appropriate heading - if the orientation on the pad is not
              aligned with the launch azimuth. -->
 
@@ -129,12 +129,12 @@
       <input> control/peg-pitch-controller </input>
       <c1> 5 </c1>
     </lag_filter>
-    
+
     <pure_gain name="control/peg-pitch-control-inverter">
       <input> control/peg-pitch-control-lag </input>
       <gain> -1.0 </gain>
     </pure_gain>
-    
+
     <pid name="control/peg-beta-controller">
       <input> aero/beta-rad </input>
       <kp>  0.4 </kp>
@@ -142,7 +142,7 @@
       <kd>  0.4 </kd>
       <trigger> guidance/executive/integrator-wind-up-guard-4 </trigger>
     </pid>
-    
+
   </channel>
 
 </system>

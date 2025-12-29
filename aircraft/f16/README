@@ -35,7 +35,7 @@ Climb speed: 1033.5 Ft/Sec
 * Wing					* Ventral Fin (Each)
     Area:		300 Sq Ft	    Area:		8.03 Sq Ft
     Wetted Area:	341.1 Sq Ft	    Wetted Area:	15.3 Sq Ft
-    Span:		30 Ft 0 In 	    Exposed Span:	27.5 In 
+    Span:		30 Ft 0 In 	    Exposed Span:	27.5 In
     Reff. Lenght:	47 Ft 6.24 In	    Reff. Lenght:	23.356 In
     Aspect Ratio:	3.0		    Aspect Ratio:	0.472 (Theo)
     Taper Ratio:	0.2275		    Taper Ratio:	0.760 (Theo)
@@ -55,7 +55,7 @@ Climb speed: 1033.5 Ft/Sec
     Wetted Area:	127.8 Sq Ft		Tire Size:	25.5*8-14 (18 Ply)
     Semi Span:	5.80 Ft			Stroke:			10.5 In
     Reff. Lenght:	5.90 Ft			Static Rolling Radius:	11.0 In
-    Aspect Ratio:	1.33	
+    Aspect Ratio:	1.33
     Taper Ratio:	0.390 (Theo)	    Nose Gear (NLG)
     Mean chord:	4.725 In		Tire Size:		18*5.5-8 (18 Ply)
     Sweep(LE):		40 Degr			Stroke:			10.0 In

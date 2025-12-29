@@ -46,7 +46,7 @@
       <!-- <set name="atmosphere/turb-type" value="4"/>
       <set name="atmosphere/turbulence/milspec/windspeed_at_20ft_AGL-fps" value="2"/>
       <set name="atmosphere/psiw-rad" value="0"/>
-      <set name="atmosphere/turbulence/milspec/severity" value="3"/> 
+      <set name="atmosphere/turbulence/milspec/severity" value="3"/>
     </event> -->
 
     <!-- <event name="Roll Step">
@@ -102,7 +102,7 @@
         <property>fcs/throttle-cmd-norm[1]</property>
         <property>fcs/throttle-cmd-norm[2]</property>
         <property>fcs/throttle-cmd-norm[3]</property>
-        
+
         <property>propulsion/engine[0]/propeller-rpm</property>
         <property>propulsion/engine[1]/propeller-rpm</property>
         <property>propulsion/engine[2]/propeller-rpm</property>
@@ -112,7 +112,7 @@
         <property>propulsion/engine[1]/thrust-lbs</property>
         <property>propulsion/engine[2]/thrust-lbs</property>
         <property>propulsion/engine[3]/thrust-lbs</property>
-        
+
         <property>position/h-agl-ft</property>
         <property>velocities/vc-kts</property>
         <property>attitude/phi-rad</property>

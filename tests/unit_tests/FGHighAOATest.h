@@ -1432,4 +1432,3 @@ public:
     TS_ASSERT_DELTA(improvement, 1.4, 0.01);
   }
 };
-

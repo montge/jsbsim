@@ -114,7 +114,7 @@ CLASS DOCUMENTATION
     }
     fgt.Report();
     @endcode
-    
+
     @author Tony Peden
 */
 

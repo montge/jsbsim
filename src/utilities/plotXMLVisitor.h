@@ -52,7 +52,7 @@ public:
 
   vector <struct Plots> vPlots;
   vector <struct Page> vPages;
-  
+
   bool inPage;
 
 private:

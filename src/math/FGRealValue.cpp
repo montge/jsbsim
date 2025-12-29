@@ -44,5 +44,5 @@ std::string FGRealValue::GetName(void) const
 {
   return std::string("constant value ") + to_string(Value);
 }
-  
+
 }

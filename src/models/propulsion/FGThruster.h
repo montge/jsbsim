@@ -62,11 +62,11 @@ CLASS DOCUMENTATION
     "Reverser angle" as used here is a way to manipulate the thrust vector,
     along the thrust axis ONLY, during run time.  This should not be confused
     with a thrust vectoring nozzle.  The angle is defined in radians, and is
-    used thus:  Final_thrust = cosine( reverser_angle ) * unmodified_thrust.  
+    used thus:  Final_thrust = cosine( reverser_angle ) * unmodified_thrust.
     Therefore a reverser angle of 0 results in no change, and a reverser angle
     of 3.14 (pi) results in a completely reversed thrust vector.  An angle of
     1.57 (pi/2) results in no thrust at all.
- 
+
     @author Jon Berndt
     */
 

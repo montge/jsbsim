@@ -10,7 +10,7 @@
   <property> forces/fbz-gear-lbs </property>
   <property> velocities/u-aero-fps </property>
   <property> velocities/v-aero-fps </property>
-  <property> velocities/w-aero-fps </property> 
+  <property> velocities/w-aero-fps </property>
   <property> velocities/v-down-fps </property>
-  <property> position/h-agl-ft </property> 
+  <property> position/h-agl-ft </property>
 </output>

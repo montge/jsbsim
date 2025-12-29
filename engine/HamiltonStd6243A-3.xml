@@ -90,7 +90,7 @@
 <!--=== gear ratio 16/9 (J above 1.0) === -->
 
 <!-- multiply by 0.9 :
-     - cut 10 at 0.4, then patch X 0.3 until 1.0 (deceleration at landing). 
+     - cut 10 at 0.4, then patch X 0.3 until 1.0 (deceleration at landing).
      - split 30 to 2.0.
 -->
 
@@ -213,7 +213,7 @@
 
 <!--=== backup gear ratio 16/9 (split method) === -->
 
-<!-- multiply by 1.75, cut 10 at 1.0, split 30 to 2.0 : above 180 kt a 9500 ft full load. 
+<!-- multiply by 1.75, cut 10 at 1.0, split 30 to 2.0 : above 180 kt a 9500 ft full load.
      engine may stop at idle on ground, whatever the pitch (low atmospheric pressure).
 -->
 
@@ -338,5 +338,3 @@
 -->
 
 </propeller>
-
-

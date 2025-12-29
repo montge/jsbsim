@@ -1,6 +1,6 @@
 # TestPressureAltitude.py
 #
-# Test that pressure altitude works 
+# Test that pressure altitude works
 #
 # Copyright (c) 2018 Sean McLeod
 #
@@ -92,5 +92,3 @@ class TestPressureAltitude(JSBSimTestCase):
             self.assertAlmostEqual(pressure_ref, fdm['atmosphere/P-psf'])
 
 RunTest(TestPressureAltitude)
-
-

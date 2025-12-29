@@ -39,7 +39,7 @@
  Also:
  http://www.wright-brothers.org/Information_Desk/Just_the_Facts/Engines_&_Props/1903_Props.htm
 -->
- 
+
 
 <!-- this version models both propellers -->
 <propeller name="wright1903_propellers" version="1.01">
@@ -85,4 +85,3 @@
   </table>
 
 </propeller>
-

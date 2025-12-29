@@ -12,7 +12,7 @@
     <twist>                               0.0 </twist>
     <massmoment>                         0.46 </massmoment> <!-- SLUG*FT -->
     <tiplossfactor>                       1.0 </tiplossfactor>
-    <inflowlag>                          0.09 </inflowlag> 
+    <inflowlag>                          0.09 </inflowlag>
     <hingeoffset unit="FT">             0.015 </hingeoffset>
 
     <ExternalRPM> 0 </ExternalRPM>

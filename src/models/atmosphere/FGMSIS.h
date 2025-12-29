@@ -1,29 +1,29 @@
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
- 
+
  Header:       FGMSIS.h
  Description:  MSIS-00 Atmosphere
  Author:       David Culp
  Date started: 12/14/03
- 
+
  ------------- Copyright (C) 2003  David P. Culp (davidculp2@comcast.net) ------
- 
+
  This program is free software; you can redistribute it and/or modify it under
  the terms of the GNU Lesser General Public License as published by the Free Software
  Foundation; either version 2 of the License, or (at your option) any later
  version.
- 
+
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
  details.
- 
+
  You should have received a copy of the GNU Lesser General Public License along with
  this program; if not, write to the Free Software Foundation, Inc., 59 Temple
  Place - Suite 330, Boston, MA  02111-1307, USA.
- 
+
  Further information about the GNU Lesser General Public License can also be found on
  the world wide web at http://www.gnu.org.
- 
+
 HISTORY
 --------------------------------------------------------------------------------
 12/14/03   DPC   Created
@@ -62,12 +62,12 @@ CLASS DOCUMENTATION
 
     This C++ format model uses the NRLMSISE-00 C source code package - release
     20020503
- 
+
     The NRLMSISE-00 model was developed by Mike Picone, Alan Hedin, and
-    Doug Drob. They also wrote a NRLMSISE-00 distribution package in 
+    Doug Drob. They also wrote a NRLMSISE-00 distribution package in
     FORTRAN which is available at
     http://uap-www.nrl.navy.mil/models_web/msis/msis_home.htm
- 
+
     Dominik Brodowski implemented and maintains this C version. You can
     reach him at devel@brodo.de. See the file "DOCUMENTATION" for details,
     and check http://www.brodo.de/english/pub/nrlmsise/index.html for
@@ -90,7 +90,7 @@ public:
   ~FGMSIS();
   /** Runs the MSIS-00 atmosphere model; called by the Executive
       Can pass in a value indicating if the executive is directing the simulation to Hold.
-      @param Holding if true, the executive has been directed to hold the sim from 
+      @param Holding if true, the executive has been directed to hold the sim from
                      advancing time. Some models may ignore this flag, such as the Input
                      model, which may need to be active to listen on a socket for the
                      "Resume" command to be given.

@@ -10,7 +10,7 @@ public class UEReferenceAppTarget : TargetRules
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.Latest;
 
-		#if UE_5_1_OR_LATER		
+		#if UE_5_1_OR_LATER
 		IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
 		#endif
 

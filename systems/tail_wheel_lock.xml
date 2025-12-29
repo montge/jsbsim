@@ -13,7 +13,7 @@
  <property value="0.0">fcs/tail-wheel-lock-cmd-norm</property>
 
  <channel name="tail wheel">
- 
+
   <switch name="fcs/tail-wheel-locked-deg">
    <default value="0.0"/>
    <output>fcs/steer-pos-deg[2]</output>

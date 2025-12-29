@@ -12,12 +12,12 @@
 // modify it under the terms of the GNU Lesser General Public
 // License as published by the Free Software Foundation; either
 // version 2.1 of the License, or (at your option) any later version.
-// 
+//
 // This library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 // Lesser General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Lesser General Public
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
@@ -80,7 +80,7 @@
 #define M2_TO_FT2		10.7639104f
 #define FT2_TO_M2		(1.0/M@_TO_FT2)
 
-// one horsepower equals 745.69987 Watts 
+// one horsepower equals 745.69987 Watts
 #define KW_TO_HP		1.341f
 #define HP_TO_KW		(1.0/KW_TO_HP)
 
@@ -251,7 +251,7 @@ public:
     static std::string get(float value, unsigned utype, bool convert=false);
     static std::string get_unit(bool upper=false, unsigned utype=0, bool convert=false);
     static std::string get_nice(float value, unsigned utype, bool convert=false, bool upper=false);
-    
+
 
     enum ParamType get_type() { return ParamType(_ptype); }
     const char* get_units() {
@@ -293,4 +293,3 @@ private:
 } /* namespace Aeromatic */
 
 #endif /* _TYPES_H */
-

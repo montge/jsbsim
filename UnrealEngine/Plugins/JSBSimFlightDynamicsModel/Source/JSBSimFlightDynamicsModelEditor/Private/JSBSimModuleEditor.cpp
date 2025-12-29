@@ -14,7 +14,7 @@ void FJSBSimModuleEditor::StartupModule()
 	if (GUnrealEd)
 	{
         // Register the FJSBSimMovementCompVisualizer to help setting up JSBSim
-        
+
 		// Make a new instance of the visualizer
 		TSharedPtr<FComponentVisualizer> Visualizer = MakeShareable(new FJSBSimMovementCompVisualizer);
     	// Register it to our specific component class
@@ -33,5 +33,5 @@ void FJSBSimModuleEditor::ShutdownModule()
 }
 
 #undef LOCTEXT_NAMESPACE
-	
+
 IMPLEMENT_MODULE(FJSBSimModuleEditor, JSBSimFlightDynamicsModelEditor)

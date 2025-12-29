@@ -1121,4 +1121,3 @@ float const Propeller::_power_t[23][9] =
 #endif
 
 } /* namespace Aeromatic */
-

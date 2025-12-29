@@ -131,4 +131,3 @@ def CopyAircraftDef(script_path, sandbox):
                                 os.path.join(system_path, subdirs))
 
     return tree, aircraft_name, path_to_jsbsim_aircrafts
-

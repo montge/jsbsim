@@ -99,7 +99,7 @@ FGRocket::FGRocket(FGFDMExec* exec, Element *el, int engine_number, struct Input
   } else {
     throw("Specific Impulse <isp> must be specified for a rocket engine");
   }
-  
+
   if (el->FindElement("builduptime"))
     BuildupTime = el->FindElementValueAsNumber("builduptime");
   if (el->FindElement("maxthrottle"))
@@ -196,7 +196,7 @@ void FGRocket::Calculate(void)
     } else { // Calculate thrust
 
       // PctPower = Throttle / MaxThrottle; // Min and MaxThrottle range from 0.0 to 1.0, normally.
-      
+
       PctPower = in.ThrottlePos[EngineNumber];
       Flameout = false;
       VacThrust = Isp * PropellantFlowRate;
@@ -213,7 +213,7 @@ void FGRocket::Calculate(void)
 }
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-// 
+//
 // The FuelFlowRate can be affected by the TotalIspVariation value (settable
 // in a config file or via properties). The TotalIspVariation parameter affects
 // thrust, but the thrust determines fuel flow rate, so it must be adjusted
@@ -268,8 +268,8 @@ string FGRocket::GetEngineValues(const string& delimiter)
 {
   std::ostringstream buf;
 
-  buf << It << delimiter 
-      << ItVac << delimiter 
+  buf << It << delimiter
+      << ItVac << delimiter
       << GetMoments().Dump(delimiter) << delimiter
       << Thruster->GetBodyForces().Dump(delimiter) << delimiter
       << Thruster->GetThrusterValues(EngineNumber, delimiter);

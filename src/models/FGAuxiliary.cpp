@@ -391,7 +391,7 @@ double FGAuxiliary::GetDistanceRelativePosition(void) const
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 const FGColumnVector3& FGAuxiliary::GetNEUPositionFromStart() const
-{ 
+{
   if (!NEUCalcValid) {
     // Position tracking in local frame with local frame origin at lat, lon of initial condition
     // and at 0 altitude relative to the reference ellipsoid. Position is NEU (North, East, UP) in feet.
@@ -400,7 +400,7 @@ const FGColumnVector3& FGAuxiliary::GetNEUPositionFromStart() const
     NEUCalcValid = true;
   }
 
-  return vNEUFromStart; 
+  return vNEUFromStart;
 }
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

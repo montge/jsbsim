@@ -153,5 +153,3 @@ float DataFile::GetAutoAxisMin(int item) {
 
   return Mn;
 }
-
-

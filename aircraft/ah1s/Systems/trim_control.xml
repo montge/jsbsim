@@ -1,5 +1,5 @@
 <system name="trim control">
-<!-- 
+<!--
   Utility system:
     used to switch between 'piloted' (manual) and table based flight,
     unneeded for interactive use.

@@ -65,7 +65,7 @@ CLASS DOCUMENTATION
 /** Models a fuel tank.
 
 <h3>Fuel Temperature:</h3>
- 
+
     Fuel temperature is calculated using the following assumptions:
 
     Fuel temperature will only be calculated for tanks which have an initial
@@ -73,12 +73,12 @@ CLASS DOCUMENTATION
 
     The surface area of the tank is estimated from the capacity in pounds.  It
     is assumed that the tank is a wing tank with dimensions h by 4h by 10h. The
-    volume of the tank is then 40(h)(h)(h). The area of the upper or lower 
+    volume of the tank is then 40(h)(h)(h). The area of the upper or lower
     surface is then 40(h)(h).  The volume is also equal to the capacity divided
     by 49.368 lbs/cu-ft, for jet fuel.  The surface area of one side can then be
-    derived from the tank's capacity.  
+    derived from the tank's capacity.
 
-    The heat capacity of jet fuel is assumed to be 900 Joules/lbm/K, and the 
+    The heat capacity of jet fuel is assumed to be 900 Joules/lbm/K, and the
     heat transfer factor of the tank is 1.115 Watts/sq-ft/K.
 
 <h3>Fuel Dump:</h3>
@@ -271,14 +271,14 @@ public:
 
   /** Gets the temperature of the fuel.
       The temperature of the fuel is calculated if an initial tempearture is
-      given in the configuration file. 
+      given in the configuration file.
       @return the temperature of the fuel in degrees C IF an initial temperature
       is given, otherwise 0.0 C is returned. */
   double GetTemperature_degC(void) const {return Temperature;}
 
   /** Gets the temperature of the fuel.
       The temperature of the fuel is calculated if an initial tempearture is
-      given in the configuration file. 
+      given in the configuration file.
       @return the temperature of the fuel in degrees F IF an initial temperature
       is given, otherwise 32 degrees F is returned. */
   double GetTemperature(void) const {return CelsiusToFahrenheit(Temperature);}
@@ -313,7 +313,7 @@ public:
   double GetStandpipe(void) const {return Standpipe;}
 
   int  GetPriority(void) const {return Priority;}
-  void SetPriority(int p) { Priority = p; Selected = p>0 ? true:false; } 
+  void SetPriority(int p) { Priority = p; Selected = p>0 ? true:false; }
 
   /** Returns the fuel density.
       @return the density in lbs/gal. */

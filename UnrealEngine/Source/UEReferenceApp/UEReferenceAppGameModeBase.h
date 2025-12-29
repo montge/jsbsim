@@ -7,11 +7,11 @@
 #include "UEReferenceAppGameModeBase.generated.h"
 
 /**
- * 
+ *
  */
 UCLASS()
 class UEREFERENCEAPP_API AUEReferenceAppGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
-	
+
 };

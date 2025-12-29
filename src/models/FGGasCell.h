@@ -76,7 +76,7 @@ CLASS DOCUMENTATION
     <z_radius unit="{M | IN}"> {number} </z_radius>
     <max_overpressure unit="{PA | PSI}"> {number} </max_overpressure>
     <valve_coefficient unit="{M4*SEC/KG | FT4*SEC/SLUG}"> {number} </valve_coefficient>
-    <fullness> {number} </fullness>  
+    <fullness> {number} </fullness>
     <heat>
       {heat transfer coefficients} [lbs ft / sec]
     </heat>
@@ -91,7 +91,7 @@ CLASS DOCUMENTATION
       <z_radius unit="{M | IN}"> {number} </z_radius>
       <max_overpressure unit="{PA | PSI}"> {number} </max_overpressure>
       <valve_coefficient unit="{M4*SEC/KG | FT4*SEC/SLUG}"> {number} </valve_coefficient>
-      <fullness> {number} </fullness>  
+      <fullness> {number} </fullness>
       <heat>
        {heat transfer coefficients} [lb ft / (sec Rankine)]
       </heat>

@@ -32,16 +32,16 @@
               <product>
                  <property>/ai/submodels/submodel[2]/count</property>
                  <value> 0.396476 </value>
-              </product>   
+              </product>
             </function>
             <output>inertia/pointmass-weight-lbs[1]</output>
        </fcs_function>
-       
+
        <fcs_function name="systems/armament/gun[1]/ammo-weight">
             <function>
               <product>
                  <property>/ai/submodels/submodel[3]/count</property>
-                 <value> 0.396476 </value> 
+                 <value> 0.396476 </value>
               </product>
             </function>
             <output>inertia/pointmass-weight-lbs[2]</output>
@@ -51,7 +51,7 @@
             <function>
               <product>
                  <property>/ai/submodels/submodel[4]/count</property>
-                 <value> 0.396476 </value> 
+                 <value> 0.396476 </value>
               </product>
             </function>
             <output>inertia/pointmass-weight-lbs[3]</output>

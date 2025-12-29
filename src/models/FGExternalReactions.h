@@ -61,21 +61,21 @@ CLASS DOCUMENTATION
     "arbitrary forces and moments", because this feature can be used to model a
     wide variety of forces and moments that act on a vehicle. Some examples
     include: parachutes, catapult, arresting hook, and tow line.
-    
+
     This class acts similarly to the other "manager classes" (FGPropulsion,
     FGFCS, FGGroundReactions, FGAerodynamics) because it manages collections of
     constituent elements. The individual forces and moments are implemented with
     the FGExternalForce class.
-    
+
     The format of the <em>optional</em> external reactions section in the config
     file is as follows:
-    
+
     @code
 <external_reactions>
 
   <!-- Interface properties, a.k.a. property declarations -->
   <property> ... </property>
-    
+
   <force name="name" frame="BODY | LOCAL | WIND">
     ...
   </force>
@@ -96,11 +96,11 @@ CLASS DOCUMENTATION
 
     See the FGExternalForce class for more information on the format of the
     force and moment specifications.
-    
+
     When force or moment elements are encountered in the configuration file, a
     new instance of the FGExternalForce class is created and a pointer to the
     class is pushed onto the Forces vector.
-    
+
     This class is one of a few of the manager classes that allows properties to
     be "declared". In code, these are represented by the
     <em>interface_properties</em> vector. Properties that have not yet been
@@ -109,7 +109,7 @@ CLASS DOCUMENTATION
     the external_reactions section because they will not be created
     automatically, and so would cause an error, since the property cannot be
     found to exist.
-        
+
     See the FGExternalForce documentation for details on how forces and moments
     are actually calculated.
   */
@@ -125,7 +125,7 @@ public:
       @param fdmex pointer to the main executive class.
   */
   FGExternalReactions(FGFDMExec* fdmex);
-  
+
   /** Destructor.
       Within the destructor the Forces and interface_properties vectors are
       cleared out and the items pointed to are deleted.
@@ -136,16 +136,16 @@ public:
 
   /** Sum all the constituent forces for this cycle.
       Can pass in a value indicating if the executive is directing the simulation to Hold.
-      @param Holding if true, the executive has been directed to hold the sim from 
+      @param Holding if true, the executive has been directed to hold the sim from
                      advancing time. Some models may ignore this flag, such as the Input
                      model, which may need to be active to listen on a socket for the
                      "Resume" command to be given.
       @return true always.  */
   bool Run(bool Holding) override;
-  
+
   /** Loads the external forces from the XML configuration file.
       If the external_reactions section is encountered in the vehicle configuration
-      file, this Load() method is called. All external forces will be parsed, and 
+      file, this Load() method is called. All external forces will be parsed, and
       a FGExternalForce object will be instantiated for each force definition.
       @param el a pointer to the XML element holding the external reactions definition.
   */

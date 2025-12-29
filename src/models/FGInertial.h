@@ -211,7 +211,7 @@ private:
   FGColumnVector3 vGravAccel;
   double GM;   // Gravitation parameter
   double J2;   // WGS84 value for J2
-  double a;    // WGS84 semimajor axis length in feet 
+  double a;    // WGS84 semimajor axis length in feet
   double b;    // WGS84 semiminor axis length in feet
   int gravType;
   std::unique_ptr<FGGroundCallback> GroundCallback;

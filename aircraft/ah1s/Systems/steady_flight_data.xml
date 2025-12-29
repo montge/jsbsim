@@ -6,12 +6,12 @@
   Atmosphere was left at JSBSim default conditions (as of march 2012).
 
   Contents:
-   
+
     A kludge for forward/backward speed.
     4 tables giving direct rotor input (col,lon,lat,anti) yielding to level flight.
     2 tables with according trim attitudes (phi,theta) .
      and
-    4 derived tables with trim inputs based on given rotor-ctrl system. 
+    4 derived tables with trim inputs based on given rotor-ctrl system.
 
   Note: The property root is set to 'fcs/SFD', relevant outputs go into 'fcs/automatic'.
 
@@ -36,7 +36,7 @@
 
 
     <!-- propulsion/engine/collective-ctrl-rad -->
-    <fcs_function name="fcs/SFD/trim/collective-ctrl-rad"> 
+    <fcs_function name="fcs/SFD/trim/collective-ctrl-rad">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -55,13 +55,13 @@
        140.00     0.266606     0.266620     0.266661     0.266730     0.266869     0.267291     0.268022     0.269581     0.275088     0.287358     0.326666
           </tableData>
         </table>
-      </function> 
+      </function>
       <output> fcs/SFD/ap/afcs/collective-trim-ctrl-rad </output>
     </fcs_function>
 
 
     <!-- propulsion/engine/longitudinal-ctrl-rad -->
-    <fcs_function name="fcs/SFD/trim/longitudinal-ctrl-rad"> 
+    <fcs_function name="fcs/SFD/trim/longitudinal-ctrl-rad">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -80,13 +80,13 @@
        140.00     0.083605     0.083611     0.083627     0.083654     0.083711     0.083884     0.084195     0.084899     0.087697     0.094841     0.120438
           </tableData>
         </table>
-      </function> 
+      </function>
       <output> fcs/SFD/ap/afcs/longitudinal-trim-ctrl-rad </output>
     </fcs_function>
 
 
     <!-- propulsion/engine/lateral-ctrl-rad -->
-    <fcs_function name="fcs/SFD/trim/lateral-ctrl-rad"> 
+    <fcs_function name="fcs/SFD/trim/lateral-ctrl-rad">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -105,13 +105,13 @@
        140.00    -0.020430    -0.020429    -0.020424    -0.020416    -0.020401    -0.020355    -0.020280    -0.020137    -0.019761    -0.019296    -0.018871
           </tableData>
         </table>
-      </function> 
+      </function>
       <output> fcs/SFD/ap/afcs/lateral-trim-ctrl-rad </output>
     </fcs_function>
 
 
     <!-- propulsion/engine[1]/antitorque-ctrl-rad -->
-    <fcs_function name="fcs/SFD/trim/antitorque-ctrl-rad"> 
+    <fcs_function name="fcs/SFD/trim/antitorque-ctrl-rad">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -130,13 +130,13 @@
        140.00     0.062504     0.062510     0.062528     0.062558     0.062618     0.062800     0.063112     0.063766     0.066011     0.070932     0.088009
           </tableData>
         </table>
-      </function> 
+      </function>
       <output> fcs/SFD/ap/afcs/antitorque-trim-ctrl-rad </output>
     </fcs_function>
 
 
     <!-- attitude/phi-rad -->
-    <fcs_function name="ap/afcs/automatic/phi-trim-rad"> 
+    <fcs_function name="ap/afcs/automatic/phi-trim-rad">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -155,12 +155,12 @@
        140.00    -0.044788    -0.044776    -0.044737    -0.044674    -0.044545    -0.044168    -0.043547    -0.042342    -0.039017    -0.034403    -0.028530
           </tableData>
         </table>
-      </function> 
+      </function>
     </fcs_function>
 
 
     <!-- attitude/theta-rad -->
-    <fcs_function name="ap/afcs/automatic/theta-trim-rad"> 
+    <fcs_function name="ap/afcs/automatic/theta-trim-rad">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -179,14 +179,14 @@
        140.00    -0.085561    -0.085544    -0.085495    -0.085413    -0.085251    -0.084760    -0.083948    -0.082338    -0.077630    -0.070224    -0.057281
           </tableData>
         </table>
-      </function> 
+      </function>
     </fcs_function>
 
     <!-- trim input for use with rotor-ctrl system -->
     <!-- ctrl source: '{JSBSim-installation}/aircraft/ah1s/Systems/rotor_control.xml' -->
 
     <!-- fcs/collective-cmd-norm -->
-    <fcs_function name="fcs/automatic/collective-trim-cmd-norm"> 
+    <fcs_function name="fcs/automatic/collective-trim-cmd-norm">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -205,12 +205,12 @@
        140.00     0.575483     0.575545     0.575732     0.576045     0.576678     0.578597     0.581918     0.589006     0.614036     0.669810     0.848482
           </tableData>
         </table>
-      </function> 
+      </function>
     </fcs_function>
 
 
     <!-- fcs/elevator-cmd-norm -->
-    <fcs_function name="fcs/automatic/pitch-trim-cmd-norm"> 
+    <fcs_function name="fcs/automatic/pitch-trim-cmd-norm">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -229,12 +229,12 @@
        140.00     0.508841     0.508884     0.509015     0.509235     0.509686     0.511071     0.513560     0.519196     0.541574     0.598730     0.803502
           </tableData>
         </table>
-      </function> 
+      </function>
     </fcs_function>
 
 
     <!-- fcs/aileron-cmd-norm -->
-    <fcs_function name="fcs/automatic/roll-trim-cmd-norm"> 
+    <fcs_function name="fcs/automatic/roll-trim-cmd-norm">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -253,12 +253,12 @@
        140.00    -0.075396    -0.075338    -0.075161    -0.074867    -0.074279    -0.072509    -0.069547    -0.063568    -0.045043    -0.011205     0.075914
           </tableData>
         </table>
-      </function> 
+      </function>
     </fcs_function>
 
 
     <!-- fcs/rudder-cmd-norm -->
-    <fcs_function name="fcs/automatic/yaw-trim-cmd-norm"> 
+    <fcs_function name="fcs/automatic/yaw-trim-cmd-norm">
       <function>
         <table>
           <independentVar lookup="row"> fcs/SFD/trim/v_dir_kts </independentVar>
@@ -277,7 +277,7 @@
        140.00    -0.059943    -0.059959    -0.060009    -0.060091    -0.060259    -0.060774    -0.061681    -0.063676    -0.071092    -0.088062    -0.135132
           </tableData>
         </table>
-      </function> 
+      </function>
     </fcs_function>
 
   </channel>

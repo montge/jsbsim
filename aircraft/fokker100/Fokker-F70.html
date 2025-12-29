@@ -22,47 +22,47 @@
        </td>
        <td style="vertical-align:bottom;padding:5px 0 0 0!important;" rowspan="2">
            <table style="border-collapse:collapse;width:110px;color:#99a;font-family:'Helvetica','Lucida Grande','Arial',sans-serif;"><tbody>
-			
+
            <!-- NEXT/PREV MONTH NAV AND MONTH INDICATOR -->
            <tr style="width:110px;height:16px;font-size:10px!important;">
            	<td style="padding-right:9px;font-size:11px!important;font-weight:bold;text-transform:uppercase;text-align:right;white-space:nowrap;overflow:visible;" nowrap="nowrap">
-               
+
 		                <a href="http://web.archive.org/web/20041208002525/http://www.lissys.demon.co.uk/f7tx2.html" style="text-decoration:none;color:#33f;font-weight:bold;background-color:transparent;border:none;" title="8 Dec 2004"><strong>DEC</strong></a>
-		                
+
                </td>
                <td id="displayMonthEl" style="background: none repeat scroll 0% 0% rgb(0, 0, 0); color: rgb(255, 255, 0); font-size: 11px ! important; font-weight: bold; text-transform: uppercase; width: 34px; height: 15px; padding-top: 1px; text-align: center;" title="You are here: 4:55:00 Mar 8, 2005">Mar</td>
 				<td style="padding-left:9px;font-size:11px!important;font-weight:bold;text-transform:uppercase;white-space:nowrap;overflow:visible;" nowrap="nowrap">
-               
+
 		                <a href="http://web.archive.org/web/20051217003519/http://www.lissys.demon.co.uk/f7tx2.html" style="text-decoration:none;color:#33f;font-weight:bold;background-color:transparent;border:none;" title="17 Dec 2005"><strong>DEC</strong></a>
-		                
+
                </td>
            </tr>
 
            <!-- NEXT/PREV CAPTURE NAV AND DAY OF MONTH INDICATOR -->
            <tr>
                <td style="padding-right:9px;white-space:nowrap;overflow:visible;text-align:right!important;vertical-align:middle!important;" nowrap="nowrap">
-               
-		                
+
+
                </td>
                <td id="displayDayEl" style="background: none repeat scroll 0% 0% rgb(0, 0, 0); color: rgb(255, 255, 0); width: 34px; height: 24px; padding: 2px 0px 0px; text-align: center; font-size: 24px; font-weight: bold;" title="You are here: 4:55:00 Mar 8, 2005">8</td>
 				<td style="padding-left:9px;white-space:nowrap;overflow:visible;text-align:left!important;vertical-align:middle!important;" nowrap="nowrap">
-               
-		                
+
+
 			    </td>
            </tr>
 
            <!-- NEXT/PREV YEAR NAV AND YEAR INDICATOR -->
            <tr style="width:110px;height:13px;font-size:9px!important;">
 				<td style="padding-right:9px;font-size:11px!important;font-weight: bold;text-align:right;white-space:nowrap;overflow:visible;" nowrap="nowrap">
-               
+
 		                <a href="http://web.archive.org/web/20031212015134/http://www.lissys.demon.co.uk/f7tx2.html" style="text-decoration:none;color:#33f;font-weight:bold;background-color:transparent;border:none;" title="12 Dec 2003"><strong>2003</strong></a>
-		                
+
                </td>
                <td id="displayYearEl" style="background: none repeat scroll 0% 0% rgb(0, 0, 0); color: rgb(255, 255, 0); font-size: 11px ! important; font-weight: bold; padding-top: 1px; width: 34px; height: 13px; text-align: center;" title="You are here: 4:55:00 Mar 8, 2005">2005</td>
 				<td style="padding-left:9px;font-size:11px!important;font-weight: bold;white-space:nowrap;overflow:visible;" nowrap="nowrap">
-               
+
                        2006
-                       
+
 				</td>
            </tr>
            </tbody></table>
@@ -118,7 +118,7 @@ function showTrackers(val) {
 	if(val == "inline") {
 		document.getElementById("displayYearEl").style.color = "#ec008c";
 		document.getElementById("displayMonthEl").style.color = "#ec008c";
-		document.getElementById("displayDayEl").style.color = "#ec008c";		
+		document.getElementById("displayDayEl").style.color = "#ec008c";
 	} else {
 		document.getElementById("displayYearEl").innerHTML = displayYear;
 		document.getElementById("displayYearEl").style.color = "#ff0";
@@ -133,8 +133,8 @@ function showTrackers(val) {
 }
 function getElementX2(obj) {
 	var thing = jQuery(obj);
-	if((thing == undefined) 
-			|| (typeof thing == "undefined") 
+	if((thing == undefined)
+			|| (typeof thing == "undefined")
 			|| (typeof thing.offset == "undefined")) {
 		return getElementX(obj);
 	}
@@ -164,8 +164,8 @@ function trackMouseMove(event,element) {
 	if(monthOff % 2 == 1) {
 		day = 15;
 	}
-	var dateString = 
-		zeroPad(year + firstYear) + 
+	var dateString =
+		zeroPad(year + firstYear) +
 		zeroPad(monthOfYear+1,2) +
 		zeroPad(day,2) + "000000";
 
@@ -206,7 +206,7 @@ function trackMouseMove(event,element) {
 <font color="#000077"> Fokker F70 Sample Analysis </font> </p></h1> <p> </p><hr>
 <font color="#000000">
 </font><p><font color="#000000">
-This sample text output was compiled directly from the Piano model of 
+This sample text output was compiled directly from the Piano model of
 the Fokker F70. Various reports are shown, in no particular order.</font>
 </p><blockquote>
 <pre>
@@ -217,10 +217,10 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  Loading "Medium-BPR Fan late80s" engine...
  calculating geometry/mass/balance ...
 
- 
+
 
  Fokker F70 option ____________________________
- 
+
  PAYLOAD         79.  PAX = 15800.lb.
 
  MTOW         84000.  lb.
@@ -228,7 +228,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
  FUEL-CAP.     3531.  US.gal. Avail/Req=1.29
 
- SPAN          91.9   feet 
+ SPAN          91.9   feet
 
  WING-AREA     1006.  sq.feet trapezoidal
 
@@ -238,7 +238,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  W/S             83.  p.s.f. trapezoidal
 
  T/W          0.330   reference
-              0.325   available 
+              0.325   available
  ______________________________________________
 
 
@@ -247,7 +247,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  GEOMETRY REPORT
  _______________
                                 Wing    Stabiliser   Fin (excl.dorsal)
-                                ----    ----------   --- 
+                                ----    ----------   ---
  Area, trapezoidal reference   1006.43   244.47    178.83    sq.feet
  Area, piano gross             1008.99   244.47    178.83    sq.feet
  Area, airbus gross            997.60                        sq.feet
@@ -256,8 +256,8 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  Area, exposed                 821.77    244.47    178.83    sq.feet
  Area, wetted                  1676.69   497.20    363.44    sq.feet
 
- Aspect Ratio, trapezoidal       8.40      4.50      1.00    
- Aspect Ratio, piano gross       8.38      4.50      1.00   
+ Aspect Ratio, trapezoidal       8.40      4.50      1.00
+ Aspect Ratio, piano gross       8.38      4.50      1.00
  Aspect Ratio, airbus gross      8.47
  Aspect Ratio, boeing wimpress   8.40
  Aspect Ratio, esdu              8.40
@@ -266,13 +266,13 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
  Sweepback at 1/4-chord         17.40     27.50     40.00    degrees
 
- Taper Ratio (trapezoidal)       0.23      0.40      0.73   
+ Taper Ratio (trapezoidal)       0.23      0.40      0.73
 
- t/c at root                    0.123     0.104     0.102   
+ t/c at root                    0.123     0.104     0.102
  t/c at thickness break           n/a
- t/c at tip                     0.096     0.104     0.102   
+ t/c at tip                     0.096     0.104     0.102
 
- Volume Coefficient (V-bar)               0.925     0.073   
+ Volume Coefficient (V-bar)               0.925     0.073
  Mean Aerodynamic Chord         12.41      7.82     13.48    feet
  Arm between MAC 1/4 chords               47.22     37.62    feet
 
@@ -305,7 +305,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  length, front section          16.40    feet
  length, mid section            35.37    feet
  length, rear section           39.70    feet
- 
+
  wetted area, total fuselage   2587.85   sq.feet
  wetted area, front section    416.91    sq.feet
  wetted area, mid section      1202.05   sq.feet
@@ -323,7 +323,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  Span                          91.95     feet
  Overall aircraft length       101.25    feet
  Height at top of fin          27.94     feet
- Overall aircraft wetted area  5691.49   sq.feet 
+ Overall aircraft wetted area  5691.49   sq.feet
 
 
 
@@ -395,12 +395,12 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
  Calculating Design RangeÉÉDone.
 
-  RANGE REPORT 
+  RANGE REPORT
   _____________
 
   {Takeoff mass 84000.lb./ Fuel 18216.lb./ Payload 15800.lb.}
 
-  Range mode: fixed mach, step-up cruise, fixed climb sched. 
+  Range mode: fixed mach, step-up cruise, fixed climb sched.
 
   Climb schedule: 250.kcas, 255.kcas, 0.650 mach
 
@@ -488,11 +488,11 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
                        -------             --------
  Total Cd0*S            19.342  sq.feet    ( 100 %)
 
- Overall Lift / Drag Ratio = 15.08 
+ Overall Lift / Drag Ratio = 15.08
  =================================
 
  Total Lift Force       80000. lbf.
- Total Drag Force        5306. lbf. (2653.lbf. per engine) 
+ Total Drag Force        5306. lbf. (2653.lbf. per engine)
 
 
  Engine / Airframe Performance:
@@ -505,7 +505,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  Available Total Thrust at MCL:        6394. lbf.
 
  Instantaneous Performance Reserves at Weight=Lift:
- 
+
  RoC at MCR, constant Mach 0.720:      335. feet/min
  RoC at MCR, constant 242.KCAS:        249. feet/min
 
@@ -522,15 +522,15 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
  Initial mass        84000.    lb.
  Airspeed schedule   250.kcas, 255.kcas, 0.650 mach
- Delta-ISA           +0.       deg.C. 
+ Delta-ISA           +0.       deg.C.
 
  NOx emissions       28.82     lb.
  --------------------------------------------------
 
  Climb details
- 
-  Alt.     Time      Dist.      Burn      FN/eng    R.o.C.    NOx   
- (feet)    (sec)   (n.miles)    (lb.)     (lbf.)    (f.p.m)   (lb.) 
+
+  Alt.     Time      Dist.      Burn      FN/eng    R.o.C.    NOx
+ (feet)    (sec)   (n.miles)    (lb.)     (lbf.)    (f.p.m)   (lb.)
 
   1500.       0.       0.0         0.       7205.    2542.      0.0
   2655.      28.       2.0        73.       7026.    2476.      1.1
@@ -569,7 +569,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  TAKEOFF PERFORMANCE {84000.lb., elevation 0.feet, ISA+0.deg.C.}
  ___________________
 
- JAR25 Takeoff Field Length     4919. feet 
+ JAR25 Takeoff Field Length     4919. feet
 
  115% Factored All-Eng.Dist.    4820. feet
  Balanced Field Length          4919. feet
@@ -583,7 +583,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  L/D at 2nd segment      12.54  {incl.windmill &amp; asymm.}
 
  Takeoff Wing Loading      83.  p.s.f.{trap.W/S}
- Takeoff Thrust/Weight   0.325  available static 
+ Takeoff Thrust/Weight   0.325  available static
 
 
  LANDING PERFORMANCE {78999.lb., elevation 0.feet, ISA+0.deg.C.}
@@ -604,12 +604,12 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
  Iterating for Off-Design Range..Done.
 
-  RANGE REPORT 
+  RANGE REPORT
   _____________
 
   {Takeoff mass 75773.lb./ Fuel 9989.lb./ Payload 15800.lb.}
 
-  Range mode: fixed mach, step-up cruise, fixed climb sched. 
+  Range mode: fixed mach, step-up cruise, fixed climb sched.
 
   Climb schedule: 250.kcas, 255.kcas, 0.650 mach
 
@@ -633,19 +633,19 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
 
 
-  Prices, millions of U.S.$ 
+  Prices, millions of U.S.$
   ________________________________
 
   Airframe                  11.63
   Engines                    3.08
-  Aircraft Delivery Price   14.71 
+  Aircraft Delivery Price   14.71
   ________________________________
 
   Costing method: aea-89-medium-range
-  
+
   Operating Costs       U.S.$/trip    % of total
   ______________________________________________
-          
+
   Depreciation              636.       11.79
   Interest                  494.        9.14
   Insurance                  43.        0.80
@@ -681,7 +681,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
  PAYLOAD-RANGE
  _____________
 
- Range mode: fixed mach, step-up 
+ Range mode: fixed mach, step-up
 
  Max.payload / MTOW case
  _______________________
@@ -710,7 +710,7 @@ the Fokker F70. Various reports are shown, in no particular order.</font>
 
 
 </pre>
-</blockquote> 
+</blockquote>
 <hr>
 
 <font size="-1">

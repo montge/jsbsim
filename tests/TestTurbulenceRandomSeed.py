@@ -42,7 +42,7 @@ class TestTurbulenceRandomSeed(JSBSimTestCase):
         fdm["simulation/randomseed"] = exec_seed
         fdm["atmosphere/randomseed"] = wind_seed
 
-        fdm.load_model('A4') 
+        fdm.load_model('A4')
 
         # Set engine running
         fdm['propulsion/engine[0]/set-running'] = 1

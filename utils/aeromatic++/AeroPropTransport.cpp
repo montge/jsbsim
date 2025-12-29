@@ -12,12 +12,12 @@
 // modify it under the terms of the GNU Lesser General Public
 // License as published by the Free Software Foundation; either
 // version 2.1 of the License, or (at your option) any later version.
-// 
+//
 // This library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 // Lesser General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Lesser General Public
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
@@ -204,7 +204,7 @@ float const PropTransport::_vtail_area_t[1][5] =
 };
 
 float const PropTransport::_vtail_arm_t[1][5] =
-{ 
+{
     { 0.50f, 0.50f, 0.50f, 0.50f, 0.50f }
 };
 
@@ -215,7 +215,7 @@ float const PropTransport::_empty_weight_t[1][5] =
 
 float const PropTransport::_roskam_t[1][5][3] =
 {
-    {				
+    {
         { 0.32f, 0.35f, 0.47f },
         { 0.32f, 0.35f, 0.47f },
         { 0.32f, 0.35f, 0.47f },
@@ -225,8 +225,8 @@ float const PropTransport::_roskam_t[1][5][3] =
 };
 
 float const PropTransport::_eyept_loc_t[1][5][3] =
-{ 
-    {				
+{
+    {
         { 0.08f, -24.00f, 65.00f },
         { 0.08f, -24.00f, 65.00f },
         { 0.08f, -24.00f, 65.00f },
@@ -306,4 +306,3 @@ float const PropTransport::_Cnda_t[1][5] =
 };
 
 } /* namespace Aeromatic */
-

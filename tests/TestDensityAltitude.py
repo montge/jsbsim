@@ -1,6 +1,6 @@
 # TestDensityAltitude.py
 #
-# Test that density altitude works 
+# Test that density altitude works
 #
 # Copyright (c) 2018 Sean McLeod
 #
@@ -24,7 +24,7 @@ class TestDensityAltitude(JSBSimTestCase):
 
     def test_densityaltitude(self):
         fdm = self.create_fdm()
-        fdm.load_model('ball')        
+        fdm.load_model('ball')
 
         # Reference data (Geometric Altitude, Temp Delta (Rankine), Density Altitude)
         reference_data = [
@@ -95,5 +95,3 @@ class TestDensityAltitude(JSBSimTestCase):
             self.assertAlmostEqual(density_ref, fdm['atmosphere/rho-slugs_ft3'])
 
 RunTest(TestDensityAltitude)
-
-

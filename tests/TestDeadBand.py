@@ -30,7 +30,7 @@ class TestDeadBand(JSBSimTestCase):
             self.assertAlmostEqual(fdm[prop], v-half)
         else:
             self.assertAlmostEqual(fdm[prop], 0.0)
-        
+
     def test_conditions(self):
         tripod = FlightModel(self, 'tripod')
         tripod.include_system_test_file('deadband.xml')
@@ -65,7 +65,7 @@ class TestDeadBand(JSBSimTestCase):
             fdm.run()
             self.dead_band(fdm, v, 1.0, 'test/db-value')
             self.dead_band(fdm, v, 1.5, 'test/db-property-inverted-sign')
-            
+
         fdm.run()
 
 

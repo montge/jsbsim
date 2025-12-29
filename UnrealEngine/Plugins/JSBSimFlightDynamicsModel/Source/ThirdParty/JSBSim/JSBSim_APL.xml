@@ -9,7 +9,7 @@
 			<setBool result="bCpuArchSupported" value="true"/>
 		</isArch>
 	</init>
-	
+
 	<!-- optional files or directories to copy to Intermediate/Android/APK -->
 	<resourceCopies>
 		<if condition="bCpuArchSupported">

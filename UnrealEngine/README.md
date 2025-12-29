@@ -1,29 +1,29 @@
 ﻿# JSBSim for Unreal - UEReferenceApp
 
 ## Introduction
-Welcome to the UE Reference Application for JSBSim. 
+Welcome to the UE Reference Application for JSBSim.
 
 This application has initially be created by the Simulation Team at Epic Games in the context of "Antoinette Project"
-This project was made to illustrate that Unreal Engine 5 with its double precision and graphic capabilities could be used for serious flight simulations. 
-For that purpose, we wrote a plugin for UE5 wrapping around the JSBSim Flight Dynamic model to leverage its capabilities and fly and Aircraft inside an Unreal Engine environment. 
+This project was made to illustrate that Unreal Engine 5 with its double precision and graphic capabilities could be used for serious flight simulations.
+For that purpose, we wrote a plugin for UE5 wrapping around the JSBSim Flight Dynamic model to leverage its capabilities and fly and Aircraft inside an Unreal Engine environment.
 
-We decided to share this sample with the community as an open source project, hosted on JSBSim's Github. 
-This reference application is voluntarily simple to make sure it's easy to understand. 
+We decided to share this sample with the community as an open source project, hosted on JSBSim's Github.
+This reference application is voluntarily simple to make sure it's easy to understand.
 
-But we are sure that the aviation community will like it and take inspiration from it. We hope that some aviation geeks will fork it and create wonderful flight sims from this starting point! 
+But we are sure that the aviation community will like it and take inspiration from it. We hope that some aviation geeks will fork it and create wonderful flight sims from this starting point!
 
-Enjoy, and Simulation for the win! 
+Enjoy, and Simulation for the win!
 
-## Building the application 
+## Building the application
 
-Linux and Mac steps found here: [README-Unix](https://github.com/JSBSim-Team/jsbsim/blob/master/UnrealEngine/README-Unix.md) 
+Linux and Mac steps found here: [README-Unix](https://github.com/JSBSim-Team/jsbsim/blob/master/UnrealEngine/README-Unix.md)
 
 Windows users continue below:
 
 ### 1. Install Unreal Engine 5.x
 The project is compatible with engine versions UE5.6 - UE5.0
 The procedure to install Unreal Engine is described here : https://www.unrealengine.com/en-US/download
-For hobbyists, the [standard license](https://www.unrealengine.com/en-US/license) applies, and is 100% free! 
+For hobbyists, the [standard license](https://www.unrealengine.com/en-US/license) applies, and is 100% free!
 
 In order to build C++ plugins for Unreal Engine in Windows, you need Visual Studio Build Tools, MSVC toolchain, Windows SDK, and .NET. Visual Studio Community can be used (It's free). You can setup Visual Studio and the required tools for Unreal using the following procedure:
 [https://dev.epicgames.com/documentation/en-us/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine/](https://dev.epicgames.com/documentation/en-us/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine/)
@@ -38,15 +38,15 @@ Optional extension setup:
 
 ### 2. Build JSBSim as Dynamic libraries and stage Model files (Windows)
 
-Unreal Engine requires that one plugin contains all its needed files in its sub-folders. 
+Unreal Engine requires that one plugin contains all its needed files in its sub-folders.
 This application contains a `Plugins/JSBSimFlightDynamicsModel` folder containing the JSBSim files.
-In some of these subfolders, one has to place 
- - The JSBSim libraries, compiled as dynamic libs  
+In some of these subfolders, one has to place
+ - The JSBSim libraries, compiled as dynamic libs
  - The aircrafts/engine/systems definition files.
 
 When the UE application will be packaged, the resources will be copied along with the executable, and the application dynamically linked against the libs transparently.
 
-To make this process easier, there is a new solution named JSBSimForUnreal.sln at the root of JSBSim repo. 
+To make this process easier, there is a new solution named JSBSimForUnreal.sln at the root of JSBSim repo.
 
  - Simply open and build this solution with VS2022, in Release, (and in Debug if you want too, but this is not mandatory)
  - It will take care of making a clean build, and copy all needed files at the right location
@@ -54,43 +54,43 @@ To make this process easier, there is a new solution named JSBSimForUnreal.sln a
 	 - All resource files (aircrafts/engines/systems) in *UnrealEngine\Plugins\JSBSimFlightDynamicsModel\Resources\JSBSim*
 
 ### 3. [Optional] - Download HD resources
- In order to keep the JSBSim repository lightweight, this application contains low quality resources. 
- If you would like to use better looking content, you can download HQ aircraft model, HD textures and non-flat terrain here: 
+ In order to keep the JSBSim repository lightweight, this application contains low quality resources.
+ If you would like to use better looking content, you can download HQ aircraft model, HD textures and non-flat terrain here:
  [High Definition content pack (330 MB)](https://epicgames.box.com/s/93mupzix8qieu51v209ockq68heuxgwj)
- 
- Simply extract this archive and copy/paste the content folder into the one of UEReferenceApp, overriding the existing files. 
- 
+
+ Simply extract this archive and copy/paste the content folder into the one of UEReferenceApp, overriding the existing files.
+
 ### 4. Build/Open the Unreal Project
 
 **Option 1** : Simply double click on the `UnrealEngine\UEReferenceApp.uproject` file.
-It will open a popup complaining about missing modules (UEReferenceApp, JSBSimFlightDynamicsModel, JSBSimFlightDynamicsModelEditor). 
-Answer Yes, and the build will be triggered as a background task. 
+It will open a popup complaining about missing modules (UEReferenceApp, JSBSimFlightDynamicsModel, JSBSimFlightDynamicsModelEditor).
+Answer Yes, and the build will be triggered as a background task.
 
-Once done, the UE Editor will open. If you get an error message, build manually using Option 2 below. 
+Once done, the UE Editor will open. If you get an error message, build manually using Option 2 below.
 
-**Option 2** : Generate a project solution, and build it using Visual Studio. 
-Right click on the  `UnrealEngine\UEReferenceApp.uproject` 
+**Option 2** : Generate a project solution, and build it using Visual Studio.
+Right click on the  `UnrealEngine\UEReferenceApp.uproject`
 A contextual menu will appear. Select "Generate Visual Studio project files"
-After a short time, a new solution file `UEReferenceApp.sln` will appear beside the uproject file. 
-Open it, and if prompted click Ok to retarget to v143, then you can Build the UERefferenceApp or select "Build Startup project" from the UnrealVS Extension bar. 
+After a short time, a new solution file `UEReferenceApp.sln` will appear beside the uproject file.
+Open it, and if prompted click Ok to retarget to v143, then you can Build the UERefferenceApp or select "Build Startup project" from the UnrealVS Extension bar.
 
-Note that this Option 2 is the recommended way to edit the plugin code, and then you can run and debug it like any other VS application. 
+Note that this Option 2 is the recommended way to edit the plugin code, and then you can run and debug it like any other VS application.
 
 ## Learning more about Unreal Engine
-You can find many free learning resources on Unreal Engine Developer Community portal : 
+You can find many free learning resources on Unreal Engine Developer Community portal :
 [Getting Started](https://dev.epicgames.com/community/getting-started)
 [Library of Learning Courses](https://dev.epicgames.com/community/learning)
 
-Still in the context of "Antoinette Project" we wrote a more advanced tutorial to leverage these developments in an even better looking application. You can find a very complete description here: 
+Still in the context of "Antoinette Project" we wrote a more advanced tutorial to leverage these developments in an even better looking application. You can find a very complete description here:
 https://dev.epicgames.com/community/learning/tutorials/mmL/a-diy-flight-simulator-tutorial
 
 
 ## Key Mappings
 
-Gamepad Layout 
+Gamepad Layout
 ![enter image description here](https://support.8bitdo.com/Manual/USB_Adapter/images/manual/ps4/ps4_switch.svg?20210414)
 ### Flight Commands
-|Command|Key Shortcut|Gamepad  
+|Command|Key Shortcut|Gamepad
 |-|-|-|
 |Toggle Engines Starters On/Off| CTRL-Q |
 |Toggle Engines Mixture On/Off| CTRL-W |
@@ -117,7 +117,7 @@ Gamepad Layout
 |Elevator Trim - Down|CTRL-UP|
 |Rudder Trim - Left| CTRL-NUM-7|
 |Rudder Trim - Right|CTRL-NUM-9|
-|All Brakes | NUM . |Y	
+|All Brakes | NUM . |Y
 |Left Brakes | NUM * |
 |Right Brakes | NUM - |
 |Parking Brakes | CTRL-NUM . |
@@ -162,10 +162,8 @@ Gamepad Layout
 
 ## Notes...
 
- - As you'll see in the aircraft animation blueprint comments, we used an aircraft model from the UE Marketplace which bones were not really well aligned with the rotation axes of moving parts. While it could (had has been) solved by using 1D Blend Space, a better way to do it would have to align the bones correctly, and just drive the locations by angles. But it would have required the aircraft 3D model sources that we did not have. 
+ - As you'll see in the aircraft animation blueprint comments, we used an aircraft model from the UE Marketplace which bones were not really well aligned with the rotation axes of moving parts. While it could (had has been) solved by using 1D Blend Space, a better way to do it would have to align the bones correctly, and just drive the locations by angles. But it would have required the aircraft 3D model sources that we did not have.
  - The aircraft lights have been made only for illustration purpose. The cone angle logic is approximate and the blinking frequencies/patterns are not the real ones. (We don't want to freak out the purists ;-) )
- - The Primary Flight Display is very simple too. A pitch indicator would help too... 
- - The terrain is a sample terrain. One might use other terrain sources, as long as the georeferencing is correct! 
+ - The Primary Flight Display is very simple too. A pitch indicator would help too...
+ - The terrain is a sample terrain. One might use other terrain sources, as long as the georeferencing is correct!
  - Gamepad support is limited, but can easily be improved in the Input Settings
- 
-

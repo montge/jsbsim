@@ -71,12 +71,12 @@ CLASS DOCUMENTATION
     The nozzle exit pressure (p2) is returned via a
     call to FGNozzle::GetPowerRequired(). This exit pressure is used
     to get the at-altitude thrust level.
-    
+
     One can model the thrust of a solid rocket by providing a normalized thrust table
     as a function of time. For instance, the space shuttle solid rocket booster
     normalized thrust value looks roughly like this:
 
-<pre>    
+<pre>
  \<thrust_table name="propulsion/thrust_time" type="internal">
    \<tableData>
       0.0   0.00
@@ -176,7 +176,7 @@ public:
   std::string GetEngineLabels(const std::string& delimiter);
   std::string GetEngineValues(const std::string& delimiter);
 
-  /** Sets the thrust variation for a solid rocket engine. 
+  /** Sets the thrust variation for a solid rocket engine.
       Solid propellant rocket motor thrust characteristics are typically
       defined at 70 degrees F temperature. At any other temperature,
       performance will be different. Warmer propellant grain will
@@ -190,9 +190,9 @@ public:
   /** Sets the variation in total motor energy.
       The total energy present in a solid rocket motor can be modified
       (such as might happen with manufacturing variations) by setting
-      the total Isp variation. 
+      the total Isp variation.
       @param var the variation in percent. That is, a 2 percent
-      variation would be specified as 0.02. This variation will 
+      variation would be specified as 0.02. This variation will
       affect the total thrust, but not the burn time.*/
   void SetTotalIspVariation(double var) {TotalIspVariation = var;}
 

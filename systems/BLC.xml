@@ -5,7 +5,7 @@
      configuration file <aerodynamics> section, not here.  In order for
      the switch to work properly the number of engine rpm tests should
      match the number of engines installed!
---> 
+-->
 
 <system name="BLC">
 

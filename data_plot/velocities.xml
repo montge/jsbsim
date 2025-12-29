@@ -3,10 +3,10 @@
   <!--
     This file contains plot descriptions for the velocities data logged by JSBSim
     when the velocities flag is turned ON.
-    
+
     These are the variables logged by JSBSim with the velocities flag set to ON
 
-      
+
 -->
   <plot>
     <title>Total (Earth Relative) Velocity</title>

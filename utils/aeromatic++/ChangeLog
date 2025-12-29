@@ -1,4 +1,4 @@
-Started July 2003, David P. Culp, davidculp2@comcast.net 
+Started July 2003, David P. Culp, davidculp2@comcast.net
 
 --- AeromatiC++ ---
 Update: 19 Nov 2015, EMH, calculate CLalpha, CLmax, CDi and Mcrit based on wing geometry. Add a sweep correction factor to flaps.

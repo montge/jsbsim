@@ -65,4 +65,3 @@ private: // Private attributes
   int StartIdx, EndIdx;
 };
 #endif
-

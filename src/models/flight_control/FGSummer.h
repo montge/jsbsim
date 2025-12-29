@@ -79,7 +79,7 @@ CLASS DOCUMENTATION
       <input> fcs/roll-ap-error-integrator </input>
       <clipto>
          <min> -1 </min>
-         <max>  1 </max> 
+         <max>  1 </max>
       </clipto>
     </summer>
 @endcode

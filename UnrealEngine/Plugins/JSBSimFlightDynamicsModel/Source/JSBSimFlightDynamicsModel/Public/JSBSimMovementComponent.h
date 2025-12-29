@@ -49,32 +49,32 @@ public:
 
 
 	// Model Properties
- 	
+
 	/**
 	 *	The Aircraft model name as expected in JSBSim (Name of folder/xml file)
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Model")
 	FString AircraftModel = "";
-	
+
 	/**
 	 * JSBSim does its computations in its own set or reference frames. All these frames are related to a "Structural Frame"
 	 * https://jsbsim-team.github.io/jsbsim-reference-manual/mypages/user-manual-frames-of-reference/
-	 * This structural frame is not aligned with the 3D modeling frame. This offset is meant to manually guess the offset between the 3D model and the internal logical model. 
-	 * Activate debug mode, and tune this value to align reference points with your 3D model 
+	 * This structural frame is not aligned with the 3D modeling frame. This offset is meant to manually guess the offset between the 3D model and the internal logical model.
+	 * Activate debug mode, and tune this value to align reference points with your 3D model
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Model")
 	FVector StructuralFrameOrigin;
 
 	/**
-	 * Display the reference points and debug text at runtime. 
+	 * Display the reference points and debug text at runtime.
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Model")
 	bool DrawDebug = true;
 
 
     /**
-	 * When querying for the Above Ground Level, JSBSim can throw raycasts from several points, sometimes under the StructuralFrameOrigin. 
-    *  By doing that, some of them can fail if they start below the ground. This value is a vertical offset added to each AGL Query to make sure we hit the ground. 
+	 * When querying for the Above Ground Level, JSBSim can throw raycasts from several points, sometimes under the StructuralFrameOrigin.
+    *  By doing that, some of them can fail if they start below the ground. This value is a vertical offset added to each AGL Query to make sure we hit the ground.
     *  (Aircraft geometry is of course ignored during the process - 15m should be sufficient for all kind of aircrafts - Issue #786)
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Model|Settings")
@@ -103,12 +103,12 @@ public:
 	// Initial Conditions Properties
 
 	/**
-	 * Control the behavior of initial Aircraft Trim. If true, an initial stall state will be computed. 
-	 * If false, the aircraft will be considered active. Depending on its precise location on ground, you could see some damping. 
+	 * Control the behavior of initial Aircraft Trim. If true, an initial stall state will be computed.
+	 * If false, the aircraft will be considered active. Depending on its precise location on ground, you could see some damping.
 	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Initial Conditions|Aircraft")
 	bool StartOnGround = true;
-	
+
 	/**
 	 * Gear Position on play
 	*/
@@ -120,13 +120,13 @@ public:
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Initial Conditions|Aircraft")
 	bool bStartWithEngineRunning = true;
-	
+
 	/**
 	 * Flaps Normalized Position on play [0..1]
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Initial Conditions|Aircraft", meta = (UIMin = "0", UIMax = "1.0", ClampMin = "0", ClampMax = "1.0"))
 	double FlapPositionAtStart = 0;
-	
+
 	/**
 	 * Calibrated Air Speed wanted on Play. (In knots)
 	*/
@@ -135,7 +135,7 @@ public:
 
 
 
-	// Atmosphere Properties 
+	// Atmosphere Properties
 
 	/**
 	 * Wind Heading Degrees
@@ -150,12 +150,12 @@ public:
 		double WindIntensityKts = 0;
 
 	/**
-	 * If false, the atmosphere model will be the one from JSBSim. 
+	 * If false, the atmosphere model will be the one from JSBSim.
 	 * If true, you can define it with custom properties
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Initial Conditions|Atmosphere")
 	bool ControlFDMAtmosphere = false;
-	
+
 	/**
 	 * Atmosphere temperature around the Aircraft (Celsius)
 	 */
@@ -167,31 +167,31 @@ public:
 	*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Initial Conditions|Atmosphere", meta = (EditCondition = "ControlFDMAtmosphere", UIMin = "0", ClampMin = "0"))
 	double PressureSeaLevelhPa = 1013.25;
-	// TODO - Other ATM properties, maybe in a dedicated structure... 
+	// TODO - Other ATM properties, maybe in a dedicated structure...
 
 
-	// Tanks Properties 
+	// Tanks Properties
 
 	UPROPERTY(BlueprintReadOnly, Editfixedsize, EditAnywhere, Category = "Model|Tanks")
 	TArray<struct FTank> Tanks;
-	
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Model|Tanks")
 	bool FuelFreeze = false;
 
-	// Gear Properties 
+	// Gear Properties
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Editfixedsize, Category = "Model|Gears", meta=(TitleProperty = "{Name} Bogey = {IsBogey}"))
 	TArray<struct FGear> Gears;
 
-	// Engine Properties 
-	
+	// Engine Properties
+
 	UPROPERTY(Transient, BlueprintReadOnly, Editfixedsize, EditAnywhere, Category = "Model|Engines")
 	TArray<struct FEngineCommand> EngineCommands;
 	UPROPERTY(Transient, BlueprintReadOnly, Editfixedsize, EditAnywhere, Category = "Model|Engines")
 	TArray<struct FEngineState> EngineStates;
 
 	// Flight Control Commands and State
-	
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Commands")
 	FFlightControlCommands Commands;
 
@@ -205,10 +205,10 @@ public:
 
     // Functions
 
-	/* Returns the full Aircraft name as set in the JSBSim definition file */ 
+	/* Returns the full Aircraft name as set in the JSBSim definition file */
 	FString GetAircraftScreenName() const;
 
-    /* This function is used in different contexts : 
+    /* This function is used in different contexts :
     *  - When the used changed the Aircraft Model string - In that case, we call it with ResetToDefaultSettings to rebuild Engine, Tanks and Gears UE structures from the new aircraft
     *  - On begin play, in that case, we don't touch the UE structures because the user can have overriden some properties. */
 	UFUNCTION(CallInEditor, DisplayName ="Reset Initial Conditions")
@@ -249,11 +249,11 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, DisplayName = "Set Winds")
 	void SetWind(FSimpleWindState WindState);
-	
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
-	
+
 	UPROPERTY()
 	AGeoReferencingSystem* GeoReferencingSystem;
 
@@ -262,13 +262,13 @@ protected:
 protected:
 	// JSBSim Objects - TODO - Hide in an JSBSimInternals Structure to allow adding a public dependency without requiring JSBSim Includes
 	JSBSim::FGFDMExec* Exec = nullptr;
-	
+
 	std::shared_ptr<JSBSim::FGAtmosphere> Atmosphere = nullptr;
 	std::shared_ptr<JSBSim::FGWinds> Winds = nullptr;
 	std::shared_ptr<JSBSim::FGFCS> FCS = nullptr;
 	std::shared_ptr<JSBSim::FGMassBalance> MassBalance = nullptr;
 	std::shared_ptr<JSBSim::FGPropulsion> Propulsion = nullptr;
-	
+
 	std::shared_ptr<JSBSim::FGAircraft> Aircraft = nullptr;
 	std::shared_ptr<JSBSim::FGPropagate> Propagate = nullptr;
 	std::shared_ptr<JSBSim::FGAuxiliary> Auxiliary = nullptr;
@@ -277,7 +277,7 @@ protected:
 
 	std::shared_ptr<JSBSim::FGGroundReactions> GroundReactions = nullptr;
 	std::shared_ptr<JSBSim::FGAccelerations> Accelerations = nullptr;
-	
+
 	std::shared_ptr<JSBSim::FGPropertyManager> PropertyManager = nullptr; // TODO ?? virer ?
 	std::shared_ptr<JSBSim::FGInitialCondition> IC = nullptr;
 
@@ -285,13 +285,13 @@ protected:
 	FTransform BodyToActor;
 
 	bool JSBSimInitialized = false;
-    bool TrimNeeded = true; // TODO ? Does false make sense ? we need to Trim the state based on the ICs... 
+    bool TrimNeeded = true; // TODO ? Does false make sense ? we need to Trim the state based on the ICs...
 	bool Trimmed = false;
 	bool AircraftLoaded = false;
 	float simDtime = 0.f;
 	float remainder = 0.f;
 	int simloops = 0;
-	
+
 	double TickTime = 0;
 
 	/////////// JSBSim Protected methods
@@ -335,7 +335,7 @@ private:
 	void InitGearDefaultProperties();
 	void CopyGearPropertiesToJSBSim();
 	void CopyGearPropertiesFromJSBSim();
-	
+
 	// Tanks
 	void InitTankDefaultProperties();
 	void CopyTankPropertiesToJSBSim();
@@ -368,11 +368,11 @@ public:
 
 	/**
 	 * When some properties changes on this component, the Editor system creates a new component from the BP template, and update the corresponding properties
-	 * It doesn't recreate the native objects, nor load the right JSBSim models. (There is no way to get notified of this re-init from within a component) 
-	 * But in order to display data in the visualizer, we must make sure that : 
+	 * It doesn't recreate the native objects, nor load the right JSBSim models. (There is no way to get notified of this re-init from within a component)
+	 * But in order to display data in the visualizer, we must make sure that :
 	 *  - The JSBSim Aircraft has been loaded
 	 *  - The Initial state has been computed from the IC (eg : Center of Gravity Location)
-	 * This method is meant to be called from the visualizer to make sure the model is ready for being used in the visualizer. 
+	 * This method is meant to be called from the visualizer to make sure the model is ready for being used in the visualizer.
 	*/
 	void PrepareModelForCompVisualizer();
 
@@ -380,5 +380,5 @@ public:
 
 #endif
 
-	
+
 };

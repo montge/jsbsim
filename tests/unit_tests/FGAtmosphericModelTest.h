@@ -75,7 +75,7 @@ public:
     double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
     double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
     double delta = std::pow(temp / ISA_SEA_LEVEL_TEMP_K, exponent);
-    
+
     // At 5000m, pressure ratio should be approximately 0.5334
     TS_ASSERT_DELTA(delta, 0.5334, 0.001);
     TS_ASSERT(delta < 1.0); // Pressure decreases with altitude
@@ -102,7 +102,7 @@ public:
     double exponent = -GRAVITY_SI / (ISA_LAPSE_RATE * GAS_CONSTANT_AIR);
     double delta = std::pow(theta, exponent);
     double sigma = delta / theta; // rho/rho0 = (P/P0) / (T/T0)
-    
+
     // At 5000m, density ratio should be approximately 0.6012
     TS_ASSERT_DELTA(sigma, 0.6012, 0.001);
     TS_ASSERT(sigma < 1.0); // Density decreases with altitude
@@ -113,7 +113,7 @@ public:
     double pressure = ISA_SEA_LEVEL_PRESSURE;
     double temp = ISA_SEA_LEVEL_TEMP_K;
     double density = pressure / (GAS_CONSTANT_AIR * temp);
-    
+
     TS_ASSERT_DELTA(density, ISA_SEA_LEVEL_DENSITY, 0.001);
   }
 
@@ -121,7 +121,7 @@ public:
   void testSpeedOfSoundSeaLevel() {
     double temp = ISA_SEA_LEVEL_TEMP_K;
     double speed_of_sound = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * temp);
-    
+
     // Speed of sound at 15°C should be approximately 340.3 m/s
     TS_ASSERT_DELTA(speed_of_sound, 340.294, 0.01);
   }
@@ -131,7 +131,7 @@ public:
     double altitude = 10000.0;
     double temp = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
     double speed_of_sound = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * temp);
-    
+
     // At 10000m, temperature is 223.15K, speed of sound ~299.5 m/s
     TS_ASSERT_DELTA(speed_of_sound, 299.5, 1.0);
     TS_ASSERT(speed_of_sound < 340.3); // Lower than sea level
@@ -143,7 +143,7 @@ public:
     double temp = ISA_SEA_LEVEL_TEMP_K;
     double speed_of_sound = std::sqrt(GAMMA_AIR * GAS_CONSTANT_AIR * temp);
     double mach = true_airspeed / speed_of_sound;
-    
+
     TS_ASSERT_DELTA(mach, 0.7347, 0.001);
   }
 
@@ -152,7 +152,7 @@ public:
     double density = ISA_SEA_LEVEL_DENSITY;
     double velocity = 100.0; // m/s
     double q = 0.5 * density * velocity * velocity;
-    
+
     TS_ASSERT_DELTA(q, 6125.0, 0.1);
   }
 
@@ -160,9 +160,9 @@ public:
   void testDynamicViscositySutherland() {
     double temp = ISA_SEA_LEVEL_TEMP_K;
     double ref_temp = 288.15;
-    double mu = DYNAMIC_VISCOSITY_REF * std::pow(temp / ref_temp, 1.5) * 
+    double mu = DYNAMIC_VISCOSITY_REF * std::pow(temp / ref_temp, 1.5) *
                 (ref_temp + SUTHERLAND_CONSTANT) / (temp + SUTHERLAND_CONSTANT);
-    
+
     TS_ASSERT_DELTA(mu, DYNAMIC_VISCOSITY_REF, 1e-10);
   }
 
@@ -170,9 +170,9 @@ public:
   void testDynamicViscosityAtAltitude() {
     double temp = 250.0; // K (cold temperature)
     double ref_temp = 288.15;
-    double mu = DYNAMIC_VISCOSITY_REF * std::pow(temp / ref_temp, 1.5) * 
+    double mu = DYNAMIC_VISCOSITY_REF * std::pow(temp / ref_temp, 1.5) *
                 (ref_temp + SUTHERLAND_CONSTANT) / (temp + SUTHERLAND_CONSTANT);
-    
+
     // Viscosity decreases with temperature
     TS_ASSERT(mu < DYNAMIC_VISCOSITY_REF);
     TS_ASSERT_DELTA(mu, 1.598e-5, 1e-7);
@@ -183,7 +183,7 @@ public:
     double dynamic_visc = DYNAMIC_VISCOSITY_REF;
     double density = ISA_SEA_LEVEL_DENSITY;
     double kinematic_visc = dynamic_visc / density;
-    
+
     // At sea level, kinematic viscosity ~1.46e-5 m²/s
     TS_ASSERT_DELTA(kinematic_visc, 1.461e-5, 1e-7);
   }
@@ -192,11 +192,11 @@ public:
   void testStratosphereIsothermal() {
     double altitude1 = 15000.0; // Above tropopause
     double altitude2 = 20000.0; // Also above tropopause
-    
+
     // In simple ISA model, stratosphere is isothermal at -56.5°C
     double temp1 = TROPOPAUSE_TEMP;
     double temp2 = TROPOPAUSE_TEMP;
-    
+
     TS_ASSERT_DELTA(temp1, temp2, epsilon);
     TS_ASSERT_DELTA(temp1, 216.65, epsilon);
   }
@@ -225,7 +225,7 @@ public:
     double temp_hot = 273.15 + 30.0; // 303.15 K
     double pressure = ISA_SEA_LEVEL_PRESSURE;
     double density_hot = pressure / (GAS_CONSTANT_AIR * temp_hot);
-    
+
     // Density should be less than standard
     TS_ASSERT(density_hot < ISA_SEA_LEVEL_DENSITY);
     TS_ASSERT_DELTA(density_hot, 1.164, 0.001);
@@ -237,7 +237,7 @@ public:
     double temp_cold = 273.15; // 273.15 K
     double pressure = ISA_SEA_LEVEL_PRESSURE;
     double density_cold = pressure / (GAS_CONSTANT_AIR * temp_cold);
-    
+
     // Density should be greater than standard
     TS_ASSERT(density_cold > ISA_SEA_LEVEL_DENSITY);
     TS_ASSERT_DELTA(density_cold, 1.292, 0.001);
@@ -249,11 +249,11 @@ public:
     double altitude = 5000.0;
     double temp_std = ISA_SEA_LEVEL_TEMP_K + ISA_LAPSE_RATE * altitude;
     double temp_hot = temp_std + 15.0; // 15K warmer
-    
+
     // Pressure altitude differs from geometric altitude on non-standard day
     double theta_std = temp_std / ISA_SEA_LEVEL_TEMP_K;
     double theta_hot = temp_hot / ISA_SEA_LEVEL_TEMP_K;
-    
+
     TS_ASSERT(theta_hot > theta_std);
   }
 
@@ -263,7 +263,7 @@ public:
     double ias = 100.0; // m/s indicated
     double density_ratio = 0.8; // At some altitude
     double tas = ias / std::sqrt(density_ratio);
-    
+
     TS_ASSERT_DELTA(tas, 111.803, 0.01);
     TS_ASSERT(tas > ias); // TAS > IAS at altitude
   }
@@ -273,7 +273,7 @@ public:
     // In ideal case with no instrument/position error
     double ias = 150.0; // m/s
     double cas = ias; // No corrections
-    
+
     TS_ASSERT_DELTA(cas, ias, epsilon);
   }
 
@@ -282,7 +282,7 @@ public:
     // At higher Mach numbers, compressibility affects airspeed
     double mach = 0.5;
     double impact_pressure_ratio = std::pow(1.0 + 0.2 * mach * mach, 3.5) - 1.0;
-    
+
     // Should be non-zero for M > 0
     TS_ASSERT(impact_pressure_ratio > 0.0);
     TS_ASSERT_DELTA(impact_pressure_ratio, 0.1860, 0.001);
@@ -294,9 +294,9 @@ public:
     double velocity = 50.0; // m/s
     double chord = 2.0; // m
     double dynamic_visc = DYNAMIC_VISCOSITY_REF;
-    
+
     double reynolds = (density * velocity * chord) / dynamic_visc;
-    
+
     TS_ASSERT_DELTA(reynolds, 6.845e6, 1e4);
   }
 
@@ -305,9 +305,9 @@ public:
     double static_pressure = 95000.0; // Pa
     double freestream_pressure = ISA_SEA_LEVEL_PRESSURE;
     double dynamic_pressure = 6000.0; // Pa
-    
+
     double cp = (static_pressure - freestream_pressure) / dynamic_pressure;
-    
+
     TS_ASSERT_DELTA(cp, -1.054, 0.001);
   }
 
@@ -315,9 +315,9 @@ public:
   void testGeopotentialAltitude() {
     double geometric_altitude = 10000.0; // m
     double earth_radius = 6356766.0; // m (mean radius)
-    double geopotential_altitude = (earth_radius * geometric_altitude) / 
+    double geopotential_altitude = (earth_radius * geometric_altitude) /
                                    (earth_radius + geometric_altitude);
-    
+
     // Geopotential altitude is slightly less than geometric
     TS_ASSERT(geopotential_altitude < geometric_altitude);
     TS_ASSERT_DELTA(geopotential_altitude, 9984.3, 0.1);
@@ -331,16 +331,16 @@ public:
     double pressure_total = ISA_SEA_LEVEL_PRESSURE;
     double pressure_water_vapor = 1000.0; // Pa (some humidity)
     double pressure_dry_air = pressure_total - pressure_water_vapor;
-    
+
     // Dry air density
     double density_dry_part = pressure_dry_air / (GAS_CONSTANT_AIR * temp);
-    
+
     // Water vapor has different gas constant (461.5 J/(kg·K))
     double gas_constant_water = 461.5;
     double density_vapor_part = pressure_water_vapor / (gas_constant_water * temp);
-    
+
     double density_moist = density_dry_part + density_vapor_part;
-    
+
     // Moist air should be less dense than dry air
     double density_dry = pressure_total / (GAS_CONSTANT_AIR * temp);
     TS_ASSERT(density_moist < density_dry);
@@ -351,7 +351,7 @@ public:
     double true_airspeed = 200.0; // m/s
     double density_ratio = 0.7; // At altitude
     double equivalent_airspeed = true_airspeed * std::sqrt(density_ratio);
-    
+
     TS_ASSERT_DELTA(equivalent_airspeed, 167.33, 0.01);
     TS_ASSERT(equivalent_airspeed < true_airspeed);
   }
@@ -360,7 +360,7 @@ public:
   void testStandardAtmosphereConsistency() {
     // Verify that P = ρRT holds for standard conditions
     double pressure_calculated = ISA_SEA_LEVEL_DENSITY * GAS_CONSTANT_AIR * ISA_SEA_LEVEL_TEMP_K;
-    
+
     TS_ASSERT_DELTA(pressure_calculated, ISA_SEA_LEVEL_PRESSURE, 1.0);
   }
 

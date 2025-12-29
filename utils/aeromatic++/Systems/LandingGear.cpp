@@ -380,4 +380,3 @@ float const LandingGear::_CDfixed_gear_t[MAX_AIRCRAFT][5] =
 };
 
 } /* namespace Aeromatic */
-

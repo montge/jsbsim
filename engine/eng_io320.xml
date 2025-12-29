@@ -13,9 +13,9 @@
 
 <piston_engine name="IO320">
   <minmp unit="INHG">        10.0  </minmp>
-  <maxmp unit="INHG">        28.5  </maxmp>	
+  <maxmp unit="INHG">        28.5  </maxmp>
   <displacement unit="IN3"> 320.0  </displacement>
-  <maxhp>                   160.0  </maxhp>	
+  <maxhp>                   160.0  </maxhp>
   <bsfc>                      0.32 </bsfc>
   <cycles>                    4.0  </cycles>
   <idlerpm>                 550.0  </idlerpm>
@@ -24,4 +24,3 @@
   <minthrottle>               0.1  </minthrottle>
   <sparkfaildrop>             0.1 </sparkfaildrop>
 </piston_engine>
-
