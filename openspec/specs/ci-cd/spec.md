@@ -1,7 +1,7 @@
 # ci-cd Specification
 
 ## Purpose
-TBD - created by archiving change add-sonarcloud-analysis. Update Purpose after archive.
+Define continuous integration and deployment standards for JSBSim. This specification covers static analysis via SonarCloud, code coverage reporting via Codecov, pre-commit hooks for local validation, and automated quality gates to maintain code health across all contributions.
 ## Requirements
 ### Requirement: SonarCloud Static Analysis
 The CI pipeline SHALL run SonarCloud static analysis on C++ source code to detect bugs, code smells, and security vulnerabilities.

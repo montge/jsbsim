@@ -1,7 +1,7 @@
 # testing Specification
 
 ## Purpose
-TBD - created by archiving change fix-test-failures. Update Purpose after archive.
+Define testing standards and coverage requirements for JSBSim. This specification ensures comprehensive test coverage through C++ unit tests and Python integration tests, maintains code quality via coverage gates, and establishes performance and documentation standards for the test suite.
 ## Requirements
 ### Requirement: Test Dependencies Complete
 The Python test suite SHALL have all required dependencies specified in `python/requirements.txt`.
