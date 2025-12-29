@@ -616,4 +616,86 @@ public:
     std::vector<std::string> list = split("a,b,c,d,e,f,g,h,i,j", ',');
     TS_ASSERT_EQUALS(list.size(), 10);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteStringProcessingPipeline() {
+    // Simulate parsing a config value from XML
+    std::string rawInput = "  +123.456e-2  ";
+
+    // Step 1: Trim whitespace
+    std::string trimmed = trim(rawInput);
+    TS_ASSERT_EQUALS(trimmed, "+123.456e-2");
+
+    // Step 2: Validate it's a number
+    TS_ASSERT(is_number(trimmed));
+
+    // Step 3: Convert to double
+    double value = atof_locale_c(trimmed);
+    TS_ASSERT_DELTA(value, 1.23456, 1e-10);
+  }
+
+  void testCompleteCSVParsing() {
+    // Parse a CSV line with mixed content
+    std::string csvLine = " name, value1, VALUE2, 3.14 ";
+    std::string cleaned = trim(csvLine);
+
+    std::vector<std::string> fields = split(cleaned, ',');
+    TS_ASSERT_EQUALS(fields.size(), 4);
+
+    // Trim and normalize each field
+    TS_ASSERT_EQUALS(trim(fields[0]), "name");
+    TS_ASSERT_EQUALS(to_lower(trim(fields[2])), "value2");
+    TS_ASSERT(is_number(trim(fields[3])));
+  }
+
+  void testCompleteConfigKeyProcessing() {
+    // Process a config key (common in XML parsing)
+    std::string key = "  Aircraft_Name  ";
+
+    // Clean and normalize
+    std::string cleaned = trim(key);
+    std::string forUpper = cleaned;  // Make copy since to_upper modifies in place
+    std::string upper = to_upper(forUpper);
+    std::string noSpaces = trim_all_space(key);
+
+    TS_ASSERT_EQUALS(cleaned, "Aircraft_Name");
+    TS_ASSERT_EQUALS(upper, "AIRCRAFT_NAME");
+    TS_ASSERT_EQUALS(noSpaces, "Aircraft_Name");
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentStringOperations() {
+    std::string s1 = "  HELLO  ";
+    std::string s2 = "  HELLO  ";
+
+    // Operate on s1 only
+    std::string r1 = trim(s1);
+    std::string r2 = to_lower(trim(s2));
+
+    // Results should be independent
+    TS_ASSERT_EQUALS(r1, "HELLO");
+    TS_ASSERT_EQUALS(r2, "hello");
+    TS_ASSERT(r1 != r2);
+  }
+
+  void testIndependentSplitResults() {
+    std::string input = "a,b,c";
+
+    std::vector<std::string> list1 = split(input, ',');
+    std::vector<std::string> list2 = split(input, ',');
+
+    // Modify list1
+    list1[0] = "modified";
+
+    // list2 should be unchanged
+    TS_ASSERT_EQUALS(list2[0], "a");
+    TS_ASSERT_EQUALS(list2[1], "b");
+    TS_ASSERT_EQUALS(list2[2], "c");
+  }
 };

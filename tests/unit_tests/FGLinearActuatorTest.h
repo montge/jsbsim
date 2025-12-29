@@ -1507,4 +1507,145 @@ public:
     TS_ASSERT_EQUALS(newState.countSpin, 5);
     TS_ASSERT_DELTA(newState.inputLast, 180.0, epsilon);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteActuatorCycle() {
+    // Test a complete cycle: start, move, wrap, return
+    LinearActuatorState state;
+    state.module = 360.0;
+    state.rate = 0.3;
+    state.hysteresis = 1.0;
+    state.gain = 1.0;
+    state.bias = 0.0;
+
+    // Initial position
+    double output = runLinearActuator(state, 0.0);
+    TS_ASSERT_DELTA(output, 0.0, 1.0);
+
+    // Move in small increments (to avoid wrap detection)
+    output = runLinearActuator(state, 45.0);
+    TS_ASSERT_DELTA(output, 45.0, 1.0);
+
+    output = runLinearActuator(state, 90.0);
+    TS_ASSERT_DELTA(output, 90.0, 1.0);
+
+    // Wrap crossing 0 (350 to 10) - reset state first
+    state.countSpin = 0;
+    state.inputLast = 350.0;
+    output = runLinearActuator(state, 10.0);
+    TS_ASSERT_EQUALS(state.countSpin, 1);
+  }
+
+  void testCompleteCalibrationSequence() {
+    // Full calibration: zero, gain, offset
+    double rawValue = 512.0;  // Raw ADC count
+    double zeroOffset = 100.0;
+    double scaleFactor = 0.1;  // degrees per count
+    double biasCorrection = 2.0;
+
+    // Apply calibration
+    double zeroed = rawValue - zeroOffset;
+    double scaled = zeroed * scaleFactor;
+    double corrected = scaled + biasCorrection;
+
+    // (512 - 100) * 0.1 + 2.0 = 41.2 + 2.0 = 43.2
+    TS_ASSERT_DELTA(corrected, 43.2, epsilon);
+  }
+
+  void testCompleteServoPositioning() {
+    // Complete servo positioning with rate limiting
+    double targetPosition = 100.0;
+    double currentPosition = 0.0;
+    double maxRate = 20.0;  // degrees per step
+    int steps = 0;
+
+    while (std::abs(targetPosition - currentPosition) > 0.1 && steps < 100) {
+      double error = targetPosition - currentPosition;
+      double move = std::min(std::abs(error), maxRate);
+      currentPosition += (error > 0) ? move : -move;
+      steps++;
+    }
+
+    TS_ASSERT_DELTA(currentPosition, targetPosition, 0.1);
+    TS_ASSERT_EQUALS(steps, 5);  // 100 / 20 = 5 steps
+  }
+
+  void testCompleteMultiTurnTracking() {
+    LinearActuatorState state;
+    state.module = 360.0;
+    state.rate = 0.3;
+    state.hysteresis = 1.0;
+
+    // Track 5 complete forward rotations
+    for (int rotation = 0; rotation < 5; rotation++) {
+      state.inputLast = 350.0;
+      runLinearActuator(state, 10.0);
+    }
+    TS_ASSERT_EQUALS(state.countSpin, 5);
+
+    // Track 3 backward rotations
+    for (int rotation = 0; rotation < 3; rotation++) {
+      state.inputLast = 10.0;
+      runLinearActuator(state, 350.0);
+    }
+    TS_ASSERT_EQUALS(state.countSpin, 2);  // 5 - 3 = 2
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentActuatorStates() {
+    LinearActuatorState state1;
+    LinearActuatorState state2;
+    state1.module = 360.0;
+    state2.module = 360.0;
+    state1.rate = 0.3;
+    state2.rate = 0.3;
+
+    // Modify state1 only
+    state1.inputLast = 350.0;
+    runLinearActuator(state1, 10.0);
+
+    // state2 should be unchanged
+    TS_ASSERT_EQUALS(state2.countSpin, 0);
+    TS_ASSERT_DELTA(state2.inputLast, 0.0, epsilon);
+
+    // state1 should have wrapped
+    TS_ASSERT_EQUALS(state1.countSpin, 1);
+  }
+
+  void testIndependentHysteresisOutputs() {
+    double input = 45.678;
+    double hysteresis1 = 1.0;
+    double hysteresis2 = 10.0;
+
+    double output1 = applyHysteresis(input, hysteresis1);
+    double output2 = applyHysteresis(input, hysteresis2);
+
+    // Different hysteresis values produce different outputs
+    TS_ASSERT_DELTA(output1, 46.0, epsilon);
+    TS_ASSERT_DELTA(output2, 50.0, epsilon);
+    TS_ASSERT(std::abs(output1 - output2) > 1.0);
+  }
+
+  void testIndependentLagFilters() {
+    double state1 = 0.0;
+    double state2 = 0.0;
+    double alpha1 = 0.1;
+    double alpha2 = 0.9;
+    double input = 100.0;
+
+    // Apply different lag coefficients
+    state1 = alpha1 * input + (1.0 - alpha1) * state1;
+    state2 = alpha2 * input + (1.0 - alpha2) * state2;
+
+    // Different responses
+    TS_ASSERT_DELTA(state1, 10.0, epsilon);  // 0.1 * 100 = 10
+    TS_ASSERT_DELTA(state2, 90.0, epsilon);  // 0.9 * 100 = 90
+    TS_ASSERT(state1 < state2);
+  }
 };

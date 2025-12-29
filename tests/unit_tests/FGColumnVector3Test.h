@@ -1226,4 +1226,139 @@ public:
 
     TS_ASSERT_DELTA(crossMagSq, expected, 1e-9);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteVectorTransformation(void) {
+    // Test a complete sequence of vector operations
+    JSBSim::FGColumnVector3 position(100.0, 50.0, 25.0);
+    JSBSim::FGColumnVector3 velocity(10.0, 5.0, -2.0);
+    double dt = 0.1;
+
+    // Update position: p' = p + v*dt
+    JSBSim::FGColumnVector3 newPosition = position + velocity * dt;
+
+    TS_ASSERT_EQUALS(newPosition(1), 101.0);
+    TS_ASSERT_EQUALS(newPosition(2), 50.5);
+    TS_ASSERT_DELTA(newPosition(3), 24.8, 1e-12);
+
+    // Verify displacement magnitude
+    JSBSim::FGColumnVector3 displacement = newPosition - position;
+    TS_ASSERT_DELTA(displacement.Magnitude(), velocity.Magnitude() * dt, 1e-12);
+  }
+
+  void testCompleteRotationSequence(void) {
+    // Test computing angular velocity from moment and inertia
+    JSBSim::FGColumnVector3 moment(1000.0, 500.0, 200.0);  // Applied moment
+    JSBSim::FGColumnVector3 inertia(5000.0, 10000.0, 15000.0);  // Inertia components
+
+    // Angular acceleration = moment / inertia (component-wise approximation)
+    JSBSim::FGColumnVector3 angAccel;
+    angAccel(1) = moment(1) / inertia(1);
+    angAccel(2) = moment(2) / inertia(2);
+    angAccel(3) = moment(3) / inertia(3);
+
+    TS_ASSERT_DELTA(angAccel(1), 0.2, 1e-12);
+    TS_ASSERT_DELTA(angAccel(2), 0.05, 1e-12);
+    TS_ASSERT_DELTA(angAccel(3), 200.0/15000.0, 1e-12);
+  }
+
+  void testCompleteForceResolution(void) {
+    // Resolve total force into components
+    JSBSim::FGColumnVector3 thrust(5000.0, 0.0, -100.0);
+    JSBSim::FGColumnVector3 drag(-1000.0, 0.0, 50.0);
+    JSBSim::FGColumnVector3 lift(0.0, 0.0, -10000.0);
+    JSBSim::FGColumnVector3 weight(0.0, 0.0, 15000.0);
+
+    JSBSim::FGColumnVector3 totalForce = thrust + drag + lift + weight;
+
+    TS_ASSERT_EQUALS(totalForce(1), 4000.0);   // Net forward
+    TS_ASSERT_EQUALS(totalForce(2), 0.0);      // No side
+    TS_ASSERT_EQUALS(totalForce(3), 4950.0);   // Net vertical
+
+    // Verify magnitude
+    TS_ASSERT(totalForce.Magnitude() > 0.0);
+  }
+
+  void testCompleteProjectionOperations(void) {
+    // Project vector onto unit vector
+    JSBSim::FGColumnVector3 v(3.0, 4.0, 5.0);
+    JSBSim::FGColumnVector3 axis(1.0, 0.0, 0.0);  // Already unit
+
+    // Projection of v onto axis: (v·axis) * axis
+    double projMag = DotProduct(v, axis);
+    JSBSim::FGColumnVector3 projection = projMag * axis;
+
+    TS_ASSERT_EQUALS(projection(1), 3.0);
+    TS_ASSERT_EQUALS(projection(2), 0.0);
+    TS_ASSERT_EQUALS(projection(3), 0.0);
+
+    // Perpendicular component
+    JSBSim::FGColumnVector3 perp = v - projection;
+    TS_ASSERT_EQUALS(perp(1), 0.0);
+    TS_ASSERT_EQUALS(perp(2), 4.0);
+    TS_ASSERT_EQUALS(perp(3), 5.0);
+
+    // Verify orthogonality
+    TS_ASSERT_DELTA(DotProduct(projection, perp), 0.0, 1e-12);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentVectorInstances(void) {
+    // Create two independent vectors
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    // Modify v1
+    v1(1) = 100.0;
+    v1(2) = 200.0;
+    v1(3) = 300.0;
+
+    // v2 should be unchanged
+    TS_ASSERT_EQUALS(v2(1), 4.0);
+    TS_ASSERT_EQUALS(v2(2), 5.0);
+    TS_ASSERT_EQUALS(v2(3), 6.0);
+  }
+
+  void testIndependentOperationResults(void) {
+    JSBSim::FGColumnVector3 v1(1.0, 2.0, 3.0);
+    JSBSim::FGColumnVector3 v2(4.0, 5.0, 6.0);
+
+    // Compute multiple results
+    JSBSim::FGColumnVector3 sum = v1 + v2;
+    JSBSim::FGColumnVector3 diff = v1 - v2;
+    JSBSim::FGColumnVector3 cross = v1 * v2;
+
+    // Results should be independent
+    sum(1) = 999.0;
+
+    TS_ASSERT_EQUALS(diff(1), -3.0);
+    TS_ASSERT_DELTA(cross(1), 2.0*6.0 - 3.0*5.0, 1e-12);  // -3
+
+    // Original vectors unchanged
+    TS_ASSERT_EQUALS(v1(1), 1.0);
+    TS_ASSERT_EQUALS(v2(1), 4.0);
+  }
+
+  void testIndependentNormalization(void) {
+    JSBSim::FGColumnVector3 v1(3.0, 4.0, 0.0);
+    JSBSim::FGColumnVector3 v2(3.0, 4.0, 0.0);
+
+    // Normalize only v1
+    v1.Normalize();
+
+    // v2 should remain unchanged
+    TS_ASSERT_EQUALS(v2(1), 3.0);
+    TS_ASSERT_EQUALS(v2(2), 4.0);
+    TS_ASSERT_EQUALS(v2(3), 0.0);
+    TS_ASSERT_EQUALS(v2.Magnitude(), 5.0);
+
+    // v1 should be normalized
+    TS_ASSERT_DELTA(v1.Magnitude(), 1.0, 1e-12);
+  }
 };

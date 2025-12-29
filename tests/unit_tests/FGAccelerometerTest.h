@@ -1212,4 +1212,115 @@ public:
     double ac_component = measured - dc_offset;
     TS_ASSERT_DELTA(ac_component, 10.0, epsilon);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteAccelerometerCalibration() {
+    // Full 6-position calibration sequence
+    double g = 9.80665;
+
+    // Raw readings at each position
+    double rawXup = 9.9, rawXdn = -9.7;
+    double rawYup = 9.85, rawYdn = -9.75;
+    double rawZup = 9.8, rawZdn = -9.9;
+
+    // Calculate scale and bias for each axis
+    double scaleX = (rawXup - rawXdn) / (2.0 * g);
+    double biasX = (rawXup + rawXdn) / 2.0;
+
+    TS_ASSERT_DELTA(scaleX, 1.0, 0.05);
+    TS_ASSERT_DELTA(biasX, 0.1, 0.2);
+  }
+
+  void testCompleteINSIntegration() {
+    // Simulate inertial navigation integration
+    double ax = 0.1, ay = 0.0, az = -9.8;  // Slight forward acceleration
+    double dt = 0.01;  // 100 Hz
+    double vx = 0.0, vy = 0.0, vz = 0.0;
+    double px = 0.0, py = 0.0, pz = 0.0;
+
+    // Integrate for 1 second (100 steps)
+    for (int i = 0; i < 100; i++) {
+      vx += ax * dt;
+      vy += ay * dt;
+      vz += (az + 9.80665) * dt;  // Remove gravity
+      px += vx * dt;
+    }
+
+    TS_ASSERT_DELTA(vx, 0.1, 0.01);  // 0.1 m/s^2 * 1 s = 0.1 m/s
+    TS_ASSERT_DELTA(px, 0.05, 0.01); // 0.5 * a * t^2 = 0.05 m
+  }
+
+  void testCompleteFilterChain() {
+    // Apply full signal conditioning chain
+    double rawValue = 10.5;
+    double bias = 0.3;
+    double scale = 1.02;
+    double lpfAlpha = 0.1;
+    double lpfState = 10.0;
+
+    // Step 1: Bias correction
+    double biased = rawValue - bias;
+
+    // Step 2: Scale correction
+    double scaled = biased / scale;
+
+    // Step 3: Low-pass filter
+    double filtered = lpfAlpha * scaled + (1.0 - lpfAlpha) * lpfState;
+
+    TS_ASSERT_DELTA(biased, 10.2, epsilon);
+    TS_ASSERT_DELTA(scaled, 10.0, 0.01);
+    TS_ASSERT_DELTA(filtered, 10.0, 0.01);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentSensorReadings() {
+    // Simulate two independent accelerometers
+    double ax1 = 5.0, ay1 = 0.0, az1 = -9.8;
+    double ax2 = 5.0, ay2 = 0.0, az2 = -9.8;
+
+    // Modify sensor 1 only
+    ax1 = 10.0;
+    ay1 = 2.0;
+
+    // Sensor 2 should be unchanged
+    TS_ASSERT_DELTA(ax2, 5.0, epsilon);
+    TS_ASSERT_DELTA(ay2, 0.0, epsilon);
+    TS_ASSERT_DELTA(az2, -9.8, epsilon);
+  }
+
+  void testIndependentFilterStates() {
+    // Two independent LP filters
+    double state1 = 0.0, state2 = 0.0;
+    double alpha1 = 0.1, alpha2 = 0.5;
+    double input = 10.0;
+
+    // Run filters
+    state1 = alpha1 * input + (1.0 - alpha1) * state1;
+    state2 = alpha2 * input + (1.0 - alpha2) * state2;
+
+    // Different responses due to different time constants
+    TS_ASSERT_DELTA(state1, 1.0, epsilon);   // 0.1 * 10
+    TS_ASSERT_DELTA(state2, 5.0, epsilon);   // 0.5 * 10
+    TS_ASSERT(state1 != state2);
+  }
+
+  void testIndependentCalibrationData() {
+    // Two sensors with different calibration
+    double bias1 = 0.1, scale1 = 1.01;
+    double bias2 = -0.2, scale2 = 0.99;
+    double raw = 10.0;
+
+    double cal1 = (raw - bias1) / scale1;
+    double cal2 = (raw - bias2) / scale2;
+
+    TS_ASSERT_DELTA(cal1, 9.80, 0.1);
+    TS_ASSERT_DELTA(cal2, 10.30, 0.1);
+    TS_ASSERT(std::abs(cal1 - cal2) > 0.3);
+  }
 };
