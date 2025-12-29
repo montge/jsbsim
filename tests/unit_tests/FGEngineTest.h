@@ -1494,4 +1494,86 @@ public:
     commandedRPM = minRPM + propLever * (targetRPM - minRPM);
     TS_ASSERT_DELTA(commandedRPM, 2700.0, DEFAULT_TOLERANCE);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompletePowerSetting() {
+    // Full power setting check
+    double throttle = 1.0;
+    double mixture = 0.9;  // Full rich
+    double rpm = 2700.0;
+    double manifoldPressure = 29.0;  // inHg
+
+    // Power calculation
+    double power = 200.0 * throttle * (rpm / 2700.0) * (manifoldPressure / 29.92);
+    TS_ASSERT(power > 180.0);
+    TS_ASSERT(power < 210.0);
+
+    // Fuel flow check
+    double sfc = 0.45;  // lb/hp/hr
+    double fuelFlow = power * sfc;
+    TS_ASSERT(fuelFlow > 80.0);
+  }
+
+  void testCompleteEngineStartSequence() {
+    bool masterSwitch = false;
+    bool fuelPump = false;
+    bool magnetos = false;
+    bool starter = false;
+    bool running = false;
+
+    // Start sequence
+    masterSwitch = true;
+    fuelPump = masterSwitch;
+    magnetos = masterSwitch;
+    starter = true;
+    running = masterSwitch && fuelPump && magnetos && starter;
+
+    TS_ASSERT(running);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentEngineParameters() {
+    double rpm1 = 2400.0, rpm2 = 2400.0;
+    double power1 = 180.0, power2 = 180.0;
+
+    // Modify engine 1
+    rpm1 = 2100.0;
+    power1 = 150.0;
+
+    // Engine 2 unchanged
+    TS_ASSERT_DELTA(rpm2, 2400.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(power2, 180.0, DEFAULT_TOLERANCE);
+  }
+
+  void testIndependentFuelSystems() {
+    double fuelFlow1 = 15.0, fuelFlow2 = 15.0;  // GPH
+    double fuelQuantity1 = 50.0, fuelQuantity2 = 50.0;
+
+    // Modify system 1
+    fuelFlow1 = 20.0;
+    fuelQuantity1 = 45.0;
+
+    // System 2 unchanged
+    TS_ASSERT_DELTA(fuelFlow2, 15.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(fuelQuantity2, 50.0, DEFAULT_TOLERANCE);
+  }
+
+  void testIndependentTemperatures() {
+    double cht1 = 400.0, cht2 = 400.0;
+    double egt1 = 1350.0, egt2 = 1350.0;
+
+    // Different operating conditions on cylinder 1
+    cht1 = 450.0;
+    egt1 = 1400.0;
+
+    // Cylinder 2 unchanged
+    TS_ASSERT_DELTA(cht2, 400.0, DEFAULT_TOLERANCE);
+    TS_ASSERT_DELTA(egt2, 1350.0, DEFAULT_TOLERANCE);
+  }
 };

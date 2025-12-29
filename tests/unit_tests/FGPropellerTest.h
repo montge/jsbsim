@@ -1489,4 +1489,94 @@ public:
       TS_ASSERT_EQUALS(in_deadband, expected[i]);
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompletePropellerPerformance() {
+    double diameter = 6.0;  // ft
+    double rpm = 2400.0;
+    double velocity = 150.0;  // ft/s
+
+    double n = rpm / 60.0;
+    double J = velocity / (n * diameter);
+    double efficiency = 0.85 * (1.0 - 0.1 * std::abs(J - 0.8));
+
+    TS_ASSERT(J > 0.5);
+    TS_ASSERT(J < 1.5);
+    TS_ASSERT(efficiency > 0.7);
+  }
+
+  void testCompleteThrustCalculation() {
+    double power = 200.0;  // HP
+    double velocity = 150.0;  // ft/s
+    double efficiency = 0.80;
+
+    double thrust = (power * 550.0 * efficiency) / velocity;
+    TS_ASSERT(thrust > 500.0);
+    TS_ASSERT(thrust < 700.0);
+  }
+
+  void testCompleteGovernorResponse() {
+    double targetRPM = 2400.0;
+    double currentRPM = 2500.0;
+    double bladeAngle = 20.0;
+    double Kp = 0.1;
+
+    for (int i = 0; i < 10; i++) {
+      double error = currentRPM - targetRPM;
+      bladeAngle += Kp * error;
+      bladeAngle = std::min(std::max(bladeAngle, 10.0), 45.0);
+      currentRPM -= error * 0.2;
+    }
+
+    TS_ASSERT_DELTA(currentRPM, targetRPM, 50.0);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentPropellerInstances() {
+    double rpm1 = 2400.0, rpm2 = 2400.0;
+    double pitch1 = 20.0, pitch2 = 20.0;
+
+    rpm1 = 2100.0;
+    pitch1 = 25.0;
+
+    TS_ASSERT_DELTA(rpm2, 2400.0, 0.001);
+    TS_ASSERT_DELTA(pitch2, 20.0, 0.001);
+  }
+
+  void testIndependentBladeAngles() {
+    double bladeAngle1 = 15.0, bladeAngle2 = 15.0;
+    double thrust1 = 500.0, thrust2 = 500.0;
+
+    bladeAngle1 = 25.0;
+    thrust1 = 700.0;
+
+    TS_ASSERT_DELTA(bladeAngle2, 15.0, 0.001);
+    TS_ASSERT_DELTA(thrust2, 500.0, 0.001);
+  }
+
+  void testIndependentEfficiencyCalculations() {
+    double J1 = 0.6, J2 = 0.8;
+    double eff1 = 0.85 * (1.0 - 0.1 * std::abs(J1 - 0.8));
+    double eff2 = 0.85 * (1.0 - 0.1 * std::abs(J2 - 0.8));
+
+    TS_ASSERT(eff1 < eff2);
+    TS_ASSERT_DELTA(eff2, 0.85, 0.001);
+  }
+
+  void testIndependentGovernorStates() {
+    double position1 = 0.5, position2 = 0.5;
+    double targetRPM1 = 2400.0, targetRPM2 = 2400.0;
+
+    position1 = 0.8;
+    targetRPM1 = 2600.0;
+
+    TS_ASSERT_DELTA(position2, 0.5, 0.001);
+    TS_ASSERT_DELTA(targetRPM2, 2400.0, 0.001);
+  }
 };

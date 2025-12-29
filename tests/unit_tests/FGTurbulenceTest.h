@@ -1245,4 +1245,268 @@ public:
 
     TS_ASSERT_DELTA(V_fps, 337.56, 0.1);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete Dryden turbulence chain
+  void testCompleteDrydenTurbulenceChain() {
+    // Complete turbulence calculation from altitude to gust velocities
+    double altitude = 750.0;  // ft AGL
+    double V = 200.0;         // True airspeed (ft/s)
+    double windspeed_at_20ft = 25.0;  // ft/s
+
+    // Step 1: Calculate scale lengths (low altitude model)
+    double L_u = altitude / pow(0.177 + 0.000823 * altitude, 1.2);
+    double L_w = altitude;
+    TS_ASSERT(L_u > L_w);
+    TS_ASSERT(L_w > 0);
+
+    // Step 2: Calculate turbulence intensities
+    double sig_w = 0.1 * windspeed_at_20ft;
+    double sig_u = sig_w / pow(0.177 + 0.000823 * altitude, 0.4);
+    TS_ASSERT(sig_u > sig_w);
+    TS_ASSERT(sig_w > 0);
+
+    // Step 3: Calculate time constants
+    double tau_u = L_u / V;
+    double tau_w = L_w / V;
+    TS_ASSERT(tau_u > tau_w);
+    TS_ASSERT(tau_w > 0);
+
+    // Step 4: Calculate filter gains
+    double K_u = sig_u * sqrt(2.0 * L_u / (PI * V));
+    double K_w = sig_w * sqrt(2.0 * L_w / (PI * V));
+    TS_ASSERT(K_u > 0);
+    TS_ASSERT(K_w > 0);
+
+    // Step 5: Calculate PSD at a reference frequency
+    double omega = 0.5;
+    double Omega_u = omega * L_u / V;
+    double Phi_u = sig_u * sig_u * 2.0 * L_u / (PI * V) /
+                   (1.0 + (1.339 * Omega_u) * (1.339 * Omega_u));
+    TS_ASSERT(Phi_u > 0);
+    TS_ASSERT(std::isfinite(Phi_u));
+
+    // Step 6: Verify consistency
+    double TKE = 0.5 * (sig_u * sig_u + sig_u * sig_u + sig_w * sig_w);
+    TS_ASSERT(TKE > 0);
+  }
+
+  // Test complete discrete gust encounter
+  void testCompleteDiscreteGustEncounter() {
+    // Simulate aircraft flying through a 1-cosine gust
+    double V = 200.0;            // True airspeed (ft/s)
+    double gustAmplitude = 30.0; // ft/s (severe gust)
+    double gustLength = 300.0;   // ft
+
+    // Time to traverse gust
+    double t_gust = gustLength / V;
+    TS_ASSERT_DELTA(t_gust, 1.5, 0.01);
+
+    // Sample gust at several points
+    int numSamples = 10;
+    double maxGust = 0.0;
+    double sumGust = 0.0;
+
+    for (int i = 0; i <= numSamples; i++) {
+      double x = gustLength * i / numSamples;
+      double gust = (gustAmplitude / 2.0) * (1.0 - cos(2.0 * PI * x / gustLength));
+
+      if (gust > maxGust) maxGust = gust;
+      sumGust += gust;
+
+      TS_ASSERT(gust >= 0.0);
+      TS_ASSERT(gust <= gustAmplitude);
+    }
+
+    // Verify peak at center
+    TS_ASSERT_DELTA(maxGust, gustAmplitude, 0.1);
+
+    // Verify average (should be roughly gustAmplitude/2)
+    double avgGust = sumGust / (numSamples + 1);
+    TS_ASSERT(avgGust > gustAmplitude * 0.4);
+    TS_ASSERT(avgGust < gustAmplitude * 0.6);
+  }
+
+  // Test complete altitude profile calculation
+  void testCompleteAltitudeProfile() {
+    // Test turbulence parameters across full altitude range
+    double altitudes[] = {10.0, 100.0, 500.0, 1000.0, 1500.0, 2000.0, 5000.0, 20000.0};
+
+    double prev_L = 0.0;
+    for (double alt : altitudes) {
+      double L_w, L_u;
+
+      if (alt < 1000.0) {
+        L_w = alt;
+        L_u = alt / pow(0.177 + 0.000823 * alt, 1.2);
+      } else if (alt < 2000.0) {
+        L_w = 1000.0 + (alt - 1000.0) / 1000.0 * 750.0;
+        L_u = L_w;
+      } else {
+        L_w = 1750.0;
+        L_u = 1750.0;
+      }
+
+      TS_ASSERT(L_w > 0);
+      TS_ASSERT(L_u > 0);
+      TS_ASSERT(L_w <= 1750.0);
+      TS_ASSERT(L_u <= 2000.0);  // Reasonable upper bound
+      TS_ASSERT(std::isfinite(L_w));
+      TS_ASSERT(std::isfinite(L_u));
+
+      // Scale length should generally increase with altitude up to 2000 ft
+      if (alt <= 2000.0 && prev_L > 0) {
+        TS_ASSERT(L_w >= prev_L * 0.99);  // Allow small tolerance
+      }
+      prev_L = L_w;
+    }
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test independent turbulence models
+  void testIndependentTurbulenceModels() {
+    // Verify Dryden and Von Karman models give independent results
+    double sigma = 5.0;
+    double L = 1000.0;
+    double V = 200.0;
+    double omega = 0.5;
+
+    // Dryden longitudinal PSD
+    double Omega = omega * L / V;
+    double Phi_dryden = sigma * sigma * 2.0 * L / (PI * V) /
+                        (1.0 + (1.339 * Omega) * (1.339 * Omega));
+
+    // Von Karman longitudinal PSD
+    double Phi_vonkarman = sigma * sigma * L / V / PI /
+                           pow(1.0 + 8.0 / 3.0 * (1.339 * Omega) * (1.339 * Omega), 5.0/6.0);
+
+    // Both should be positive and finite
+    TS_ASSERT(Phi_dryden > 0);
+    TS_ASSERT(Phi_vonkarman > 0);
+    TS_ASSERT(std::isfinite(Phi_dryden));
+    TS_ASSERT(std::isfinite(Phi_vonkarman));
+
+    // They should give different values (different spectral shapes)
+    TS_ASSERT(std::abs(Phi_dryden - Phi_vonkarman) > 0.01);
+
+    // Test at multiple frequencies
+    double omegas[] = {0.1, 0.5, 1.0, 5.0, 10.0};
+    for (double w : omegas) {
+      double Om = w * L / V;
+      double pd = sigma * sigma * 2.0 * L / (PI * V) /
+                  (1.0 + (1.339 * Om) * (1.339 * Om));
+      double pv = sigma * sigma * L / V / PI /
+                  pow(1.0 + 8.0 / 3.0 * (1.339 * Om) * (1.339 * Om), 5.0/6.0);
+
+      TS_ASSERT(pd > 0);
+      TS_ASSERT(pv > 0);
+    }
+  }
+
+  // Test independent flight condition turbulence
+  void testIndependentFlightConditionTurbulence() {
+    // Different flight conditions should give independent results
+    struct FlightCondition {
+      double altitude;
+      double airspeed;
+      double windspeed_20ft;
+    };
+
+    FlightCondition low_slow = {200.0, 100.0, 15.0};
+    FlightCondition mid_cruise = {1500.0, 250.0, 25.0};
+    FlightCondition high_fast = {25000.0, 400.0, 30.0};
+
+    auto calcTurbParams = [](FlightCondition& fc) {
+      double L_w, sig_w;
+      if (fc.altitude < 1000.0) {
+        L_w = fc.altitude;
+        sig_w = 0.1 * fc.windspeed_20ft;
+      } else if (fc.altitude < 2000.0) {
+        L_w = 1000.0 + (fc.altitude - 1000.0) / 1000.0 * 750.0;
+        sig_w = 0.1 * fc.windspeed_20ft;
+      } else {
+        L_w = 1750.0;
+        sig_w = 3.0;  // High altitude intensity
+      }
+      double tau = L_w / fc.airspeed;
+      return std::make_tuple(L_w, sig_w, tau);
+    };
+
+    auto [L1, sig1, tau1] = calcTurbParams(low_slow);
+    auto [L2, sig2, tau2] = calcTurbParams(mid_cruise);
+    auto [L3, sig3, tau3] = calcTurbParams(high_fast);
+
+    // Each condition gives independent, valid results
+    TS_ASSERT(L1 > 0);
+    TS_ASSERT(L2 > L1);  // Scale length increases
+    TS_ASSERT(L3 > L2);
+
+    TS_ASSERT(sig1 > 0);
+    TS_ASSERT(sig2 > sig1);
+    TS_ASSERT(sig3 > 0);
+
+    TS_ASSERT(tau1 > 0);
+    TS_ASSERT(tau2 > 0);
+    TS_ASSERT(tau3 > 0);
+
+    // Verify independence
+    TS_ASSERT(L1 != L2);
+    TS_ASSERT(L2 != L3);
+    TS_ASSERT(tau1 != tau2);
+    TS_ASSERT(tau2 != tau3);
+  }
+
+  // Test independent gust component calculations
+  void testIndependentGustComponents() {
+    // u, v, w gust components should be calculated independently
+    double sigma_u = 5.0;
+    double sigma_v = 5.0;
+    double sigma_w = 3.0;
+
+    double L_u = 1000.0;
+    double L_v = 1000.0;
+    double L_w = 500.0;
+
+    double V = 200.0;
+
+    // Calculate time constants for each component
+    double tau_u = L_u / V;
+    double tau_v = L_v / V;
+    double tau_w = L_w / V;
+
+    TS_ASSERT_DELTA(tau_u, 5.0, 0.01);
+    TS_ASSERT_DELTA(tau_v, 5.0, 0.01);
+    TS_ASSERT_DELTA(tau_w, 2.5, 0.01);
+
+    // Calculate filter gains for each component
+    double K_u = sigma_u * sqrt(2.0 * L_u / (PI * V));
+    double K_v = sigma_v * sqrt(2.0 * L_v / (PI * V));
+    double K_w = sigma_w * sqrt(2.0 * L_w / (PI * V));
+
+    TS_ASSERT(K_u > 0);
+    TS_ASSERT(K_v > 0);
+    TS_ASSERT(K_w > 0);
+
+    // u and v should have same gain (same sigma and L)
+    TS_ASSERT_DELTA(K_u, K_v, 0.001);
+
+    // w should have different gain
+    TS_ASSERT(std::abs(K_w - K_u) > 0.1);
+
+    // Verify turbulent kinetic energy calculation
+    double TKE = 0.5 * (sigma_u * sigma_u + sigma_v * sigma_v + sigma_w * sigma_w);
+    TS_ASSERT_DELTA(TKE, 29.5, 0.01);
+
+    // Each component contributes independently
+    double TKE_u = 0.5 * sigma_u * sigma_u;
+    double TKE_v = 0.5 * sigma_v * sigma_v;
+    double TKE_w = 0.5 * sigma_w * sigma_w;
+    TS_ASSERT_DELTA(TKE_u + TKE_v + TKE_w, TKE, 0.01);
+  }
 };

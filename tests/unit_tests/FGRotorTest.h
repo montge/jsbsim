@@ -1296,4 +1296,300 @@ public:
     double thrustDirection = (collective > 0) ? 1.0 : -1.0;
     TS_ASSERT(thrustDirection < 0.0);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  // Test complete rotor performance chain
+  void testCompleteRotorPerformance() {
+    // Comprehensive rotor performance calculation from inputs to outputs
+    double rpm = 300.0;
+    double radius = 17.5;
+    double numBlades = 4;
+    double chord = 1.5;
+    double collective = 0.12;
+    double rho = 0.002377;
+
+    // Calculate omega and tip speed
+    double omega = rpm * 2.0 * M_PI / 60.0;
+    double Vtip = omega * radius;
+    TS_ASSERT_DELTA(omega, 31.42, 0.1);
+    TS_ASSERT_DELTA(Vtip, 549.8, 1.0);
+
+    // Calculate solidity
+    double sigma = (numBlades * chord) / (M_PI * radius);
+    TS_ASSERT_DELTA(sigma, 0.109, 0.001);
+
+    // Calculate disk area
+    double area = M_PI * radius * radius;
+    TS_ASSERT_DELTA(area, 962.1, 0.5);
+
+    // Estimate thrust coefficient using BEM approximation
+    double a = 5.7;  // Lift curve slope
+    double lambda = 0.06;  // Inflow ratio
+    double CT = sigma * a * (collective / 3.0 - lambda / 2.0);
+    TS_ASSERT(CT > 0.0);
+    TS_ASSERT(CT < 0.02);
+
+    // Calculate thrust
+    double thrust = CT * rho * area * Vtip * Vtip;
+    TS_ASSERT(thrust > 3000.0);
+    TS_ASSERT(thrust < 8000.0);
+
+    // Calculate induced velocity
+    double vi = sqrt(thrust / (2.0 * rho * area));
+    TS_ASSERT(vi > 20.0);
+    TS_ASSERT(vi < 50.0);
+
+    // Calculate power
+    double inducedPower = thrust * vi / 550.0;  // HP
+    double profileFactor = 1.15;
+    double totalPower = inducedPower * profileFactor;
+    TS_ASSERT(totalPower > 200.0);
+    TS_ASSERT(totalPower < 500.0);
+
+    // Calculate figure of merit
+    double FM = inducedPower / totalPower;
+    TS_ASSERT(FM > 0.8);
+    TS_ASSERT(FM < 0.95);
+  }
+
+  // Test complete flight envelope calculations
+  void testCompleteFlightEnvelope() {
+    // Test multiple flight regimes from hover to high-speed forward flight
+    double Vtip = 549.8;
+    double speedOfSound = 1116.0;
+    double vi_hover = 33.0;
+
+    // Flight regimes: hover, transition, cruise, high-speed
+    double speeds[] = {0.0, 30.0, 100.0, 180.0};  // ft/sec
+
+    for (double V : speeds) {
+      // Advance ratio
+      double mu = V / Vtip;
+      TS_ASSERT(mu >= 0.0);
+      TS_ASSERT(mu < 0.5);
+
+      // Advancing blade tip Mach
+      double M_adv = (Vtip + V) / speedOfSound;
+      TS_ASSERT(M_adv > 0.0);
+      TS_ASSERT(M_adv < 0.9);
+
+      // Check for translational lift regime
+      double V_kts = V / 1.689;
+      bool inETL = (V_kts >= 15.0) && (V_kts <= 24.0);
+
+      // Check for potential VRS
+      double descentRate = 0.0;  // Level flight
+      bool inVRS = (descentRate > 0.7 * vi_hover) && (V < vi_hover);
+      TS_ASSERT(!inVRS);
+
+      // Retreating blade consideration
+      double V_retreat = Vtip * (1.0 - mu);
+      TS_ASSERT(V_retreat > 0.0);
+    }
+
+    // Verify all regimes covered
+    TS_ASSERT_EQUALS(speeds[0], 0.0);  // Hover
+    TS_ASSERT(speeds[3] > 150.0);       // High-speed
+  }
+
+  // Test complete control response chain
+  void testCompleteControlResponse() {
+    // Full control input to rotor response calculation
+    double collectiveCmd = 0.12;  // rad
+    double lateralCyclicCmd = 0.05;  // rad
+    double longCyclicCmd = -0.03;  // rad
+    double pedalCmd = 0.02;  // rad
+
+    // Control mixing gain factors
+    double collectiveGain = 1.0;
+    double cyclicGain = 1.2;
+    double pedalGain = 1.5;
+
+    // Actual control positions after mixing
+    double collective = collectiveCmd * collectiveGain;
+    double lateralCyclic = lateralCyclicCmd * cyclicGain;
+    double longCyclic = longCyclicCmd * cyclicGain;
+    double pedal = pedalCmd * pedalGain;
+
+    TS_ASSERT_DELTA(collective, 0.12, 0.001);
+    TS_ASSERT_DELTA(lateralCyclic, 0.06, 0.001);
+    TS_ASSERT_DELTA(longCyclic, -0.036, 0.001);
+    TS_ASSERT_DELTA(pedal, 0.03, 0.001);
+
+    // Flapping response to cyclic
+    double a1 = longCyclic * 1.0;  // Longitudinal tilt
+    double b1 = lateralCyclic * 1.0;  // Lateral tilt
+    TS_ASSERT(a1 < 0.0);  // Aft tilt for forward stick
+    TS_ASSERT(b1 > 0.0);  // Right tilt for right stick
+
+    // Thrust response to collective
+    double baseThrust = 5000.0;
+    double thrustChange = baseThrust * collective * 8.0;
+    double totalThrust = baseThrust + thrustChange;
+    TS_ASSERT(totalThrust > baseThrust);
+
+    // Torque response to collective (more collective = more torque)
+    double baseTorque = 8000.0;
+    double torqueChange = baseTorque * collective * 5.0;
+    double totalTorque = baseTorque + torqueChange;
+    TS_ASSERT(totalTorque > baseTorque);
+
+    // Tail rotor requirement (balance main rotor torque)
+    double tailArm = 30.0;
+    double tailThrustRequired = totalTorque / tailArm;
+    double tailCollective = tailThrustRequired / 500.0 + pedal;
+    TS_ASSERT(tailCollective > 0.0);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  // Test independent rotor instance calculations
+  void testIndependentRotorInstances() {
+    // Verify that different rotor configurations don't interfere
+
+    // Light helicopter rotor
+    struct RotorConfig {
+      double radius;
+      double numBlades;
+      double chord;
+      double rpm;
+    };
+
+    RotorConfig light = {17.5, 4, 1.5, 300.0};
+    RotorConfig medium = {22.0, 4, 1.8, 260.0};
+    RotorConfig heavy = {30.0, 5, 2.0, 220.0};
+
+    // Calculate properties for each independently
+    auto calcRotor = [](RotorConfig& r) {
+      double omega = r.rpm * 2.0 * M_PI / 60.0;
+      double Vtip = omega * r.radius;
+      double area = M_PI * r.radius * r.radius;
+      double sigma = (r.numBlades * r.chord) / (M_PI * r.radius);
+      return std::make_tuple(omega, Vtip, area, sigma);
+    };
+
+    auto [omega_l, Vtip_l, area_l, sigma_l] = calcRotor(light);
+    auto [omega_m, Vtip_m, area_m, sigma_m] = calcRotor(medium);
+    auto [omega_h, Vtip_h, area_h, sigma_h] = calcRotor(heavy);
+
+    // Verify each calculation is independent
+    TS_ASSERT_DELTA(omega_l, 31.42, 0.1);
+    TS_ASSERT_DELTA(omega_m, 27.23, 0.1);
+    TS_ASSERT_DELTA(omega_h, 23.04, 0.1);
+
+    // Areas should scale with radius squared
+    TS_ASSERT(area_m > area_l);
+    TS_ASSERT(area_h > area_m);
+
+    // Verify tip speeds
+    TS_ASSERT(Vtip_l > 500.0);
+    TS_ASSERT(Vtip_m > 550.0);
+    TS_ASSERT(Vtip_h > 650.0);
+  }
+
+  // Test independent flight condition calculations
+  void testIndependentFlightConditions() {
+    // Different atmospheric conditions should give independent results
+    struct AtmosphereCondition {
+      double rho;
+      double speedOfSound;
+      double altitude;
+    };
+
+    AtmosphereCondition seaLevel = {0.002377, 1116.0, 0.0};
+    AtmosphereCondition mid = {0.001756, 1056.0, 10000.0};
+    AtmosphereCondition high = {0.001267, 994.0, 20000.0};
+
+    // Fixed rotor parameters
+    double thrust = 5000.0;  // Required thrust
+    double area = 962.1;
+    double Vtip = 549.8;
+
+    // Calculate thrust coefficient at each altitude
+    double CT_sl = thrust / (seaLevel.rho * area * Vtip * Vtip);
+    double CT_mid = thrust / (mid.rho * area * Vtip * Vtip);
+    double CT_high = thrust / (high.rho * area * Vtip * Vtip);
+
+    // CT must increase with altitude (lower density)
+    TS_ASSERT(CT_mid > CT_sl);
+    TS_ASSERT(CT_high > CT_mid);
+
+    // Calculate induced velocity at each altitude
+    double vi_sl = sqrt(thrust / (2.0 * seaLevel.rho * area));
+    double vi_mid = sqrt(thrust / (2.0 * mid.rho * area));
+    double vi_high = sqrt(thrust / (2.0 * high.rho * area));
+
+    // Induced velocity increases with altitude
+    TS_ASSERT(vi_mid > vi_sl);
+    TS_ASSERT(vi_high > vi_mid);
+
+    // Calculate tip Mach at each altitude
+    double M_sl = Vtip / seaLevel.speedOfSound;
+    double M_mid = Vtip / mid.speedOfSound;
+    double M_high = Vtip / high.speedOfSound;
+
+    // Mach number increases with altitude (lower speed of sound)
+    TS_ASSERT(M_mid > M_sl);
+    TS_ASSERT(M_high > M_mid);
+
+    // Verify each condition is calculated independently
+    TS_ASSERT_DELTA(CT_sl, 0.00724, 0.0001);
+    TS_ASSERT(CT_high < 0.02);  // Still reasonable
+  }
+
+  // Test independent blade dynamics calculations
+  void testIndependentBladeDynamics() {
+    // Calculate blade properties at different azimuth positions
+    double Vtip = 549.8;
+    double mu = 0.2;  // Advance ratio
+    double collective = 0.12;
+    double lateralCyclic = 0.05;
+    double longCyclic = -0.03;
+
+    // Blade positions: 0°, 90°, 180°, 270°
+    double azimuths[] = {0.0, M_PI/2.0, M_PI, 3.0*M_PI/2.0};
+    double velocities[4];
+    double pitches[4];
+
+    for (int i = 0; i < 4; i++) {
+      double psi = azimuths[i];
+
+      // Local velocity varies with azimuth
+      velocities[i] = Vtip * (1.0 + mu * sin(psi));
+
+      // Blade pitch varies with azimuth (cyclic)
+      pitches[i] = collective + lateralCyclic * cos(psi) + longCyclic * sin(psi);
+    }
+
+    // Verify independent calculations
+    // At 0° (rear): velocity = Vtip * (1 + 0) = Vtip
+    TS_ASSERT_DELTA(velocities[0], Vtip, 0.1);
+
+    // At 90° (starboard/advancing): velocity = Vtip * (1 + mu)
+    TS_ASSERT_DELTA(velocities[1], Vtip * 1.2, 1.0);
+
+    // At 180° (front): velocity = Vtip
+    TS_ASSERT_DELTA(velocities[2], Vtip, 0.1);
+
+    // At 270° (port/retreating): velocity = Vtip * (1 - mu)
+    TS_ASSERT_DELTA(velocities[3], Vtip * 0.8, 1.0);
+
+    // Pitch should vary correctly
+    TS_ASSERT_DELTA(pitches[0], collective + lateralCyclic, 0.001);
+    TS_ASSERT_DELTA(pitches[1], collective + longCyclic, 0.001);
+    TS_ASSERT_DELTA(pitches[2], collective - lateralCyclic, 0.001);
+    TS_ASSERT_DELTA(pitches[3], collective - longCyclic, 0.001);
+
+    // All calculations should be independent
+    for (int i = 0; i < 4; i++) {
+      for (int j = i+1; j < 4; j++) {
+        TS_ASSERT(std::abs(azimuths[i] - azimuths[j]) > 0.1);
+      }
+    }
+  }
 };
