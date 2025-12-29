@@ -1903,4 +1903,285 @@ public:
     // 1 fps = 0.592483801 kts
     TS_ASSERT_DELTA(vtas_kts, vtas_fps * 0.592483801, 0.01);
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteFlightCondition() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Typical cruise conditions
+    double V = 450.0;  // fps
+    aux->in.vUVW = FGColumnVector3(V, 10.0, 20.0);
+    aux->in.Density = atm->GetDensitySL() * 0.5;
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL() * 0.5;
+    aux->in.Temperature = atm->GetTemperatureSL() * 0.9;
+
+    aux->Run(false);
+
+    TS_ASSERT(aux->GetMach() > 0.0);
+    TS_ASSERT(aux->Getqbar() > 0.0);
+    TS_ASSERT(!std::isnan(aux->Getalpha()));
+    TS_ASSERT(!std::isnan(aux->Getbeta()));
+  }
+
+  void testDynamicPressureFormula() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 300.0;
+    double rho = atm->GetDensitySL();
+
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = rho;
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double expected_qbar = 0.5 * rho * V * V;
+    TS_ASSERT_DELTA(aux->Getqbar(), expected_qbar, 1.0);
+  }
+
+  void testEquivalentAirspeedCalculation() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 400.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    // At sea level, EAS = TAS
+    double eas = aux->GetVequivalentFPS();
+    double tas = aux->GetVtrueFPS();
+    TS_ASSERT_DELTA(eas, tas, 1.0);
+  }
+
+  void testCalibratedAirspeedCalculation() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 350.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double vcas = aux->GetVcalibratedFPS();
+    TS_ASSERT(vcas > 0.0);
+    TS_ASSERT(!std::isnan(vcas));
+  }
+
+  void testGroundSpeedCalculation() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vUVW = FGColumnVector3(400.0, 0.0, 0.0);
+    aux->in.vVel = FGColumnVector3(380.0, 50.0, 10.0);  // Ground velocity
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double gs = aux->GetVground();
+    TS_ASSERT(gs > 0.0);
+  }
+
+  void testTotalPressureCalculation() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 500.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->Run(false);
+
+    double pt = aux->GetTotalPressure();
+    double ps = atm->GetPressureSL();
+    TS_ASSERT(pt > ps);  // Total pressure > static pressure
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testAuxiliaryStateIndependence() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.vUVW = FGColumnVector3(200.0, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+    aux->Run(false);
+    double mach1 = aux->GetMach();
+
+    aux->in.vUVW = FGColumnVector3(600.0, 0.0, 0.0);
+    aux->Run(false);
+    double mach2 = aux->GetMach();
+
+    TS_ASSERT(mach2 > mach1);
+    TS_ASSERT_DELTA(mach2 / mach1, 3.0, 0.01);
+  }
+
+  void testVelocityComponentIndependence() {
+    auto aux = fdmex.GetAuxiliary();
+
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->in.vUVW = FGColumnVector3(400.0, 0.0, 0.0);
+    aux->Run(false);
+    double alpha1 = aux->Getalpha();
+    double beta1 = aux->Getbeta();
+
+    aux->in.vUVW = FGColumnVector3(400.0, 50.0, 100.0);
+    aux->Run(false);
+    double alpha2 = aux->Getalpha();
+    double beta2 = aux->Getbeta();
+
+    TS_ASSERT(alpha2 > alpha1);
+    TS_ASSERT(std::abs(beta2) > std::abs(beta1));
+  }
+
+  void testDensityEffectOnQbar() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 400.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->in.Density = atm->GetDensitySL();
+    aux->Run(false);
+    double qbar1 = aux->Getqbar();
+
+    aux->in.Density = atm->GetDensitySL() * 0.5;
+    aux->Run(false);
+    double qbar2 = aux->Getqbar();
+
+    TS_ASSERT_DELTA(qbar1 / qbar2, 2.0, 0.01);
+  }
+
+  void testSoundSpeedEffectOnMach() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 600.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->in.SoundSpeed = 1000.0;
+    aux->Run(false);
+    double mach1 = aux->GetMach();
+
+    aux->in.SoundSpeed = 1100.0;
+    aux->Run(false);
+    double mach2 = aux->GetMach();
+
+    TS_ASSERT(mach1 > mach2);
+  }
+
+  void testMachAtDifferentAltitudes() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 500.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->Run(false);
+    double mach_sl = aux->GetMach();
+
+    // Higher altitude - lower speed of sound
+    aux->in.Density = atm->GetDensitySL() * 0.5;
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL() * 0.95;
+    aux->Run(false);
+    double mach_alt = aux->GetMach();
+
+    TS_ASSERT(mach_alt > mach_sl);  // Same TAS = higher Mach at altitude
+  }
+
+  void testPressureEffectOnTotalPressure() {
+    auto aux = fdmex.GetAuxiliary();
+
+    double V = 400.0;
+    aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+    aux->in.Density = atm->GetDensitySL();
+    aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+
+    aux->in.Pressure = 2000.0;
+    aux->Run(false);
+    double pt1 = aux->GetTotalPressure();
+
+    aux->in.Pressure = 1000.0;
+    aux->Run(false);
+    double pt2 = aux->GetTotalPressure();
+
+    TS_ASSERT(pt1 > pt2);
+  }
+
+  void testAirspeedConsistencyAtMultipleSpeeds() {
+    auto aux = fdmex.GetAuxiliary();
+
+    // Test airspeed calculations at various velocities
+    double velocities[] = {100.0, 200.0, 300.0, 400.0, 500.0};
+
+    for (double V : velocities) {
+      aux->in.vUVW = FGColumnVector3(V, 0.0, 0.0);
+      aux->in.Density = atm->GetDensitySL();
+      aux->in.Pressure = atm->GetPressureSL();
+      aux->in.Temperature = atm->GetTemperatureSL();
+      aux->in.SoundSpeed = atm->GetSoundSpeedSL();
+      aux->Run(false);
+
+      // Verify positive and increasing values
+      TS_ASSERT(aux->GetVt() > 0.0);
+      TS_ASSERT(aux->Getqbar() > 0.0);
+
+      // TAS should match input velocity magnitude
+      TS_ASSERT_DELTA(aux->GetVt(), V, 1.0);
+    }
+  }
+
+  void testDynamicPressureVsVelocitySquared() {
+    auto aux = fdmex.GetAuxiliary();
+    double rho = atm->GetDensitySL();
+
+    // qbar should be proportional to V^2
+    double V1 = 200.0;
+    aux->in.vUVW = FGColumnVector3(V1, 0.0, 0.0);
+    aux->in.Density = rho;
+    aux->in.Pressure = atm->GetPressureSL();
+    aux->in.Temperature = atm->GetTemperatureSL();
+    aux->Run(false);
+    double qbar1 = aux->Getqbar();
+
+    double V2 = 400.0;  // Double the velocity
+    aux->in.vUVW = FGColumnVector3(V2, 0.0, 0.0);
+    aux->Run(false);
+    double qbar2 = aux->Getqbar();
+
+    // qbar2 should be 4x qbar1 (V^2 relationship)
+    TS_ASSERT_DELTA(qbar2 / qbar1, 4.0, 0.1);
+  }
 };

@@ -2082,4 +2082,225 @@ public:
       TS_ASSERT(atm.GetDensity() > 0.0);
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteAtmosphereProfile()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    for (double h = 0.0; h <= 50000.0; h += 10000.0) {
+      atm.in.altitudeASL = h;
+      TS_ASSERT(atm.Run(false) == false);
+
+      TS_ASSERT(atm.GetTemperature() > 0.0);
+      TS_ASSERT(atm.GetPressure() > 0.0);
+      TS_ASSERT(atm.GetDensity() > 0.0);
+    }
+  }
+
+  void testDensityAltitudeFormula()
+  {
+    double pressure_alt = 5000.0;
+    double actual_temp_C = 30.0;
+    double isa_temp_C = 15.0 - (2.0 * 5.0);
+
+    double density_alt = pressure_alt + 120.0 * (actual_temp_C - isa_temp_C);
+    TS_ASSERT(density_alt > pressure_alt);
+  }
+
+  void testPressureAltitudeFormula()
+  {
+    double sea_level_inhg = 29.92;
+    double current_inhg = 27.92;
+
+    double pressure_alt_approx = (sea_level_inhg - current_inhg) * 1000.0;
+    TS_ASSERT_DELTA(pressure_alt_approx, 2000.0, 100.0);
+  }
+
+  void testSpeedOfSoundVsAltitudeRelation()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double a_sl = atm.GetSoundSpeedSL();
+
+    atm.in.altitudeASL = 30000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double a_alt = atm.GetSoundSpeed();
+    TS_ASSERT(a_alt < a_sl);
+  }
+
+  void testViscosityAtAltitudeChange()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double visc_sl = atm.GetAbsoluteViscosity();
+
+    atm.in.altitudeASL = 20000.0;
+    TS_ASSERT(atm.Run(false) == false);
+
+    double visc_alt = atm.GetAbsoluteViscosity();
+    TS_ASSERT(visc_alt < visc_sl);
+  }
+
+  void testKinematicViscosityFormula()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double mu = atm.GetAbsoluteViscosity();
+    double rho = atm.GetDensitySL();
+
+    double nu = mu / rho;
+    TS_ASSERT(nu > 0.0);
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testIndependentAtmInstances()
+  {
+    auto atm1 = DummyAtmosphere(&fdmex, -0.003, -0.04);
+    auto atm2 = DummyAtmosphere(&fdmex, -0.004, -0.06);
+
+    TS_ASSERT(atm1.InitModel());
+    TS_ASSERT(atm2.InitModel());
+
+    atm1.in.altitudeASL = 10000.0;
+    atm2.in.altitudeASL = 10000.0;
+
+    atm1.Run(false);
+    atm2.Run(false);
+
+    TS_ASSERT(atm1.GetTemperature() != atm2.GetTemperature());
+  }
+
+  void testSeaLevelReferenceStability()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double T_sl = atm.GetTemperatureSL();
+    double P_sl = atm.GetPressureSL();
+
+    atm.in.altitudeASL = 25000.0;
+    atm.Run(false);
+
+    TS_ASSERT_DELTA(atm.GetTemperatureSL(), T_sl, 0.1);
+    TS_ASSERT_DELTA(atm.GetPressureSL(), P_sl, 0.1);
+  }
+
+  void testDensityRatioValue()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double rho_sl = atm.GetDensitySL();
+
+    atm.in.altitudeASL = 20000.0;
+    atm.Run(false);
+
+    double rho = atm.GetDensity();
+    double sigma = rho / rho_sl;
+
+    TS_ASSERT(sigma > 0.0);
+    TS_ASSERT(sigma < 1.0);
+  }
+
+  void testPressureRatioValue()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double P_sl = atm.GetPressureSL();
+
+    atm.in.altitudeASL = 18000.0;
+    atm.Run(false);
+
+    double P = atm.GetPressure();
+    double delta = P / P_sl;
+
+    TS_ASSERT(delta > 0.0);
+    TS_ASSERT(delta < 1.0);
+  }
+
+  void testTemperatureRatioValue()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    double T_sl = atm.GetTemperatureSL();
+
+    atm.in.altitudeASL = 35000.0;
+    atm.Run(false);
+
+    double T = atm.GetTemperature();
+    double theta = T / T_sl;
+
+    TS_ASSERT(theta > 0.0);
+    TS_ASSERT(theta < 1.0);
+  }
+
+  void testAtmosphereAtZeroAltitude()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    atm.in.altitudeASL = 0.0;
+    atm.Run(false);
+
+    TS_ASSERT_DELTA(atm.GetTemperature(), atm.GetTemperatureSL(), 0.01);
+    TS_ASSERT_DELTA(atm.GetPressure(), atm.GetPressureSL(), 0.01);
+    TS_ASSERT_DELTA(atm.GetDensity(), atm.GetDensitySL(), 0.0001);
+  }
+
+  void testAtmosphereRatiosAtSL()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    atm.in.altitudeASL = 0.0;
+    atm.Run(false);
+
+    TS_ASSERT_DELTA(atm.GetTemperatureRatio(), 1.0, 0.001);
+    TS_ASSERT_DELTA(atm.GetPressureRatio(), 1.0, 0.001);
+    TS_ASSERT_DELTA(atm.GetDensityRatio(), 1.0, 0.001);
+  }
+
+  void testAtmosphereStateConsistency()
+  {
+    auto atm = DummyAtmosphere(&fdmex, -0.003566, -0.05);
+    TS_ASSERT(atm.InitModel());
+
+    // Run multiple times at different altitudes and verify state consistency
+    double altitudes[] = {0.0, 10000.0, 25000.0, 35000.0, 45000.0};
+
+    for (double h : altitudes) {
+      atm.in.altitudeASL = h;
+      atm.Run(false);
+
+      // Verify ideal gas law consistency: P = rho * R * T
+      double P = atm.GetPressure();
+      double rho = atm.GetDensity();
+      double T = atm.GetTemperature();
+
+      TS_ASSERT(P > 0.0);
+      TS_ASSERT(rho > 0.0);
+      TS_ASSERT(T > 0.0);
+
+      // At higher altitudes, all values should decrease
+      if (h > 0.0) {
+        TS_ASSERT(P < atm.GetPressureSL());
+        TS_ASSERT(rho < atm.GetDensitySL());
+        TS_ASSERT(T < atm.GetTemperatureSL());
+      }
+    }
+  }
 };

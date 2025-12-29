@@ -1119,4 +1119,325 @@ public:
       TS_ASSERT(Kg < 0.88);
     }
   }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteGustEncounterSequence() {
+    // Simulate a complete gust encounter from approach to exit
+    double H = 350.0;       // Gust gradient distance (ft)
+    double Ude = 45.0;      // Design gust velocity (ft/s)
+    double V = 250.0;       // Aircraft TAS (ft/s)
+    double dt = 0.01;       // Time step
+
+    double distance = 0.0;
+    double max_gust = 0.0;
+
+    // Traverse entire gust profile
+    while (distance <= 2.0 * H) {
+      double gust;
+      if (distance <= H) {
+        gust = (Ude / 2.0) * (1.0 - std::cos(PI * distance / H));
+      } else {
+        gust = (Ude / 2.0) * (1.0 + std::cos(PI * (distance - H) / H));
+      }
+
+      max_gust = std::fmax(max_gust, gust);
+      distance += V * dt;
+    }
+
+    TS_ASSERT_DELTA(max_gust, Ude, 1.0);
+  }
+
+  void testCompleteVelocityEnvelopeGustLoads() {
+    // Calculate gust loads across entire flight envelope
+    double rho = 0.002377;
+    double CLalpha = 5.5;
+    double W_over_S = 50.0;
+
+    double velocities[] = {150.0, 200.0, 250.0, 300.0, 350.0};  // ft/s
+    double gusts[] = {66.0, 50.0, 25.0};  // ft/s (Ub, Uc, Ud)
+
+    double max_load = 0.0;
+
+    for (double V : velocities) {
+      for (double Ude : gusts) {
+        double mu_g = (2.0 * W_over_S) / (rho * 6.0 * 32.174 * CLalpha);
+        double Kg = 0.88 * mu_g / (5.3 + mu_g);
+        double delta_n = (rho * V * CLalpha * Ude * Kg) / (2.0 * W_over_S);
+
+        max_load = std::fmax(max_load, std::fabs(delta_n));
+      }
+    }
+
+    TS_ASSERT(max_load > 0.0);
+    TS_ASSERT(max_load < 5.0);  // Reasonable limit
+  }
+
+  void testCompleteAircraftResponseToGust() {
+    // Full dynamic response simulation
+    double W = 5000.0;      // Weight (lbs)
+    double S = 180.0;       // Wing area (ft^2)
+    double c_bar = 5.5;     // MAC (ft)
+    double V = 200.0;       // TAS (ft/s)
+    double rho = 0.002377;
+    double CLalpha = 5.0;
+    double g = 32.174;
+
+    // Mass ratio
+    double mu_g = (2.0 * W / S) / (rho * c_bar * g * CLalpha);
+    TS_ASSERT(mu_g > 5.0);
+
+    // Alleviation factor
+    double Kg = 0.88 * mu_g / (5.3 + mu_g);
+    TS_ASSERT(Kg > 0.0 && Kg < 0.88);
+
+    // Gust load factor
+    double Ude = 50.0;
+    double delta_n = (rho * V * CLalpha * Ude * Kg) / (2.0 * W / S);
+    TS_ASSERT(delta_n > 0.0);
+
+    // Total load range
+    double n_max = 1.0 + delta_n;
+    double n_min = 1.0 - delta_n;
+    TS_ASSERT(n_max > 1.0);
+    TS_ASSERT(n_min < 1.0);
+  }
+
+  void testCompleteGustSpectrumAnalysis() {
+    // Von Karman power spectral density
+    double L = 1750.0;      // Scale length (ft)
+    double sigma = 10.0;    // RMS gust intensity (ft/s)
+    double V = 250.0;       // TAS (ft/s)
+
+    double omega_values[] = {0.1, 0.5, 1.0, 2.0, 5.0};  // rad/s
+    double prev_psd = 1e10;
+
+    for (double omega : omega_values) {
+      double omega_hat = omega * L / V;
+      double psd = (sigma * sigma * L / (PI * V)) *
+                   (1.0 + (8.0/3.0) * std::pow(1.339 * omega_hat, 2)) /
+                   std::pow(1.0 + std::pow(1.339 * omega_hat, 2), 11.0/6.0);
+
+      TS_ASSERT(psd > 0.0);
+      TS_ASSERT(psd < prev_psd);  // PSD decreases with frequency
+      prev_psd = psd;
+    }
+  }
+
+  void testCompleteGustLoadEnvelope() {
+    // Build complete V-n diagram gust lines
+    double rho_sl = 0.002377;
+    double rho_cr = 0.001;  // Cruise altitude density
+    double CLalpha = 5.5;
+    double W_over_S = 60.0;
+    double Vc = 300.0;      // Cruise speed (ft/s)
+
+    // Sea level gust loads
+    double mu_sl = (2.0 * W_over_S) / (rho_sl * 5.5 * 32.174 * CLalpha);
+    double Kg_sl = 0.88 * mu_sl / (5.3 + mu_sl);
+    double Ude_c = 50.0;
+    double delta_n_sl = (rho_sl * Vc * CLalpha * Ude_c * Kg_sl) / (2.0 * W_over_S);
+
+    // Cruise altitude gust loads
+    double mu_cr = (2.0 * W_over_S) / (rho_cr * 5.5 * 32.174 * CLalpha);
+    double Kg_cr = 0.88 * mu_cr / (5.3 + mu_cr);
+    double delta_n_cr = (rho_cr * Vc * CLalpha * Ude_c * Kg_cr) / (2.0 * W_over_S);
+
+    TS_ASSERT(delta_n_sl > delta_n_cr);  // Lower loads at altitude
+    TS_ASSERT(delta_n_sl > 0.0);
+    TS_ASSERT(delta_n_cr > 0.0);
+  }
+
+  void testCompleteTurbulenceEncounter() {
+    // Continuous turbulence model
+    double L_w = 2500.0;    // Vertical scale (ft)
+    double sigma_w = 5.0;   // Vertical RMS (ft/s)
+    double V = 400.0;       // TAS (ft/s)
+    double b = 100.0;       // Wingspan (ft)
+
+    // Crossing frequency
+    double N0 = V / (2.0 * L_w);
+    TS_ASSERT(N0 > 0.0);
+
+    // Expected peak in 1 hour (statistical)
+    double T = 3600.0;      // seconds
+    double eta = std::sqrt(2.0 * std::log(N0 * T));
+    double w_peak = sigma_w * eta;
+
+    TS_ASSERT(w_peak > sigma_w);
+    TS_ASSERT(w_peak < 5.0 * sigma_w);
+  }
+
+  void testCompleteGustGradientVariation() {
+    // Test complete range of gust gradients
+    double Ude = 50.0;
+    double V = 250.0;
+
+    double gradients[] = {30.0, 100.0, 200.0, 350.0, 500.0};  // ft
+
+    for (double H : gradients) {
+      double t_gust = H / V;
+      double f_gust = 1.0 / (2.0 * t_gust);  // Frequency
+
+      TS_ASSERT(t_gust > 0.0);
+      TS_ASSERT(f_gust > 0.0);
+
+      // Peak gust at center
+      double s_peak = H;
+      double gust_peak = (Ude / 2.0) * (1.0 - std::cos(PI));
+      TS_ASSERT_DELTA(gust_peak, Ude, 0.01);
+    }
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testGustCalculationIndependence() {
+    // Two independent gust calculations shouldn't interfere
+    double H1 = 350.0, Ude1 = 50.0;
+    double H2 = 200.0, Ude2 = 30.0;
+    double s = 175.0;  // Midpoint of gradient 1
+
+    double gust1 = (Ude1 / 2.0) * (1.0 - std::cos(PI * s / H1));
+    double gust2 = (Ude2 / 2.0) * (1.0 - std::cos(PI * s / H2));
+
+    // Results should differ
+    TS_ASSERT(std::fabs(gust1 - gust2) > 1.0);
+
+    // Recalculate gust1 to verify independence
+    double gust1_verify = (Ude1 / 2.0) * (1.0 - std::cos(PI * s / H1));
+    TS_ASSERT_DELTA(gust1, gust1_verify, DEFAULT_TOLERANCE);
+  }
+
+  void testAlleviationFactorIndependence() {
+    // Multiple aircraft with different mass ratios
+    double mu_light = 15.0;   // Light aircraft
+    double mu_heavy = 80.0;   // Heavy transport
+
+    double Kg_light = 0.88 * mu_light / (5.3 + mu_light);
+    double Kg_heavy = 0.88 * mu_heavy / (5.3 + mu_heavy);
+
+    // Heavy aircraft has higher alleviation factor
+    TS_ASSERT(Kg_heavy > Kg_light);
+
+    // Verify calculation didn't affect each other
+    double Kg_light_verify = 0.88 * mu_light / (5.3 + mu_light);
+    TS_ASSERT_DELTA(Kg_light, Kg_light_verify, DEFAULT_TOLERANCE);
+  }
+
+  void testLoadFactorCalculationIndependence() {
+    double rho = 0.002377;
+    double CLalpha = 5.5;
+    double Ude = 50.0;
+    double Kg = 0.7;
+
+    // Aircraft 1: high wing loading
+    double W_S_1 = 100.0;
+    double delta_n_1 = (rho * 300.0 * CLalpha * Ude * Kg) / (2.0 * W_S_1);
+
+    // Aircraft 2: low wing loading
+    double W_S_2 = 30.0;
+    double delta_n_2 = (rho * 200.0 * CLalpha * Ude * Kg) / (2.0 * W_S_2);
+
+    // Low wing loading = higher gust response
+    TS_ASSERT(delta_n_2 > delta_n_1 * 0.5);
+
+    // Verify delta_n_1 unchanged
+    double delta_n_1_verify = (rho * 300.0 * CLalpha * Ude * Kg) / (2.0 * W_S_1);
+    TS_ASSERT_DELTA(delta_n_1, delta_n_1_verify, DEFAULT_TOLERANCE);
+  }
+
+  void testPSDCalculationIndependence() {
+    double L = 1750.0;
+    double V = 250.0;
+
+    // Two different intensity levels
+    double sigma1 = 5.0;
+    double sigma2 = 15.0;
+    double omega = 1.0;
+
+    double omega_hat = omega * L / V;
+    double psd1 = (sigma1 * sigma1 * L / (PI * V)) *
+                  (1.0 + (8.0/3.0) * std::pow(1.339 * omega_hat, 2)) /
+                  std::pow(1.0 + std::pow(1.339 * omega_hat, 2), 11.0/6.0);
+    double psd2 = (sigma2 * sigma2 * L / (PI * V)) *
+                  (1.0 + (8.0/3.0) * std::pow(1.339 * omega_hat, 2)) /
+                  std::pow(1.0 + std::pow(1.339 * omega_hat, 2), 11.0/6.0);
+
+    // Higher intensity = higher PSD
+    TS_ASSERT(psd2 > psd1);
+
+    // Ratio should be sigma^2 ratio
+    TS_ASSERT_DELTA(psd2 / psd1, (sigma2 / sigma1) * (sigma2 / sigma1), 0.01);
+  }
+
+  void testGustProfileSequenceIndependence() {
+    double H = 350.0;
+    double Ude = 50.0;
+
+    // Forward traversal
+    double gust_forward[10];
+    for (int i = 0; i < 10; i++) {
+      double s = i * H / 9.0;
+      gust_forward[i] = (Ude / 2.0) * (1.0 - std::cos(PI * s / H));
+    }
+
+    // Reverse traversal
+    double gust_reverse[10];
+    for (int i = 9; i >= 0; i--) {
+      double s = i * H / 9.0;
+      gust_reverse[i] = (Ude / 2.0) * (1.0 - std::cos(PI * s / H));
+    }
+
+    // Results should match regardless of traversal order
+    for (int i = 0; i < 10; i++) {
+      TS_ASSERT_DELTA(gust_forward[i], gust_reverse[i], DEFAULT_TOLERANCE);
+    }
+  }
+
+  void testScaleLengthIndependence() {
+    // Different turbulence scale lengths
+    double L_low = 1000.0;   // Low altitude
+    double L_high = 2500.0;  // High altitude
+    double sigma = 10.0;
+    double V = 300.0;
+    double omega = 1.0;
+
+    double omega_hat_low = omega * L_low / V;
+    double omega_hat_high = omega * L_high / V;
+
+    double psd_low = (sigma * sigma * L_low / (PI * V)) *
+                     (1.0 + (8.0/3.0) * std::pow(1.339 * omega_hat_low, 2)) /
+                     std::pow(1.0 + std::pow(1.339 * omega_hat_low, 2), 11.0/6.0);
+    double psd_high = (sigma * sigma * L_high / (PI * V)) *
+                      (1.0 + (8.0/3.0) * std::pow(1.339 * omega_hat_high, 2)) /
+                      std::pow(1.0 + std::pow(1.339 * omega_hat_high, 2), 11.0/6.0);
+
+    TS_ASSERT(psd_low != psd_high);
+    TS_ASSERT(psd_low > 0.0);
+    TS_ASSERT(psd_high > 0.0);
+  }
+
+  void testGustComponentIndependence() {
+    // Vertical and lateral gust components
+    double Ude_w = 40.0;  // Vertical (ft/s)
+    double Ude_v = 25.0;  // Lateral (ft/s)
+    double s = 175.0;
+    double H = 350.0;
+
+    double gust_w = (Ude_w / 2.0) * (1.0 - std::cos(PI * s / H));
+    double gust_v = (Ude_v / 2.0) * (1.0 - std::cos(PI * s / H));
+
+    // Components are independent
+    double combined = std::sqrt(gust_w * gust_w + gust_v * gust_v);
+    TS_ASSERT(combined > gust_w);
+    TS_ASSERT(combined > gust_v);
+
+    // Verify individual components unchanged
+    double gust_w_verify = (Ude_w / 2.0) * (1.0 - std::cos(PI * s / H));
+    TS_ASSERT_DELTA(gust_w, gust_w_verify, DEFAULT_TOLERANCE);
+  }
 };

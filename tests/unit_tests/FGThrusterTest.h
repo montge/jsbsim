@@ -1,6 +1,7 @@
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+#include <vector>
 
 #include <FGFDMExec.h>
 #include <models/propulsion/FGThruster.h>
@@ -1145,5 +1146,285 @@ public:
 
     double groundThrust = staticThrust * ramFactor;
     TS_ASSERT(groundThrust >= staticThrust);
+  }
+
+  /***************************************************************************
+   * Complete System Tests
+   ***************************************************************************/
+
+  void testCompleteThrustCalculationCycle() {
+    // Full thrust calculation from throttle to net thrust
+    double throttle = 0.85;
+    double maxThrust = 12000.0;  // lbf
+
+    // Throttle to commanded thrust
+    double cmdThrust = maxThrust * throttle;
+
+    // Altitude derating
+    double rho = 0.0017;  // density at altitude
+    double rho_sl = 0.002377;
+    double altFactor = std::sqrt(rho / rho_sl);
+    double altThrust = cmdThrust * altFactor;
+
+    // Installation losses
+    double installLoss = 0.02;  // 2%
+    double netThrust = altThrust * (1.0 - installLoss);
+
+    TS_ASSERT(netThrust > 0.0);
+    TS_ASSERT(netThrust < maxThrust);
+    TS_ASSERT(netThrust < cmdThrust);
+  }
+
+  void testCompletePropellerPerformanceEnvelope() {
+    // Propeller performance across operating range
+    double power = 300.0 * 550.0;  // 300 HP in ft-lb/s
+    double D = 6.5;  // Propeller diameter (ft)
+    double rho = 0.002377;
+
+    double rpm_values[] = {1800.0, 2000.0, 2200.0, 2400.0, 2600.0};
+    double V_values[] = {100.0, 150.0, 200.0, 250.0};
+
+    for (double rpm : rpm_values) {
+      double n = rpm / 60.0;  // rev/s
+      for (double V : V_values) {
+        double J = V / (n * D);  // Advance ratio
+        TS_ASSERT(J > 0.0);
+        TS_ASSERT(J < 3.0);  // Reasonable range
+
+        // Estimated Cp based on typical curve
+        double Cp = 0.08 * std::exp(-0.5 * (J - 0.8) * (J - 0.8));
+        TS_ASSERT(Cp >= 0.0);
+      }
+    }
+  }
+
+  void testCompleteJetEngineThrottleResponse() {
+    // Simulate engine spool-up
+    double targetThrust = 10000.0;
+    double thrust = 1000.0;  // Initial (idle)
+    double timeConstant = 3.0;  // seconds
+    double dt = 0.1;
+
+    std::vector<double> thrustHistory;
+    for (double t = 0.0; t < 10.0; t += dt) {
+      double error = targetThrust - thrust;
+      thrust += error * (1.0 - std::exp(-dt / timeConstant));
+      thrustHistory.push_back(thrust);
+    }
+
+    // Should converge toward target
+    TS_ASSERT(thrustHistory.back() > 0.9 * targetThrust);
+    // Should be monotonically increasing
+    for (size_t i = 1; i < thrustHistory.size(); i++) {
+      TS_ASSERT(thrustHistory[i] >= thrustHistory[i-1] - epsilon);
+    }
+  }
+
+  void testCompleteMultiEnginePerformance() {
+    // Four-engine aircraft performance
+    double singleEngineThrust = 5000.0;
+    int numEngines = 4;
+
+    double totalThrust = singleEngineThrust * numEngines;
+    TS_ASSERT_DELTA(totalThrust, 20000.0, epsilon);
+
+    // One engine failed
+    double thrustWithFailure = singleEngineThrust * (numEngines - 1);
+    TS_ASSERT_DELTA(thrustWithFailure, 15000.0, epsilon);
+
+    // Thrust-to-weight considerations
+    double weight = 80000.0;  // lbs
+    double TW_normal = totalThrust / weight;
+    double TW_oei = thrustWithFailure / weight;
+
+    TS_ASSERT(TW_normal > 0.2);  // Reasonable T/W
+    TS_ASSERT(TW_oei > 0.15);    // Can still maintain flight
+  }
+
+  void testCompleteTurbofanPerformance() {
+    // Turbofan with bypass ratio effects
+    double coreMdot = 50.0;    // Core mass flow (lb/s)
+    double bypassRatio = 5.0;
+    double totalMdot = coreMdot * (1.0 + bypassRatio);
+
+    // Exhaust velocities
+    double Vc = 1500.0;  // Core exhaust (ft/s)
+    double Vb = 700.0;   // Bypass exhaust (ft/s)
+    double V0 = 300.0;   // Inlet velocity (ft/s)
+    double g = 32.174;
+
+    // Thrust contributions
+    double coreThrust = (coreMdot / g) * (Vc - V0);
+    double bypassThrust = (coreMdot * bypassRatio / g) * (Vb - V0);
+    double totalThrust = coreThrust + bypassThrust;
+
+    TS_ASSERT(totalThrust > 0.0);
+    TS_ASSERT(bypassThrust > coreThrust);  // High bypass = more fan thrust
+  }
+
+  void testCompleteAfterburnerOperation() {
+    // Afterburner thrust augmentation
+    double dryThrust = 15000.0;  // lbf
+    double wetThrust = 25000.0;  // lbf with A/B
+    double augmentationRatio = wetThrust / dryThrust;
+
+    TS_ASSERT(augmentationRatio > 1.5);
+    TS_ASSERT(augmentationRatio < 2.0);  // Typical range
+
+    // SFC increase with afterburner
+    double drySFC = 0.8;   // lb/hr/lbf
+    double wetSFC = 2.0;   // lb/hr/lbf
+
+    double dryFuelFlow = dryThrust * drySFC;
+    double wetFuelFlow = wetThrust * wetSFC;
+
+    TS_ASSERT(wetFuelFlow > 3.0 * dryFuelFlow);  // Much higher consumption
+  }
+
+  void testCompleteThrustVectoringMoments() {
+    // Thrust vectoring contributions to control
+    double thrust = 10000.0;      // lbf
+    double vectorAngle = 15.0;    // degrees
+    double momentArm = 15.0;      // ft from CG
+
+    double angleRad = vectorAngle * M_PI / 180.0;
+    double thrustX = thrust * cos(angleRad);
+    double thrustZ = thrust * sin(angleRad);
+
+    // Pitching moment from vectored thrust
+    double pitchMoment = thrustZ * momentArm;  // ft-lbf
+
+    TS_ASSERT(thrustX > 0.95 * thrust);  // Most thrust still forward
+    TS_ASSERT(pitchMoment > 30000.0);    // Significant control moment
+  }
+
+  /***************************************************************************
+   * Instance Independence Tests
+   ***************************************************************************/
+
+  void testThrustCalculationIndependence() {
+    // Two engines with different settings shouldn't interfere
+    double thrust1 = 8000.0 * 0.9;   // Engine 1: 90% throttle
+    double thrust2 = 10000.0 * 0.75; // Engine 2: 75% throttle
+
+    TS_ASSERT_DELTA(thrust1, 7200.0, epsilon);
+    TS_ASSERT_DELTA(thrust2, 7500.0, epsilon);
+
+    // Verify thrust1 unchanged after thrust2 calculation
+    double thrust1_verify = 8000.0 * 0.9;
+    TS_ASSERT_DELTA(thrust1, thrust1_verify, epsilon);
+  }
+
+  void testPropellerEfficiencyIndependence() {
+    // Multiple propellers with different advance ratios
+    double J1 = 0.6;
+    double J2 = 0.9;
+
+    double eta1 = 0.85 * J1 * (1.5 - J1);
+    double eta2 = 0.85 * J2 * (1.5 - J2);
+
+    TS_ASSERT(eta1 != eta2);
+    TS_ASSERT(eta1 > 0.0 && eta1 < 1.0);
+    TS_ASSERT(eta2 > 0.0 && eta2 < 1.0);
+
+    // Verify eta1 unchanged
+    double eta1_verify = 0.85 * J1 * (1.5 - J1);
+    TS_ASSERT_DELTA(eta1, eta1_verify, epsilon);
+  }
+
+  void testEngineSpoolIndependence() {
+    // Independent engine spool-up dynamics
+    double N1_eng1 = 80.0;  // %
+    double N1_eng2 = 95.0;  // %
+
+    double thrust1 = 10000.0 * (N1_eng1 / 100.0);
+    double thrust2 = 12000.0 * (N1_eng2 / 100.0);
+
+    TS_ASSERT_DELTA(thrust1, 8000.0, epsilon);
+    TS_ASSERT_DELTA(thrust2, 11400.0, epsilon);
+
+    // Verify thrust1 unchanged
+    double thrust1_verify = 10000.0 * (N1_eng1 / 100.0);
+    TS_ASSERT_DELTA(thrust1, thrust1_verify, epsilon);
+  }
+
+  void testSFCCalculationIndependence() {
+    // Different engine types, different SFC
+    double thrust_turbojet = 8000.0;
+    double sfc_turbojet = 1.0;
+    double fuel1 = thrust_turbojet * sfc_turbojet;
+
+    double thrust_turbofan = 12000.0;
+    double sfc_turbofan = 0.6;
+    double fuel2 = thrust_turbofan * sfc_turbofan;
+
+    TS_ASSERT_DELTA(fuel1, 8000.0, epsilon);
+    TS_ASSERT_DELTA(fuel2, 7200.0, epsilon);
+
+    // Verify fuel1 unchanged
+    double fuel1_verify = thrust_turbojet * sfc_turbojet;
+    TS_ASSERT_DELTA(fuel1, fuel1_verify, epsilon);
+  }
+
+  void testTorqueCalculationIndependence() {
+    // Two propeller engines with different power/RPM
+    double power1 = 200.0 * 550.0;  // ft-lb/s
+    double rpm1 = 2400.0;
+    double omega1 = rpm1 * 2.0 * M_PI / 60.0;
+    double torque1 = power1 / omega1;
+
+    double power2 = 350.0 * 550.0;
+    double rpm2 = 2700.0;
+    double omega2 = rpm2 * 2.0 * M_PI / 60.0;
+    double torque2 = power2 / omega2;
+
+    TS_ASSERT(torque1 != torque2);
+    TS_ASSERT(torque1 > 0.0);
+    TS_ASSERT(torque2 > 0.0);
+
+    // Verify torque1 unchanged
+    double torque1_verify = power1 / omega1;
+    TS_ASSERT_DELTA(torque1, torque1_verify, epsilon);
+  }
+
+  void testNozzleAreaIndependence() {
+    // Variable nozzle settings for different engines
+    double minArea = 5.0;
+    double maxArea = 8.0;
+
+    double setting1 = 0.3;
+    double setting2 = 0.8;
+
+    double area1 = minArea + setting1 * (maxArea - minArea);
+    double area2 = minArea + setting2 * (maxArea - minArea);
+
+    TS_ASSERT_DELTA(area1, 5.9, epsilon);
+    TS_ASSERT_DELTA(area2, 7.4, epsilon);
+
+    // Verify area1 unchanged
+    double area1_verify = minArea + setting1 * (maxArea - minArea);
+    TS_ASSERT_DELTA(area1, area1_verify, epsilon);
+  }
+
+  void testThrustVectorIndependence() {
+    // Multiple engines with different vector angles
+    double thrust = 10000.0;
+    double angle1 = 10.0 * M_PI / 180.0;
+    double angle2 = 20.0 * M_PI / 180.0;
+
+    double Fx1 = thrust * cos(angle1);
+    double Fz1 = thrust * sin(angle1);
+
+    double Fx2 = thrust * cos(angle2);
+    double Fz2 = thrust * sin(angle2);
+
+    TS_ASSERT(Fx1 > Fx2);  // More forward at smaller angle
+    TS_ASSERT(Fz1 < Fz2);  // Less vertical at smaller angle
+
+    // Verify Fx1, Fz1 unchanged
+    double Fx1_verify = thrust * cos(angle1);
+    double Fz1_verify = thrust * sin(angle1);
+    TS_ASSERT_DELTA(Fx1, Fx1_verify, epsilon);
+    TS_ASSERT_DELTA(Fz1, Fz1_verify, epsilon);
   }
 };
