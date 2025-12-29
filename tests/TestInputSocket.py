@@ -31,8 +31,9 @@ class TelnetInterface:
     writer = None
 
     async def run(self, port, shell):
-        self.reader, self.writer = await telnetlib3.open_connection(
-            "localhost", port, shell=shell
+        self.reader, self.writer = await asyncio.wait_for(
+            telnetlib3.open_connection("localhost", port, shell=shell),
+            timeout=10.0  # 10 second timeout for connection
         )
         await self.writer.protocol.waiter_closed
 
@@ -223,9 +224,18 @@ class TestInputSocket(JSBSimTestCase):
         telnet_task = asyncio.create_task(self.telnet.run(port, shell))
         fdm_task = asyncio.create_task(self.run_fdm())
 
-        done, pending = await asyncio.wait(
-            [telnet_task, fdm_task], return_when=asyncio.FIRST_COMPLETED
-        )
+        try:
+            done, pending = await asyncio.wait_for(
+                asyncio.wait(
+                    [telnet_task, fdm_task], return_when=asyncio.FIRST_COMPLETED
+                ),
+                timeout=30.0  # 30 second timeout for the test
+            )
+        except asyncio.TimeoutError:
+            # Cancel all tasks on timeout
+            telnet_task.cancel()
+            fdm_task.cancel()
+            raise TimeoutError("Test timed out after 30 seconds")
 
         # Cancel the fdm_task if it is still pending
         for task in pending:
