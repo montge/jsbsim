@@ -717,17 +717,17 @@ bool FGTrimAnalysis::RemoveControl( TaControl control ) {
 
   mode = taCustom;
 
-  #error TODO: Iterator is used after erase(). See GH issue #309
+  // Fixed: Use erase() return value to get valid iterator (GH issue #309)
   vector <FGTrimAnalysisControl*>::iterator iControls = vTrimAnalysisControls.begin();
   while (iControls != vTrimAnalysisControls.end()) {
       tac=*iControls;
       if( tac->GetControlType() == control ) {
         delete tac;
-        vTrimAnalysisControls.erase(iControls);
+        iControls = vTrimAnalysisControls.erase(iControls);
         result=true;
-        continue;
+      } else {
+        iControls++;
       }
-      iControls++;
   }
 
   return result;
@@ -740,17 +740,15 @@ bool FGTrimAnalysis::EditState( TaControl new_control, double new_initvalue, dou
   bool result=false;
 
   mode = taCustom;
-  vector <FGTrimAnalysisControl*>::iterator iControls = vTrimAnalysisControls.begin();
-  while (iControls != vTrimAnalysisControls.end()) {
-      tac=*iControls;
+  // Fixed: Use index-based access to avoid iterator invalidation (GH issue #309)
+  for (size_t i = 0; i < vTrimAnalysisControls.size(); i++) {
+      tac = vTrimAnalysisControls[i];
       if( tac->GetControlType() == new_control ) {
-        vTrimAnalysisControls.insert(iControls,1,new FGTrimAnalysisControl(fdmex,fgic,new_control));
         delete tac;
-        vTrimAnalysisControls.erase(iControls+1);
+        vTrimAnalysisControls[i] = new FGTrimAnalysisControl(fdmex,fgic,new_control);
         result=true;
         break;
       }
-      iControls++;
   }
   return result;
 }
