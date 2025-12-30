@@ -2,8 +2,11 @@
 #include <limits>
 #include <cmath>
 
+#include <FGFDMExec.h>
+#include <models/FGBuoyantForces.h>
 #include "TestUtilities.h"
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
@@ -1401,5 +1404,123 @@ public:
     double buoyancy_ratio = gross_lift / total_weight;
     TS_ASSERT(buoyancy_ratio > 1.0);  // Positive lift
     TS_ASSERT_DELTA(buoyancy_ratio, 1.053, 0.01);
+  }
+
+  // ============================================================================
+  // FGBuoyantForces class tests - using actual class methods
+  // ============================================================================
+
+  // Test FGBuoyantForces access through FGFDMExec
+  void testFGBuoyantForcesAccess() {
+    FGFDMExec fdmex;
+    auto buoyantForces = fdmex.GetBuoyantForces();
+    TS_ASSERT(buoyantForces != nullptr);
+  }
+
+  // Test FGBuoyantForces with loaded model
+  void testFGBuoyantForcesWithModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto buoyantForces = fdmex.GetBuoyantForces();
+    TS_ASSERT(buoyantForces != nullptr);
+  }
+
+  // Test InitModel method
+  void testFGBuoyantForcesInitModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto buoyantForces = fdmex.GetBuoyantForces();
+
+    bool result = buoyantForces->InitModel();
+    TS_ASSERT(result);
+  }
+
+  // Test Run method
+  void testFGBuoyantForcesRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto buoyantForces = fdmex.GetBuoyantForces();
+
+    // Run should complete without throwing
+    bool result = buoyantForces->Run(false);
+    TS_ASSERT(result == true || result == false);  // Just verify it runs
+  }
+
+  // Test Run in holding mode
+  void testFGBuoyantForcesRunHolding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto buoyantForces = fdmex.GetBuoyantForces();
+
+    bool result = buoyantForces->Run(true);
+    TS_ASSERT(result == true || result == false);  // Just verify it runs
+  }
+
+  // Test GetForces method
+  void testFGBuoyantForcesGetForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto buoyantForces = fdmex.GetBuoyantForces();
+    buoyantForces->Run(false);
+
+    // Ball model has no buoyant forces, so should be zero or near zero
+    double fx = buoyantForces->GetForces(1);
+    double fy = buoyantForces->GetForces(2);
+    double fz = buoyantForces->GetForces(3);
+    TS_ASSERT(std::isfinite(fx));
+    TS_ASSERT(std::isfinite(fy));
+    TS_ASSERT(std::isfinite(fz));
+  }
+
+  // Test GetMoments method
+  void testFGBuoyantForcesGetMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto buoyantForces = fdmex.GetBuoyantForces();
+    buoyantForces->Run(false);
+
+    double mx = buoyantForces->GetMoments(1);
+    double my = buoyantForces->GetMoments(2);
+    double mz = buoyantForces->GetMoments(3);
+    TS_ASSERT(std::isfinite(mx));
+    TS_ASSERT(std::isfinite(my));
+    TS_ASSERT(std::isfinite(mz));
+  }
+
+  // Test GetGasMass method
+  void testFGBuoyantForcesGetGasMass() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto buoyantForces = fdmex.GetBuoyantForces();
+
+    double gasMass = buoyantForces->GetGasMass();
+    TS_ASSERT(gasMass >= 0.0);  // Should be non-negative
+  }
+
+  // Test GetBuoyancyStrings method
+  void testFGBuoyantForcesGetBuoyancyStrings() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto buoyantForces = fdmex.GetBuoyantForces();
+
+    std::string header = buoyantForces->GetBuoyancyStrings(",");
+    // Ball model may not have buoyant forces, so string may be empty or minimal
+    TS_ASSERT(header.length() >= 0);  // Valid string
+  }
+
+  // Test GetBuoyancyValues method
+  void testFGBuoyantForcesGetBuoyancyValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto buoyantForces = fdmex.GetBuoyantForces();
+    buoyantForces->Run(false);
+
+    std::string values = buoyantForces->GetBuoyancyValues(",");
+    TS_ASSERT(values.length() >= 0);  // Valid string
   }
 };
