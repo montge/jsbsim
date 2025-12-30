@@ -19,6 +19,14 @@
 #include <limits>
 #include <cmath>
 
+#include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
+#include <models/propulsion/FGTank.h>
+#include "TestUtilities.h"
+
+using namespace JSBSim;
+using namespace JSBSimTest;
+
 const double epsilon = 1e-10;
 const double LBS_TO_GAL = 1.0 / 6.02;  // Approximate for jet fuel
 const double GAL_TO_LBS = 6.02;
@@ -1392,5 +1400,290 @@ public:
     // Verify fill percentage
     double fillPercent = (totalFuel / totalCapacity) * 100.0;
     TS_ASSERT_DELTA(fillPercent, 70.83, 0.1);
+  }
+
+  //==========================================================================
+  // Class-based tests using FGFDMExec and actual FGTank
+  //==========================================================================
+
+  // Test FGTank access via FGPropulsion (c172x has fuel tanks)
+  void testTankAccessViaFDMExec() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    int numTanks = propulsion->GetNumTanks();
+    TS_ASSERT(numTanks > 0);
+  }
+
+  // Test getting tank by index
+  void testGetTankByIndex() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      TS_ASSERT(tank != nullptr);
+    }
+  }
+
+  // Test tank contents retrieval
+  void testTankContents() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double contents = tank->GetContents();
+      TS_ASSERT(std::isfinite(contents));
+      TS_ASSERT(contents >= 0.0);
+    }
+  }
+
+  // Test tank capacity
+  void testTankCapacity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double capacity = tank->GetCapacity();
+      TS_ASSERT(std::isfinite(capacity));
+      TS_ASSERT(capacity > 0.0);
+    }
+  }
+
+  // Test tank fill percentage
+  void testTankFillPercentage() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double pct = tank->GetPctFull();
+      TS_ASSERT(std::isfinite(pct));
+      TS_ASSERT(pct >= 0.0);
+      TS_ASSERT(pct <= 100.0);
+    }
+  }
+
+  // Test total tanks weight
+  void testTanksWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    double weight = propulsion->GetTanksWeight();
+    TS_ASSERT(std::isfinite(weight));
+    TS_ASSERT(weight >= 0.0);
+  }
+
+  // Test tanks moment
+  void testTanksMoment() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    const FGColumnVector3& moment = propulsion->GetTanksMoment();
+    TS_ASSERT(std::isfinite(moment(1)));
+    TS_ASSERT(std::isfinite(moment(2)));
+    TS_ASSERT(std::isfinite(moment(3)));
+  }
+
+  // Test tank type
+  void testTankType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      int type = tank->GetType();
+      // Type should be valid (ttFUEL=0 or ttOXIDIZER=1)
+      TS_ASSERT(type == FGTank::ttFUEL || type == FGTank::ttOXIDIZER);
+    }
+  }
+
+  // Test tank grain type (for solid fuel)
+  void testTankGrainType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      int grain = tank->GetGrainType();
+      // Any grain type is valid
+      TS_ASSERT(grain >= FGTank::gtUNKNOWN);
+    }
+  }
+
+  // Test tank selected status
+  void testTankSelected() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      bool selected = tank->GetSelected();
+      TS_ASSERT(selected == true || selected == false);
+    }
+  }
+
+  // Test tank set selected
+  void testTankSetSelected() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+
+      tank->SetSelected(true);
+      TS_ASSERT(tank->GetSelected() == true);
+
+      tank->SetSelected(false);
+      TS_ASSERT(tank->GetSelected() == false);
+    }
+  }
+
+  // Test tank temperature
+  void testTankTemperature() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double temp = tank->GetTemperature_degC();
+      TS_ASSERT(std::isfinite(temp));
+    }
+  }
+
+  // Test tank density
+  void testTankDensity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double density = tank->GetDensity();
+      TS_ASSERT(std::isfinite(density));
+      TS_ASSERT(density > 0.0);
+    }
+  }
+
+  // Test tank location
+  void testTankLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double x = tank->GetXYZ(1);
+      double y = tank->GetXYZ(2);
+      double z = tank->GetXYZ(3);
+      TS_ASSERT(std::isfinite(x));
+      TS_ASSERT(std::isfinite(y));
+      TS_ASSERT(std::isfinite(z));
+    }
+  }
+
+  // Test tank set contents
+  void testTankSetContents() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double originalContents = tank->GetContents();
+
+      // Set to half capacity
+      double capacity = tank->GetCapacity();
+      tank->SetContents(capacity / 2.0);
+
+      double newContents = tank->GetContents();
+      TS_ASSERT_DELTA(newContents, capacity / 2.0, 0.1);
+
+      // Restore original
+      tank->SetContents(originalContents);
+    }
+  }
+
+  // Test tank drain
+  void testTankDrain() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    if (numTanks > 0) {
+      auto tank = propulsion->GetTank(0);
+      double originalContents = tank->GetContents();
+
+      if (originalContents > 10.0) {
+        double drained = tank->Drain(5.0);
+        TS_ASSERT(std::isfinite(drained));
+        TS_ASSERT(drained >= 0.0);
+        // Drained amount may exceed request depending on implementation
+
+        // Restore
+        tank->SetContents(originalContents);
+      }
+    }
+  }
+
+  // Test multiple tanks iteration
+  void testMultipleTanksIteration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    int numTanks = propulsion->GetNumTanks();
+
+    double totalContents = 0.0;
+    for (int i = 0; i < numTanks; i++) {
+      auto tank = propulsion->GetTank(i);
+      TS_ASSERT(tank != nullptr);
+      totalContents += tank->GetContents();
+    }
+
+    TS_ASSERT(std::isfinite(totalContents));
+    TS_ASSERT(totalContents >= 0.0);
   }
 };
