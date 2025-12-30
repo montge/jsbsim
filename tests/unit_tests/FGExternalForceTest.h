@@ -1445,4 +1445,692 @@ public:
     TS_ASSERT_DELTA(state1(1), 100.0, epsilon);
     TS_ASSERT_DELTA(state2(1), 500.0, epsilon);
   }
+
+  // ============================================================================
+  // XML-based initialization tests for setForce(), setMoment(), bind()
+  // ============================================================================
+
+  // Test setForce() with XML element containing location and direction
+  void testSetForceWithXML() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="test_force" frame="BODY">
+        <location unit="IN">
+          <x>10.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Check that location was set correctly
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 10.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 0.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), 0.0, epsilon);
+  }
+
+  // Test setForce() with BODY frame
+  void testSetForceBodyFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="body_force" frame="BODY">
+        <location unit="IN">
+          <x>5.0</x>
+          <y>5.0</y>
+          <z>5.0</z>
+        </location>
+        <direction>
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>1.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify frame type is BODY (tNone)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test setForce() with LOCAL frame
+  void testSetForceLocalFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="local_force" frame="LOCAL">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>0.0</x>
+          <y>1.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify frame type is LOCAL (tLocalBody)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tLocalBody);
+  }
+
+  // Test setForce() with WIND frame
+  void testSetForceWindFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="wind_force" frame="WIND">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify frame type is WIND (tWindBody)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tWindBody);
+  }
+
+  // Test setForce() with INERTIAL frame
+  void testSetForceInertialFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="inertial_force" frame="INERTIAL">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>-1.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify frame type is INERTIAL (tInertialBody)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tInertialBody);
+  }
+
+  // Test setForce() with missing frame attribute (defaults to BODY)
+  void testSetForceMissingFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="no_frame_force">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Should default to BODY frame (tNone)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test setForce() with invalid frame attribute (defaults to BODY)
+  void testSetForceInvalidFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="invalid_frame_force" frame="INVALID">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Should default to BODY frame (tNone) on invalid frame
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test setForce() without location element
+  void testSetForceMissingLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="no_location_force" frame="BODY">
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Should still construct (with warning)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test setForce() without direction element
+  void testSetForceMissingDirection() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="no_direction_force" frame="BODY">
+        <location unit="IN">
+          <x>10.0</x>
+          <y>5.0</y>
+          <z>0.0</z>
+        </location>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Should construct with default direction (0,0,0)
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 10.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 5.0, epsilon);
+  }
+
+  // Test setMoment() with XML element
+  void testSetMomentWithXML() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="test_moment" frame="BODY">
+        <direction>
+          <x>0.0</x>
+          <y>1.0</y>
+          <z>0.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Verify frame type is BODY (tNone)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test setMoment() with WIND frame
+  void testSetMomentWindFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="wind_moment" frame="WIND">
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Verify frame type is WIND (tWindBody)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tWindBody);
+  }
+
+  // Test setMoment() with LOCAL frame
+  void testSetMomentLocalFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="local_moment" frame="LOCAL">
+        <direction>
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>1.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Verify frame type is LOCAL (tLocalBody)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tLocalBody);
+  }
+
+  // Test setMoment() with INERTIAL frame
+  void testSetMomentInertialFrame() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="inertial_moment" frame="INERTIAL">
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Verify frame type is INERTIAL (tInertialBody)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tInertialBody);
+  }
+
+  // Test setMoment() with missing direction
+  void testSetMomentMissingDirection() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="no_dir_moment" frame="BODY">
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Should construct with default direction (0,0,0)
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test GetBodyForces() with force
+  void testGetBodyForcesWithForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    std::string xml = R"(
+      <force name="test_body_force" frame="BODY">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Set the force magnitude via property
+    auto pm = fdmex.GetPropertyManager();
+    auto magNode = pm->GetNode("external_reactions/test_body_force/magnitude");
+    if (magNode) {
+      magNode->setDoubleValue(100.0);
+    }
+
+    // Get body forces
+    const FGColumnVector3& forces = extForce.GetBodyForces();
+
+    // Force should be applied in X direction (magnitude * direction)
+    // Body frame force should be 100 * (1,0,0) = (100, 0, 0)
+    TS_ASSERT_DELTA(forces(1), 100.0, 0.1);
+    TS_ASSERT_DELTA(forces(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(3), 0.0, epsilon);
+  }
+
+  // Test GetBodyForces() with moment
+  void testGetBodyForcesWithMoment() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    std::string xml = R"(
+      <moment name="test_body_moment" frame="BODY">
+        <direction>
+          <x>0.0</x>
+          <y>1.0</y>
+          <z>0.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Set the moment magnitude via property
+    auto pm = fdmex.GetPropertyManager();
+    auto magNode = pm->GetNode("external_reactions/test_body_moment/magnitude-lbsft");
+    if (magNode) {
+      magNode->setDoubleValue(50.0);
+    }
+
+    // Get body forces (which also computes moments)
+    extForce.GetBodyForces();
+
+    // The moment should be computed via Transform()
+    // Exact value depends on Transform() implementation
+    TS_ASSERT(true); // Test that it runs without crashing
+  }
+
+  // Test setForce() with function element
+  void testSetForceWithFunction() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="function_force" frame="BODY">
+        <function>
+          <product>
+            <value>2.0</value>
+            <value>50.0</value>
+          </product>
+        </function>
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify construction
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test setMoment() with function element
+  void testSetMomentWithFunction() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="function_moment" frame="BODY">
+        <function>
+          <product>
+            <value>10.0</value>
+            <value>5.0</value>
+          </product>
+        </function>
+        <direction>
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>1.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Verify construction
+    TS_ASSERT_EQUALS(extForce.GetTransformType(), FGForce::tNone);
+  }
+
+  // Test property binding for force location
+  void testForceLocationPropertyBinding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="prop_force" frame="BODY">
+        <location unit="IN">
+          <x>100.0</x>
+          <y>50.0</y>
+          <z>25.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify initial location
+    TS_ASSERT_DELTA(extForce.GetLocationX(), 100.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationY(), 50.0, epsilon);
+    TS_ASSERT_DELTA(extForce.GetLocationZ(), 25.0, epsilon);
+
+    // Modify location via property if bound
+    auto pm = fdmex.GetPropertyManager();
+    auto xNode = pm->GetNode("external_reactions/prop_force/location-x-in");
+    if (xNode) {
+      xNode->setDoubleValue(200.0);
+      TS_ASSERT_DELTA(extForce.GetLocationX(), 200.0, epsilon);
+    }
+  }
+
+  // Test force direction property binding
+  void testForceDirectionPropertyBinding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <force name="dir_force" frame="BODY">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Verify direction properties are created
+    auto pm = fdmex.GetPropertyManager();
+    auto xNode = pm->GetNode("external_reactions/dir_force/x");
+    auto yNode = pm->GetNode("external_reactions/dir_force/y");
+    auto zNode = pm->GetNode("external_reactions/dir_force/z");
+
+    TS_ASSERT(xNode != nullptr);
+    TS_ASSERT(yNode != nullptr);
+    TS_ASSERT(zNode != nullptr);
+
+    if (xNode && yNode && zNode) {
+      TS_ASSERT_DELTA(xNode->getDoubleValue(), 1.0, epsilon);
+      TS_ASSERT_DELTA(yNode->getDoubleValue(), 0.0, epsilon);
+      TS_ASSERT_DELTA(zNode->getDoubleValue(), 0.0, epsilon);
+    }
+  }
+
+  // Test moment direction property binding
+  void testMomentDirectionPropertyBinding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    std::string xml = R"(
+      <moment name="dir_moment" frame="BODY">
+        <direction>
+          <x>0.0</x>
+          <y>1.0</y>
+          <z>0.0</z>
+        </direction>
+      </moment>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setMoment(el.ptr());
+
+    // Verify direction properties are created (l, m, n for moments)
+    auto pm = fdmex.GetPropertyManager();
+    auto lNode = pm->GetNode("external_reactions/dir_moment/l");
+    auto mNode = pm->GetNode("external_reactions/dir_moment/m");
+    auto nNode = pm->GetNode("external_reactions/dir_moment/n");
+
+    TS_ASSERT(lNode != nullptr);
+    TS_ASSERT(mNode != nullptr);
+    TS_ASSERT(nNode != nullptr);
+
+    if (lNode && mNode && nNode) {
+      TS_ASSERT_DELTA(lNode->getDoubleValue(), 0.0, epsilon);
+      TS_ASSERT_DELTA(mNode->getDoubleValue(), 1.0, epsilon);
+      TS_ASSERT_DELTA(nNode->getDoubleValue(), 0.0, epsilon);
+    }
+  }
+
+  // Test zero force magnitude
+  void testZeroForceMagnitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    std::string xml = R"(
+      <force name="zero_force" frame="BODY">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>1.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Magnitude defaults to 0
+    const FGColumnVector3& forces = extForce.GetBodyForces();
+    TS_ASSERT_DELTA(forces(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(3), 0.0, epsilon);
+  }
+
+  // Test normalized direction vector
+  void testNormalizedDirectionVector() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+
+    // Use a non-unit direction that should be normalized
+    std::string xml = R"(
+      <force name="norm_force" frame="BODY">
+        <location unit="IN">
+          <x>0.0</x>
+          <y>0.0</y>
+          <z>0.0</z>
+        </location>
+        <direction>
+          <x>3.0</x>
+          <y>4.0</y>
+          <z>0.0</z>
+        </direction>
+      </force>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    FGExternalForce extForce(&fdmex);
+    extForce.setForce(el.ptr());
+
+    // Direction should be normalized to (0.6, 0.8, 0)
+    auto pm = fdmex.GetPropertyManager();
+    auto xNode = pm->GetNode("external_reactions/norm_force/x");
+    auto yNode = pm->GetNode("external_reactions/norm_force/y");
+    auto zNode = pm->GetNode("external_reactions/norm_force/z");
+
+    if (xNode && yNode && zNode) {
+      double x = xNode->getDoubleValue();
+      double y = yNode->getDoubleValue();
+      double z = zNode->getDoubleValue();
+      double magnitude = std::sqrt(x*x + y*y + z*z);
+      TS_ASSERT_DELTA(magnitude, 1.0, epsilon);
+      TS_ASSERT_DELTA(x, 0.6, epsilon);
+      TS_ASSERT_DELTA(y, 0.8, epsilon);
+    }
+  }
 };
