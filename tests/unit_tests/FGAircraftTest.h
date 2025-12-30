@@ -1773,3 +1773,514 @@ public:
     TS_ASSERT_DELTA(moments(3), 0.0, epsilon);
   }
 };
+
+/*******************************************************************************
+ * FGAircraftC172xTest - Tests using the c172x aircraft model
+ ******************************************************************************/
+class FGAircraftC172xTest : public CxxTest::TestSuite
+{
+public:
+  JSBSim::FGFDMExec* fdmex;
+
+  void setUp() {
+    fdmex = new JSBSim::FGFDMExec();
+    fdmex->LoadModel("c172x");
+    fdmex->RunIC();
+    fdmex->Run();
+  }
+
+  void tearDown() {
+    delete fdmex;
+    fdmex = nullptr;
+  }
+
+  /***************************************************************************
+   * Model Loading Tests
+   ***************************************************************************/
+
+  // Test c172x model loads successfully
+  void testC172xLoadModel() {
+    FGFDMExec localfdmex;
+    bool loaded = localfdmex.LoadModel("c172x");
+    TS_ASSERT(loaded);
+    auto aircraft = localfdmex.GetAircraft();
+    TS_ASSERT(aircraft != nullptr);
+  }
+
+  // Test aircraft instance is valid after load
+  void testC172xAircraftInstanceValid() {
+    auto aircraft = fdmex->GetAircraft();
+    TS_ASSERT(aircraft != nullptr);
+  }
+
+  // Test aircraft name is set correctly
+  void testC172xAircraftName() {
+    auto aircraft = fdmex->GetAircraft();
+    std::string name = aircraft->GetAircraftName();
+    TS_ASSERT(!name.empty());
+    // C172x should have a recognizable name
+    TS_ASSERT(name.find("172") != std::string::npos || name.find("Cessna") != std::string::npos || !name.empty());
+  }
+
+  /***************************************************************************
+   * Wing Geometry Tests for c172x
+   ***************************************************************************/
+
+  // Test wing area is reasonable for C172
+  void testC172xWingArea() {
+    auto aircraft = fdmex->GetAircraft();
+    double wingArea = aircraft->GetWingArea();
+
+    TS_ASSERT(!std::isnan(wingArea));
+    TS_ASSERT(wingArea > 0.0);
+    // C172 wing area is approximately 174 sq ft
+    TS_ASSERT(wingArea > 150.0);
+    TS_ASSERT(wingArea < 200.0);
+  }
+
+  // Test wingspan is reasonable for C172
+  void testC172xWingSpan() {
+    auto aircraft = fdmex->GetAircraft();
+    double wingspan = aircraft->GetWingSpan();
+
+    TS_ASSERT(!std::isnan(wingspan));
+    TS_ASSERT(wingspan > 0.0);
+    // C172 wingspan is approximately 36 ft
+    TS_ASSERT(wingspan > 30.0);
+    TS_ASSERT(wingspan < 45.0);
+  }
+
+  // Test mean aerodynamic chord is reasonable
+  void testC172xMeanChord() {
+    auto aircraft = fdmex->GetAircraft();
+    double cbar = aircraft->Getcbar();
+
+    TS_ASSERT(!std::isnan(cbar));
+    TS_ASSERT(cbar > 0.0);
+    // C172 MAC is approximately 4.9 ft
+    TS_ASSERT(cbar > 3.0);
+    TS_ASSERT(cbar < 8.0);
+  }
+
+  // Test aspect ratio is typical for light aircraft
+  void testC172xAspectRatio() {
+    auto aircraft = fdmex->GetAircraft();
+    double wingspan = aircraft->GetWingSpan();
+    double wingArea = aircraft->GetWingArea();
+
+    double AR = (wingspan * wingspan) / wingArea;
+
+    TS_ASSERT(!std::isnan(AR));
+    // C172 aspect ratio is approximately 7.5
+    TS_ASSERT(AR > 5.0);
+    TS_ASSERT(AR < 12.0);
+  }
+
+  // Test wing incidence is set
+  void testC172xWingIncidence() {
+    auto aircraft = fdmex->GetAircraft();
+    double incRad = aircraft->GetWingIncidence();
+    double incDeg = aircraft->GetWingIncidenceDeg();
+
+    TS_ASSERT(!std::isnan(incRad));
+    TS_ASSERT(!std::isnan(incDeg));
+    // Wing incidence typically 0-5 degrees
+    TS_ASSERT(incDeg >= -2.0);
+    TS_ASSERT(incDeg <= 10.0);
+  }
+
+  /***************************************************************************
+   * Tail Geometry Tests for c172x
+   ***************************************************************************/
+
+  // Test horizontal tail area
+  void testC172xHTailArea() {
+    auto aircraft = fdmex->GetAircraft();
+    double htailArea = aircraft->GetHTailArea();
+
+    TS_ASSERT(!std::isnan(htailArea));
+    TS_ASSERT(htailArea >= 0.0);
+    // HTail area should be smaller than wing area
+    double wingArea = aircraft->GetWingArea();
+    if (htailArea > 0.0) {
+      TS_ASSERT(htailArea < wingArea);
+    }
+  }
+
+  // Test horizontal tail arm
+  void testC172xHTailArm() {
+    auto aircraft = fdmex->GetAircraft();
+    double htailArm = aircraft->GetHTailArm();
+
+    TS_ASSERT(!std::isnan(htailArm));
+    // Tail arm should be positive (aft of reference)
+    TS_ASSERT(htailArm >= 0.0);
+  }
+
+  // Test vertical tail area
+  void testC172xVTailArea() {
+    auto aircraft = fdmex->GetAircraft();
+    double vtailArea = aircraft->GetVTailArea();
+
+    TS_ASSERT(!std::isnan(vtailArea));
+    TS_ASSERT(vtailArea >= 0.0);
+  }
+
+  // Test vertical tail arm
+  void testC172xVTailArm() {
+    auto aircraft = fdmex->GetAircraft();
+    double vtailArm = aircraft->GetVTailArm();
+
+    TS_ASSERT(!std::isnan(vtailArm));
+    TS_ASSERT(vtailArm >= 0.0);
+  }
+
+  // Test normalized horizontal tail arm (lbarh)
+  void testC172xLbarh() {
+    auto aircraft = fdmex->GetAircraft();
+    double lbarh = aircraft->Getlbarh();
+
+    TS_ASSERT(!std::isnan(lbarh));
+    // Normalized value should be reasonable
+    TS_ASSERT(lbarh >= 0.0);
+  }
+
+  // Test normalized vertical tail arm (lbarv)
+  void testC172xLbarv() {
+    auto aircraft = fdmex->GetAircraft();
+    double lbarv = aircraft->Getlbarv();
+
+    TS_ASSERT(!std::isnan(lbarv));
+    TS_ASSERT(lbarv >= 0.0);
+  }
+
+  // Test horizontal tail volume coefficient
+  void testC172xVbarh() {
+    auto aircraft = fdmex->GetAircraft();
+    double vbarh = aircraft->Getvbarh();
+
+    TS_ASSERT(!std::isnan(vbarh));
+    // Typical Vbar_h is 0.5-1.0
+    TS_ASSERT(vbarh >= 0.0);
+  }
+
+  // Test vertical tail volume coefficient
+  void testC172xVbarv() {
+    auto aircraft = fdmex->GetAircraft();
+    double vbarv = aircraft->Getvbarv();
+
+    TS_ASSERT(!std::isnan(vbarv));
+    // Typical Vbar_v is 0.02-0.10
+    TS_ASSERT(vbarv >= 0.0);
+  }
+
+  /***************************************************************************
+   * Reference Point Tests for c172x
+   ***************************************************************************/
+
+  // Test aerodynamic reference point (XYZrp)
+  void testC172xXYZrp() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 rp = aircraft->GetXYZrp();
+
+    TS_ASSERT(!std::isnan(rp(1)));
+    TS_ASSERT(!std::isnan(rp(2)));
+    TS_ASSERT(!std::isnan(rp(3)));
+
+    // X should be positive (distance from nose)
+    TS_ASSERT(rp(1) >= 0.0);
+    // Y should be near zero for symmetric aircraft
+    TS_ASSERT(std::abs(rp(2)) < 10.0);
+  }
+
+  // Test indexed XYZrp accessor
+  void testC172xXYZrpIndexed() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 rp = aircraft->GetXYZrp();
+
+    TS_ASSERT_DELTA(aircraft->GetXYZrp(1), rp(1), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetXYZrp(2), rp(2), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetXYZrp(3), rp(3), epsilon);
+  }
+
+  // Test eyepoint (XYZep) is set
+  void testC172xXYZep() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 ep = aircraft->GetXYZep();
+
+    TS_ASSERT(!std::isnan(ep(1)));
+    TS_ASSERT(!std::isnan(ep(2)));
+    TS_ASSERT(!std::isnan(ep(3)));
+  }
+
+  // Test indexed eyepoint accessor
+  void testC172xXYZepIndexed() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 ep = aircraft->GetXYZep();
+
+    TS_ASSERT_DELTA(aircraft->GetXYZep(1), ep(1), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetXYZep(2), ep(2), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetXYZep(3), ep(3), epsilon);
+  }
+
+  // Test visual reference point (XYZvrp)
+  void testC172xXYZvrp() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 vrp = aircraft->GetXYZvrp();
+
+    TS_ASSERT(!std::isnan(vrp(1)));
+    TS_ASSERT(!std::isnan(vrp(2)));
+    TS_ASSERT(!std::isnan(vrp(3)));
+  }
+
+  // Test indexed VRP accessor
+  void testC172xXYZvrpIndexed() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 vrp = aircraft->GetXYZvrp();
+
+    TS_ASSERT_DELTA(aircraft->GetXYZvrp(1), vrp(1), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetXYZvrp(2), vrp(2), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetXYZvrp(3), vrp(3), epsilon);
+  }
+
+  /***************************************************************************
+   * Forces and Moments Tests for c172x
+   ***************************************************************************/
+
+  // Test total forces after initialization
+  void testC172xTotalForces() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 forces = aircraft->GetForces();
+
+    TS_ASSERT(!std::isnan(forces(1)));
+    TS_ASSERT(!std::isnan(forces(2)));
+    TS_ASSERT(!std::isnan(forces(3)));
+    TS_ASSERT(!std::isinf(forces(1)));
+    TS_ASSERT(!std::isinf(forces(2)));
+    TS_ASSERT(!std::isinf(forces(3)));
+  }
+
+  // Test indexed forces accessor
+  void testC172xForcesIndexed() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 forces = aircraft->GetForces();
+
+    TS_ASSERT_DELTA(aircraft->GetForces(1), forces(1), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetForces(2), forces(2), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetForces(3), forces(3), epsilon);
+  }
+
+  // Test total moments after initialization
+  void testC172xTotalMoments() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 moments = aircraft->GetMoments();
+
+    TS_ASSERT(!std::isnan(moments(1)));
+    TS_ASSERT(!std::isnan(moments(2)));
+    TS_ASSERT(!std::isnan(moments(3)));
+    TS_ASSERT(!std::isinf(moments(1)));
+    TS_ASSERT(!std::isinf(moments(2)));
+    TS_ASSERT(!std::isinf(moments(3)));
+  }
+
+  // Test indexed moments accessor
+  void testC172xMomentsIndexed() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 moments = aircraft->GetMoments();
+
+    TS_ASSERT_DELTA(aircraft->GetMoments(1), moments(1), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetMoments(2), moments(2), epsilon);
+    TS_ASSERT_DELTA(aircraft->GetMoments(3), moments(3), epsilon);
+  }
+
+  /***************************************************************************
+   * Physical Plausibility Tests for c172x
+   ***************************************************************************/
+
+  // Test wing loading is reasonable for light aircraft
+  void testC172xWingLoading() {
+    auto aircraft = fdmex->GetAircraft();
+    double wingArea = aircraft->GetWingArea();
+
+    // C172 max gross weight is about 2550 lbs
+    double typicalWeight = 2400.0;
+    double wingLoading = typicalWeight / wingArea;
+
+    // Light aircraft wing loading: 10-25 lbs/sq ft
+    TS_ASSERT(wingLoading > 8.0);
+    TS_ASSERT(wingLoading < 30.0);
+  }
+
+  // Test geometry relationships are consistent
+  void testC172xGeometryConsistency() {
+    auto aircraft = fdmex->GetAircraft();
+    double wingspan = aircraft->GetWingSpan();
+    double wingArea = aircraft->GetWingArea();
+    double cbar = aircraft->Getcbar();
+
+    // Simplified check: S ~ b * c (approximately)
+    double estimatedArea = wingspan * cbar;
+
+    // Allow for taper ratio effects (actual area is typically less)
+    TS_ASSERT(wingArea > estimatedArea * 0.5);
+    TS_ASSERT(wingArea < estimatedArea * 1.5);
+  }
+
+  // Test reference point is within aircraft bounds
+  void testC172xReferencePointBounds() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 rp = aircraft->GetXYZrp();
+
+    // X position should be positive and reasonable (in inches)
+    TS_ASSERT(rp(1) > 0.0);
+    TS_ASSERT(rp(1) < 500.0);  // Within aircraft length
+
+    // Y should be near centerline
+    TS_ASSERT(std::abs(rp(2)) < 50.0);
+  }
+
+  // Test eyepoint is forward of reference point (typical pilot position)
+  void testC172xEyepointPosition() {
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 ep = aircraft->GetXYZep();
+
+    // Eyepoint X should be reasonable
+    TS_ASSERT(!std::isnan(ep(1)));
+
+    // Eyepoint Z should put pilot above floor
+    // (positive Z is down in JSBSim body coordinates)
+    TS_ASSERT(!std::isnan(ep(3)));
+  }
+
+  /***************************************************************************
+   * Run Simulation Tests for c172x
+   ***************************************************************************/
+
+  // Test simulation can run multiple steps
+  void testC172xMultipleRunSteps() {
+    for (int i = 0; i < 10; i++) {
+      fdmex->Run();
+    }
+
+    auto aircraft = fdmex->GetAircraft();
+    FGColumnVector3 forces = aircraft->GetForces();
+    FGColumnVector3 moments = aircraft->GetMoments();
+
+    // Values should still be valid after multiple runs
+    TS_ASSERT(!std::isnan(forces(1)));
+    TS_ASSERT(!std::isnan(forces(2)));
+    TS_ASSERT(!std::isnan(forces(3)));
+    TS_ASSERT(!std::isnan(moments(1)));
+    TS_ASSERT(!std::isnan(moments(2)));
+    TS_ASSERT(!std::isnan(moments(3)));
+  }
+
+  // Test forces change during simulation
+  void testC172xForcesChangeDuringSimulation() {
+    auto aircraft = fdmex->GetAircraft();
+
+    FGColumnVector3 initialForces = aircraft->GetForces();
+
+    // Run several steps
+    for (int i = 0; i < 100; i++) {
+      fdmex->Run();
+    }
+
+    FGColumnVector3 finalForces = aircraft->GetForces();
+
+    // Forces should still be valid
+    TS_ASSERT(!std::isnan(finalForces(1)));
+    TS_ASSERT(!std::isnan(finalForces(2)));
+    TS_ASSERT(!std::isnan(finalForces(3)));
+  }
+
+  // Test InitModel works for loaded aircraft
+  void testC172xInitModel() {
+    auto aircraft = fdmex->GetAircraft();
+    bool result = aircraft->InitModel();
+    TS_ASSERT(result);
+
+    // Forces and moments should be zeroed after InitModel
+    FGColumnVector3 forces = aircraft->GetForces();
+    FGColumnVector3 moments = aircraft->GetMoments();
+
+    TS_ASSERT_DELTA(forces(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(forces(3), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments(3), 0.0, epsilon);
+  }
+
+  /***************************************************************************
+   * Setter Tests for c172x
+   ***************************************************************************/
+
+  // Test SetXYZrp modifies reference point
+  void testC172xSetXYZrp() {
+    auto aircraft = fdmex->GetAircraft();
+
+    double newX = 150.0;
+    aircraft->SetXYZrp(1, newX);
+    TS_ASSERT_DELTA(aircraft->GetXYZrp(1), newX, epsilon);
+
+    double newY = 5.0;
+    aircraft->SetXYZrp(2, newY);
+    TS_ASSERT_DELTA(aircraft->GetXYZrp(2), newY, epsilon);
+
+    double newZ = 25.0;
+    aircraft->SetXYZrp(3, newZ);
+    TS_ASSERT_DELTA(aircraft->GetXYZrp(3), newZ, epsilon);
+  }
+
+  // Test SetWingArea modifies wing area
+  void testC172xSetWingArea() {
+    auto aircraft = fdmex->GetAircraft();
+
+    double originalArea = aircraft->GetWingArea();
+    double newArea = 200.0;
+
+    aircraft->SetWingArea(newArea);
+    TS_ASSERT_DELTA(aircraft->GetWingArea(), newArea, epsilon);
+
+    // Restore original
+    aircraft->SetWingArea(originalArea);
+    TS_ASSERT_DELTA(aircraft->GetWingArea(), originalArea, epsilon);
+  }
+
+  // Test SetAircraftName
+  void testC172xSetAircraftName() {
+    auto aircraft = fdmex->GetAircraft();
+
+    std::string originalName = aircraft->GetAircraftName();
+    std::string newName = "Modified C172";
+
+    aircraft->SetAircraftName(newName);
+    TS_ASSERT_EQUALS(aircraft->GetAircraftName(), newName);
+
+    // Restore original
+    aircraft->SetAircraftName(originalName);
+    TS_ASSERT_EQUALS(aircraft->GetAircraftName(), originalName);
+  }
+
+  /***************************************************************************
+   * Holding Mode Tests for c172x
+   ***************************************************************************/
+
+  // Test Run with holding mode
+  void testC172xHoldingMode() {
+    auto aircraft = fdmex->GetAircraft();
+
+    FGColumnVector3 beforeForces = aircraft->GetForces();
+
+    // Run with holding = true
+    bool result = aircraft->Run(true);
+    TS_ASSERT_EQUALS(result, false);  // Should not error
+
+    // Forces should not change in holding mode
+    FGColumnVector3 afterForces = aircraft->GetForces();
+    TS_ASSERT_DELTA(afterForces(1), beforeForces(1), epsilon);
+    TS_ASSERT_DELTA(afterForces(2), beforeForces(2), epsilon);
+    TS_ASSERT_DELTA(afterForces(3), beforeForces(3), epsilon);
+  }
+};

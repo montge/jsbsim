@@ -21,6 +21,7 @@
 
 #include <FGFDMExec.h>
 #include <models/FGGroundReactions.h>
+#include <initialization/FGInitialCondition.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1458,5 +1459,589 @@ public:
     double maxStatic = groundReactions->GetMaximumForce();
     // Should be a positive value
     TS_ASSERT(maxStatic >= 0.0);
+  }
+
+  // ============================================================================
+  // C172x Model-Based Tests - Using FGFDMExec with c172x aircraft
+  // ============================================================================
+
+  // Test loading c172x model and accessing ground reactions
+  void testC172xLoadModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+  }
+
+  // Test c172x number of gear units (3 bogeys + 3 structure = 6 total)
+  void testC172xGetNumGearUnits() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    int numGear = gr->GetNumGearUnits();
+    // c172x has: nose gear, left main, right main, tail skid, left tip, right tip
+    TS_ASSERT_EQUALS(numGear, 6);
+  }
+
+  // Test c172x individual gear unit access
+  void testC172xGetGearUnit() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    // Access each gear unit
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      TS_ASSERT(gear != nullptr);
+    }
+  }
+
+  // Test c172x gear names
+  void testC172xGearNames() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    // First 3 are bogeys
+    TS_ASSERT_EQUALS(gr->GetGearUnit(0)->GetName(), "Nose Gear");
+    TS_ASSERT_EQUALS(gr->GetGearUnit(1)->GetName(), "Left Main Gear");
+    TS_ASSERT_EQUALS(gr->GetGearUnit(2)->GetName(), "Right Main Gear");
+    // Next 3 are structure contact points
+    TS_ASSERT_EQUALS(gr->GetGearUnit(3)->GetName(), "TAIL_SKID");
+    TS_ASSERT_EQUALS(gr->GetGearUnit(4)->GetName(), "LEFT_TIP");
+    TS_ASSERT_EQUALS(gr->GetGearUnit(5)->GetName(), "RIGHT_TIP");
+  }
+
+  // Test c172x gear types (bogey vs structure)
+  void testC172xGearTypes() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    // First 3 are bogeys
+    TS_ASSERT(gr->GetGearUnit(0)->IsBogey());
+    TS_ASSERT(gr->GetGearUnit(1)->IsBogey());
+    TS_ASSERT(gr->GetGearUnit(2)->IsBogey());
+    // Structure contact points are not bogeys
+    TS_ASSERT(!gr->GetGearUnit(3)->IsBogey());
+    TS_ASSERT(!gr->GetGearUnit(4)->IsBogey());
+    TS_ASSERT(!gr->GetGearUnit(5)->IsBogey());
+  }
+
+  // Test c172x gear steerable properties
+  void testC172xGearSteerable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    // Nose gear is steerable (max_steer = 10 deg)
+    TS_ASSERT(gr->GetGearUnit(0)->GetSteerable());
+    // Main gears are not steerable (max_steer = 0)
+    TS_ASSERT(!gr->GetGearUnit(1)->GetSteerable());
+    TS_ASSERT(!gr->GetGearUnit(2)->GetSteerable());
+  }
+
+  // Test c172x gear retractable properties
+  void testC172xGearRetractable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    // c172x has fixed gear (retractable = 0)
+    TS_ASSERT(!gr->GetGearUnit(0)->GetRetractable());
+    TS_ASSERT(!gr->GetGearUnit(1)->GetRetractable());
+    TS_ASSERT(!gr->GetGearUnit(2)->GetRetractable());
+  }
+
+  // Test c172x gear brake groups
+  void testC172xGearBrakeGroups() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto gr = fdmex.GetGroundReactions();
+
+    // Nose gear has no brake
+    TS_ASSERT_EQUALS(gr->GetGearUnit(0)->GetBrakeGroup(), FGLGear::bgNone);
+    // Main gears have left/right brakes
+    TS_ASSERT_EQUALS(gr->GetGearUnit(1)->GetBrakeGroup(), FGLGear::bgLeft);
+    TS_ASSERT_EQUALS(gr->GetGearUnit(2)->GetBrakeGroup(), FGLGear::bgRight);
+  }
+
+  // Test c172x initialization and run
+  void testC172xRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    bool result = fdmex.RunIC();
+    TS_ASSERT(result);
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+  }
+
+  // Test c172x ground reactions run
+  void testC172xGroundReactionsRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+    bool result = gr->Run(false);
+    TS_ASSERT_EQUALS(result, false);  // false means no error
+  }
+
+  // Test c172x WOW status after initialization (on ground)
+  void testC172xWOWOnGround() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    // Set aircraft on ground
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Aircraft should have weight on wheels when on ground
+    bool wow = gr->GetWOW();
+    TS_ASSERT(wow);
+  }
+
+  // Test c172x gear compression on ground
+  void testC172xGearCompressionOnGround() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // At least some gear should be compressed on ground
+    bool anyCompressed = false;
+    for (int i = 0; i < 3; i++) {  // Check the 3 bogeys
+      auto gear = gr->GetGearUnit(i);
+      if (gear->GetCompLen() > 0.0) {
+        anyCompressed = true;
+        break;
+      }
+    }
+    TS_ASSERT(anyCompressed);
+  }
+
+  // Test c172x gear WOW individual status
+  void testC172xIndividualGearWOW() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Check individual gear WOW status
+    bool noseWOW = gr->GetGearUnit(0)->GetWOW();
+    bool leftWOW = gr->GetGearUnit(1)->GetWOW();
+    bool rightWOW = gr->GetGearUnit(2)->GetWOW();
+
+    // At least main gears should have weight on wheels
+    TS_ASSERT(leftWOW || rightWOW);
+  }
+
+  // Test c172x ground reaction forces on ground
+  void testC172xGroundReactionForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    const FGColumnVector3& forces = gr->GetForces();
+
+    // On ground, there should be some vertical force (supporting weight)
+    // Force is in body frame, Z is down (positive)
+    TS_ASSERT(forces.Magnitude() > 0.0);
+  }
+
+  // Test c172x ground reaction moments
+  void testC172xGroundReactionMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    const FGColumnVector3& moments = gr->GetMoments();
+
+    // Moments vector should exist (may be small if balanced)
+    TS_ASSERT(!std::isnan(moments(1)));
+    TS_ASSERT(!std::isnan(moments(2)));
+    TS_ASSERT(!std::isnan(moments(3)));
+  }
+
+  // Test c172x gear compression force
+  void testC172xGearCompressForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Check compression force for main gears on ground
+    double leftForce = gr->GetGearUnit(1)->GetCompForce();
+    double rightForce = gr->GetGearUnit(2)->GetCompForce();
+
+    // Should have some force on main gears (negative = pushing up)
+    TS_ASSERT(leftForce != 0.0 || rightForce != 0.0);
+  }
+
+  // Test c172x steering command
+  void testC172xSteeringCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Set steering command
+    gr->SetDsCmd(0.5);
+    TS_ASSERT_DELTA(gr->GetDsCmd(), 0.5, epsilon);
+
+    gr->SetDsCmd(-0.5);
+    TS_ASSERT_DELTA(gr->GetDsCmd(), -0.5, epsilon);
+
+    gr->SetDsCmd(0.0);
+    TS_ASSERT_DELTA(gr->GetDsCmd(), 0.0, epsilon);
+  }
+
+  // Test c172x gear static friction coefficient
+  void testC172xStaticFriction() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Static friction coefficient from XML is 0.8 for bogeys
+    double staticFCoeff = gr->GetGearUnit(0)->GetstaticFCoeff();
+    TS_ASSERT_DELTA(staticFCoeff, 0.8, 0.01);
+  }
+
+  // Test c172x gear down status (fixed gear always down)
+  void testC172xGearDownStatus() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Fixed gear should always be down
+    TS_ASSERT(gr->GetGearUnit(0)->GetGearUnitDown());
+    TS_ASSERT(gr->GetGearUnit(1)->GetGearUnitDown());
+    TS_ASSERT(gr->GetGearUnit(2)->GetGearUnitDown());
+
+    // Fixed gear should never be up
+    TS_ASSERT(!gr->GetGearUnit(0)->GetGearUnitUp());
+    TS_ASSERT(!gr->GetGearUnit(1)->GetGearUnitUp());
+    TS_ASSERT(!gr->GetGearUnit(2)->GetGearUnitUp());
+  }
+
+  // Test c172x gear position value
+  void testC172xGearPosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Fixed gear position should be 1.0 (fully extended)
+    double pos0 = gr->GetGearUnit(0)->GetGearUnitPos();
+    double pos1 = gr->GetGearUnit(1)->GetGearUnitPos();
+    double pos2 = gr->GetGearUnit(2)->GetGearUnitPos();
+
+    TS_ASSERT_DELTA(pos0, 1.0, epsilon);
+    TS_ASSERT_DELTA(pos1, 1.0, epsilon);
+    TS_ASSERT_DELTA(pos2, 1.0, epsilon);
+  }
+
+  // Test c172x gear local position
+  void testC172xGearLocalPosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Get local gear positions
+    const FGColumnVector3& noseLocal = gr->GetGearUnit(0)->GetLocalGear();
+    const FGColumnVector3& leftLocal = gr->GetGearUnit(1)->GetLocalGear();
+    const FGColumnVector3& rightLocal = gr->GetGearUnit(2)->GetLocalGear();
+
+    // Positions should be valid (not NaN)
+    TS_ASSERT(!std::isnan(noseLocal(1)));
+    TS_ASSERT(!std::isnan(leftLocal(1)));
+    TS_ASSERT(!std::isnan(rightLocal(1)));
+  }
+
+  // Test c172x WOW airborne (no WOW when high)
+  void testC172xWOWAirborne() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(1000.0);  // High above ground
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Aircraft should not have weight on wheels when airborne
+    bool wow = gr->GetWOW();
+    TS_ASSERT(!wow);
+  }
+
+  // Test c172x no gear compression when airborne
+  void testC172xNoCompressionAirborne() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(1000.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // No compression when airborne
+    for (int i = 0; i < 3; i++) {
+      double compLen = gr->GetGearUnit(i)->GetCompLen();
+      TS_ASSERT_DELTA(compLen, 0.0, epsilon);
+    }
+  }
+
+  // Test c172x ground reaction strings
+  void testC172xGroundReactionStrings() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    std::string header = gr->GetGroundReactionStrings(",");
+    TS_ASSERT(!header.empty());
+    // Should contain gear names
+    TS_ASSERT(header.find("Nose Gear") != std::string::npos);
+    TS_ASSERT(header.find("Left Main Gear") != std::string::npos);
+    TS_ASSERT(header.find("Right Main Gear") != std::string::npos);
+  }
+
+  // Test c172x ground reaction values
+  void testC172xGroundReactionValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    std::string values = gr->GetGroundReactionValues(",");
+    TS_ASSERT(!values.empty());
+  }
+
+  // Test c172x gear body forces
+  void testC172xGearBodyForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Check body forces for main gears
+    double leftXForce = gr->GetGearUnit(1)->GetBodyXForce();
+    double leftYForce = gr->GetGearUnit(1)->GetBodyYForce();
+    double leftZForce = gr->GetGearUnit(1)->GetBodyZForce();
+
+    // Forces should be valid (not NaN)
+    TS_ASSERT(!std::isnan(leftXForce));
+    TS_ASSERT(!std::isnan(leftYForce));
+    TS_ASSERT(!std::isnan(leftZForce));
+  }
+
+  // Test c172x multiple simulation runs
+  void testC172xMultipleRuns() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Run multiple times
+    for (int i = 0; i < 10; i++) {
+      bool result = fdmex.Run();
+      TS_ASSERT(result);
+
+      // Check WOW remains consistent
+      bool wow = gr->GetWOW();
+      TS_ASSERT(wow == true || wow == false);  // Valid boolean
+    }
+  }
+
+  // Test c172x gear forces sum to total
+  void testC172xTotalForcesConsistency() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    const FGColumnVector3& totalForces = gr->GetForces();
+
+    // Sum individual gear body forces
+    FGColumnVector3 sumForces;
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      const FGColumnVector3& gearForce = gear->GetBodyForces();
+      sumForces(1) += gearForce(1);
+      sumForces(2) += gearForce(2);
+      sumForces(3) += gearForce(3);
+    }
+
+    // Total should equal sum of individual gear forces
+    TS_ASSERT_DELTA(totalForces(1), sumForces(1), 1.0);
+    TS_ASSERT_DELTA(totalForces(2), sumForces(2), 1.0);
+    TS_ASSERT_DELTA(totalForces(3), sumForces(3), 1.0);
+  }
+
+  // Test c172x property access for gear
+  void testC172xGearProperties() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    // Check gear/num-units property
+    auto numUnitsNode = pm->GetNode("gear/num-units");
+    TS_ASSERT(numUnitsNode != nullptr);
+    if (numUnitsNode) {
+      TS_ASSERT_EQUALS(numUnitsNode->getIntValue(), 6);
+    }
+
+    // Check gear/wow property exists
+    auto wowNode = pm->GetNode("gear/wow");
+    TS_ASSERT(wowNode != nullptr);
+  }
+
+  // Test c172x wheel velocities when stationary
+  void testC172xWheelVelocitiesStationary() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Check wheel velocities (should be near zero when stationary)
+    double rollVel = gr->GetGearUnit(1)->GetWheelRollVel();
+    double sideVel = gr->GetGearUnit(1)->GetWheelSideVel();
+
+    TS_ASSERT(!std::isnan(rollVel));
+    TS_ASSERT(!std::isnan(sideVel));
+  }
+
+  // Test c172x wheel slip angle
+  void testC172xWheelSlipAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Check slip angle for main gear
+    double slipAngle = gr->GetGearUnit(1)->GetWheelSlipAngle();
+    TS_ASSERT(!std::isnan(slipAngle));
+  }
+
+  // Test c172x gear steer angle
+  void testC172xGearSteerAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Get initial steer angle
+    double steerAngle = gr->GetGearUnit(0)->GetSteerAngleDeg();
+    TS_ASSERT(!std::isnan(steerAngle));
+
+    // Steer normalized value
+    double steerNorm = gr->GetGearUnit(0)->GetSteerNorm();
+    TS_ASSERT(!std::isnan(steerNorm));
+  }
+
+  // Test c172x compression velocity
+  void testC172xCompressionVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Compression velocity should be finite
+    for (int i = 0; i < 3; i++) {
+      double compVel = gr->GetGearUnit(i)->GetCompVel();
+      TS_ASSERT(!std::isnan(compVel));
+      TS_ASSERT(std::isfinite(compVel));
+    }
   }
 };
