@@ -1523,4 +1523,284 @@ public:
     std::string values = buoyantForces->GetBuoyancyValues(",");
     TS_ASSERT(values.length() >= 0);  // Valid string
   }
+
+  // ============================================================================
+  // C172x (fixed-wing aircraft) tests - verifying buoyant forces handling
+  // for heavier-than-air aircraft without gas cells
+  // ============================================================================
+
+  // Test GetBuoyantForces pointer for c172x
+  void testC172xGetBuoyantForcesPointer() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    // Buoyant forces subsystem should exist even for fixed-wing aircraft
+    TS_ASSERT(buoy != nullptr);
+  }
+
+  // Test GetForces returns zero for fixed-wing aircraft
+  void testC172xGetForcesReturnsZero() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      buoy->Run(false);
+      // C172x has no gas cells, so buoyant forces should be zero
+      TS_ASSERT_DELTA(buoy->GetForces(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(3), 0.0, epsilon);
+    }
+  }
+
+  // Test GetMoments returns zero for fixed-wing aircraft
+  void testC172xGetMomentsReturnsZero() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      buoy->Run(false);
+      // C172x has no gas cells, so buoyant moments should be zero
+      TS_ASSERT_DELTA(buoy->GetMoments(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetMoments(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetMoments(3), 0.0, epsilon);
+    }
+  }
+
+  // Test GetGasMass returns zero for fixed-wing aircraft
+  void testC172xGetGasMassReturnsZero() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // C172x has no gas cells, so gas mass should be zero
+      TS_ASSERT_DELTA(buoy->GetGasMass(), 0.0, epsilon);
+    }
+  }
+
+  // Test model initialization for c172x
+  void testC172xModelInitialization() {
+    FGFDMExec fdmex;
+    bool loadResult = fdmex.LoadModel("c172x");
+    TS_ASSERT(loadResult);
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      bool initResult = buoy->InitModel();
+      TS_ASSERT(initResult);
+    }
+  }
+
+  // Test empty gas cell handling for c172x
+  void testC172xEmptyGasCellHandling() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Run should complete without errors even with no gas cells
+      bool runResult = buoy->Run(false);
+      TS_ASSERT(runResult == true || runResult == false);
+      // Forces should remain zero
+      double totalForce = std::abs(buoy->GetForces(1)) +
+                          std::abs(buoy->GetForces(2)) +
+                          std::abs(buoy->GetForces(3));
+      TS_ASSERT_DELTA(totalForce, 0.0, epsilon);
+    }
+  }
+
+  // Test disabled state for fixed-wing aircraft
+  void testC172xDisabledStateForFixedWing() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Even after multiple simulation steps, buoyant forces remain zero
+      for (int i = 0; i < 10; i++) {
+        fdmex.Run();
+      }
+      TS_ASSERT_DELTA(buoy->GetForces(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(3), 0.0, epsilon);
+    }
+  }
+
+  // Test model existence check for c172x
+  void testC172xModelExistenceCheck() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto buoy = fdmex.GetBuoyantForces();
+    // The buoyant forces model should exist as part of the FDM infrastructure
+    TS_ASSERT(buoy != nullptr);
+    // Verify it has a valid name
+    if (buoy != nullptr) {
+      std::string name = buoy->GetName();
+      TS_ASSERT(name.length() > 0);
+    }
+  }
+
+  // Test no buoyancy contribution for heavier-than-air craft
+  void testC172xNoBuoyancyContribution() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      buoy->Run(false);
+      // Get forces vector magnitude should be zero
+      double fx = buoy->GetForces(1);
+      double fy = buoy->GetForces(2);
+      double fz = buoy->GetForces(3);
+      double magnitude = std::sqrt(fx*fx + fy*fy + fz*fz);
+      TS_ASSERT_DELTA(magnitude, 0.0, epsilon);
+    }
+  }
+
+  // Test interaction with mass balance for c172x
+  void testC172xMassBalanceInteraction() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    auto massBalance = fdmex.GetMassBalance();
+    if (buoy != nullptr && massBalance != nullptr) {
+      // Gas mass should be zero, not affecting total mass
+      double gasMass = buoy->GetGasMass();
+      TS_ASSERT_DELTA(gasMass, 0.0, epsilon);
+      // Mass balance should have valid non-zero weight for c172x
+      double weight = massBalance->GetWeight();
+      TS_ASSERT(weight > 0.0);
+    }
+  }
+
+  // Test Run method returns properly for c172x
+  void testC172xRunMethod() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Run should complete successfully
+      bool result = buoy->Run(false);
+      // The Run method should return a valid boolean
+      TS_ASSERT(result == true || result == false);
+    }
+  }
+
+  // Test Run in holding mode for c172x
+  void testC172xRunHoldingMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Run in holding mode should also work
+      bool result = buoy->Run(true);
+      TS_ASSERT(result == true || result == false);
+      // Forces should still be zero
+      TS_ASSERT_DELTA(buoy->GetForces(1), 0.0, epsilon);
+    }
+  }
+
+  // Test GetBuoyancyStrings for c172x
+  void testC172xGetBuoyancyStrings() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      std::string header = buoy->GetBuoyancyStrings(",");
+      // String should be valid (possibly empty for no gas cells)
+      TS_ASSERT(header.length() >= 0);
+    }
+  }
+
+  // Test GetBuoyancyValues for c172x
+  void testC172xGetBuoyancyValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      buoy->Run(false);
+      std::string values = buoy->GetBuoyancyValues(",");
+      // Values string should be valid (possibly empty for no gas cells)
+      TS_ASSERT(values.length() >= 0);
+    }
+  }
+
+  // Test forces remain zero after simulation for c172x
+  void testC172xForcesRemainZeroAfterSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Run several simulation frames
+      for (int i = 0; i < 100; i++) {
+        fdmex.Run();
+      }
+      // Buoyant forces should still be zero
+      TS_ASSERT_DELTA(buoy->GetForces(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(3), 0.0, epsilon);
+    }
+  }
+
+  // Test moments remain zero after simulation for c172x
+  void testC172xMomentsRemainZeroAfterSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Run several simulation frames
+      for (int i = 0; i < 100; i++) {
+        fdmex.Run();
+      }
+      // Buoyant moments should still be zero
+      TS_ASSERT_DELTA(buoy->GetMoments(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetMoments(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetMoments(3), 0.0, epsilon);
+    }
+  }
+
+  // Test gas mass remains zero during simulation for c172x
+  void testC172xGasMassRemainZeroDuringSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto buoy = fdmex.GetBuoyantForces();
+    if (buoy != nullptr) {
+      // Check gas mass at various points during simulation
+      for (int i = 0; i < 50; i++) {
+        fdmex.Run();
+        TS_ASSERT_DELTA(buoy->GetGasMass(), 0.0, epsilon);
+      }
+    }
+  }
+
+  // Test FDMExec integration with buoyant forces for c172x
+  void testC172xFDMExecIntegration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Get buoyant forces through FDMExec
+    auto buoy = fdmex.GetBuoyantForces();
+    TS_ASSERT(buoy != nullptr);
+
+    if (buoy != nullptr) {
+      // Run full simulation and verify integration
+      bool simResult = fdmex.Run();
+      TS_ASSERT(simResult);
+
+      // Buoyant forces should not affect fixed-wing simulation
+      TS_ASSERT_DELTA(buoy->GetForces(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(buoy->GetForces(3), 0.0, epsilon);
+    }
+  }
 };

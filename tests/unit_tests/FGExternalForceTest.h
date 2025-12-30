@@ -33,6 +33,7 @@ SENTRY
 
 #include <FGFDMExec.h>
 #include <models/FGExternalForce.h>
+#include <models/FGExternalReactions.h>
 #include <models/propulsion/FGForce.h>
 #include <math/FGColumnVector3.h>
 #include <math/FGMatrix33.h>
@@ -2132,5 +2133,507 @@ public:
       TS_ASSERT_DELTA(x, 0.6, epsilon);
       TS_ASSERT_DELTA(y, 0.8, epsilon);
     }
+  }
+
+  // ============================================================================
+  // C172x Model-Based Tests for FGExternalForce/FGExternalReactions
+  // ============================================================================
+
+  // Test 1: GetExternalReactions pointer is not null after loading c172x model
+  void testC172xExternalReactionsNotNull() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    TS_ASSERT(extReact != nullptr);
+  }
+
+  // Test 2: External forces are finite after model load
+  void testC172xExternalForcesFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    const FGColumnVector3& forces = extReact->GetForces();
+
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+    TS_ASSERT(!std::isnan(forces(1)));
+    TS_ASSERT(!std::isnan(forces(2)));
+    TS_ASSERT(!std::isnan(forces(3)));
+  }
+
+  // Test 3: External moments are finite after model load
+  void testC172xExternalMomentsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    const FGColumnVector3& moments = extReact->GetMoments();
+
+    TS_ASSERT(std::isfinite(moments(1)));
+    TS_ASSERT(std::isfinite(moments(2)));
+    TS_ASSERT(std::isfinite(moments(3)));
+    TS_ASSERT(!std::isnan(moments(1)));
+    TS_ASSERT(!std::isnan(moments(2)));
+    TS_ASSERT(!std::isnan(moments(3)));
+  }
+
+  // Test 4: Force X component indexed access
+  void testC172xForceXIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    double fx = extReact->GetForces(1);
+
+    TS_ASSERT(std::isfinite(fx));
+    TS_ASSERT(!std::isnan(fx));
+    // Without external forces defined, should be zero
+    TS_ASSERT_DELTA(fx, 0.0, epsilon);
+  }
+
+  // Test 5: Force Y component indexed access
+  void testC172xForceYIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    double fy = extReact->GetForces(2);
+
+    TS_ASSERT(std::isfinite(fy));
+    TS_ASSERT(!std::isnan(fy));
+    TS_ASSERT_DELTA(fy, 0.0, epsilon);
+  }
+
+  // Test 6: Force Z component indexed access
+  void testC172xForceZIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    double fz = extReact->GetForces(3);
+
+    TS_ASSERT(std::isfinite(fz));
+    TS_ASSERT(!std::isnan(fz));
+    TS_ASSERT_DELTA(fz, 0.0, epsilon);
+  }
+
+  // Test 7: Moment X (roll) component indexed access
+  void testC172xMomentXIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    double mx = extReact->GetMoments(1);
+
+    TS_ASSERT(std::isfinite(mx));
+    TS_ASSERT(!std::isnan(mx));
+    TS_ASSERT_DELTA(mx, 0.0, epsilon);
+  }
+
+  // Test 8: Moment Y (pitch) component indexed access
+  void testC172xMomentYIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    double my = extReact->GetMoments(2);
+
+    TS_ASSERT(std::isfinite(my));
+    TS_ASSERT(!std::isnan(my));
+    TS_ASSERT_DELTA(my, 0.0, epsilon);
+  }
+
+  // Test 9: Moment Z (yaw) component indexed access
+  void testC172xMomentZIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    double mz = extReact->GetMoments(3);
+
+    TS_ASSERT(std::isfinite(mz));
+    TS_ASSERT(!std::isnan(mz));
+    TS_ASSERT_DELTA(mz, 0.0, epsilon);
+  }
+
+  // Test 10: Forces vector matches indexed access
+  void testC172xForcesVectorMatchesIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    const FGColumnVector3& forces = extReact->GetForces();
+
+    TS_ASSERT_DELTA(forces(1), extReact->GetForces(1), epsilon);
+    TS_ASSERT_DELTA(forces(2), extReact->GetForces(2), epsilon);
+    TS_ASSERT_DELTA(forces(3), extReact->GetForces(3), epsilon);
+  }
+
+  // Test 11: Moments vector matches indexed access
+  void testC172xMomentsVectorMatchesIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    const FGColumnVector3& moments = extReact->GetMoments();
+
+    TS_ASSERT_DELTA(moments(1), extReact->GetMoments(1), epsilon);
+    TS_ASSERT_DELTA(moments(2), extReact->GetMoments(2), epsilon);
+    TS_ASSERT_DELTA(moments(3), extReact->GetMoments(3), epsilon);
+  }
+
+  // Test 12: External reactions remain stable after simulation run
+  void testC172xExternalReactionsAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    // Run simulation for several steps
+    for (int i = 0; i < 10; i++) {
+      fdmex.Run();
+    }
+
+    const FGColumnVector3& forces = extReact->GetForces();
+    const FGColumnVector3& moments = extReact->GetMoments();
+
+    // Forces and moments should remain finite
+    for (int i = 1; i <= 3; i++) {
+      TS_ASSERT(std::isfinite(forces(i)));
+      TS_ASSERT(std::isfinite(moments(i)));
+      TS_ASSERT(!std::isnan(forces(i)));
+      TS_ASSERT(!std::isnan(moments(i)));
+    }
+  }
+
+  // Test 13: External reactions with extended simulation run
+  void testC172xExternalReactionsExtendedRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    // Run simulation for extended time
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    const FGColumnVector3& forces = extReact->GetForces();
+    const FGColumnVector3& moments = extReact->GetMoments();
+
+    // Without external forces defined, should remain zero
+    TS_ASSERT_DELTA(forces.Magnitude(), 0.0, epsilon);
+    TS_ASSERT_DELTA(moments.Magnitude(), 0.0, epsilon);
+  }
+
+  // Test 14: Force magnitude is within reasonable range
+  void testC172xForceMagnitudeReasonable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    fdmex.Run();
+
+    const FGColumnVector3& forces = extReact->GetForces();
+    double magnitude = forces.Magnitude();
+
+    TS_ASSERT(std::isfinite(magnitude));
+    TS_ASSERT(magnitude >= 0.0);
+    // Without external forces, magnitude should be zero or very small
+    TS_ASSERT(magnitude < 1.0e6);  // Reasonable upper bound
+  }
+
+  // Test 15: Moment magnitude is within reasonable range
+  void testC172xMomentMagnitudeReasonable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    fdmex.Run();
+
+    const FGColumnVector3& moments = extReact->GetMoments();
+    double magnitude = moments.Magnitude();
+
+    TS_ASSERT(std::isfinite(magnitude));
+    TS_ASSERT(magnitude >= 0.0);
+    // Without external moments, magnitude should be zero or very small
+    TS_ASSERT(magnitude < 1.0e6);  // Reasonable upper bound
+  }
+
+  // Test 16: External reactions consistent across multiple accesses
+  void testC172xExternalReactionsConsistentAccess() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    fdmex.Run();
+
+    // Get forces multiple times - should be consistent
+    const FGColumnVector3& forces1 = extReact->GetForces();
+    const FGColumnVector3& forces2 = extReact->GetForces();
+    const FGColumnVector3& forces3 = extReact->GetForces();
+
+    TS_ASSERT_DELTA(forces1(1), forces2(1), epsilon);
+    TS_ASSERT_DELTA(forces2(1), forces3(1), epsilon);
+    TS_ASSERT_DELTA(forces1(2), forces2(2), epsilon);
+    TS_ASSERT_DELTA(forces2(2), forces3(2), epsilon);
+    TS_ASSERT_DELTA(forces1(3), forces2(3), epsilon);
+    TS_ASSERT_DELTA(forces2(3), forces3(3), epsilon);
+  }
+
+  // Test 17: External reactions vector reference stability
+  void testC172xExternalReactionsVectorReferenceStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    const FGColumnVector3& forces1 = extReact->GetForces();
+    const FGColumnVector3& forces2 = extReact->GetForces();
+
+    // Should return reference to same internal vector
+    TS_ASSERT_EQUALS(&forces1, &forces2);
+
+    const FGColumnVector3& moments1 = extReact->GetMoments();
+    const FGColumnVector3& moments2 = extReact->GetMoments();
+
+    TS_ASSERT_EQUALS(&moments1, &moments2);
+  }
+
+  // Test 18: Forces and moments are different vectors
+  void testC172xForcesAndMomentsDifferentVectors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    const FGColumnVector3& forces = extReact->GetForces();
+    const FGColumnVector3& moments = extReact->GetMoments();
+
+    TS_ASSERT(&forces != &moments);
+  }
+
+  // Test 19: External reactions InitModel returns true
+  void testC172xExternalReactionsInitModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    bool result = extReact->InitModel();
+    TS_ASSERT_EQUALS(result, true);
+
+    // After init, forces should still be valid
+    const FGColumnVector3& forces = extReact->GetForces();
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+  }
+
+  // Test 20: External reactions Run method behavior
+  void testC172xExternalReactionsRunMethod() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    // Run with holding = false
+    bool result = extReact->Run(false);
+    // Returns true when no external forces defined (early return)
+    TS_ASSERT_EQUALS(result, true);
+
+    // Run with holding = true
+    result = extReact->Run(true);
+    // Returns false when holding
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test 21: Two independent c172x instances have separate external reactions
+  void testC172xTwoInstancesIndependent() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    fdmex1.LoadModel("c172x");
+    fdmex2.LoadModel("c172x");
+
+    fdmex1.RunIC();
+    fdmex2.RunIC();
+
+    auto extReact1 = fdmex1.GetExternalReactions();
+    auto extReact2 = fdmex2.GetExternalReactions();
+
+    // Should be different instances
+    TS_ASSERT(extReact1 != nullptr);
+    TS_ASSERT(extReact2 != nullptr);
+    TS_ASSERT(extReact1.get() != extReact2.get());
+
+    // Run one instance
+    for (int i = 0; i < 10; i++) {
+      fdmex1.Run();
+    }
+
+    // Both should have valid forces
+    const FGColumnVector3& forces1 = extReact1->GetForces();
+    const FGColumnVector3& forces2 = extReact2->GetForces();
+
+    for (int i = 1; i <= 3; i++) {
+      TS_ASSERT(std::isfinite(forces1(i)));
+      TS_ASSERT(std::isfinite(forces2(i)));
+    }
+  }
+
+  // Test 22: External reactions forces remain stable through init cycles
+  void testC172xExternalReactionsInitCycles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    for (int cycle = 0; cycle < 5; cycle++) {
+      extReact->InitModel();
+      fdmex.Run();
+
+      const FGColumnVector3& forces = extReact->GetForces();
+
+      TS_ASSERT(std::isfinite(forces(1)));
+      TS_ASSERT(std::isfinite(forces(2)));
+      TS_ASSERT(std::isfinite(forces(3)));
+      TS_ASSERT_DELTA(forces(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(forces(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(forces(3), 0.0, epsilon);
+    }
+  }
+
+  // Test 23: External reactions moments remain stable through init cycles
+  void testC172xExternalReactionsMomentsInitCycles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    for (int cycle = 0; cycle < 5; cycle++) {
+      extReact->InitModel();
+      fdmex.Run();
+
+      const FGColumnVector3& moments = extReact->GetMoments();
+
+      TS_ASSERT(std::isfinite(moments(1)));
+      TS_ASSERT(std::isfinite(moments(2)));
+      TS_ASSERT(std::isfinite(moments(3)));
+      TS_ASSERT_DELTA(moments(1), 0.0, epsilon);
+      TS_ASSERT_DELTA(moments(2), 0.0, epsilon);
+      TS_ASSERT_DELTA(moments(3), 0.0, epsilon);
+    }
+  }
+
+  // Test 24: Full API verification with c172x model
+  void testC172xFullAPIVerification() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    // 1. Verify pointer is valid
+    TS_ASSERT(extReact != nullptr);
+
+    // 2. Verify InitModel works
+    TS_ASSERT_EQUALS(extReact->InitModel(), true);
+
+    // 3. Verify Run behavior
+    TS_ASSERT_EQUALS(extReact->Run(true), false);   // Holding returns false
+    TS_ASSERT_EQUALS(extReact->Run(false), true);   // Not holding returns true
+
+    // 4. Run the full simulation
+    fdmex.Run();
+
+    // 5. Verify forces vector access
+    const FGColumnVector3& forces = extReact->GetForces();
+    for (int i = 1; i <= 3; i++) {
+      TS_ASSERT(std::isfinite(forces(i)));
+      TS_ASSERT(!std::isnan(forces(i)));
+      TS_ASSERT(!std::isinf(forces(i)));
+    }
+
+    // 6. Verify moments vector access
+    const FGColumnVector3& moments = extReact->GetMoments();
+    for (int i = 1; i <= 3; i++) {
+      TS_ASSERT(std::isfinite(moments(i)));
+      TS_ASSERT(!std::isnan(moments(i)));
+      TS_ASSERT(!std::isinf(moments(i)));
+    }
+
+    // 7. Verify indexed access matches vector access
+    for (int i = 1; i <= 3; i++) {
+      TS_ASSERT_DELTA(forces(i), extReact->GetForces(i), epsilon);
+      TS_ASSERT_DELTA(moments(i), extReact->GetMoments(i), epsilon);
+    }
+
+    // 8. Verify magnitudes are reasonable
+    TS_ASSERT(forces.Magnitude() >= 0.0);
+    TS_ASSERT(moments.Magnitude() >= 0.0);
+    TS_ASSERT(forces.Magnitude() < 1.0e10);
+    TS_ASSERT(moments.Magnitude() < 1.0e10);
+  }
+
+  // Test 25: Comprehensive simulation run with external reactions verification
+  void testC172xComprehensiveSimulationRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto extReact = fdmex.GetExternalReactions();
+
+    // Initial state verification
+    const FGColumnVector3& initialForces = extReact->GetForces();
+    const FGColumnVector3& initialMoments = extReact->GetMoments();
+
+    TS_ASSERT_DELTA(initialForces.Magnitude(), 0.0, epsilon);
+    TS_ASSERT_DELTA(initialMoments.Magnitude(), 0.0, epsilon);
+
+    // Extended simulation with periodic verification
+    for (int step = 0; step < 50; step++) {
+      fdmex.Run();
+
+      // Verify stability at each step
+      const FGColumnVector3& forces = extReact->GetForces();
+      const FGColumnVector3& moments = extReact->GetMoments();
+
+      for (int i = 1; i <= 3; i++) {
+        TS_ASSERT(std::isfinite(forces(i)));
+        TS_ASSERT(std::isfinite(moments(i)));
+        TS_ASSERT(!std::isnan(forces(i)));
+        TS_ASSERT(!std::isnan(moments(i)));
+        TS_ASSERT(!std::isinf(forces(i)));
+        TS_ASSERT(!std::isinf(moments(i)));
+      }
+
+      // Verify values within reasonable bounds (for aircraft without external forces)
+      TS_ASSERT(forces.Magnitude() < 1.0e8);
+      TS_ASSERT(moments.Magnitude() < 1.0e8);
+    }
+
+    // Final state verification
+    const FGColumnVector3& finalForces = extReact->GetForces();
+    const FGColumnVector3& finalMoments = extReact->GetMoments();
+
+    // Without external forces defined, should remain at zero
+    TS_ASSERT_DELTA(finalForces.Magnitude(), 0.0, epsilon);
+    TS_ASSERT_DELTA(finalMoments.Magnitude(), 0.0, epsilon);
   }
 };

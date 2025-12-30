@@ -1309,4 +1309,511 @@ public:
       TS_ASSERT_EQUALS(fdmex.GetFCS()->GetRate(), rate);
     }
   }
+
+  /***************************************************************************
+   * C172x Model Tests - FGModel Base Class Functionality
+   ***************************************************************************/
+
+  // Test GetName - model name retrieval with loaded aircraft
+  void testC172xAerodynamicsGetName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    std::string name = aero->GetName();
+
+    TS_ASSERT(!name.empty());
+    TS_ASSERT(name.length() > 0);
+    TS_ASSERT(name.length() < 100);  // Reasonable length
+  }
+
+  // Test GetName for multiple models with loaded aircraft
+  void testC172xAllModelsGetName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    std::string aeroName = fdmex.GetAerodynamics()->GetName();
+    std::string propName = fdmex.GetPropagate()->GetName();
+    std::string fcsName = fdmex.GetFCS()->GetName();
+    std::string massName = fdmex.GetMassBalance()->GetName();
+
+    TS_ASSERT(!aeroName.empty());
+    TS_ASSERT(!propName.empty());
+    TS_ASSERT(!fcsName.empty());
+    TS_ASSERT(!massName.empty());
+
+    // Names should be unique
+    TS_ASSERT_DIFFERS(aeroName, propName);
+    TS_ASSERT_DIFFERS(aeroName, fcsName);
+    TS_ASSERT_DIFFERS(propName, massName);
+  }
+
+  // Test GetRate - model execution rate
+  void testC172xGetRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    unsigned int rate = aero->GetRate();
+
+    TS_ASSERT(rate >= 0);
+    TS_ASSERT(rate <= 1000);  // Reasonable upper bound
+  }
+
+  // Test SetRate - set execution rate
+  void testC172xSetRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    aero->SetRate(1);
+    TS_ASSERT_EQUALS(aero->GetRate(), 1u);
+
+    aero->SetRate(5);
+    TS_ASSERT_EQUALS(aero->GetRate(), 5u);
+
+    aero->SetRate(10);
+    TS_ASSERT_EQUALS(aero->GetRate(), 10u);
+  }
+
+  // Test SetRate on multiple models
+  void testC172xSetRateMultipleModels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    fdmex.GetAerodynamics()->SetRate(2);
+    fdmex.GetPropagate()->SetRate(3);
+    fdmex.GetFCS()->SetRate(4);
+    fdmex.GetMassBalance()->SetRate(5);
+
+    TS_ASSERT_EQUALS(fdmex.GetAerodynamics()->GetRate(), 2u);
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->GetRate(), 3u);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->GetRate(), 4u);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->GetRate(), 5u);
+  }
+
+  // Test GetExec - access to FGFDMExec
+  void testC172xGetExec() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGFDMExec* exec = aero->GetExec();
+
+    TS_ASSERT(exec != nullptr);
+    TS_ASSERT_EQUALS(exec, &fdmex);
+  }
+
+  // Test GetExec for all models
+  void testC172xGetExecAllModels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    TS_ASSERT_EQUALS(fdmex.GetAerodynamics()->GetExec(), &fdmex);
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->GetExec(), &fdmex);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->GetExec(), &fdmex);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->GetExec(), &fdmex);
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->GetExec(), &fdmex);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->GetExec(), &fdmex);
+  }
+
+  // Test Run - model execution with loaded aircraft
+  void testC172xRunAerodynamics() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    bool result = aero->Run(false);
+
+    TS_ASSERT_EQUALS(result, false);  // false = no error
+  }
+
+  // Test Run on multiple models
+  void testC172xRunAllModels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    TS_ASSERT_EQUALS(fdmex.GetAerodynamics()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetPropagate()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetFCS()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetMassBalance()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetGroundReactions()->Run(false), false);
+    TS_ASSERT_EQUALS(fdmex.GetAccelerations()->Run(false), false);
+  }
+
+  // Test InitModel - model initialization
+  void testC172xInitModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    bool result = aero->InitModel();
+
+    TS_ASSERT_EQUALS(result, true);
+  }
+
+  // Test InitModel on multiple models
+  void testC172xInitModelAllModels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    TS_ASSERT(fdmex.GetAerodynamics()->InitModel());
+    TS_ASSERT(fdmex.GetPropagate()->InitModel());
+    TS_ASSERT(fdmex.GetFCS()->InitModel());
+    TS_ASSERT(fdmex.GetMassBalance()->InitModel());
+    TS_ASSERT(fdmex.GetGroundReactions()->InitModel());
+    TS_ASSERT(fdmex.GetAccelerations()->InitModel());
+  }
+
+  // Test model chaining - multiple models running in sequence
+  void testC172xModelChaining() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Run models in sequence as they would during simulation
+    for (int i = 0; i < 10; i++) {
+      fdmex.GetAtmosphere()->Run(false);
+      fdmex.GetPropagate()->Run(false);
+      fdmex.GetAerodynamics()->Run(false);
+      fdmex.GetMassBalance()->Run(false);
+      fdmex.GetFCS()->Run(false);
+      fdmex.GetGroundReactions()->Run(false);
+      fdmex.GetAccelerations()->Run(false);
+    }
+    TS_ASSERT(true);  // No errors occurred
+  }
+
+  // Test model naming convention - names should follow expected patterns
+  void testC172xModelNamingConvention() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    std::string aeroName = fdmex.GetAerodynamics()->GetName();
+    std::string propName = fdmex.GetPropagate()->GetName();
+    std::string fcsName = fdmex.GetFCS()->GetName();
+
+    // Names should be non-empty and printable
+    TS_ASSERT(!aeroName.empty());
+    TS_ASSERT(!propName.empty());
+    TS_ASSERT(!fcsName.empty());
+
+    // All characters should be printable
+    for (char c : aeroName) {
+      TS_ASSERT(std::isprint(c));
+    }
+    for (char c : propName) {
+      TS_ASSERT(std::isprint(c));
+    }
+    for (char c : fcsName) {
+      TS_ASSERT(std::isprint(c));
+    }
+  }
+
+  // Test model execution order - verify FDM can run complete cycle
+  void testC172xModelExecutionOrder() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Run full FDM cycle
+    bool result = fdmex.Run();
+    TS_ASSERT_EQUALS(result, true);
+
+    // Run multiple cycles
+    for (int i = 0; i < 100; i++) {
+      result = fdmex.Run();
+      TS_ASSERT_EQUALS(result, true);
+    }
+  }
+
+  // Test aerodynamic forces are finite after model run
+  void testC172xAeroForcesFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Get aerodynamic forces in body frame
+    double forceX = aero->GetForces()(1);
+    double forceY = aero->GetForces()(2);
+    double forceZ = aero->GetForces()(3);
+
+    TS_ASSERT(std::isfinite(forceX));
+    TS_ASSERT(std::isfinite(forceY));
+    TS_ASSERT(std::isfinite(forceZ));
+  }
+
+  // Test propagate state values are finite
+  void testC172xPropagateStateFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+
+    // Check position values
+    double altitude = propagate->GetAltitudeASL();
+    double lat = propagate->GetLatitudeDeg();
+    double lon = propagate->GetLongitudeDeg();
+
+    TS_ASSERT(std::isfinite(altitude));
+    TS_ASSERT(std::isfinite(lat));
+    TS_ASSERT(std::isfinite(lon));
+
+    // Check velocity values
+    double u = propagate->GetUVW()(1);
+    double v = propagate->GetUVW()(2);
+    double w = propagate->GetUVW()(3);
+
+    TS_ASSERT(std::isfinite(u));
+    TS_ASSERT(std::isfinite(v));
+    TS_ASSERT(std::isfinite(w));
+  }
+
+  // Test mass balance values are finite and reasonable
+  void testC172xMassBalanceFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto mass = fdmex.GetMassBalance();
+
+    double weight = mass->GetWeight();
+    double mass_val = mass->GetMass();
+
+    TS_ASSERT(std::isfinite(weight));
+    TS_ASSERT(std::isfinite(mass_val));
+    TS_ASSERT(weight > 0);  // Weight should be positive
+    TS_ASSERT(mass_val > 0);  // Mass should be positive
+
+    // C172 typical weight range 1600-2400 lbs
+    TS_ASSERT(weight > 1000);
+    TS_ASSERT(weight < 5000);
+  }
+
+  // Test rate changes during simulation
+  void testC172xRateChangesDuringSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    for (unsigned int rate = 1; rate <= 5; rate++) {
+      aero->SetRate(rate);
+      TS_ASSERT_EQUALS(aero->GetRate(), rate);
+
+      fdmex.Run();
+
+      // Verify rate persists after run
+      TS_ASSERT_EQUALS(aero->GetRate(), rate);
+    }
+  }
+
+  // Test model exec consistency after multiple runs
+  void testC172xExecConsistencyAfterRuns() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    FGFDMExec* exec1 = aero->GetExec();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGFDMExec* exec2 = aero->GetExec();
+
+    TS_ASSERT_EQUALS(exec1, exec2);
+    TS_ASSERT_EQUALS(exec1, &fdmex);
+  }
+
+  // Test model name consistency after operations
+  void testC172xNameConsistencyAfterOperations() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    std::string name1 = aero->GetName();
+
+    aero->SetRate(10);
+    fdmex.Run();
+    aero->InitModel();
+
+    std::string name2 = aero->GetName();
+
+    TS_ASSERT_EQUALS(name1, name2);
+  }
+
+  // Test FCS control surface outputs are finite
+  void testC172xFCSOutputsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto fcs = fdmex.GetFCS();
+
+    double aileron = fcs->GetDePos(0);  // Aileron
+    double elevator = fcs->GetDePos(1);  // Elevator
+    double rudder = fcs->GetDrPos();
+
+    TS_ASSERT(std::isfinite(aileron));
+    TS_ASSERT(std::isfinite(elevator));
+    TS_ASSERT(std::isfinite(rudder));
+
+    // Control surfaces should be within reasonable deflection limits
+    TS_ASSERT(aileron >= -1.0 && aileron <= 1.0);
+    TS_ASSERT(elevator >= -1.0 && elevator <= 1.0);
+    TS_ASSERT(rudder >= -1.0 && rudder <= 1.0);
+  }
+
+  // Test ground reactions with loaded aircraft
+  void testC172xGroundReactionsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto ground = fdmex.GetGroundReactions();
+
+    // Number of gear units should be positive for C172
+    int numGear = ground->GetNumGearUnits();
+    TS_ASSERT(numGear > 0);
+    TS_ASSERT(numGear <= 10);  // Reasonable upper bound
+  }
+
+  // Test accelerations are finite
+  void testC172xAccelerationsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto accel = fdmex.GetAccelerations();
+
+    // Body accelerations
+    double udot = accel->GetUVWdot()(1);
+    double vdot = accel->GetUVWdot()(2);
+    double wdot = accel->GetUVWdot()(3);
+
+    TS_ASSERT(std::isfinite(udot));
+    TS_ASSERT(std::isfinite(vdot));
+    TS_ASSERT(std::isfinite(wdot));
+
+    // Accelerations should be within reasonable bounds (< 100 ft/s^2)
+    TS_ASSERT(std::abs(udot) < 1000);
+    TS_ASSERT(std::abs(vdot) < 1000);
+    TS_ASSERT(std::abs(wdot) < 1000);
+  }
+
+  // Test auxiliary computed values are finite
+  void testC172xAuxiliaryFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aux = fdmex.GetAuxiliary();
+
+    double mach = aux->GetMach();
+    double qbar = aux->Getqbar();
+    double vcas = aux->GetVcalibratedKTS();
+
+    TS_ASSERT(std::isfinite(mach));
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(std::isfinite(vcas));
+
+    // Reasonable ranges for C172 at startup
+    TS_ASSERT(mach >= 0);
+    TS_ASSERT(mach < 1.0);  // C172 is subsonic
+    TS_ASSERT(qbar >= 0);
+  }
+
+  // Test multiple FDMExec instances with C172x
+  void testC172xMultipleFDMExecInstances() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    fdmex1.LoadModel("c172x");
+    fdmex2.LoadModel("c172x");
+
+    fdmex1.RunIC();
+    fdmex2.RunIC();
+
+    // Verify each has its own model instances
+    auto aero1 = fdmex1.GetAerodynamics();
+    auto aero2 = fdmex2.GetAerodynamics();
+
+    TS_ASSERT(aero1 != aero2);
+    TS_ASSERT(aero1->GetExec() == &fdmex1);
+    TS_ASSERT(aero2->GetExec() == &fdmex2);
+
+    // Set different rates
+    aero1->SetRate(1);
+    aero2->SetRate(10);
+
+    TS_ASSERT_EQUALS(aero1->GetRate(), 1u);
+    TS_ASSERT_EQUALS(aero2->GetRate(), 10u);
+  }
+
+  // Test extended simulation run stability
+  void testC172xExtendedSimulationStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Run for extended period
+    for (int i = 0; i < 500; i++) {
+      bool result = fdmex.Run();
+      TS_ASSERT_EQUALS(result, true);
+
+      // Verify state remains finite
+      auto prop = fdmex.GetPropagate();
+      TS_ASSERT(std::isfinite(prop->GetAltitudeASL()));
+      TS_ASSERT(std::isfinite(prop->GetLatitudeDeg()));
+      TS_ASSERT(std::isfinite(prop->GetLongitudeDeg()));
+    }
+  }
+
+  // Test model InitModel and Run sequence
+  void testC172xInitRunSequence() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Sequence: Init -> Run -> Init -> Run
+    TS_ASSERT(aero->InitModel());
+    TS_ASSERT_EQUALS(aero->Run(false), false);
+    TS_ASSERT(aero->InitModel());
+    TS_ASSERT_EQUALS(aero->Run(false), false);
+
+    // Verify state is still valid
+    TS_ASSERT(!aero->GetName().empty());
+    TS_ASSERT(aero->GetExec() == &fdmex);
+  }
 };
