@@ -141,10 +141,15 @@ foreach(test ${UNIT_TESTS})
   # Add test labels for ctest -L filtering
   # Fast tests: core math, run quickly for PR checks
   # Comprehensive tests: full suite for nightly runs
+  # Set working directory to project root so tests can find aircraft files
   if(${test} IN_LIST FAST_TESTS)
-    set_tests_properties(${test}1 PROPERTIES LABELS "quick;unit")
+    set_tests_properties(${test}1 PROPERTIES
+      LABELS "quick;unit"
+      WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
   else()
-    set_tests_properties(${test}1 PROPERTIES LABELS "comprehensive;unit")
+    set_tests_properties(${test}1 PROPERTIES
+      LABELS "comprehensive;unit"
+      WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
   endif()
 endforeach()
 

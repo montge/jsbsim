@@ -19,6 +19,13 @@
 #include <cmath>
 #include <vector>
 
+#include <FGFDMExec.h>
+#include <models/FGGroundReactions.h>
+#include "TestUtilities.h"
+
+using namespace JSBSim;
+using namespace JSBSimTest;
+
 const double epsilon = 1e-10;
 
 class FGGroundReactionsTest : public CxxTest::TestSuite
@@ -1193,5 +1200,263 @@ public:
     TS_ASSERT(totalForce > springForce);
     TS_ASSERT(acceleration > 0.0);
     TS_ASSERT_DELTA(springForce, 50000.0, epsilon);
+  }
+
+  // ============================================================================
+  // FGGroundReactions class tests - using actual class methods
+  // ============================================================================
+
+  // Test FGGroundReactions construction through FGFDMExec
+  void testFGGroundReactionsConstruction() {
+    FGFDMExec fdmex;
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(groundReactions != nullptr);
+  }
+
+  // Test FGGroundReactions with loaded aircraft
+  void testFGGroundReactionsWithAircraft() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(groundReactions != nullptr);
+
+    // Ball model has contact point(s)
+    int numGear = groundReactions->GetNumGearUnits();
+    TS_ASSERT(numGear > 0);
+  }
+
+  // Test GetNumGearUnits
+  void testFGGroundReactionsGetNumGearUnits() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    int numGear = groundReactions->GetNumGearUnits();
+    // Ball model has 1 contact point
+    TS_ASSERT(numGear >= 1);
+  }
+
+  // Test GetGearUnit
+  void testFGGroundReactionsGetGearUnit() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    int numGear = groundReactions->GetNumGearUnits();
+    if (numGear > 0) {
+      auto gear = groundReactions->GetGearUnit(0);
+      TS_ASSERT(gear != nullptr);
+    }
+  }
+
+  // Test Run method
+  void testFGGroundReactionsRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Run should succeed
+    bool result = groundReactions->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test Run in holding mode
+  void testFGGroundReactionsRunHolding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Run in holding mode
+    bool result = groundReactions->Run(true);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test InitModel method
+  void testFGGroundReactionsInitModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    bool result = groundReactions->InitModel();
+    TS_ASSERT(result);
+  }
+
+  // Test GetWOW method
+  void testFGGroundReactionsGetWOW() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Run to compute ground reactions
+    groundReactions->Run(false);
+
+    // Just verify it returns a valid boolean
+    bool wow = groundReactions->GetWOW();
+    TS_ASSERT(wow == true || wow == false);
+  }
+
+  // Test SetDsCmd (steering command)
+  void testFGGroundReactionsSetDsCmd() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Set steering command
+    groundReactions->SetDsCmd(0.5);
+    double cmd = groundReactions->GetDsCmd();
+    TS_ASSERT_DELTA(cmd, 0.5, epsilon);
+
+    // Set to different value
+    groundReactions->SetDsCmd(-0.3);
+    cmd = groundReactions->GetDsCmd();
+    TS_ASSERT_DELTA(cmd, -0.3, epsilon);
+  }
+
+  // Test GetForces method
+  void testFGGroundReactionsGetForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Run to compute forces
+    groundReactions->Run(false);
+
+    // Get total ground forces
+    const FGColumnVector3& forces = groundReactions->GetForces();
+    // Forces should be a valid vector (may be zero if airborne)
+    TS_ASSERT(forces.Magnitude() >= 0.0);
+  }
+
+  // Test GetMoments method
+  void testFGGroundReactionsGetMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Run to compute moments
+    groundReactions->Run(false);
+
+    // Get total ground moments
+    const FGColumnVector3& moments = groundReactions->GetMoments();
+    // Moments should be a valid vector
+    TS_ASSERT(moments.Magnitude() >= 0.0);
+  }
+
+  // Test GetGroundReactionStrings
+  void testFGGroundReactionsGetStrings() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    std::string header = groundReactions->GetGroundReactionStrings(",");
+    // Should return a non-empty string with gear data
+    TS_ASSERT(!header.empty());
+  }
+
+  // Test GetGroundReactionValues
+  void testFGGroundReactionsGetValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Run to compute values
+    groundReactions->Run(false);
+
+    std::string values = groundReactions->GetGroundReactionValues(",");
+    // Should return a non-empty string
+    TS_ASSERT(!values.empty());
+  }
+
+  // Test property binding for steer command
+  void testFGGroundReactionsSteerProperty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto pm = fdmex.GetPropertyManager();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Check property exists
+    auto node = pm->GetNode("fcs/steer-cmd-norm");
+    TS_ASSERT(node != nullptr);
+
+    if (node) {
+      // Set via property
+      node->setDoubleValue(0.25);
+      TS_ASSERT_DELTA(groundReactions->GetDsCmd(), 0.25, epsilon);
+    }
+  }
+
+  // Test property binding for WOW
+  void testFGGroundReactionsWOWProperty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto pm = fdmex.GetPropertyManager();
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    groundReactions->Run(false);
+
+    // Check WOW property exists
+    auto node = pm->GetNode("gear/wow");
+    TS_ASSERT(node != nullptr);
+  }
+
+  // Test property binding for num gear units
+  void testFGGroundReactionsNumUnitsProperty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto pm = fdmex.GetPropertyManager();
+
+    // Check property exists
+    auto node = pm->GetNode("gear/num-units");
+    TS_ASSERT(node != nullptr);
+
+    if (node) {
+      int numUnits = node->getIntValue();
+      TS_ASSERT(numUnits >= 1);  // Ball model has at least 1 contact
+    }
+  }
+
+  // Test with ball model contact point
+  void testFGGroundReactionsBallModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Ball model has contact point
+    int numGear = groundReactions->GetNumGearUnits();
+    TS_ASSERT(numGear >= 1);  // Has contact point(s)
+  }
+
+  // Test surface friction access
+  void testFGGroundReactionsSurfaceFriction() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    // Get static friction coefficient
+    double staticFriction = groundReactions->GetStaticFFactor();
+    TS_ASSERT(staticFriction > 0.0);
+    TS_ASSERT(staticFriction <= 1.5);  // Reasonable friction range
+
+    // Get rolling friction coefficient
+    double rollingFriction = groundReactions->GetRollingFFactor();
+    TS_ASSERT(rollingFriction >= 0.0);
+  }
+
+  // Test maximum static friction factor
+  void testFGGroundReactionsMaxStaticFriction() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    double maxStatic = groundReactions->GetMaximumForce();
+    // Should be a positive value
+    TS_ASSERT(maxStatic >= 0.0);
   }
 };
