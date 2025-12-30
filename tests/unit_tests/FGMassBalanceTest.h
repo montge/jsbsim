@@ -1580,4 +1580,365 @@ public:
     TS_ASSERT(!std::isnan(j1_11));
     TS_ASSERT(!std::isnan(J2(1, 1)));
   }
+
+  /***************************************************************************
+   * C172x Model-Based Tests
+   * These tests load the actual c172x aircraft model and verify that
+   * FGMassBalance correctly processes realistic aircraft mass data.
+   ***************************************************************************/
+
+  // Test loading c172x model and getting mass balance
+  void testC172xMassBalanceExists() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto massBalance = fdmex.GetMassBalance();
+
+    TS_ASSERT(massBalance != nullptr);
+  }
+
+  // Test c172x empty weight matches expected value
+  void testC172xEmptyWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto massBalance = fdmex.GetMassBalance();
+
+    // c172x has empty weight of 1454 lbs
+    double emptyWeight = massBalance->GetEmptyWeight();
+    TS_ASSERT_DELTA(emptyWeight, 1454.0, 1.0);
+  }
+
+  // Test c172x mass is positive and reasonable
+  void testC172xMass() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    double mass = massBalance->GetMass();
+    TS_ASSERT(mass > 0.0);
+    // Mass should be reasonable for a small aircraft (roughly weight/g)
+    // 1454 lbs / 32.174 ft/s^2 ~ 45 slugs empty
+    TS_ASSERT(mass > 40.0);
+    TS_ASSERT(mass < 200.0);
+  }
+
+  // Test c172x weight is positive and reasonable
+  void testC172xWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    double weight = massBalance->GetWeight();
+    TS_ASSERT(weight > 0.0);
+    // Weight should be at least empty weight
+    TS_ASSERT(weight >= 1454.0 - 1.0);
+    // And less than max gross weight (typically 2400 lbs for c172)
+    TS_ASSERT(weight < 3000.0);
+  }
+
+  // Test c172x CG location is valid
+  void testC172xCGLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGColumnVector3& cg = massBalance->GetXYZcg();
+
+    // CG should be finite and in reasonable range for c172
+    // c172x CG is around x=41 inches
+    TS_ASSERT(std::isfinite(cg(1)));
+    TS_ASSERT(std::isfinite(cg(2)));
+    TS_ASSERT(std::isfinite(cg(3)));
+
+    // X should be positive (aft of reference)
+    TS_ASSERT(cg(1) > 0.0);
+    // Y should be near centerline
+    TS_ASSERT(std::abs(cg(2)) < 10.0);
+  }
+
+  // Test c172x indexed CG accessor
+  void testC172xCGIndexed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGColumnVector3& cg = massBalance->GetXYZcg();
+
+    TS_ASSERT_DELTA(massBalance->GetXYZcg(1), cg(1), epsilon);
+    TS_ASSERT_DELTA(massBalance->GetXYZcg(2), cg(2), epsilon);
+    TS_ASSERT_DELTA(massBalance->GetXYZcg(3), cg(3), epsilon);
+  }
+
+  // Test c172x inertia matrix is valid
+  void testC172xInertiaMatrix() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // Diagonal elements should be positive
+    TS_ASSERT(J(1, 1) > 0.0);
+    TS_ASSERT(J(2, 2) > 0.0);
+    TS_ASSERT(J(3, 3) > 0.0);
+
+    // Inertias should be reasonable for c172x
+    // c172x: Ixx=948, Iyy=1346, Izz=1967 slug*ft^2
+    TS_ASSERT(J(1, 1) > 500.0);
+    TS_ASSERT(J(2, 2) > 1000.0);
+    TS_ASSERT(J(3, 3) > 1500.0);
+  }
+
+  // Test c172x inertia matrix symmetry
+  void testC172xInertiaSymmetry() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // Inertia tensor must be symmetric
+    TS_ASSERT_DELTA(J(1, 2), J(2, 1), 1e-6);
+    TS_ASSERT_DELTA(J(1, 3), J(3, 1), 1e-6);
+    TS_ASSERT_DELTA(J(2, 3), J(3, 2), 1e-6);
+  }
+
+  // Test c172x inverse inertia matrix
+  void testC172xInverseInertia() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGMatrix33& Jinv = massBalance->GetJinv();
+
+    // Inverse should have positive diagonal elements
+    TS_ASSERT(Jinv(1, 1) > 0.0);
+    TS_ASSERT(Jinv(2, 2) > 0.0);
+    TS_ASSERT(Jinv(3, 3) > 0.0);
+  }
+
+  // Test c172x J * Jinv = I
+  void testC172xJTimesJinv() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGMatrix33& J = massBalance->GetJ();
+    const FGMatrix33& Jinv = massBalance->GetJinv();
+
+    FGMatrix33 product = J * Jinv;
+
+    // Should be close to identity
+    TS_ASSERT_DELTA(product(1, 1), 1.0, 0.001);
+    TS_ASSERT_DELTA(product(2, 2), 1.0, 0.001);
+    TS_ASSERT_DELTA(product(3, 3), 1.0, 0.001);
+    TS_ASSERT_DELTA(product(1, 2), 0.0, 0.001);
+    TS_ASSERT_DELTA(product(1, 3), 0.0, 0.001);
+    TS_ASSERT_DELTA(product(2, 3), 0.0, 0.001);
+  }
+
+  // Test c172x triangle inequality for inertias
+  void testC172xTriangleInequality() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // Triangle inequalities for physical inertia tensor
+    TS_ASSERT(J(1, 1) <= J(2, 2) + J(3, 3) + 0.1);
+    TS_ASSERT(J(2, 2) <= J(1, 1) + J(3, 3) + 0.1);
+    TS_ASSERT(J(3, 3) <= J(1, 1) + J(2, 2) + 0.1);
+  }
+
+  // Test c172x delta CG is valid
+  void testC172xDeltaCG() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGColumnVector3& deltaCG = massBalance->GetDeltaXYZcg();
+
+    // Delta CG should be finite
+    TS_ASSERT(std::isfinite(deltaCG(1)));
+    TS_ASSERT(std::isfinite(deltaCG(2)));
+    TS_ASSERT(std::isfinite(deltaCG(3)));
+  }
+
+  // Test c172x point mass weight
+  void testC172xPointMassWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    double pmWeight = massBalance->GetTotalPointMassWeight();
+
+    // c172x has point masses for pilot, copilot, passenger, baggage
+    // Point mass weight should be non-negative
+    TS_ASSERT(pmWeight >= 0.0);
+  }
+
+  // Test c172x point mass moment
+  void testC172xPointMassMoment() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGColumnVector3& moment = massBalance->GetPointMassMoment();
+
+    // Point mass moment should be finite
+    TS_ASSERT(std::isfinite(moment(1)));
+    TS_ASSERT(std::isfinite(moment(2)));
+    TS_ASSERT(std::isfinite(moment(3)));
+  }
+
+  // Test c172x Run method
+  void testC172xRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    bool result = massBalance->Run(false);
+    TS_ASSERT_EQUALS(result, false);  // false means no error
+  }
+
+  // Test c172x multiple simulation steps
+  void testC172xMultipleSimSteps() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      // Mass values should remain finite
+      TS_ASSERT(std::isfinite(massBalance->GetMass()));
+      TS_ASSERT(std::isfinite(massBalance->GetWeight()));
+      TS_ASSERT(std::isfinite(massBalance->GetXYZcg(1)));
+    }
+  }
+
+  // Test c172x mass stability over time
+  void testC172xMassStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    double initialMass = massBalance->GetMass();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double finalMass = massBalance->GetMass();
+
+    // Mass should not change dramatically without fuel burn
+    // Allow some tolerance for numerical precision
+    TS_ASSERT(std::abs(finalMass - initialMass) < initialMass * 0.1);
+  }
+
+  // Test c172x structural to body conversion
+  void testC172xStructuralToBody() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    // Test a point at the wing
+    FGColumnVector3 structPos(40.0, 60.0, 0.0);  // Inches
+    FGColumnVector3 bodyPos = massBalance->StructuralToBody(structPos);
+
+    // Result should be in feet and finite
+    TS_ASSERT(std::isfinite(bodyPos(1)));
+    TS_ASSERT(std::isfinite(bodyPos(2)));
+    TS_ASSERT(std::isfinite(bodyPos(3)));
+  }
+
+  // Test two c172x instances are independent
+  void testC172xIndependentInstances() {
+    FGFDMExec fdmex1, fdmex2;
+
+    fdmex1.LoadModel("c172x");
+    fdmex2.LoadModel("c172x");
+
+    fdmex1.RunIC();
+    fdmex2.RunIC();
+
+    auto mb1 = fdmex1.GetMassBalance();
+    auto mb2 = fdmex2.GetMassBalance();
+
+    // Modify one instance
+    mb1->SetEmptyWeight(2000.0);
+
+    // Other instance should be unchanged
+    TS_ASSERT_DELTA(mb2->GetEmptyWeight(), 1454.0, 1.0);
+    TS_ASSERT_DELTA(mb1->GetEmptyWeight(), 2000.0, epsilon);
+  }
+
+  // Test c172x with modified empty weight
+  void testC172xModifiedEmptyWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    double originalWeight = massBalance->GetWeight();
+
+    // Increase empty weight
+    massBalance->SetEmptyWeight(1600.0);
+    massBalance->Run(false);
+
+    double newWeight = massBalance->GetWeight();
+
+    // Weight should increase by approximately the same amount
+    TS_ASSERT(newWeight > originalWeight);
+    TS_ASSERT_DELTA(newWeight - originalWeight, 146.0, 10.0);
+  }
+
+  // Test c172x with modified CG
+  void testC172xModifiedCG() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    FGColumnVector3 newCG(50.0, 0.0, 0.0);
+    massBalance->SetBaseCG(newCG);
+    massBalance->Run(false);
+
+    // CG should be updated
+    TS_ASSERT(std::isfinite(massBalance->GetXYZcg(1)));
+  }
+
+  // Test c172x inertia values match specification
+  void testC172xInertiaValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto massBalance = fdmex.GetMassBalance();
+
+    const FGMatrix33& J = massBalance->GetJ();
+
+    // c172x base inertias: Ixx=948, Iyy=1346, Izz=1967 slug*ft^2
+    // With point masses (pilot, copilot, passengers, luggage, pesticide bomb)
+    // and fuel, actual values are higher:
+    // Total: Ixx~2095.7, Iyy~1505.0, Izz~3150.4 slug*ft^2
+    TS_ASSERT(J(1, 1) > 1800.0 && J(1, 1) < 2500.0);
+    TS_ASSERT(J(2, 2) > 1300.0 && J(2, 2) < 1800.0);
+    TS_ASSERT(J(3, 3) > 2800.0 && J(3, 3) < 3500.0);
+  }
 };

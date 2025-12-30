@@ -2184,4 +2184,537 @@ public:
     // qbar2 should be 4x qbar1 (V^2 relationship)
     TS_ASSERT_DELTA(qbar2 / qbar1, 4.0, 0.1);
   }
+
+  /***************************************************************************
+   * FGFDMExec-based FGAuxiliary Class Tests with Loaded Aircraft Model
+   * These tests use a realistic aircraft model (c172x) to validate that
+   * the FGAuxiliary class operates correctly within the full simulation.
+   ***************************************************************************/
+
+  // Test retrieving FGAuxiliary from FGFDMExec with loaded model
+  void testGetAuxiliaryFromLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+
+    auto auxiliary = fdm.GetAuxiliary();
+    TS_ASSERT(auxiliary != nullptr);
+    TS_ASSERT(auxiliary->GetExec() == &fdm);
+  }
+
+  // Test Mach number after simulation initialization
+  void testMachAfterModelLoad() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double mach = auxiliary->GetMach();
+
+    // Mach should be finite and non-negative
+    TS_ASSERT(std::isfinite(mach));
+    TS_ASSERT(mach >= 0.0);
+  }
+
+  // Test calibrated airspeed with loaded model
+  void testVcalibratedKTSWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double vcas_kts = auxiliary->GetVcalibratedKTS();
+    double vcas_fps = auxiliary->GetVcalibratedFPS();
+
+    TS_ASSERT(std::isfinite(vcas_kts));
+    TS_ASSERT(std::isfinite(vcas_fps));
+    // Verify unit conversion consistency (1 fps = 0.592483801 kts)
+    if (vcas_fps > 0.0) {
+      TS_ASSERT_DELTA(vcas_kts / vcas_fps, 0.592483801, 0.001);
+    }
+  }
+
+  // Test equivalent airspeed with loaded model
+  void testVequivalentKTSWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double veas_kts = auxiliary->GetVequivalentKTS();
+    double veas_fps = auxiliary->GetVequivalentFPS();
+
+    TS_ASSERT(std::isfinite(veas_kts));
+    TS_ASSERT(std::isfinite(veas_fps));
+    // Verify unit conversion consistency
+    if (veas_fps > 0.0) {
+      TS_ASSERT_DELTA(veas_kts / veas_fps, 0.592483801, 0.001);
+    }
+  }
+
+  // Test true airspeed with loaded model
+  void testVtrueKTSWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double vtas_kts = auxiliary->GetVtrueKTS();
+    double vtas_fps = auxiliary->GetVtrueFPS();
+
+    TS_ASSERT(std::isfinite(vtas_kts));
+    TS_ASSERT(std::isfinite(vtas_fps));
+    // Verify unit conversion consistency
+    if (vtas_fps > 0.0) {
+      TS_ASSERT_DELTA(vtas_kts / vtas_fps, 0.592483801, 0.001);
+    }
+  }
+
+  // Test total pressure calculation with loaded model
+  void testTotalPressureWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double pt = auxiliary->GetTotalPressure();
+
+    TS_ASSERT(std::isfinite(pt));
+    TS_ASSERT(pt >= 0.0);
+  }
+
+  // Test dynamic pressure with loaded model
+  void testDynamicPressureWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double qbar = auxiliary->Getqbar();
+    double qbarUW = auxiliary->GetqbarUW();
+    double qbarUV = auxiliary->GetqbarUV();
+
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(std::isfinite(qbarUW));
+    TS_ASSERT(std::isfinite(qbarUV));
+    TS_ASSERT(qbar >= 0.0);
+    TS_ASSERT(qbarUW >= 0.0);
+    TS_ASSERT(qbarUV >= 0.0);
+  }
+
+  // Test angle of attack with loaded model
+  void testAlphaWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double alpha_rad = auxiliary->Getalpha();
+    double alpha_deg = auxiliary->Getalpha(FGJSBBase::inDegrees);
+
+    TS_ASSERT(std::isfinite(alpha_rad));
+    TS_ASSERT(std::isfinite(alpha_deg));
+    // Verify unit conversion
+    TS_ASSERT_DELTA(alpha_deg, alpha_rad * radtodeg, 1e-10);
+  }
+
+  // Test sideslip angle with loaded model
+  void testBetaWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double beta_rad = auxiliary->Getbeta();
+    double beta_deg = auxiliary->Getbeta(FGJSBBase::inDegrees);
+    double mag_beta = auxiliary->GetMagBeta();
+
+    TS_ASSERT(std::isfinite(beta_rad));
+    TS_ASSERT(std::isfinite(beta_deg));
+    TS_ASSERT(std::isfinite(mag_beta));
+    // Verify unit conversion
+    TS_ASSERT_DELTA(beta_deg, beta_rad * radtodeg, 1e-10);
+    // Verify magnitude is absolute value
+    TS_ASSERT_DELTA(mag_beta, fabs(beta_rad), 1e-10);
+  }
+
+  // Test flight path angle (gamma) with loaded model
+  void testGammaWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double gamma_rad = auxiliary->GetGamma();
+    double gamma_deg = auxiliary->GetGamma(FGJSBBase::inDegrees);
+
+    TS_ASSERT(std::isfinite(gamma_rad));
+    TS_ASSERT(std::isfinite(gamma_deg));
+    // Verify unit conversion
+    TS_ASSERT_DELTA(gamma_deg, gamma_rad * radtodeg, 1e-10);
+  }
+
+  // Test climb rate derivation from simulation
+  void testClimbRateWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    // Get gamma and ground speed to compute climb rate
+    double gamma = auxiliary->GetGamma();
+    double Vground = auxiliary->GetVground();
+
+    TS_ASSERT(std::isfinite(gamma));
+    TS_ASSERT(std::isfinite(Vground));
+    TS_ASSERT(Vground >= 0.0);
+  }
+
+  // Test total temperature with loaded model
+  void testTotalTemperatureWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double tat = auxiliary->GetTotalTemperature();
+    double tat_c = auxiliary->GetTAT_C();
+
+    TS_ASSERT(std::isfinite(tat));
+    TS_ASSERT(std::isfinite(tat_c));
+    TS_ASSERT(tat > 0.0);  // Temperature in Rankine must be positive
+
+    // Verify Rankine to Celsius conversion: C = (R - 491.67) * 5/9
+    double expected_tat_c = (tat - 491.67) * 5.0 / 9.0;
+    TS_ASSERT_DELTA(tat_c, expected_tat_c, 0.1);
+  }
+
+  // Test ground speed and ground track with loaded model
+  void testGroundSpeedAndTrackWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double Vground = auxiliary->GetVground();
+    double psigt = auxiliary->GetGroundTrack();
+
+    TS_ASSERT(std::isfinite(Vground));
+    TS_ASSERT(std::isfinite(psigt));
+    TS_ASSERT(Vground >= 0.0);
+  }
+
+  // Test Reynolds number with loaded model
+  void testReynoldsNumberWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double Re = auxiliary->GetReynoldsNumber();
+
+    TS_ASSERT(std::isfinite(Re));
+    TS_ASSERT(Re >= 0.0);
+  }
+
+  // Test running simulation steps and verifying values remain finite
+  void testSimulationStepsValuesRemainFinite() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    // Run 100 simulation steps
+    for (int i = 0; i < 100; ++i) {
+      fdm.Run();
+
+      // Verify all key outputs remain finite
+      TS_ASSERT(std::isfinite(auxiliary->GetMach()));
+      TS_ASSERT(std::isfinite(auxiliary->GetVcalibratedKTS()));
+      TS_ASSERT(std::isfinite(auxiliary->GetVequivalentKTS()));
+      TS_ASSERT(std::isfinite(auxiliary->GetVtrueKTS()));
+      TS_ASSERT(std::isfinite(auxiliary->GetTotalPressure()));
+      TS_ASSERT(std::isfinite(auxiliary->Getqbar()));
+      TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+      TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+      TS_ASSERT(std::isfinite(auxiliary->GetGamma()));
+    }
+  }
+
+  // Test H over B values with loaded model
+  void testHOverBWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double hOverBCG = auxiliary->GetHOverBCG();
+    double hOverBMAC = auxiliary->GetHOverBMAC();
+
+    TS_ASSERT(std::isfinite(hOverBCG));
+    TS_ASSERT(std::isfinite(hOverBMAC));
+    // These should typically be positive when aircraft is above ground
+    TS_ASSERT(hOverBCG >= 0.0);
+  }
+
+  // Test load factors (Nx, Ny, Nz) with loaded model
+  void testLoadFactorsWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double Nx = auxiliary->GetNx();
+    double Ny = auxiliary->GetNy();
+    double Nz = auxiliary->GetNz();
+
+    TS_ASSERT(std::isfinite(Nx));
+    TS_ASSERT(std::isfinite(Ny));
+    TS_ASSERT(std::isfinite(Nz));
+  }
+
+  // Test pilot acceleration with loaded model
+  void testPilotAccelWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    // Get pilot accelerations
+    const FGColumnVector3& pilotAccel = auxiliary->GetPilotAccel();
+    TS_ASSERT(std::isfinite(pilotAccel(1)));
+    TS_ASSERT(std::isfinite(pilotAccel(2)));
+    TS_ASSERT(std::isfinite(pilotAccel(3)));
+
+    // Get pilot load factors
+    const FGColumnVector3& Npilot = auxiliary->GetNpilot();
+    TS_ASSERT(std::isfinite(Npilot(1)));
+    TS_ASSERT(std::isfinite(Npilot(2)));
+    TS_ASSERT(std::isfinite(Npilot(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(auxiliary->GetPilotAccel(1), pilotAccel(1), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetNpilot(1), Npilot(1), 1e-10);
+  }
+
+  // Test Ncg (CG load factor) vector with loaded model
+  void testNcgWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    const FGColumnVector3& Ncg = auxiliary->GetNcg();
+    TS_ASSERT(std::isfinite(Ncg(1)));
+    TS_ASSERT(std::isfinite(Ncg(2)));
+    TS_ASSERT(std::isfinite(Ncg(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(auxiliary->GetNcg(1), Ncg(1), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetNcg(2), Ncg(2), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetNcg(3), Ncg(3), 1e-10);
+  }
+
+  // Test aerodynamic angular rates (AeroPQR) with loaded model
+  void testAeroPQRWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    const FGColumnVector3& aeroPQR = auxiliary->GetAeroPQR();
+    TS_ASSERT(std::isfinite(aeroPQR(1)));
+    TS_ASSERT(std::isfinite(aeroPQR(2)));
+    TS_ASSERT(std::isfinite(aeroPQR(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(auxiliary->GetAeroPQR(1), aeroPQR(1), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetAeroPQR(2), aeroPQR(2), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetAeroPQR(3), aeroPQR(3), 1e-10);
+  }
+
+  // Test Euler rates with loaded model
+  void testEulerRatesWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    const FGColumnVector3& eulerRates = auxiliary->GetEulerRates();
+    TS_ASSERT(std::isfinite(eulerRates(1)));
+    TS_ASSERT(std::isfinite(eulerRates(2)));
+    TS_ASSERT(std::isfinite(eulerRates(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(auxiliary->GetEulerRates(1), eulerRates(1), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetEulerRates(2), eulerRates(2), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetEulerRates(3), eulerRates(3), 1e-10);
+  }
+
+  // Test AeroUVW (aerodynamic velocities) with loaded model
+  void testAeroUVWWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    const FGColumnVector3& aeroUVW = auxiliary->GetAeroUVW();
+    TS_ASSERT(std::isfinite(aeroUVW(1)));
+    TS_ASSERT(std::isfinite(aeroUVW(2)));
+    TS_ASSERT(std::isfinite(aeroUVW(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(auxiliary->GetAeroUVW(1), aeroUVW(1), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetAeroUVW(2), aeroUVW(2), 1e-10);
+    TS_ASSERT_DELTA(auxiliary->GetAeroUVW(3), aeroUVW(3), 1e-10);
+  }
+
+  // Test wind-to-body transformation matrices with loaded model
+  void testWindBodyTransformWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    const FGMatrix33& Tw2b = auxiliary->GetTw2b();
+    const FGMatrix33& Tb2w = auxiliary->GetTb2w();
+
+    // Verify all elements are finite
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT(std::isfinite(Tw2b(i, j)));
+        TS_ASSERT(std::isfinite(Tb2w(i, j)));
+      }
+    }
+
+    // Verify Tw2b and Tb2w are inverses (product should be identity)
+    FGMatrix33 product = Tw2b * Tb2w;
+    TS_ASSERT_DELTA(product(1,1), 1.0, 1e-6);
+    TS_ASSERT_DELTA(product(2,2), 1.0, 1e-6);
+    TS_ASSERT_DELTA(product(3,3), 1.0, 1e-6);
+    TS_ASSERT_DELTA(product(1,2), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(1,3), 0.0, 1e-6);
+    TS_ASSERT_DELTA(product(2,3), 0.0, 1e-6);
+  }
+
+  // Test alpha and beta dot (rates) with loaded model
+  void testAlphaBetaDotWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    // Run a few steps to get some dynamics going
+    for (int i = 0; i < 10; i++) {
+      fdm.Run();
+    }
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    double adot_rad = auxiliary->Getadot();
+    double bdot_rad = auxiliary->Getbdot();
+    double adot_deg = auxiliary->Getadot(FGJSBBase::inDegrees);
+    double bdot_deg = auxiliary->Getbdot(FGJSBBase::inDegrees);
+
+    TS_ASSERT(std::isfinite(adot_rad));
+    TS_ASSERT(std::isfinite(bdot_rad));
+    TS_ASSERT(std::isfinite(adot_deg));
+    TS_ASSERT(std::isfinite(bdot_deg));
+
+    // Verify unit conversion
+    TS_ASSERT_DELTA(adot_deg, adot_rad * radtodeg, 1e-10);
+    TS_ASSERT_DELTA(bdot_deg, bdot_rad * radtodeg, 1e-10);
+  }
+
+  // Test MachU with loaded model
+  void testMachUWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double machU = auxiliary->GetMachU();
+    double mach = auxiliary->GetMach();
+
+    TS_ASSERT(std::isfinite(machU));
+    // MachU should be less than or equal to Mach (based on u-component only)
+    TS_ASSERT(machU <= mach + 0.001);  // Small tolerance for numerical precision
+  }
+
+  // Test total velocity Vt with loaded model
+  void testVtWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double Vt = auxiliary->GetVt();
+
+    TS_ASSERT(std::isfinite(Vt));
+    TS_ASSERT(Vt >= 0.0);
+  }
+
+  // Test location VRP with loaded model
+  void testLocationVRPWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    const FGLocation& locVRP = auxiliary->GetLocationVRP();
+
+    TS_ASSERT(std::isfinite(locVRP.GetLongitude()));
+    TS_ASSERT(std::isfinite(locVRP.GetLatitude()));
+    TS_ASSERT(std::isfinite(locVRP.GetRadius()));
+  }
+
+  // Test Nlf (load factor) with loaded model
+  void testNlfWithLoadedModel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+    double Nlf = auxiliary->GetNlf();
+
+    TS_ASSERT(std::isfinite(Nlf));
+  }
+
+  // Test values after extended simulation run
+  void testValuesAfterExtendedSimulation() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto auxiliary = fdm.GetAuxiliary();
+
+    // Run 500 simulation steps (about 4 seconds at 120 Hz)
+    for (int i = 0; i < 500; ++i) {
+      fdm.Run();
+    }
+
+    // All outputs should still be finite and valid
+    TS_ASSERT(std::isfinite(auxiliary->GetMach()));
+    TS_ASSERT(std::isfinite(auxiliary->GetVcalibratedKTS()));
+    TS_ASSERT(std::isfinite(auxiliary->GetVequivalentKTS()));
+    TS_ASSERT(std::isfinite(auxiliary->GetVtrueKTS()));
+    TS_ASSERT(std::isfinite(auxiliary->GetTotalPressure()));
+    TS_ASSERT(std::isfinite(auxiliary->Getqbar()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+    TS_ASSERT(std::isfinite(auxiliary->GetGamma()));
+    TS_ASSERT(std::isfinite(auxiliary->GetVground()));
+    TS_ASSERT(std::isfinite(auxiliary->GetGroundTrack()));
+    TS_ASSERT(std::isfinite(auxiliary->GetTotalTemperature()));
+    TS_ASSERT(std::isfinite(auxiliary->GetReynoldsNumber()));
+    TS_ASSERT(std::isfinite(auxiliary->GetNx()));
+    TS_ASSERT(std::isfinite(auxiliary->GetNy()));
+    TS_ASSERT(std::isfinite(auxiliary->GetNz()));
+  }
 };

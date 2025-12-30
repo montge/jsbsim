@@ -1586,6 +1586,421 @@ public:
   }
 
   /***************************************************************************
+   * Class-based Tests with FGFDMExec and c172x model
+   ***************************************************************************/
+
+  // Test loading c172x model and getting propagate
+  void testC172xPropagateExists() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+  }
+
+  // Test altitude ASL after loading model
+  void testC172xAltitudeASL() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double altASL = propagate->GetAltitudeASL();
+    TS_ASSERT(std::isfinite(altASL));
+    // Default C172x starts at positive altitude
+    TS_ASSERT(altASL >= 0.0);
+  }
+
+  // Test altitude in meters conversion
+  void testC172xAltitudeASLmeters() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double altFt = propagate->GetAltitudeASL();
+    double altM = propagate->GetAltitudeASLmeters();
+
+    // 1 ft = 0.3048 m
+    TS_ASSERT_DELTA(altM, altFt * 0.3048, 0.01);
+  }
+
+  // Test location after loading model
+  void testC172xLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    const FGLocation& loc = propagate->GetLocation();
+
+    double lat = loc.GetLatitude();
+    double lon = loc.GetLongitude();
+    double radius = loc.GetRadius();
+
+    TS_ASSERT(!std::isnan(lat));
+    TS_ASSERT(!std::isnan(lon));
+    TS_ASSERT(radius > 2.0e7);  // Earth radius in feet
+  }
+
+  // Test VState after loading model
+  void testC172xVState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    const FGPropagate::VehicleState& vstate = propagate->GetVState();
+
+    // vUVW should be valid
+    TS_ASSERT(!std::isnan(vstate.vUVW(1)));
+    TS_ASSERT(!std::isnan(vstate.vUVW(2)));
+    TS_ASSERT(!std::isnan(vstate.vUVW(3)));
+
+    // vPQR should be valid
+    TS_ASSERT(!std::isnan(vstate.vPQR(1)));
+    TS_ASSERT(!std::isnan(vstate.vPQR(2)));
+    TS_ASSERT(!std::isnan(vstate.vPQR(3)));
+
+    // Quaternions should be normalized
+    double qMag = sqrt(vstate.qAttitudeLocal(1)*vstate.qAttitudeLocal(1) +
+                       vstate.qAttitudeLocal(2)*vstate.qAttitudeLocal(2) +
+                       vstate.qAttitudeLocal(3)*vstate.qAttitudeLocal(3) +
+                       vstate.qAttitudeLocal(4)*vstate.qAttitudeLocal(4));
+    TS_ASSERT_DELTA(qMag, 1.0, 1e-6);
+  }
+
+  // Test GetUVW body velocity after loading model
+  void testC172xGetUVW() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 uvw = propagate->GetUVW();
+
+    TS_ASSERT(!std::isnan(uvw(1)));
+    TS_ASSERT(!std::isnan(uvw(2)));
+    TS_ASSERT(!std::isnan(uvw(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(propagate->GetUVW(1), uvw(1), epsilon);
+    TS_ASSERT_DELTA(propagate->GetUVW(2), uvw(2), epsilon);
+    TS_ASSERT_DELTA(propagate->GetUVW(3), uvw(3), epsilon);
+  }
+
+  // Test GetPQR angular rates after loading model
+  void testC172xGetPQR() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 pqr = propagate->GetPQR();
+
+    TS_ASSERT(!std::isnan(pqr(1)));
+    TS_ASSERT(!std::isnan(pqr(2)));
+    TS_ASSERT(!std::isnan(pqr(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(propagate->GetPQR(1), pqr(1), epsilon);
+    TS_ASSERT_DELTA(propagate->GetPQR(2), pqr(2), epsilon);
+    TS_ASSERT_DELTA(propagate->GetPQR(3), pqr(3), epsilon);
+  }
+
+  // Test GetEuler angles after loading model
+  void testC172xGetEuler() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 euler = propagate->GetEuler();
+
+    // Euler angles should be valid
+    TS_ASSERT(!std::isnan(euler(1)));  // Phi (roll)
+    TS_ASSERT(!std::isnan(euler(2)));  // Theta (pitch)
+    TS_ASSERT(!std::isnan(euler(3)));  // Psi (yaw)
+
+    // Euler angles in valid ranges
+    TS_ASSERT(euler(1) >= -M_PI && euler(1) <= M_PI);
+    TS_ASSERT(euler(2) >= -M_PI/2 && euler(2) <= M_PI/2);
+  }
+
+  // Test GetVel NED velocity after loading model
+  void testC172xGetVel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 vel = propagate->GetVel();
+
+    TS_ASSERT(!std::isnan(vel(1)));  // Vnorth
+    TS_ASSERT(!std::isnan(vel(2)));  // Veast
+    TS_ASSERT(!std::isnan(vel(3)));  // Vdown
+
+    // Test indexed access
+    TS_ASSERT_DELTA(propagate->GetVel(1), vel(1), epsilon);
+    TS_ASSERT_DELTA(propagate->GetVel(2), vel(2), epsilon);
+    TS_ASSERT_DELTA(propagate->GetVel(3), vel(3), epsilon);
+  }
+
+  // Test inertial velocity after loading model
+  void testC172xInertialVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 vInertial = propagate->GetInertialVelocity();
+    double vMag = propagate->GetInertialVelocityMagnitude();
+
+    TS_ASSERT(!std::isnan(vInertial(1)));
+    TS_ASSERT(!std::isnan(vInertial(2)));
+    TS_ASSERT(!std::isnan(vInertial(3)));
+    TS_ASSERT(!std::isnan(vMag));
+
+    // Magnitude should match vector magnitude
+    double expectedMag = sqrt(vInertial(1)*vInertial(1) +
+                              vInertial(2)*vInertial(2) +
+                              vInertial(3)*vInertial(3));
+    TS_ASSERT_DELTA(vMag, expectedMag, epsilon);
+  }
+
+  // Test terrain elevation after loading model
+  void testC172xTerrainElevation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double terrain = propagate->GetTerrainElevation();
+    double agl = propagate->GetDistanceAGL();
+
+    TS_ASSERT(!std::isnan(terrain));
+    TS_ASSERT(!std::isnan(agl));
+
+    // AGL should be non-negative for a grounded or flying aircraft
+    TS_ASSERT(agl >= -1.0);  // Allow small negative due to gear compression
+  }
+
+  // Test run simulation steps with c172x
+  void testC172xRunSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double altBefore = propagate->GetAltitudeASL();
+
+    // Run several simulation cycles
+    for (int i = 0; i < 10; i++) {
+      fdmex.Run();
+    }
+
+    double altAfter = propagate->GetAltitudeASL();
+
+    // Altitude should still be valid (not NaN or inf)
+    TS_ASSERT(std::isfinite(altAfter));
+
+    // State should remain valid
+    FGColumnVector3 uvw = propagate->GetUVW();
+    TS_ASSERT(std::isfinite(uvw(1)));
+    TS_ASSERT(std::isfinite(uvw(2)));
+    TS_ASSERT(std::isfinite(uvw(3)));
+  }
+
+  // Test quaternion stays normalized during simulation
+  void testC172xQuaternionNormalization() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    // Run several simulation cycles
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      // Check quaternion stays normalized
+      const FGQuaternion& q = propagate->GetQuaternion();
+      double mag = sqrt(q(1)*q(1) + q(2)*q(2) + q(3)*q(3) + q(4)*q(4));
+      TS_ASSERT_DELTA(mag, 1.0, 1e-6);
+    }
+  }
+
+  // Test transformation matrices are valid after loading model
+  void testC172xTransformationMatrices() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    const FGMatrix33& Tl2b = propagate->GetTl2b();
+    const FGMatrix33& Tb2l = propagate->GetTb2l();
+
+    // All elements should be finite
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT(std::isfinite(Tl2b(i, j)));
+        TS_ASSERT(std::isfinite(Tb2l(i, j)));
+      }
+    }
+
+    // Tb2l should be transpose of Tl2b (rotation matrices)
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(Tb2l(i, j), Tl2b(j, i), 1e-10);
+      }
+    }
+  }
+
+  // Test GetRadius after loading model
+  void testC172xGetRadius() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double radius = propagate->GetRadius();
+
+    // Radius should be approximately Earth radius in feet
+    TS_ASSERT(radius > 2.0e7);
+    TS_ASSERT(radius < 2.2e7);
+  }
+
+  // Test geodetic position after loading model
+  void testC172xGeodeticPosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double latDeg = propagate->GetLatitudeDeg();
+    double lonDeg = propagate->GetLongitudeDeg();
+    double geoAlt = propagate->GetGeodeticAltitude();
+
+    TS_ASSERT(latDeg >= -90.0 && latDeg <= 90.0);
+    TS_ASSERT(lonDeg >= -180.0 && lonDeg <= 180.0);
+    TS_ASSERT(std::isfinite(geoAlt));
+  }
+
+  // Test climb rate (hdot) after loading model
+  void testC172xClimbRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double hdot = propagate->Gethdot();
+    TS_ASSERT(std::isfinite(hdot));
+  }
+
+  // Test Earth position angle
+  void testC172xEarthPositionAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double epa = propagate->GetEarthPositionAngle();
+    double epaDeg = propagate->GetEarthPositionAngleDeg();
+
+    TS_ASSERT(std::isfinite(epa));
+    TS_ASSERT(std::isfinite(epaDeg));
+
+    // EPA degrees should be EPA radians converted
+    TS_ASSERT_DELTA(epaDeg, epa * 180.0 / M_PI, 1e-6);
+  }
+
+  // Test ECEF velocity after loading model
+  void testC172xECEFVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    FGColumnVector3 vECEF = propagate->GetECEFVelocity();
+
+    TS_ASSERT(std::isfinite(vECEF(1)));
+    TS_ASSERT(std::isfinite(vECEF(2)));
+    TS_ASSERT(std::isfinite(vECEF(3)));
+
+    // Test indexed access
+    TS_ASSERT_DELTA(propagate->GetECEFVelocity(1), vECEF(1), epsilon);
+    TS_ASSERT_DELTA(propagate->GetECEFVelocity(2), vECEF(2), epsilon);
+    TS_ASSERT_DELTA(propagate->GetECEFVelocity(3), vECEF(3), epsilon);
+  }
+
+  // Test SetAltitudeASL and verify change
+  void testC172xSetAltitudeASL() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double newAlt = 5000.0;  // feet
+    propagate->SetAltitudeASL(newAlt);
+
+    double alt = propagate->GetAltitudeASL();
+    TS_ASSERT_DELTA(alt, newAlt, 1.0);  // Within 1 foot
+  }
+
+  // Test SetLatitude and verify change
+  void testC172xSetLatitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double newLatDeg = 45.0;  // degrees
+    propagate->SetLatitudeDeg(newLatDeg);
+
+    double latDeg = propagate->GetLatitudeDeg();
+    TS_ASSERT_DELTA(latDeg, newLatDeg, 0.01);
+  }
+
+  // Test SetLongitude and verify change
+  void testC172xSetLongitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propagate = fdmex.GetPropagate();
+
+    double newLonDeg = -120.0;  // degrees
+    propagate->SetLongitudeDeg(newLonDeg);
+
+    double lonDeg = propagate->GetLongitudeDeg();
+    TS_ASSERT_DELTA(lonDeg, newLonDeg, 0.01);
+  }
+
+  // Test multiple instances are independent
+  void testC172xMultipleInstancesIndependent() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    fdmex1.LoadModel("c172x");
+    fdmex2.LoadModel("c172x");
+
+    fdmex1.RunIC();
+    fdmex2.RunIC();
+
+    auto prop1 = fdmex1.GetPropagate();
+    auto prop2 = fdmex2.GetPropagate();
+
+    // Set different altitudes
+    prop1->SetAltitudeASL(3000.0);
+    prop2->SetAltitudeASL(6000.0);
+
+    // Verify they are independent
+    double alt1 = prop1->GetAltitudeASL();
+    double alt2 = prop2->GetAltitudeASL();
+
+    TS_ASSERT_DELTA(alt1, 3000.0, 1.0);
+    TS_ASSERT_DELTA(alt2, 6000.0, 1.0);
+    TS_ASSERT(std::abs(alt1 - alt2) > 2000.0);
+  }
+
+  /***************************************************************************
    * Instance Independence Tests
    ***************************************************************************/
 

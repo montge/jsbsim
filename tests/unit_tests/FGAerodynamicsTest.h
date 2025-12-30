@@ -1604,4 +1604,605 @@ public:
     TS_ASSERT_DELTA(aero->GetForces().Magnitude(), 0.0, epsilon);
     TS_ASSERT_DELTA(aero->GetMoments().Magnitude(), 0.0, epsilon);
   }
+
+  /***************************************************************************
+   * C172x Model Tests - Tests with actual aircraft model loaded
+   * These tests exercise the FGAerodynamics class with a real aircraft
+   ***************************************************************************/
+
+  // Test 101: Load c172x model and verify aerodynamics is valid
+  void testC172xLoadModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+  }
+
+  // Test 102: Load c172x and run initial conditions
+  void testC172xRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+
+    // After RunIC, aerodynamics should have valid values
+    const FGColumnVector3& forces = aero->GetForces();
+    TS_ASSERT(!std::isnan(forces(1)));
+    TS_ASSERT(!std::isnan(forces(2)));
+    TS_ASSERT(!std::isnan(forces(3)));
+  }
+
+  // Test 103: Test GetForces after simulation step
+  void testC172xGetForcesAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();  // Execute one simulation step
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& forces = aero->GetForces();
+
+    // Forces should be finite after simulation step
+    TS_ASSERT(!std::isnan(forces(1)));
+    TS_ASSERT(!std::isnan(forces(2)));
+    TS_ASSERT(!std::isnan(forces(3)));
+    TS_ASSERT(!std::isinf(forces(1)));
+    TS_ASSERT(!std::isinf(forces(2)));
+    TS_ASSERT(!std::isinf(forces(3)));
+  }
+
+  // Test 104: Test GetMoments after simulation step
+  void testC172xGetMomentsAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& moments = aero->GetMoments();
+
+    // Moments should be finite
+    TS_ASSERT(!std::isnan(moments(1)));
+    TS_ASSERT(!std::isnan(moments(2)));
+    TS_ASSERT(!std::isnan(moments(3)));
+    TS_ASSERT(!std::isinf(moments(1)));
+    TS_ASSERT(!std::isinf(moments(2)));
+    TS_ASSERT(!std::isinf(moments(3)));
+  }
+
+  // Test 105: Test GetLoD (Lift over Drag) with loaded aircraft
+  void testC172xGetLoD() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    double lod = aero->GetLoD();
+
+    // L/D should be finite (not NaN or inf)
+    TS_ASSERT(!std::isnan(lod));
+  }
+
+  // Test 106: Test GetClSquared with loaded aircraft
+  void testC172xGetClSquared() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    double clsq = aero->GetClSquared();
+
+    // ClSquared must be non-negative
+    TS_ASSERT(clsq >= 0.0);
+    TS_ASSERT(!std::isnan(clsq));
+  }
+
+  // Test 107: Test wind axis forces with loaded aircraft
+  void testC172xGetvFw() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& vFw = aero->GetvFw();
+
+    // Wind axis forces should be finite
+    TS_ASSERT(!std::isnan(vFw(1)));  // Drag component
+    TS_ASSERT(!std::isnan(vFw(2)));  // Side force
+    TS_ASSERT(!std::isnan(vFw(3)));  // Lift component
+    TS_ASSERT(!std::isinf(vFw(1)));
+    TS_ASSERT(!std::isinf(vFw(2)));
+    TS_ASSERT(!std::isinf(vFw(3)));
+  }
+
+  // Test 108: Test stability axis forces with loaded aircraft
+  void testC172xGetForcesInStabilityAxes() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGColumnVector3 stabForces = aero->GetForcesInStabilityAxes();
+
+    // Stability axis forces should be finite
+    TS_ASSERT(!std::isnan(stabForces(1)));
+    TS_ASSERT(!std::isnan(stabForces(2)));
+    TS_ASSERT(!std::isnan(stabForces(3)));
+    TS_ASSERT(!std::isinf(stabForces(1)));
+    TS_ASSERT(!std::isinf(stabForces(2)));
+    TS_ASSERT(!std::isinf(stabForces(3)));
+  }
+
+  // Test 109: Test stability axis moments with loaded aircraft
+  void testC172xGetMomentsInStabilityAxes() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGColumnVector3 stabMoments = aero->GetMomentsInStabilityAxes();
+
+    // Stability axis moments should be finite
+    TS_ASSERT(!std::isnan(stabMoments(1)));
+    TS_ASSERT(!std::isnan(stabMoments(2)));
+    TS_ASSERT(!std::isnan(stabMoments(3)));
+  }
+
+  // Test 110: Test wind axis moments with loaded aircraft
+  void testC172xGetMomentsInWindAxes() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGColumnVector3 windMoments = aero->GetMomentsInWindAxes();
+
+    // Wind axis moments should be finite
+    TS_ASSERT(!std::isnan(windMoments(1)));
+    TS_ASSERT(!std::isnan(windMoments(2)));
+    TS_ASSERT(!std::isnan(windMoments(3)));
+  }
+
+  // Test 111: Test MRC moments with loaded aircraft
+  void testC172xGetMomentsMRC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& mrcMoments = aero->GetMomentsMRC();
+
+    // MRC moments should be finite
+    TS_ASSERT(!std::isnan(mrcMoments(1)));
+    TS_ASSERT(!std::isnan(mrcMoments(2)));
+    TS_ASSERT(!std::isnan(mrcMoments(3)));
+  }
+
+  // Test 112: Test alpha limits with loaded aircraft
+  void testC172xAlphaLimits() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    double alphaMax = aero->GetAlphaCLMax();
+    double alphaMin = aero->GetAlphaCLMin();
+
+    // Alpha limits should be finite and max >= min
+    TS_ASSERT(!std::isnan(alphaMax));
+    TS_ASSERT(!std::isnan(alphaMin));
+    TS_ASSERT(alphaMax >= alphaMin);
+  }
+
+  // Test 113: Test stall warning with loaded aircraft
+  void testC172xGetStallWarn() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    double stallWarn = aero->GetStallWarn();
+
+    // Stall warning should be in [0, 1] range
+    TS_ASSERT(stallWarn >= 0.0);
+    TS_ASSERT(stallWarn <= 1.0);
+  }
+
+  // Test 114: Test rate damping factors with loaded aircraft
+  void testC172xRateDampingFactors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    double bi2vel = aero->GetBI2Vel();
+    double ci2vel = aero->GetCI2Vel();
+
+    // Rate damping factors should be non-negative
+    TS_ASSERT(bi2vel >= 0.0);
+    TS_ASSERT(ci2vel >= 0.0);
+    TS_ASSERT(!std::isnan(bi2vel));
+    TS_ASSERT(!std::isnan(ci2vel));
+  }
+
+  // Test 115: Test multiple simulation steps
+  void testC172xMultipleSimulationSteps() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Run multiple simulation steps
+    for (int i = 0; i < 10; i++) {
+      fdmex.Run();
+
+      // All values should remain finite
+      TS_ASSERT(!std::isnan(aero->GetForces().Magnitude()));
+      TS_ASSERT(!std::isnan(aero->GetMoments().Magnitude()));
+      TS_ASSERT(!std::isnan(aero->GetLoD()) || aero->GetLoD() == 0.0);
+      TS_ASSERT(aero->GetClSquared() >= 0.0);
+    }
+  }
+
+  // Test 116: Test force magnitude conservation with loaded aircraft
+  void testC172xForceMagnitudeConservation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    const FGColumnVector3& bodyForces = aero->GetForces();
+    const FGColumnVector3& windForces = aero->GetvFw();
+    FGColumnVector3 stabForces = aero->GetForcesInStabilityAxes();
+
+    double bodyMag = bodyForces.Magnitude();
+    double windMag = windForces.Magnitude();
+    double stabMag = stabForces.Magnitude();
+
+    // Force magnitudes should be equal across coordinate systems
+    TS_ASSERT_DELTA(bodyMag, windMag, 1e-6);
+    TS_ASSERT_DELTA(bodyMag, stabMag, 1e-6);
+  }
+
+  // Test 117: Test aero function strings with loaded aircraft
+  void testC172xGetAeroFunctionStrings() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    std::string funcStrings = aero->GetAeroFunctionStrings("\t");
+
+    // With a loaded aircraft, there should be aero function strings
+    TS_ASSERT(funcStrings.length() > 0);
+  }
+
+  // Test 118: Test aero function values with loaded aircraft
+  void testC172xGetAeroFunctionValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    std::string funcValues = aero->GetAeroFunctionValues("\t");
+
+    // With a loaded aircraft after Run, there should be aero function values
+    TS_ASSERT(funcValues.length() > 0);
+  }
+
+  // Test 119: Test input structure with loaded aircraft
+  void testC172xInputStructure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Input structure should have valid values
+    TS_ASSERT(!std::isnan(aero->in.Alpha));
+    TS_ASSERT(!std::isnan(aero->in.Beta));
+    TS_ASSERT(!std::isnan(aero->in.Vt));
+    TS_ASSERT(!std::isnan(aero->in.Qbar));
+    TS_ASSERT(aero->in.Wingarea > 0.0);
+    TS_ASSERT(aero->in.Wingspan > 0.0);
+    TS_ASSERT(aero->in.Wingchord > 0.0);
+  }
+
+  // Test 120: Test SetAlphaCLMax/Min with loaded aircraft
+  void testC172xSetAlphaLimits() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Save original values
+    double origMax = aero->GetAlphaCLMax();
+    double origMin = aero->GetAlphaCLMin();
+
+    // Set new values
+    double newMax = 0.35;
+    double newMin = -0.20;
+    aero->SetAlphaCLMax(newMax);
+    aero->SetAlphaCLMin(newMin);
+
+    // Verify new values
+    TS_ASSERT_DELTA(aero->GetAlphaCLMax(), newMax, epsilon);
+    TS_ASSERT_DELTA(aero->GetAlphaCLMin(), newMin, epsilon);
+
+    // Restore original values
+    aero->SetAlphaCLMax(origMax);
+    aero->SetAlphaCLMin(origMin);
+  }
+
+  // Test 121: Test indexed force accessors with loaded aircraft
+  void testC172xIndexedForceAccessors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& forces = aero->GetForces();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetForces(1), forces(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetForces(2), forces(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetForces(3), forces(3), epsilon);
+  }
+
+  // Test 122: Test indexed moment accessors with loaded aircraft
+  void testC172xIndexedMomentAccessors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& moments = aero->GetMoments();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetMoments(1), moments(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetMoments(2), moments(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetMoments(3), moments(3), epsilon);
+  }
+
+  // Test 123: Test GetAeroFunctions returns valid array
+  void testC172xGetAeroFunctions() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    auto aeroFuncs = aero->GetAeroFunctions();
+
+    // With loaded aircraft, should have aero functions defined
+    TS_ASSERT(aeroFuncs != nullptr);
+  }
+
+  // Test 124: Test simulation stability over many steps
+  void testC172xSimulationStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Run 100 simulation steps and verify stability
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      // Forces should remain finite
+      const FGColumnVector3& forces = aero->GetForces();
+      TS_ASSERT(std::isfinite(forces(1)));
+      TS_ASSERT(std::isfinite(forces(2)));
+      TS_ASSERT(std::isfinite(forces(3)));
+
+      // Moments should remain finite
+      const FGColumnVector3& moments = aero->GetMoments();
+      TS_ASSERT(std::isfinite(moments(1)));
+      TS_ASSERT(std::isfinite(moments(2)));
+      TS_ASSERT(std::isfinite(moments(3)));
+    }
+  }
+
+  // Test 125: Test GetAlphaW with loaded aircraft
+  void testC172xGetAlphaW() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    double alphaW = aero->GetAlphaW();
+
+    // Alpha wing should be finite
+    TS_ASSERT(!std::isnan(alphaW));
+    TS_ASSERT(!std::isinf(alphaW));
+  }
+
+  // Test 126: Test GetHysteresisParm with loaded aircraft
+  void testC172xGetHysteresisParm() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    double hystParm = aero->GetHysteresisParm();
+
+    // Hysteresis parameter should be non-negative
+    TS_ASSERT(hystParm >= 0.0);
+  }
+
+  // Test 127: Test moment magnitude conservation
+  void testC172xMomentMagnitudeConservation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    const FGColumnVector3& bodyMoments = aero->GetMoments();
+    FGColumnVector3 stabMoments = aero->GetMomentsInStabilityAxes();
+    FGColumnVector3 windMoments = aero->GetMomentsInWindAxes();
+
+    double bodyMag = bodyMoments.Magnitude();
+    double stabMag = stabMoments.Magnitude();
+    double windMag = windMoments.Magnitude();
+
+    // Moment magnitudes should be equal across coordinate systems
+    TS_ASSERT_DELTA(bodyMag, stabMag, 1e-6);
+    TS_ASSERT_DELTA(bodyMag, windMag, 1e-6);
+  }
+
+  // Test 128: Test indexed wind axis forces with loaded aircraft
+  void testC172xIndexedWindAxisForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& vFw = aero->GetvFw();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetvFw(1), vFw(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetvFw(2), vFw(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetvFw(3), vFw(3), epsilon);
+  }
+
+  // Test 129: Test indexed stability axis forces with loaded aircraft
+  void testC172xIndexedStabilityAxisForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGColumnVector3 stabForces = aero->GetForcesInStabilityAxes();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetForcesInStabilityAxes(1), stabForces(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetForcesInStabilityAxes(2), stabForces(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetForcesInStabilityAxes(3), stabForces(3), epsilon);
+  }
+
+  // Test 130: Test indexed stability axis moments with loaded aircraft
+  void testC172xIndexedStabilityAxisMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGColumnVector3 stabMoments = aero->GetMomentsInStabilityAxes();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetMomentsInStabilityAxes(1), stabMoments(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetMomentsInStabilityAxes(2), stabMoments(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetMomentsInStabilityAxes(3), stabMoments(3), epsilon);
+  }
+
+  // Test 131: Test indexed wind axis moments with loaded aircraft
+  void testC172xIndexedWindAxisMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    FGColumnVector3 windMoments = aero->GetMomentsInWindAxes();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetMomentsInWindAxes(1), windMoments(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetMomentsInWindAxes(2), windMoments(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetMomentsInWindAxes(3), windMoments(3), epsilon);
+  }
+
+  // Test 132: Test indexed MRC moments with loaded aircraft
+  void testC172xIndexedMRCMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& mrcMoments = aero->GetMomentsMRC();
+
+    // Indexed accessors should match vector
+    TS_ASSERT_DELTA(aero->GetMomentsMRC(1), mrcMoments(1), epsilon);
+    TS_ASSERT_DELTA(aero->GetMomentsMRC(2), mrcMoments(2), epsilon);
+    TS_ASSERT_DELTA(aero->GetMomentsMRC(3), mrcMoments(3), epsilon);
+  }
+
+  // Test 133: Complete C172x aerodynamics integration test
+  void testC172xCompleteAerodynamicsIntegration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+
+    // Run a few steps
+    for (int i = 0; i < 5; i++) {
+      fdmex.Run();
+    }
+
+    // 1. Verify forces in all coordinate systems
+    const FGColumnVector3& bodyF = aero->GetForces();
+    const FGColumnVector3& windF = aero->GetvFw();
+    FGColumnVector3 stabF = aero->GetForcesInStabilityAxes();
+
+    TS_ASSERT(std::isfinite(bodyF.Magnitude()));
+    TS_ASSERT(std::isfinite(windF.Magnitude()));
+    TS_ASSERT(std::isfinite(stabF.Magnitude()));
+
+    // 2. Verify moments in all coordinate systems
+    const FGColumnVector3& bodyM = aero->GetMoments();
+    const FGColumnVector3& mrcM = aero->GetMomentsMRC();
+    FGColumnVector3 stabM = aero->GetMomentsInStabilityAxes();
+    FGColumnVector3 windM = aero->GetMomentsInWindAxes();
+
+    TS_ASSERT(std::isfinite(bodyM.Magnitude()));
+    TS_ASSERT(std::isfinite(mrcM.Magnitude()));
+    TS_ASSERT(std::isfinite(stabM.Magnitude()));
+    TS_ASSERT(std::isfinite(windM.Magnitude()));
+
+    // 3. Verify aerodynamic parameters
+    TS_ASSERT(!std::isnan(aero->GetLoD()));
+    TS_ASSERT(aero->GetClSquared() >= 0.0);
+    TS_ASSERT(aero->GetStallWarn() >= 0.0);
+    TS_ASSERT(aero->GetStallWarn() <= 1.0);
+    TS_ASSERT(aero->GetBI2Vel() >= 0.0);
+    TS_ASSERT(aero->GetCI2Vel() >= 0.0);
+
+    // 4. Verify input structure
+    TS_ASSERT(aero->in.Wingarea > 0.0);
+    TS_ASSERT(aero->in.Wingspan > 0.0);
+    TS_ASSERT(aero->in.Wingchord > 0.0);
+
+    // 5. Verify aero functions
+    std::string funcStrings = aero->GetAeroFunctionStrings(",");
+    std::string funcValues = aero->GetAeroFunctionValues(",");
+    TS_ASSERT(funcStrings.length() > 0);
+    TS_ASSERT(funcValues.length() > 0);
+  }
 };
