@@ -17,6 +17,9 @@
 #include <cmath>
 #include <random>
 
+#include <FGFDMExec.h>
+#include <models/atmosphere/FGWinds.h>
+
 const double epsilon = 1e-10;
 const double DEG_TO_RAD = M_PI / 180.0;
 const double RAD_TO_DEG = 180.0 / M_PI;
@@ -1374,5 +1377,584 @@ public:
     double downdraft = max_downdraft * (1.0 - current_radius / outflow_radius);
     TS_ASSERT(downdraft > 0);
     TS_ASSERT(downdraft + outflow < 2.0 * max_downdraft);
+  }
+
+  /***************************************************************************
+   * FGFDMExec-based FGWinds Class Tests
+   ***************************************************************************/
+
+  // Test FGWinds instance retrieval from FGFDMExec
+  void testGetWindsFromFDMExec() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+  }
+
+  // Test setting and getting wind NED components
+  void testSetGetWindNED() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set wind components (north, east, down)
+    winds->SetWindNED(10.0, 5.0, 0.0);
+
+    // Verify components
+    TS_ASSERT_DELTA(winds->GetWindNED(1), 10.0, epsilon);  // North
+    TS_ASSERT_DELTA(winds->GetWindNED(2), 5.0, epsilon);   // East
+    TS_ASSERT_DELTA(winds->GetWindNED(3), 0.0, epsilon);   // Down
+  }
+
+  // Test setting wind NED by index
+  void testSetWindNEDByIndex() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetWindNED(1, 15.0);  // North
+    winds->SetWindNED(2, -8.0);  // East
+    winds->SetWindNED(3, 2.0);   // Down
+
+    TS_ASSERT_DELTA(winds->GetWindNED(1), 15.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(2), -8.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(3), 2.0, epsilon);
+  }
+
+  // Test setting wind NED with vector
+  void testSetWindNEDVector() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    JSBSim::FGColumnVector3 windVec(20.0, 10.0, -5.0);
+    winds->SetWindNED(windVec);
+
+    const JSBSim::FGColumnVector3& result = winds->GetWindNED();
+    TS_ASSERT_DELTA(result(1), 20.0, epsilon);
+    TS_ASSERT_DELTA(result(2), 10.0, epsilon);
+    TS_ASSERT_DELTA(result(3), -5.0, epsilon);
+  }
+
+  // Test wind speed and direction
+  void testWindSpeedAndDirection() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set wind speed
+    winds->SetWindspeed(25.0);
+    TS_ASSERT_DELTA(winds->GetWindspeed(), 25.0, 0.1);
+  }
+
+  // Test wind direction (psi)
+  void testWindPsi() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set wind speed first
+    winds->SetWindspeed(20.0);
+
+    // Set wind direction (radians, from north clockwise)
+    double psi = M_PI / 2.0;  // 90 degrees (from east)
+    winds->SetWindPsi(psi);
+
+    TS_ASSERT_DELTA(winds->GetWindPsi(), psi, 0.01);
+  }
+
+  // Test gust NED components
+  void testGustNED() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set gust components
+    winds->SetGustNED(5.0, 3.0, 1.0);
+
+    TS_ASSERT_DELTA(winds->GetGustNED(1), 5.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetGustNED(2), 3.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetGustNED(3), 1.0, epsilon);
+  }
+
+  // Test gust NED by index
+  void testSetGustNEDByIndex() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetGustNED(1, 10.0);
+    winds->SetGustNED(2, -5.0);
+    winds->SetGustNED(3, 2.5);
+
+    TS_ASSERT_DELTA(winds->GetGustNED(1), 10.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetGustNED(2), -5.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetGustNED(3), 2.5, epsilon);
+  }
+
+  // Test turbulence NED components
+  void testTurbulenceNED() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetTurbNED(1, 3.0);
+    winds->SetTurbNED(2, 2.0);
+    winds->SetTurbNED(3, 1.0);
+
+    TS_ASSERT_DELTA(winds->GetTurbNED(1), 3.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetTurbNED(2), 2.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetTurbNED(3), 1.0, epsilon);
+  }
+
+  // Test turbulence type
+  void testTurbulenceType() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Default is ttMilspec (set in FGWinds constructor)
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttMilspec);
+
+    // Set to Tustin
+    winds->SetTurbType(JSBSim::FGWinds::ttTustin);
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttTustin);
+
+    // Set to none
+    winds->SetTurbType(JSBSim::FGWinds::ttNone);
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttNone);
+
+    // Set back to Milspec
+    winds->SetTurbType(JSBSim::FGWinds::ttMilspec);
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttMilspec);
+  }
+
+  // Test turbulence gain
+  void testTurbulenceGain() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetTurbGain(1.5);
+    TS_ASSERT_DELTA(winds->GetTurbGain(), 1.5, epsilon);
+
+    winds->SetTurbGain(2.0);
+    TS_ASSERT_DELTA(winds->GetTurbGain(), 2.0, epsilon);
+  }
+
+  // Test turbulence rate
+  void testTurbulenceRate() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetTurbRate(0.5);
+    TS_ASSERT_DELTA(winds->GetTurbRate(), 0.5, epsilon);
+
+    winds->SetTurbRate(1.0);
+    TS_ASSERT_DELTA(winds->GetTurbRate(), 1.0, epsilon);
+  }
+
+  // Test rhythmicity
+  void testRhythmicity() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetRhythmicity(0.8);
+    TS_ASSERT_DELTA(winds->GetRhythmicity(), 0.8, epsilon);
+  }
+
+  // Test windspeed at 20ft
+  void testWindspeed20ft() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetWindspeed20ft(30.0);
+    TS_ASSERT_DELTA(winds->GetWindspeed20ft(), 30.0, epsilon);
+  }
+
+  // Test probability of exceedence
+  void testProbabilityOfExceedence() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Light turbulence
+    winds->SetProbabilityOfExceedence(3);
+    TS_ASSERT_EQUALS(winds->GetProbabilityOfExceedence(), 3);
+
+    // Moderate turbulence
+    winds->SetProbabilityOfExceedence(4);
+    TS_ASSERT_EQUALS(winds->GetProbabilityOfExceedence(), 4);
+
+    // Severe turbulence
+    winds->SetProbabilityOfExceedence(6);
+    TS_ASSERT_EQUALS(winds->GetProbabilityOfExceedence(), 6);
+  }
+
+  // Test total wind NED (wind + gust + turbulence)
+  void testTotalWindNED() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set wind components
+    winds->SetWindNED(10.0, 5.0, 0.0);
+
+    // Get total wind - should include wind, gust, and turbulence
+    const JSBSim::FGColumnVector3& totalWind = winds->GetTotalWindNED();
+    TS_ASSERT(std::isfinite(totalWind(1)));
+    TS_ASSERT(std::isfinite(totalWind(2)));
+    TS_ASSERT(std::isfinite(totalWind(3)));
+  }
+
+  // Test total wind NED by index
+  void testTotalWindNEDByIndex() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetWindNED(15.0, 10.0, 2.0);
+
+    TS_ASSERT(std::isfinite(winds->GetTotalWindNED(1)));
+    TS_ASSERT(std::isfinite(winds->GetTotalWindNED(2)));
+    TS_ASSERT(std::isfinite(winds->GetTotalWindNED(3)));
+  }
+
+  // Test cosine gust parameters
+  void testCosineGustParameters() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set gust parameters
+    winds->StartupGustDuration(5.0);
+    winds->SteadyGustDuration(3.0);
+    winds->EndGustDuration(4.0);
+    winds->GustMagnitude(30.0);
+
+    // Set gust direction components
+    winds->GustXComponent(-1.0);
+    winds->GustYComponent(0.0);
+    winds->GustZComponent(0.0);
+
+    // Set gust frame (wind frame = 2)
+    winds->GustFrame(JSBSim::FGWinds::gfWind);
+
+    // These should not cause any errors
+    TS_ASSERT(true);
+  }
+
+  // Test starting and stopping gust
+  void testStartStopGust() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Configure gust
+    winds->GustMagnitude(20.0);
+    winds->StartupGustDuration(2.0);
+    winds->SteadyGustDuration(1.0);
+    winds->EndGustDuration(2.0);
+
+    // Start gust
+    winds->StartGust(true);
+
+    // Stop gust
+    winds->StartGust(false);
+
+    TS_ASSERT(true);
+  }
+
+  // Test gust frame types
+  void testGustFrameTypes() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Test body frame
+    winds->GustFrame(JSBSim::FGWinds::gfBody);
+    TS_ASSERT(true);
+
+    // Test wind frame
+    winds->GustFrame(JSBSim::FGWinds::gfWind);
+    TS_ASSERT(true);
+
+    // Test local frame
+    winds->GustFrame(JSBSim::FGWinds::gfLocal);
+    TS_ASSERT(true);
+
+    // Test none frame
+    winds->GustFrame(JSBSim::FGWinds::gfNone);
+    TS_ASSERT(true);
+  }
+
+  // Test turbulence magnitude
+  void testTurbulenceMagnitude() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set turbulence components
+    winds->SetTurbNED(1, 3.0);
+    winds->SetTurbNED(2, 4.0);
+    winds->SetTurbNED(3, 0.0);
+
+    double magnitude = winds->GetTurbMagnitude();
+    TS_ASSERT_DELTA(magnitude, 5.0, epsilon);  // sqrt(3^2 + 4^2)
+  }
+
+  // Test turbulence direction
+  void testTurbulenceDirection() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    double direction = winds->GetTurbDirection();
+    TS_ASSERT(std::isfinite(direction));
+  }
+
+  // Test turbulence PQR
+  void testTurbulencePQR() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Get turbulence PQR components
+    double p = winds->GetTurbPQR(1);
+    double q = winds->GetTurbPQR(2);
+    double r = winds->GetTurbPQR(3);
+
+    TS_ASSERT(std::isfinite(p));
+    TS_ASSERT(std::isfinite(q));
+    TS_ASSERT(std::isfinite(r));
+
+    // Get as vector
+    const JSBSim::FGColumnVector3& turbPQR = winds->GetTurbPQR();
+    TS_ASSERT(std::isfinite(turbPQR(1)));
+    TS_ASSERT(std::isfinite(turbPQR(2)));
+    TS_ASSERT(std::isfinite(turbPQR(3)));
+  }
+
+  // Test zero wind conditions
+  void testZeroWindConditions() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetWindNED(0.0, 0.0, 0.0);
+    winds->SetGustNED(0.0, 0.0, 0.0);
+    winds->SetTurbNED(1, 0.0);
+    winds->SetTurbNED(2, 0.0);
+    winds->SetTurbNED(3, 0.0);
+
+    TS_ASSERT_DELTA(winds->GetWindNED(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(2), 0.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(3), 0.0, epsilon);
+  }
+
+  // Test high wind values
+  void testHighWindValues() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Hurricane force winds (100 kts ~ 169 fps)
+    winds->SetWindNED(150.0, 80.0, 0.0);
+
+    TS_ASSERT_DELTA(winds->GetWindNED(1), 150.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(2), 80.0, epsilon);
+  }
+
+  // Test negative wind values
+  void testNegativeWindValues() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetWindNED(-25.0, -15.0, -5.0);
+
+    TS_ASSERT_DELTA(winds->GetWindNED(1), -25.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(2), -15.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetWindNED(3), -5.0, epsilon);
+  }
+
+  // Test InitModel
+  void testInitModel() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set some values
+    winds->SetWindNED(50.0, 30.0, 10.0);
+    winds->SetTurbGain(2.0);
+
+    // InitModel should reset to defaults
+    bool result = winds->InitModel();
+    TS_ASSERT(result);
+  }
+
+  // Test multiple wind setting operations
+  void testMultipleWindOperations() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    for (int i = 0; i < 100; ++i) {
+      double n = static_cast<double>(i % 50);
+      double e = static_cast<double>((i * 2) % 40);
+      double d = static_cast<double>((i * 3) % 10);
+
+      winds->SetWindNED(n, e, d);
+
+      TS_ASSERT_DELTA(winds->GetWindNED(1), n, epsilon);
+      TS_ASSERT_DELTA(winds->GetWindNED(2), e, epsilon);
+      TS_ASSERT_DELTA(winds->GetWindNED(3), d, epsilon);
+    }
+  }
+
+  // Test combined wind and gust
+  void testCombinedWindAndGust() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    winds->SetWindNED(20.0, 10.0, 0.0);
+    winds->SetGustNED(5.0, 3.0, 0.0);
+
+    // Wind should be retrievable separately
+    TS_ASSERT_DELTA(winds->GetWindNED(1), 20.0, epsilon);
+    TS_ASSERT_DELTA(winds->GetGustNED(1), 5.0, epsilon);
+  }
+
+  // Test turbulence type enumeration
+  void testAllTurbulenceTypes() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Test all turbulence types
+    JSBSim::FGWinds::tType types[] = {
+      JSBSim::FGWinds::ttNone,
+      JSBSim::FGWinds::ttStandard,
+      JSBSim::FGWinds::ttCulp,
+      JSBSim::FGWinds::ttMilspec,
+      JSBSim::FGWinds::ttTustin
+    };
+
+    for (auto type : types) {
+      winds->SetTurbType(type);
+      TS_ASSERT_EQUALS(winds->GetTurbType(), type);
+    }
+  }
+
+  // Test wind vector consistency
+  void testWindVectorConsistency() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set using individual components
+    winds->SetWindNED(1, 30.0);
+    winds->SetWindNED(2, 20.0);
+    winds->SetWindNED(3, 5.0);
+
+    // Get as vector
+    const JSBSim::FGColumnVector3& windVec = winds->GetWindNED();
+
+    // Should match
+    TS_ASSERT_DELTA(windVec(1), 30.0, epsilon);
+    TS_ASSERT_DELTA(windVec(2), 20.0, epsilon);
+    TS_ASSERT_DELTA(windVec(3), 5.0, epsilon);
+  }
+
+  // Test gust vector consistency
+  void testGustVectorConsistency() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set using individual components
+    winds->SetGustNED(1, 8.0);
+    winds->SetGustNED(2, 4.0);
+    winds->SetGustNED(3, 2.0);
+
+    // Get as vector
+    const JSBSim::FGColumnVector3& gustVec = winds->GetGustNED();
+
+    // Should match
+    TS_ASSERT_DELTA(gustVec(1), 8.0, epsilon);
+    TS_ASSERT_DELTA(gustVec(2), 4.0, epsilon);
+    TS_ASSERT_DELTA(gustVec(3), 2.0, epsilon);
+  }
+
+  // Test setting windspeed preserves direction
+  void testWindspeedPreservesDirection() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Set initial wind
+    winds->SetWindspeed(20.0);
+    winds->SetWindPsi(M_PI / 4.0);  // 45 degrees
+
+    double psi1 = winds->GetWindPsi();
+
+    // Change windspeed
+    winds->SetWindspeed(40.0);
+
+    // Direction should be preserved (or close)
+    double psi2 = winds->GetWindPsi();
+    TS_ASSERT_DELTA(psi1, psi2, 0.01);
+  }
+
+  // Test up-downburst cell configuration
+  void testUpDownburstCells() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Configure number of cells (should not crash)
+    winds->NumberOfUpDownburstCells(0);
+    TS_ASSERT(true);
+
+    winds->NumberOfUpDownburstCells(1);
+    TS_ASSERT(true);
+  }
+
+  // Test winds Run method
+  void testWindsRun() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Initialize inputs
+    winds->in.V = 200.0;
+    winds->in.wingspan = 50.0;
+    winds->in.DistanceAGL = 1000.0;
+    winds->in.AltitudeASL = 5000.0;
+    winds->in.longitude = 0.0;
+    winds->in.latitude = 0.0;
+    winds->in.planetRadius = 20925646.0;  // Earth radius in feet
+    winds->in.totalDeltaT = 0.0083333;     // 120 Hz
+
+    // Set some wind
+    winds->SetWindNED(15.0, 10.0, 0.0);
+
+    // Run should succeed
+    bool result = winds->Run(false);
+    TS_ASSERT(!result);  // Returns false on success
+  }
+
+  // Test winds with holding flag
+  void testWindsRunHolding() {
+    JSBSim::FGFDMExec fdmex;
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+
+    // Run with holding flag should also work
+    bool result = winds->Run(true);
+    TS_ASSERT(!result);  // Returns false on success
   }
 };

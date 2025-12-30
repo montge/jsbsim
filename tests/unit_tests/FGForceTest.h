@@ -3,7 +3,9 @@
 #include <cmath>
 
 #include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
 #include <models/propulsion/FGForce.h>
+#include <models/propulsion/FGThruster.h>
 #include <math/FGColumnVector3.h>
 #include <math/FGMatrix33.h>
 #include "TestAssertions.h"
@@ -2078,5 +2080,408 @@ public:
     TS_ASSERT_DELTA(finalForce(1), 1000.0, epsilon);
     TS_ASSERT_DELTA(finalForce(2), 2000.0, epsilon);
     TS_ASSERT_DELTA(finalForce(3), 3000.0, epsilon);
+  }
+
+  //==========================================================================
+  // Class-based tests using FGFDMExec with loaded aircraft model
+  //==========================================================================
+
+  // Test loading c172x model and accessing propulsion system
+  void testLoadC172xModel() {
+    FGFDMExec fdmex;
+    bool loaded = fdmex.LoadModel("c172x");
+
+    TS_ASSERT(loaded);
+    TS_ASSERT(fdmex.GetPropulsion() != nullptr);
+  }
+
+  // Test getting thruster (FGForce subclass) from propulsion
+  void testGetThrusterFromPropulsion() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      TS_ASSERT(engine != nullptr);
+
+      FGThruster* thruster = engine->GetThruster();
+      TS_ASSERT(thruster != nullptr);
+    }
+  }
+
+  // Test thruster body forces through FGForce interface
+  void testThrusterBodyForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        const FGColumnVector3& bodyForces = thruster->GetBodyForces();
+
+        // Verify forces are finite
+        TS_ASSERT(std::isfinite(bodyForces(1)));
+        TS_ASSERT(std::isfinite(bodyForces(2)));
+        TS_ASSERT(std::isfinite(bodyForces(3)));
+
+        // Verify individual component getters match vector
+        TS_ASSERT_DELTA(thruster->GetBodyXForce(), bodyForces(1), epsilon);
+        TS_ASSERT_DELTA(thruster->GetBodyYForce(), bodyForces(2), epsilon);
+        TS_ASSERT_DELTA(thruster->GetBodyZForce(), bodyForces(3), epsilon);
+      }
+    }
+  }
+
+  // Test thruster moments through FGForce interface
+  void testThrusterMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        const FGColumnVector3& moments = thruster->GetMoments();
+
+        // Verify moments are finite
+        TS_ASSERT(std::isfinite(moments(1)));
+        TS_ASSERT(std::isfinite(moments(2)));
+        TS_ASSERT(std::isfinite(moments(3)));
+      }
+    }
+  }
+
+  // Test thruster location getters
+  void testThrusterLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        // Get location values
+        double locX = thruster->GetLocationX();
+        double locY = thruster->GetLocationY();
+        double locZ = thruster->GetLocationZ();
+
+        // Verify they are finite
+        TS_ASSERT(std::isfinite(locX));
+        TS_ASSERT(std::isfinite(locY));
+        TS_ASSERT(std::isfinite(locZ));
+
+        // Verify vector accessor matches individual getters
+        const FGColumnVector3& loc = thruster->GetLocation();
+        TS_ASSERT_DELTA(loc(1), locX, epsilon);
+        TS_ASSERT_DELTA(loc(2), locY, epsilon);
+        TS_ASSERT_DELTA(loc(3), locZ, epsilon);
+      }
+    }
+  }
+
+  // Test thruster acting location getters
+  void testThrusterActingLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        // Get acting location values
+        double actX = thruster->GetActingLocationX();
+        double actY = thruster->GetActingLocationY();
+        double actZ = thruster->GetActingLocationZ();
+
+        // Verify they are finite
+        TS_ASSERT(std::isfinite(actX));
+        TS_ASSERT(std::isfinite(actY));
+        TS_ASSERT(std::isfinite(actZ));
+
+        // Verify vector accessor matches individual getters
+        const FGColumnVector3& actLoc = thruster->GetActingLocation();
+        TS_ASSERT_DELTA(actLoc(1), actX, epsilon);
+        TS_ASSERT_DELTA(actLoc(2), actY, epsilon);
+        TS_ASSERT_DELTA(actLoc(3), actZ, epsilon);
+      }
+    }
+  }
+
+  // Test thruster transform type
+  void testThrusterTransformType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        FGForce::TransformType ttype = thruster->GetTransformType();
+
+        // Transform type should be one of the valid enum values
+        TS_ASSERT(ttype == FGForce::tNone ||
+                  ttype == FGForce::tWindBody ||
+                  ttype == FGForce::tLocalBody ||
+                  ttype == FGForce::tInertialBody ||
+                  ttype == FGForce::tCustom);
+      }
+    }
+  }
+
+  // Test thruster transform matrix
+  void testThrusterTransformMatrix() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        const FGMatrix33& T = thruster->Transform();
+
+        // All matrix elements should be finite
+        for (int i = 1; i <= 3; i++) {
+          for (int j = 1; j <= 3; j++) {
+            TS_ASSERT(std::isfinite(T(i, j)));
+          }
+        }
+      }
+    }
+  }
+
+  // Test thruster angles to body
+  void testThrusterAnglesToBody() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        const FGColumnVector3& angles = thruster->GetAnglesToBody();
+
+        // Angles should be finite
+        TS_ASSERT(std::isfinite(angles(1)));
+        TS_ASSERT(std::isfinite(angles(2)));
+        TS_ASSERT(std::isfinite(angles(3)));
+
+        // Individual accessor should match vector
+        TS_ASSERT_DELTA(thruster->GetAnglesToBody(1), angles(1), epsilon);
+        TS_ASSERT_DELTA(thruster->GetAnglesToBody(2), angles(2), epsilon);
+        TS_ASSERT_DELTA(thruster->GetAnglesToBody(3), angles(3), epsilon);
+      }
+    }
+  }
+
+  // Test thruster pitch and yaw getters
+  void testThrusterPitchYaw() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        double pitch = thruster->GetPitch();
+        double yaw = thruster->GetYaw();
+
+        // Values should be finite
+        TS_ASSERT(std::isfinite(pitch));
+        TS_ASSERT(std::isfinite(yaw));
+
+        // Angles are in radians, should be in reasonable range
+        TS_ASSERT(pitch >= -M_PI && pitch <= M_PI);
+        TS_ASSERT(yaw >= -M_PI && yaw <= M_PI);
+      }
+    }
+  }
+
+  // Test running simulation and checking force updates
+  void testForcesDuringSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    // Initialize the simulation
+    fdmex.RunIC();
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        // Run a few simulation steps
+        for (int i = 0; i < 10; i++) {
+          fdmex.Run();
+
+          // Forces should remain finite during simulation
+          const FGColumnVector3& bodyForces = thruster->GetBodyForces();
+          TS_ASSERT(std::isfinite(bodyForces(1)));
+          TS_ASSERT(std::isfinite(bodyForces(2)));
+          TS_ASSERT(std::isfinite(bodyForces(3)));
+
+          // Moments should remain finite during simulation
+          const FGColumnVector3& moments = thruster->GetMoments();
+          TS_ASSERT(std::isfinite(moments(1)));
+          TS_ASSERT(std::isfinite(moments(2)));
+          TS_ASSERT(std::isfinite(moments(3)));
+        }
+      }
+    }
+  }
+
+  // Test multiple engines accessing thrusters
+  void testMultipleEngineThrusters() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    size_t numEngines = propulsion->GetNumEngines();
+
+    // Test all available engines
+    for (size_t i = 0; i < numEngines; i++) {
+      auto engine = propulsion->GetEngine(i);
+      TS_ASSERT(engine != nullptr);
+
+      FGThruster* thruster = engine->GetThruster();
+      TS_ASSERT(thruster != nullptr);
+
+      if (thruster != nullptr) {
+        // Each thruster should have valid forces
+        const FGColumnVector3& forces = thruster->GetBodyForces();
+        TS_ASSERT(std::isfinite(forces(1)));
+        TS_ASSERT(std::isfinite(forces(2)));
+        TS_ASSERT(std::isfinite(forces(3)));
+      }
+    }
+  }
+
+  // Test force location setters with model loaded
+  void testForceLocationSettersWithModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        // Save original location
+        double origX = thruster->GetLocationX();
+        double origY = thruster->GetLocationY();
+        double origZ = thruster->GetLocationZ();
+
+        // Modify location
+        thruster->SetLocation(100.0, 50.0, 25.0);
+
+        TS_ASSERT_DELTA(thruster->GetLocationX(), 100.0, epsilon);
+        TS_ASSERT_DELTA(thruster->GetLocationY(), 50.0, epsilon);
+        TS_ASSERT_DELTA(thruster->GetLocationZ(), 25.0, epsilon);
+
+        // Acting location should be updated too
+        TS_ASSERT_DELTA(thruster->GetActingLocationX(), 100.0, epsilon);
+        TS_ASSERT_DELTA(thruster->GetActingLocationY(), 50.0, epsilon);
+        TS_ASSERT_DELTA(thruster->GetActingLocationZ(), 25.0, epsilon);
+
+        // Restore original location
+        thruster->SetLocation(origX, origY, origZ);
+      }
+    }
+  }
+
+  // Test force angles setters with model loaded
+  void testForceAngleSettersWithModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      FGThruster* thruster = engine->GetThruster();
+
+      if (thruster != nullptr) {
+        // Set transform type to custom to allow angle changes
+        thruster->SetTransformType(FGForce::tCustom);
+
+        // Set angles
+        thruster->SetAnglesToBody(0.1, 0.2, 0.3);
+
+        TS_ASSERT_DELTA(thruster->GetAnglesToBody(1), 0.1, epsilon);
+        TS_ASSERT_DELTA(thruster->GetAnglesToBody(2), 0.2, epsilon);
+        TS_ASSERT_DELTA(thruster->GetAnglesToBody(3), 0.3, epsilon);
+
+        // Test pitch/yaw setters
+        thruster->SetPitch(0.15);
+        thruster->SetYaw(0.25);
+
+        TS_ASSERT_DELTA(thruster->GetPitch(), 0.15, epsilon);
+        TS_ASSERT_DELTA(thruster->GetYaw(), 0.25, epsilon);
+      }
+    }
+  }
+
+  // Test propulsion system forces aggregate
+  void testPropulsionSystemForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    // Get total forces from propulsion system
+    const FGColumnVector3& forces = propulsion->GetForces();
+
+    // Forces should be finite
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+
+    // Individual accessors should match vector
+    TS_ASSERT_DELTA(propulsion->GetForces(1), forces(1), epsilon);
+    TS_ASSERT_DELTA(propulsion->GetForces(2), forces(2), epsilon);
+    TS_ASSERT_DELTA(propulsion->GetForces(3), forces(3), epsilon);
+  }
+
+  // Test propulsion system moments aggregate
+  void testPropulsionSystemMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    // Get total moments from propulsion system
+    const FGColumnVector3& moments = propulsion->GetMoments();
+
+    // Moments should be finite
+    TS_ASSERT(std::isfinite(moments(1)));
+    TS_ASSERT(std::isfinite(moments(2)));
+    TS_ASSERT(std::isfinite(moments(3)));
+
+    // Individual accessors should match vector
+    TS_ASSERT_DELTA(propulsion->GetMoments(1), moments(1), epsilon);
+    TS_ASSERT_DELTA(propulsion->GetMoments(2), moments(2), epsilon);
+    TS_ASSERT_DELTA(propulsion->GetMoments(3), moments(3), epsilon);
   }
 };

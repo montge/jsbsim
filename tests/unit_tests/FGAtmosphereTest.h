@@ -2303,4 +2303,370 @@ public:
       }
     }
   }
+
+  /***************************************************************************
+   * FGFDMExec Integration Tests - Tests using real atmosphere via FGFDMExec
+   ***************************************************************************/
+
+  void testFDMAtmosphereSeaLevelTemperature()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sea level temperature should be standard day value (518.67 R = 288.15 K)
+    double T_sl = atm->GetTemperatureSL();
+    TS_ASSERT(T_sl > 0.0);
+    TS_ASSERT_DELTA(T_sl, FGAtmosphere::StdDaySLtemperature, 1.0);
+  }
+
+  void testFDMAtmosphereSeaLevelPressure()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sea level pressure should be standard day value (2116.22 psf)
+    double P_sl = atm->GetPressureSL();
+    TS_ASSERT(P_sl > 0.0);
+    TS_ASSERT_DELTA(P_sl, FGAtmosphere::StdDaySLpressure, 1.0);
+  }
+
+  void testFDMAtmosphereSeaLevelDensity()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sea level density should be positive and reasonable
+    double rho_sl = atm->GetDensitySL();
+    TS_ASSERT(rho_sl > 0.0);
+    // Standard day SL density is approximately 0.002377 slug/ft^3
+    TS_ASSERT_DELTA(rho_sl, 0.002377, 0.0001);
+  }
+
+  void testFDMAtmosphereSeaLevelSoundSpeed()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sea level sound speed should be positive
+    double a_sl = atm->GetSoundSpeedSL();
+    TS_ASSERT(a_sl > 0.0);
+    // Standard day SL sound speed is approximately 1116.45 ft/s
+    TS_ASSERT_DELTA(a_sl, 1116.45, 5.0);
+  }
+
+  void testFDMAtmosphereTemperatureAtAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Temperature at altitude should be less than sea level
+    double T_sl = atm->GetTemperatureSL();
+    double T_10k = atm->GetTemperature(10000.0);
+    double T_20k = atm->GetTemperature(20000.0);
+    double T_30k = atm->GetTemperature(30000.0);
+
+    // Temperature decreases with altitude (in troposphere)
+    TS_ASSERT(T_10k < T_sl);
+    TS_ASSERT(T_20k < T_10k);
+    TS_ASSERT(T_30k < T_20k);
+
+    // All temperatures should be positive
+    TS_ASSERT(T_10k > 0.0);
+    TS_ASSERT(T_20k > 0.0);
+    TS_ASSERT(T_30k > 0.0);
+  }
+
+  void testFDMAtmospherePressureAtAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Pressure at altitude should be less than sea level
+    double P_sl = atm->GetPressureSL();
+    double P_10k = atm->GetPressure(10000.0);
+    double P_20k = atm->GetPressure(20000.0);
+    double P_30k = atm->GetPressure(30000.0);
+
+    // Pressure decreases with altitude
+    TS_ASSERT(P_10k < P_sl);
+    TS_ASSERT(P_20k < P_10k);
+    TS_ASSERT(P_30k < P_20k);
+
+    // All pressures should be positive
+    TS_ASSERT(P_10k > 0.0);
+    TS_ASSERT(P_20k > 0.0);
+    TS_ASSERT(P_30k > 0.0);
+  }
+
+  void testFDMAtmosphereDensityAtAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Density at altitude should be less than sea level
+    double rho_sl = atm->GetDensitySL();
+    double rho_10k = atm->GetDensity(10000.0);
+    double rho_20k = atm->GetDensity(20000.0);
+    double rho_30k = atm->GetDensity(30000.0);
+
+    // Density decreases with altitude
+    TS_ASSERT(rho_10k < rho_sl);
+    TS_ASSERT(rho_20k < rho_10k);
+    TS_ASSERT(rho_30k < rho_20k);
+
+    // All densities should be positive
+    TS_ASSERT(rho_10k > 0.0);
+    TS_ASSERT(rho_20k > 0.0);
+    TS_ASSERT(rho_30k > 0.0);
+  }
+
+  void testFDMAtmosphereSoundSpeedAtAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sound speed at altitude should be less than sea level (depends on temperature)
+    double a_sl = atm->GetSoundSpeedSL();
+    double a_10k = atm->GetSoundSpeed(10000.0);
+    double a_20k = atm->GetSoundSpeed(20000.0);
+    double a_30k = atm->GetSoundSpeed(30000.0);
+
+    // Sound speed decreases with altitude (as temperature decreases in troposphere)
+    TS_ASSERT(a_10k < a_sl);
+    TS_ASSERT(a_20k < a_10k);
+    TS_ASSERT(a_30k < a_20k);
+
+    // All sound speeds should be positive
+    TS_ASSERT(a_10k > 0.0);
+    TS_ASSERT(a_20k > 0.0);
+    TS_ASSERT(a_30k > 0.0);
+  }
+
+  void testFDMAtmosphereIdealGasLawConsistency()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Verify ideal gas law at various altitudes: P = rho * R * T
+    double altitudes[] = {0.0, 5000.0, 10000.0, 15000.0, 20000.0, 25000.0};
+
+    for (double h : altitudes) {
+      double T = atm->GetTemperature(h);
+      double P = atm->GetPressure(h);
+      double rho = atm->GetDensity(h);
+
+      // R for air (ft-lbf/slug-R)
+      double P_calc = rho * R * T;
+      TS_ASSERT_DELTA(P, P_calc, P * 0.001);  // Within 0.1%
+    }
+  }
+
+  void testFDMAtmosphereSoundSpeedFormula()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sound speed should follow: a = sqrt(gamma * R * T)
+    double altitudes[] = {0.0, 10000.0, 20000.0, 30000.0};
+
+    for (double h : altitudes) {
+      double T = atm->GetTemperature(h);
+      double a = atm->GetSoundSpeed(h);
+      double a_calc = sqrt(gama * R * T);
+      TS_ASSERT_DELTA(a, a_calc, a * 0.001);  // Within 0.1%
+    }
+  }
+
+  void testFDMAtmosphereTemperatureRatio()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    double T_sl = atm->GetTemperatureSL();
+    double altitudes[] = {5000.0, 10000.0, 15000.0, 20000.0};
+
+    for (double h : altitudes) {
+      double T = atm->GetTemperature(h);
+      double theta = atm->GetTemperatureRatio(h);
+      double theta_calc = T / T_sl;
+      TS_ASSERT_DELTA(theta, theta_calc, epsilon);
+    }
+  }
+
+  void testFDMAtmospherePressureUnits()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Test pressure conversion methods
+    double P_psf = atm->GetPressureSL(FGAtmosphere::ePSF);
+    double P_pa = atm->GetPressureSL(FGAtmosphere::ePascals);
+    double P_inhg = atm->GetPressureSL(FGAtmosphere::eInchesHg);
+    double P_mbar = atm->GetPressureSL(FGAtmosphere::eMillibars);
+
+    // All should be positive
+    TS_ASSERT(P_psf > 0.0);
+    TS_ASSERT(P_pa > 0.0);
+    TS_ASSERT(P_inhg > 0.0);
+    TS_ASSERT(P_mbar > 0.0);
+
+    // Check unit conversions
+    TS_ASSERT_DELTA(P_pa / P_psf, psftopa, 0.001);
+    TS_ASSERT_DELTA(P_inhg / P_psf, psftoinhg, 0.0001);
+    TS_ASSERT_DELTA(P_mbar / P_psf, psftombar, 0.001);
+  }
+
+  void testFDMAtmosphereViscosity()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Get viscosity values
+    double mu = atm->GetAbsoluteViscosity();
+    double nu = atm->GetKinematicViscosity();
+
+    // Both should be positive
+    TS_ASSERT(mu > 0.0);
+    TS_ASSERT(nu > 0.0);
+
+    // Kinematic = absolute / density
+    double rho = atm->GetDensity();
+    TS_ASSERT_DELTA(nu, mu / rho, nu * 0.001);
+  }
+
+  void testFDMAtmosphereMultipleInstances()
+  {
+    // Create multiple FDMExec instances with independent atmospheres
+    FGFDMExec fdm1;
+    FGFDMExec fdm2;
+
+    auto atm1 = fdm1.GetAtmosphere();
+    auto atm2 = fdm2.GetAtmosphere();
+
+    // Both should be valid but distinct
+    TS_ASSERT(atm1 != nullptr);
+    TS_ASSERT(atm2 != nullptr);
+    TS_ASSERT(atm1 != atm2);
+
+    // Both should return same standard values
+    TS_ASSERT_DELTA(atm1->GetTemperatureSL(), atm2->GetTemperatureSL(), epsilon);
+    TS_ASSERT_DELTA(atm1->GetPressureSL(), atm2->GetPressureSL(), epsilon);
+    TS_ASSERT_DELTA(atm1->GetDensitySL(), atm2->GetDensitySL(), epsilon);
+  }
+
+  void testFDMAtmosphereAltitudeSweep()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Sweep through altitudes and verify monotonic decrease
+    double prev_T = atm->GetTemperatureSL();
+    double prev_P = atm->GetPressureSL();
+    double prev_rho = atm->GetDensitySL();
+    double prev_a = atm->GetSoundSpeedSL();
+
+    for (double h = 1000.0; h <= 35000.0; h += 1000.0) {
+      double T = atm->GetTemperature(h);
+      double P = atm->GetPressure(h);
+      double rho = atm->GetDensity(h);
+      double a = atm->GetSoundSpeed(h);
+
+      // All values should decrease with altitude (in troposphere)
+      TS_ASSERT(T <= prev_T);
+      TS_ASSERT(P < prev_P);
+      TS_ASSERT(rho < prev_rho);
+      TS_ASSERT(a <= prev_a);
+
+      prev_T = T;
+      prev_P = P;
+      prev_rho = rho;
+      prev_a = a;
+    }
+  }
+
+  void testFDMAtmosphereNegativeAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Test below sea level (e.g., Dead Sea region)
+    double T_neg = atm->GetTemperature(-1000.0);
+    double P_neg = atm->GetPressure(-1000.0);
+    double rho_neg = atm->GetDensity(-1000.0);
+
+    // All should be positive
+    TS_ASSERT(T_neg > 0.0);
+    TS_ASSERT(P_neg > 0.0);
+    TS_ASSERT(rho_neg > 0.0);
+
+    // Should be higher than sea level values
+    TS_ASSERT(T_neg > atm->GetTemperatureSL());
+    TS_ASSERT(P_neg > atm->GetPressureSL());
+    TS_ASSERT(rho_neg > atm->GetDensitySL());
+  }
+
+  void testFDMAtmosphereHighAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Test at high altitude (stratosphere)
+    double T_60k = atm->GetTemperature(60000.0);
+    double P_60k = atm->GetPressure(60000.0);
+    double rho_60k = atm->GetDensity(60000.0);
+    double a_60k = atm->GetSoundSpeed(60000.0);
+
+    // All should still be positive
+    TS_ASSERT(T_60k > 0.0);
+    TS_ASSERT(P_60k > 0.0);
+    TS_ASSERT(rho_60k > 0.0);
+    TS_ASSERT(a_60k > 0.0);
+
+    // Should be much less than sea level
+    TS_ASSERT(P_60k < atm->GetPressureSL() * 0.1);
+    TS_ASSERT(rho_60k < atm->GetDensitySL() * 0.1);
+  }
+
+  void testFDMAtmosphereDensityAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Density altitude at sea level with standard conditions should be ~0
+    double da = atm->GetDensityAltitude();
+    // Should be a valid number (may be non-zero depending on initial state)
+    TS_ASSERT(!std::isnan(da));
+    TS_ASSERT(!std::isinf(da));
+  }
+
+  void testFDMAtmospherePressureAltitude()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // Pressure altitude should be valid
+    double pa = atm->GetPressureAltitude();
+    TS_ASSERT(!std::isnan(pa));
+    TS_ASSERT(!std::isinf(pa));
+  }
+
+  void testFDMAtmosphereRatioConsistency()
+  {
+    FGFDMExec fdm;
+    auto atm = fdm.GetAtmosphere();
+
+    // At any altitude, the ratio methods should be consistent
+    double h = 15000.0;
+
+    double T = atm->GetTemperature(h);
+    double T_sl = atm->GetTemperatureSL();
+    double theta = atm->GetTemperatureRatio(h);
+
+    TS_ASSERT_DELTA(theta, T / T_sl, epsilon);
+
+    // Sound speed ratio should equal sqrt of temperature ratio
+    double a = atm->GetSoundSpeed(h);
+    double a_sl = atm->GetSoundSpeedSL();
+    TS_ASSERT_DELTA(a / a_sl, sqrt(theta), epsilon);
+  }
 };

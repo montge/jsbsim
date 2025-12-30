@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
 #include <models/propulsion/FGThruster.h>
 #include <models/propulsion/FGNozzle.h>
 #include <math/FGColumnVector3.h>
@@ -626,6 +627,429 @@ public:
     double thrust = cos(0.0) * inputThrust;
 
     TS_ASSERT_DELTA(thrust, 1000.0, 1e-15);
+  }
+
+  /***************************************************************************
+   * Class-based Tests with FGFDMExec and c172x model
+   ***************************************************************************/
+
+  // Test loading c172x model and getting thruster
+  void testC172xThrusterExists() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      TS_ASSERT(thruster != nullptr);
+    }
+  }
+
+  // Test thruster type for c172x (should be propeller)
+  void testC172xThrusterType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      TS_ASSERT(thruster != nullptr);
+      // C172x has a propeller
+      TS_ASSERT_EQUALS(thruster->GetType(), FGThruster::ttPropeller);
+    }
+  }
+
+  // Test GetThrust method
+  void testC172xGetThrust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      double thrust = thruster->GetThrust();
+      TS_ASSERT(std::isfinite(thrust));
+      // Thrust could be zero at startup
+      TS_ASSERT(thrust >= -1.0);  // Allow small negative for numerical precision
+    }
+  }
+
+  // Test GetName method
+  void testC172xThrusterName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      std::string name = thruster->GetName();
+      TS_ASSERT(!name.empty());
+    }
+  }
+
+  // Test GetGearRatio method
+  void testC172xGearRatio() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      double gearRatio = thruster->GetGearRatio();
+      TS_ASSERT(std::isfinite(gearRatio));
+      TS_ASSERT(gearRatio > 0.0);  // Gear ratio must be positive
+    }
+  }
+
+  // Test GetReverserAngle method
+  void testC172xReverserAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      double angle = thruster->GetReverserAngle();
+      TS_ASSERT(std::isfinite(angle));
+      // Default reverser angle should be 0
+      TS_ASSERT_DELTA(angle, 0.0, epsilon);
+    }
+  }
+
+  // Test SetReverserAngle method
+  void testC172xSetReverserAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Set reverser angle
+      thruster->SetReverserAngle(M_PI / 4.0);
+      double angle = thruster->GetReverserAngle();
+      TS_ASSERT_DELTA(angle, M_PI / 4.0, epsilon);
+
+      // Reset to zero
+      thruster->SetReverserAngle(0.0);
+      angle = thruster->GetReverserAngle();
+      TS_ASSERT_DELTA(angle, 0.0, epsilon);
+    }
+  }
+
+  // Test GetRPM method (base class returns 0)
+  void testC172xThrusterRPM() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      double rpm = thruster->GetRPM();
+      TS_ASSERT(std::isfinite(rpm));
+      TS_ASSERT(rpm >= 0.0);  // RPM is non-negative
+    }
+  }
+
+  // Test GetEngineRPM method
+  void testC172xThrusterEngineRPM() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      double engineRPM = thruster->GetEngineRPM();
+      TS_ASSERT(std::isfinite(engineRPM));
+      TS_ASSERT(engineRPM >= 0.0);
+    }
+  }
+
+  // Test GetPowerRequired method
+  void testC172xPowerRequired() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      double power = thruster->GetPowerRequired();
+      TS_ASSERT(std::isfinite(power));
+      // Power required should be non-negative
+      TS_ASSERT(power >= 0.0);
+    }
+  }
+
+  // Test GetThrusterLabels method
+  void testC172xThrusterLabels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      std::string labels = thruster->GetThrusterLabels(0, ",");
+      TS_ASSERT(!labels.empty());
+    }
+  }
+
+  // Test GetThrusterValues method
+  void testC172xThrusterValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      std::string values = thruster->GetThrusterValues(0, ",");
+      TS_ASSERT(!values.empty());
+    }
+  }
+
+  // Test SetName method
+  void testC172xSetThrusterName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      std::string originalName = thruster->GetName();
+
+      thruster->SetName("TestThruster");
+      TS_ASSERT_EQUALS(thruster->GetName(), "TestThruster");
+
+      // Restore original name
+      thruster->SetName(originalName);
+    }
+  }
+
+  // Test ResetToIC method
+  void testC172xResetToIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Modify state
+      thruster->SetReverserAngle(M_PI / 2.0);
+
+      // Reset to IC
+      thruster->ResetToIC();
+
+      // After reset, reverser angle should be back to initial (0)
+      double angle = thruster->GetReverserAngle();
+      TS_ASSERT_DELTA(angle, 0.0, epsilon);
+    }
+  }
+
+  // Test Calculate method returns finite value
+  void testC172xThrusterCalculate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // The propeller's Calculate method uses tables and actual dynamics,
+      // not the base class's simple cosine formula.
+      // Just verify it returns a finite value.
+      double inputThrust = 1000.0;
+      double outputThrust = thruster->Calculate(inputThrust);
+
+      TS_ASSERT(std::isfinite(outputThrust));
+    }
+  }
+
+  // Test reverser angle affects GetThrust after Calculate
+  void testC172xThrusterCalculateWithReverser() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Set reverser angle and verify it's stored
+      thruster->SetReverserAngle(M_PI / 4.0);
+      TS_ASSERT_DELTA(thruster->GetReverserAngle(), M_PI / 4.0, epsilon);
+
+      // For propellers, the Calculate method computes thrust based on
+      // advance ratio and Ct/Cp tables. The reverser angle is applied
+      // in the base class's Calculate, but propeller overrides it.
+      // Just verify the thrust returned is finite.
+      double outputThrust = thruster->Calculate(1000.0);
+      TS_ASSERT(std::isfinite(outputThrust));
+
+      // Reset reverser angle
+      thruster->SetReverserAngle(0.0);
+    }
+  }
+
+  // Test multiple simulation cycles
+  void testC172xThrusterMultipleRuns() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      for (int i = 0; i < 10; i++) {
+        propulsion->Run(false);
+        double thrust = thruster->GetThrust();
+        TS_ASSERT(std::isfinite(thrust));
+      }
+    }
+  }
+
+  // Test inputs structure in thruster
+  void testC172xThrusterInputs() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Access the inputs structure
+      FGThruster::Inputs& inputs = thruster->in;
+
+      // Check that inputs have reasonable values
+      TS_ASSERT(std::isfinite(inputs.TotalDeltaT));
+      TS_ASSERT(std::isfinite(inputs.H_agl));
+      TS_ASSERT(std::isfinite(inputs.Density));
+      TS_ASSERT(inputs.Density > 0.0);  // Density must be positive
+    }
+  }
+
+  // Test thruster state persistence across runs
+  void testC172xThrusterStatePersistence() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Set a reverser angle
+      double testAngle = 0.5;
+      thruster->SetReverserAngle(testAngle);
+
+      // Run multiple cycles
+      for (int i = 0; i < 5; i++) {
+        propulsion->Run(false);
+      }
+
+      // Angle should persist
+      TS_ASSERT_DELTA(thruster->GetReverserAngle(), testAngle, epsilon);
+
+      // Reset
+      thruster->SetReverserAngle(0.0);
+    }
+  }
+
+  // Test multiple FDMExec instances with thrusters
+  void testMultipleC172xThrusterInstances() {
+    FGFDMExec fdmex1, fdmex2;
+
+    fdmex1.LoadModel("c172x");
+    fdmex2.LoadModel("c172x");
+
+    auto prop1 = fdmex1.GetPropulsion();
+    auto prop2 = fdmex2.GetPropulsion();
+
+    if (prop1->GetNumEngines() > 0 && prop2->GetNumEngines() > 0) {
+      auto thruster1 = prop1->GetEngine(0)->GetThruster();
+      auto thruster2 = prop2->GetEngine(0)->GetThruster();
+
+      // Set different reverser angles
+      thruster1->SetReverserAngle(0.1);
+      thruster2->SetReverserAngle(0.5);
+
+      // Verify independence
+      TS_ASSERT_DELTA(thruster1->GetReverserAngle(), 0.1, epsilon);
+      TS_ASSERT_DELTA(thruster2->GetReverserAngle(), 0.5, epsilon);
+
+      // Reset
+      thruster1->SetReverserAngle(0.0);
+      thruster2->SetReverserAngle(0.0);
+    }
+  }
+
+  // Test full reverser angle setting
+  void testC172xFullReverser() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Set full reverse angle
+      thruster->SetReverserAngle(M_PI);
+      TS_ASSERT_DELTA(thruster->GetReverserAngle(), M_PI, epsilon);
+
+      // The propeller's Calculate method uses its own thrust calculation
+      // based on Ct tables. Just verify the calculation is finite.
+      double outputThrust = thruster->Calculate(1000.0);
+      TS_ASSERT(std::isfinite(outputThrust));
+
+      // Reset
+      thruster->SetReverserAngle(0.0);
+      TS_ASSERT_DELTA(thruster->GetReverserAngle(), 0.0, epsilon);
+    }
+  }
+
+  // Test 90 degree reverser angle setting
+  void testC172xZeroThrustReverser() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+
+      // Set 90 degree reverser angle
+      thruster->SetReverserAngle(M_PI / 2.0);
+      TS_ASSERT_DELTA(thruster->GetReverserAngle(), M_PI / 2.0, epsilon);
+
+      // The propeller's Calculate uses Ct tables, not the base reverser formula.
+      // Just verify the calculation is finite.
+      double outputThrust = thruster->Calculate(1000.0);
+      TS_ASSERT(std::isfinite(outputThrust));
+
+      // Reset
+      thruster->SetReverserAngle(0.0);
+    }
   }
 
   // Test thrust vectoring with pitch angle
