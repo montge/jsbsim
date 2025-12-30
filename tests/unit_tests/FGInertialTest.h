@@ -15,6 +15,14 @@
 #include <limits>
 #include <cmath>
 
+#include <FGFDMExec.h>
+#include <models/FGInertial.h>
+#include <math/FGLocation.h>
+#include "TestUtilities.h"
+
+using namespace JSBSim;
+using namespace JSBSimTest;
+
 const double epsilon = 1e-8;
 const double DEG_TO_RAD = M_PI / 180.0;
 
@@ -1261,5 +1269,274 @@ public:
 
     TS_ASSERT(g1 > g2);  // Gravity decreases with altitude
     TS_ASSERT_DELTA(g1, G0, 0.1);
+  }
+
+  // ============================================================================
+  // FGInertial class tests - using actual class methods
+  // ============================================================================
+
+  // Test FGInertial default construction through FGFDMExec
+  void testFGInertialConstruction() {
+    FGFDMExec fdmex;
+    auto inertial = fdmex.GetInertial();
+    TS_ASSERT(inertial != nullptr);
+  }
+
+  // Test GetStandardGravity static method
+  void testFGInertialGetStandardGravity() {
+    // GetStandardGravity is a static constexpr method
+    double gRef = FGInertial::GetStandardGravity();
+    TS_ASSERT(gRef > 31.0);
+    TS_ASSERT(gRef < 33.0);
+    // Should be about 32.174 ft/s^2
+    TS_ASSERT_DELTA(gRef, 32.174, 0.01);
+  }
+
+  // Test GetGravity method
+  void testFGInertialGetGravity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto inertial = fdmex.GetInertial();
+
+    // Run to compute gravity
+    inertial->Run(false);
+
+    // Get computed gravity vector
+    const FGColumnVector3& gravity = inertial->GetGravity();
+    TS_ASSERT(gravity.Magnitude() > 0.0);
+  }
+
+  // Test GetGM method
+  void testFGInertialGetGM() {
+    FGFDMExec fdmex;
+    auto inertial = fdmex.GetInertial();
+
+    double gm = inertial->GetGM();
+    // GM should be about 1.4e16 ft^3/s^2 for Earth
+    TS_ASSERT(gm > 1.0e15);
+    TS_ASSERT(gm < 2.0e16);
+  }
+
+  // Test SetGravityType method
+  void testFGInertialSetGravityType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto inertial = fdmex.GetInertial();
+
+    // Default is WGS84
+    TS_ASSERT_EQUALS(inertial->GetGravityType(), FGInertial::gtWGS84);
+
+    // Set to Standard
+    inertial->SetGravityType(FGInertial::gtStandard);
+    TS_ASSERT_EQUALS(inertial->GetGravityType(), FGInertial::gtStandard);
+
+    // Set back to WGS84
+    inertial->SetGravityType(FGInertial::gtWGS84);
+    TS_ASSERT_EQUALS(inertial->GetGravityType(), FGInertial::gtWGS84);
+  }
+
+  // Test GetTl2ec transformation
+  void testFGInertialGetTl2ec() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto inertial = fdmex.GetInertial();
+
+    FGLocation position;
+    position.SetPositionGeodetic(0.0, 0.0, 0.0);
+
+    FGMatrix33 Tl2ec = inertial->GetTl2ec(position);
+
+    // Should be a valid rotation matrix (determinant = 1)
+    double det = Tl2ec.Determinant();
+    TS_ASSERT_DELTA(det, 1.0, 0.01);
+  }
+
+  // Test GetTl2ec at different latitudes
+  void testFGInertialGetTl2ecLatitudes() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto inertial = fdmex.GetInertial();
+
+    // Test at equator
+    FGLocation pos_eq;
+    pos_eq.SetPositionGeodetic(0.0, 0.0, 0.0);
+    FGMatrix33 T_eq = inertial->GetTl2ec(pos_eq);
+    TS_ASSERT_DELTA(T_eq.Determinant(), 1.0, 0.01);
+
+    // Test at 45 degrees
+    FGLocation pos_45;
+    pos_45.SetPositionGeodetic(0.0, 45.0 * M_PI / 180.0, 0.0);
+    FGMatrix33 T_45 = inertial->GetTl2ec(pos_45);
+    TS_ASSERT_DELTA(T_45.Determinant(), 1.0, 0.01);
+  }
+
+  // Test omega planet (rotation rate)
+  void testFGInertialOmegaPlanet() {
+    FGFDMExec fdmex;
+    auto inertial = fdmex.GetInertial();
+
+    FGColumnVector3 omega = inertial->GetOmegaPlanet();
+
+    // Earth rotation is about Z axis
+    TS_ASSERT_DELTA(omega(1), 0.0, epsilon);
+    TS_ASSERT_DELTA(omega(2), 0.0, epsilon);
+    TS_ASSERT(omega(3) > 7.0e-5);  // About 7.29e-5 rad/s
+    TS_ASSERT(omega(3) < 7.4e-5);
+  }
+
+  // Test Run method
+  void testFGInertialRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    auto inertial = fdmex.GetInertial();
+
+    // Run should succeed and return false (no error)
+    bool result = inertial->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test Run in holding mode
+  void testFGInertialRunHolding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    auto inertial = fdmex.GetInertial();
+
+    // Run in holding mode
+    bool result = inertial->Run(true);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test Load method with XML
+  void testFGInertialLoadXML() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto inertial = fdmex.GetInertial();
+
+    std::string xml = R"(
+      <planet name="TestPlanet">
+        <semimajor_axis unit="FT">20000000.0</semimajor_axis>
+        <semiminor_axis unit="FT">19900000.0</semiminor_axis>
+        <rotation_rate unit="RAD/SEC">0.00005</rotation_rate>
+        <GM unit="FT3/SEC2">1.0e16</GM>
+        <J2>0.001</J2>
+      </planet>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    bool loaded = inertial->Load(el.ptr());
+    TS_ASSERT(loaded);
+  }
+
+  // Test Load with equatorial_radius instead of semimajor_axis
+  void testFGInertialLoadXMLEquatorialRadius() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto inertial = fdmex.GetInertial();
+
+    std::string xml = R"(
+      <planet name="TestPlanet2">
+        <equatorial_radius unit="FT">20000000.0</equatorial_radius>
+        <polar_radius unit="FT">19900000.0</polar_radius>
+      </planet>
+    )";
+
+    Element_ptr el = readFromXML(xml);
+    bool loaded = inertial->Load(el.ptr());
+    TS_ASSERT(loaded);
+  }
+
+  // Test gravity model property binding
+  void testFGInertialGravityModelProperty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto pm = fdmex.GetPropertyManager();
+
+    // Check property exists
+    auto node = pm->GetNode("simulation/gravity-model");
+    TS_ASSERT(node != nullptr);
+
+    if (node) {
+      // Default is WGS84 (1)
+      int gravType = node->getIntValue();
+      TS_ASSERT_EQUALS(gravType, FGInertial::gtWGS84);
+
+      // Set to Standard (0)
+      node->setIntValue(FGInertial::gtStandard);
+      auto inertial = fdmex.GetInertial();
+      TS_ASSERT_EQUALS(inertial->GetGravityType(), FGInertial::gtStandard);
+    }
+  }
+
+  // Test GetSemiMajor and GetSemiMinor
+  void testFGInertialGetAxes() {
+    FGFDMExec fdmex;
+    auto inertial = fdmex.GetInertial();
+
+    double a = inertial->GetSemimajor();
+    double b = inertial->GetSemiminor();
+
+    // WGS84 defaults
+    TS_ASSERT(a > 20900000.0);
+    TS_ASSERT(a < 21000000.0);
+    TS_ASSERT(b > 20800000.0);
+    TS_ASSERT(b < 20900000.0);
+    TS_ASSERT(a > b);  // Oblate spheroid
+  }
+
+  // Test SetAltitudeAGL
+  void testFGInertialSetAltitudeAGL() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto inertial = fdmex.GetInertial();
+
+    FGLocation location;
+    location.SetPositionGeodetic(0.0, 0.0, 1000.0);
+
+    // Set altitude to 500 ft AGL
+    inertial->SetAltitudeAGL(location, 500.0);
+
+    // The geodetic altitude should have been modified
+    double newAlt = location.GetGeodAltitude();
+    TS_ASSERT(newAlt >= 0.0);  // Should be non-negative
+  }
+
+  // Test gravity with standard model
+  void testFGInertialStandardGravity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    auto inertial = fdmex.GetInertial();
+    inertial->SetGravityType(FGInertial::gtStandard);
+
+    // Run to compute gravity
+    bool result = inertial->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+
+    // Standard model should be set
+    TS_ASSERT_EQUALS(inertial->GetGravityType(), FGInertial::gtStandard);
+  }
+
+  // Test WGS84 gravity model
+  void testFGInertialWGS84Gravity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+
+    auto inertial = fdmex.GetInertial();
+    inertial->SetGravityType(FGInertial::gtWGS84);
+
+    // Run to compute gravity
+    bool result = inertial->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+
+    // WGS84 model should be set
+    TS_ASSERT_EQUALS(inertial->GetGravityType(), FGInertial::gtWGS84);
   }
 };
