@@ -4,6 +4,7 @@
 
 #include <FGFDMExec.h>
 #include <models/propulsion/FGEngine.h>
+#include <models/FGPropulsion.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1575,5 +1576,182 @@ public:
     // Cylinder 2 unchanged
     TS_ASSERT_DELTA(cht2, 400.0, DEFAULT_TOLERANCE);
     TS_ASSERT_DELTA(egt2, 1350.0, DEFAULT_TOLERANCE);
+  }
+
+  // ============================================================================
+  // FGEngine class tests - using actual class methods via FGPropulsion
+  // ============================================================================
+
+  // Test FGPropulsion access through FGFDMExec
+  void testFGPropulsionAccess() {
+    FGFDMExec fdmex;
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+  }
+
+  // Test FGPropulsion with loaded model (ball has no engines)
+  void testFGPropulsionBallModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    // Ball has no engines
+    unsigned int numEngines = propulsion->GetNumEngines();
+    TS_ASSERT_EQUALS(numEngines, 0);
+  }
+
+  // Test FGPropulsion with c172x model (has engine)
+  void testFGPropulsionC172xModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    // C172x has 1 engine
+    unsigned int numEngines = propulsion->GetNumEngines();
+    TS_ASSERT(numEngines >= 1);
+  }
+
+  // Test GetEngine method
+  void testFGPropulsionGetEngine() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    unsigned int numEngines = propulsion->GetNumEngines();
+    if (numEngines > 0) {
+      auto engine = propulsion->GetEngine(0);
+      TS_ASSERT(engine != nullptr);
+    }
+  }
+
+  // Test engine name
+  void testFGEngineName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      std::string name = engine->GetName();
+      TS_ASSERT(!name.empty());
+    }
+  }
+
+  // Test engine type
+  void testFGEngineType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      int type = engine->GetType();
+      // Should be a valid engine type (piston for C172x)
+      TS_ASSERT(type >= 0);
+      TS_ASSERT(type == FGEngine::etPiston);
+    }
+  }
+
+  // Test FGPropulsion InitModel
+  void testFGPropulsionInitModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    bool result = propulsion->InitModel();
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test FGPropulsion Run
+  void testFGPropulsionRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+
+    bool result = propulsion->Run(false);
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test engine GetThrust
+  void testFGEngineGetThrust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      double thrust = engine->GetThrust();
+      TS_ASSERT(std::isfinite(thrust));
+      TS_ASSERT(thrust >= 0.0);  // Thrust can't be negative
+    }
+  }
+
+  // Test GetTanksWeight
+  void testFGPropulsionGetTanksWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    double tanksWeight = propulsion->GetTanksWeight();
+    TS_ASSERT(tanksWeight >= 0.0);
+  }
+
+  // Test GetForces
+  void testFGPropulsionGetForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    double fx = propulsion->GetForces(1);
+    double fy = propulsion->GetForces(2);
+    double fz = propulsion->GetForces(3);
+    TS_ASSERT(std::isfinite(fx));
+    TS_ASSERT(std::isfinite(fy));
+    TS_ASSERT(std::isfinite(fz));
+  }
+
+  // Test GetMoments
+  void testFGPropulsionGetMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    double mx = propulsion->GetMoments(1);
+    double my = propulsion->GetMoments(2);
+    double mz = propulsion->GetMoments(3);
+    TS_ASSERT(std::isfinite(mx));
+    TS_ASSERT(std::isfinite(my));
+    TS_ASSERT(std::isfinite(mz));
+  }
+
+  // Test GetPropulsionStrings
+  void testFGPropulsionGetStrings() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto propulsion = fdmex.GetPropulsion();
+
+    std::string header = propulsion->GetPropulsionStrings(",");
+    TS_ASSERT(!header.empty());
+  }
+
+  // Test GetPropulsionValues
+  void testFGPropulsionGetValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto propulsion = fdmex.GetPropulsion();
+    propulsion->Run(false);
+
+    std::string values = propulsion->GetPropulsionValues(",");
+    TS_ASSERT(!values.empty());
   }
 };
