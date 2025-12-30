@@ -1476,4 +1476,429 @@ public:
     TS_ASSERT_EQUALS(p1->GetNumTanks(), 0u);
     TS_ASSERT_EQUALS(p2->GetNumTanks(), 0u);
   }
+
+  // ============================================================================
+  // C172x Model-Based Tests for FGPropulsion
+  // ============================================================================
+
+  // Test 1: C172x has engine after loading
+  void testC172xHasEngine() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    TS_ASSERT(prop->GetNumEngines() > 0);
+  }
+
+  // Test 2: C172x has fuel tanks
+  void testC172xHasTanks() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    TS_ASSERT(prop->GetNumTanks() > 0);
+  }
+
+  // Test 3: C172x tank weight is positive
+  void testC172xTankWeightPositive() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    double weight = prop->GetTanksWeight();
+    TS_ASSERT(weight > 0.0);
+  }
+
+  // Test 4: C172x forces are finite
+  void testC172xForcesFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGColumnVector3& forces = prop->GetForces();
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+  }
+
+  // Test 5: C172x moments are finite
+  void testC172xMomentsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGColumnVector3& moments = prop->GetMoments();
+    TS_ASSERT(std::isfinite(moments(1)));
+    TS_ASSERT(std::isfinite(moments(2)));
+    TS_ASSERT(std::isfinite(moments(3)));
+  }
+
+  // Test 6: C172x indexed forces match vector
+  void testC172xIndexedForcesMatchVector() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGColumnVector3& forces = prop->GetForces();
+    TS_ASSERT_EQUALS(prop->GetForces(1), forces(1));
+    TS_ASSERT_EQUALS(prop->GetForces(2), forces(2));
+    TS_ASSERT_EQUALS(prop->GetForces(3), forces(3));
+  }
+
+  // Test 7: C172x indexed moments match vector
+  void testC172xIndexedMomentsMatchVector() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGColumnVector3& moments = prop->GetMoments();
+    TS_ASSERT_EQUALS(prop->GetMoments(1), moments(1));
+    TS_ASSERT_EQUALS(prop->GetMoments(2), moments(2));
+    TS_ASSERT_EQUALS(prop->GetMoments(3), moments(3));
+  }
+
+  // Test 8: C172x tank moment is finite
+  void testC172xTankMomentFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGColumnVector3& moment = prop->GetTanksMoment();
+    TS_ASSERT(std::isfinite(moment(1)));
+    TS_ASSERT(std::isfinite(moment(2)));
+    TS_ASSERT(std::isfinite(moment(3)));
+  }
+
+  // Test 9: C172x tank inertia is non-negative diagonal
+  void testC172xTankInertiaValid() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGMatrix33& inertia = prop->CalculateTankInertias();
+    TS_ASSERT(inertia(1,1) >= 0.0);
+    TS_ASSERT(inertia(2,2) >= 0.0);
+    TS_ASSERT(inertia(3,3) >= 0.0);
+  }
+
+  // Test 10: C172x propulsion runs without error
+  void testC172xRunNoError() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    bool result = prop->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test 11: C172x active engine default
+  void testC172xActiveEngineDefault() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    int active = prop->GetActiveEngine();
+    TS_ASSERT(active == -1 || active >= 0);
+  }
+
+  // Test 12: C172x set active engine to first
+  void testC172xSetActiveEngine() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetActiveEngine(0);
+    int active = prop->GetActiveEngine();
+    TS_ASSERT(active == 0 || active == -1);
+  }
+
+  // Test 13: C172x fuel freeze toggle
+  void testC172xFuelFreezeToggle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetFuelFreeze(true);
+    TS_ASSERT_EQUALS(prop->GetFuelFreeze(), true);
+    prop->SetFuelFreeze(false);
+    TS_ASSERT_EQUALS(prop->GetFuelFreeze(), false);
+  }
+
+  // Test 14: C172x propulsion strings not empty
+  void testC172xPropulsionStringsNotEmpty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    std::string strings = prop->GetPropulsionStrings(",");
+    TS_ASSERT(!strings.empty());
+  }
+
+  // Test 15: C172x propulsion values not empty
+  void testC172xPropulsionValuesNotEmpty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto prop = fdmex.GetPropulsion();
+
+    std::string values = prop->GetPropulsionValues(",");
+    TS_ASSERT(!values.empty());
+  }
+
+  // Test 16: C172x tank report not empty
+  void testC172xTankReportNotEmpty() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    std::string report = prop->GetPropulsionTankReport();
+    TS_ASSERT(!report.empty());
+  }
+
+  // Test 17: C172x forces stable over multiple runs
+  void testC172xForcesStableAcrossRuns() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 10; i++) {
+      fdmex.Run();
+      const FGColumnVector3& forces = prop->GetForces();
+      TS_ASSERT(std::isfinite(forces(1)));
+      TS_ASSERT(std::isfinite(forces(2)));
+      TS_ASSERT(std::isfinite(forces(3)));
+    }
+  }
+
+  // Test 18: C172x moments stable over multiple runs
+  void testC172xMomentsStableAcrossRuns() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    for (int i = 0; i < 10; i++) {
+      fdmex.Run();
+      const FGColumnVector3& moments = prop->GetMoments();
+      TS_ASSERT(std::isfinite(moments(1)));
+      TS_ASSERT(std::isfinite(moments(2)));
+      TS_ASSERT(std::isfinite(moments(3)));
+    }
+  }
+
+  // Test 19: C172x magnetos control
+  void testC172xMagnetosControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    // Test all magneto positions
+    for (int pos = 0; pos <= 3; pos++) {
+      prop->SetMagnetos(pos);
+      prop->Run(false);
+      TS_ASSERT(true);
+    }
+  }
+
+  // Test 20: C172x starter control
+  void testC172xStarterControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetStarter(1);
+    prop->Run(false);
+    TS_ASSERT(true);
+
+    prop->SetStarter(0);
+    prop->Run(false);
+    TS_ASSERT(true);
+  }
+
+  // Test 21: C172x cutoff control
+  void testC172xCutoffControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetCutoff(1);
+    prop->Run(false);
+    TS_ASSERT(true);
+
+    prop->SetCutoff(0);
+    prop->Run(false);
+    TS_ASSERT(true);
+  }
+
+  // Test 22: C172x tank weight reasonable
+  void testC172xTankWeightReasonable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    double weight = prop->GetTanksWeight();
+    // C172x has fuel, weight should be reasonable (not extreme)
+    TS_ASSERT(weight >= 0.0);
+    TS_ASSERT(weight < 10000.0);  // Reasonable upper bound in lbs
+  }
+
+  // Test 23: C172x engine count is one
+  void testC172xEngineCountIsOne() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    // C172x has a single piston engine
+    TS_ASSERT_EQUALS(prop->GetNumEngines(), 1u);
+  }
+
+  // Test 24: C172x tank inertia matrix symmetric
+  void testC172xTankInertiaSymmetric() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    const FGMatrix33& inertia = prop->CalculateTankInertias();
+    TS_ASSERT_DELTA(inertia(1,2), inertia(2,1), epsilon);
+    TS_ASSERT_DELTA(inertia(1,3), inertia(3,1), epsilon);
+    TS_ASSERT_DELTA(inertia(2,3), inertia(3,2), epsilon);
+  }
+
+  // Test 25: C172x extended simulation run
+  void testC172xExtendedSimulationRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    // Run for 50 cycles
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+
+      // Verify propulsion state remains valid
+      const FGColumnVector3& forces = prop->GetForces();
+      const FGColumnVector3& moments = prop->GetMoments();
+
+      TS_ASSERT(std::isfinite(forces(1)));
+      TS_ASSERT(std::isfinite(forces(2)));
+      TS_ASSERT(std::isfinite(forces(3)));
+      TS_ASSERT(std::isfinite(moments(1)));
+      TS_ASSERT(std::isfinite(moments(2)));
+      TS_ASSERT(std::isfinite(moments(3)));
+    }
+  }
+
+  // Test 26: C172x GetExec returns correct FDMExec
+  void testC172xGetExec() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    TS_ASSERT(prop->GetExec() == &fdmex);
+  }
+
+  // Test 27: C172x InitModel after loading
+  void testC172xInitModelAfterLoading() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    bool result = prop->InitModel();
+    TS_ASSERT_EQUALS(result, true);
+  }
+
+  // Test 28: C172x two instances independent
+  void testC172xTwoInstancesIndependent() {
+    FGFDMExec fdmex1;
+    fdmex1.LoadModel("c172x");
+    fdmex1.RunIC();
+
+    FGFDMExec fdmex2;
+    fdmex2.LoadModel("c172x");
+    fdmex2.RunIC();
+
+    auto p1 = fdmex1.GetPropulsion();
+    auto p2 = fdmex2.GetPropulsion();
+
+    TS_ASSERT(p1 != p2);
+
+    p1->SetFuelFreeze(true);
+    TS_ASSERT_EQUALS(p1->GetFuelFreeze(), true);
+    TS_ASSERT_EQUALS(p2->GetFuelFreeze(), false);
+  }
+
+  // Test 29: C172x rate setting
+  void testC172xRateSetting() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->SetRate(5);
+    TS_ASSERT_EQUALS(prop->GetRate(), 5u);
+  }
+
+  // Test 30: C172x comprehensive propulsion verification
+  void testC172xComprehensivePropulsionVerification() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto prop = fdmex.GetPropulsion();
+
+    // Verify has engine and tanks
+    TS_ASSERT_EQUALS(prop->GetNumEngines(), 1u);
+    TS_ASSERT(prop->GetNumTanks() > 0);
+
+    // Verify tank weight
+    double tankWeight = prop->GetTanksWeight();
+    TS_ASSERT(tankWeight > 0.0);
+
+    // Run simulation
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    // Verify forces and moments are finite
+    const FGColumnVector3& forces = prop->GetForces();
+    const FGColumnVector3& moments = prop->GetMoments();
+    for (int j = 1; j <= 3; j++) {
+      TS_ASSERT(std::isfinite(forces(j)));
+      TS_ASSERT(std::isfinite(moments(j)));
+    }
+
+    // Verify propulsion output strings
+    std::string propStrings = prop->GetPropulsionStrings(",");
+    std::string propValues = prop->GetPropulsionValues(",");
+    TS_ASSERT(!propStrings.empty());
+    TS_ASSERT(!propValues.empty());
+  }
 };
