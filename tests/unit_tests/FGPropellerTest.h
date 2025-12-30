@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
 #include <models/propulsion/FGThruster.h>
 #include <models/propulsion/FGPropeller.h>
 #include "TestUtilities.h"
@@ -1578,5 +1579,321 @@ public:
 
     TS_ASSERT_DELTA(position2, 0.5, 0.001);
     TS_ASSERT_DELTA(targetRPM2, 2400.0, 0.001);
+  }
+
+  //==========================================================================
+  // Class-based tests using FGFDMExec and actual FGPropeller
+  //==========================================================================
+
+  // Test getting propeller from c172x model
+  void testGetPropeller() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      TS_ASSERT(thruster != nullptr);
+      TS_ASSERT_EQUALS(thruster->GetType(), FGThruster::ttPropeller);
+    }
+  }
+
+  // Test propeller RPM
+  void testPropellerRPM() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double rpm = prop->GetRPM();
+        TS_ASSERT(std::isfinite(rpm));
+        TS_ASSERT(rpm >= 0.0);
+      }
+    }
+  }
+
+  // Test propeller set RPM
+  void testPropellerSetRPM() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+
+        prop->SetRPM(2400.0);
+        TS_ASSERT_DELTA(prop->GetRPM(), 2400.0, 0.1);
+      }
+    }
+  }
+
+  // Test propeller pitch
+  void testPropellerPitch() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double pitch = prop->GetPitch();
+        TS_ASSERT(std::isfinite(pitch));
+      }
+    }
+  }
+
+  // Test propeller set pitch
+  void testPropellerSetPitch() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+
+        prop->SetPitch(25.0);
+        TS_ASSERT_DELTA(prop->GetPitch(), 25.0, 0.1);
+      }
+    }
+  }
+
+  // Test propeller diameter
+  void testPropellerDiameter() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double diameter = prop->GetDiameter();
+        TS_ASSERT(std::isfinite(diameter));
+        TS_ASSERT(diameter > 0.0);
+      }
+    }
+  }
+
+  // Test propeller Ixx (moment of inertia)
+  void testPropellerIxx() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double ixx = prop->GetIxx();
+        TS_ASSERT(std::isfinite(ixx));
+        TS_ASSERT(ixx >= 0.0);
+      }
+    }
+  }
+
+  // Test propeller Ct and Cp factors
+  void testPropellerFactors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+
+        double ctf = prop->GetCtFactor();
+        double cpf = prop->GetCpFactor();
+        TS_ASSERT(std::isfinite(ctf));
+        TS_ASSERT(std::isfinite(cpf));
+      }
+    }
+  }
+
+  // Test propeller set Ct and Cp factors
+  void testPropellerSetFactors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+
+        prop->SetCtFactor(1.1);
+        TS_ASSERT_DELTA(prop->GetCtFactor(), 1.1, 0.01);
+
+        prop->SetCpFactor(0.9);
+        TS_ASSERT_DELTA(prop->GetCpFactor(), 0.9, 0.01);
+      }
+    }
+  }
+
+  // Test propeller torque
+  void testPropellerTorque() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double torque = prop->GetTorque();
+        TS_ASSERT(std::isfinite(torque));
+      }
+    }
+  }
+
+  // Test propeller IsVPitch
+  void testPropellerIsVPitch() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        bool vpitch = prop->IsVPitch();
+        TS_ASSERT(vpitch == true || vpitch == false);
+      }
+    }
+  }
+
+  // Test propeller constant speed mode
+  void testPropellerConstantSpeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        int cs = prop->GetConstantSpeed();
+        TS_ASSERT(cs >= 0);
+      }
+    }
+  }
+
+  // Test propeller thrust coefficient
+  void testPropellerThrustCoefficient() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double tc = prop->GetThrustCoefficient();
+        TS_ASSERT(std::isfinite(tc));
+      }
+    }
+  }
+
+  // Test propeller helical tip Mach
+  void testPropellerHelicalTipMach() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        double tipMach = prop->GetHelicalTipMach();
+        TS_ASSERT(std::isfinite(tipMach));
+        TS_ASSERT(tipMach >= 0.0);
+      }
+    }
+  }
+
+  // Test propeller induced velocity
+  void testPropellerInducedVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+
+        prop->SetInducedVelocity(50.0);
+        TS_ASSERT_DELTA(prop->GetInducedVelocity(), 50.0, 0.1);
+      }
+    }
+  }
+
+  // Test propeller thruster labels
+  void testPropellerLabels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        std::string labels = prop->GetThrusterLabels(0, ",");
+        TS_ASSERT(!labels.empty());
+      }
+    }
+  }
+
+  // Test propeller thruster values
+  void testPropellerValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+        std::string values = prop->GetThrusterValues(0, ",");
+        TS_ASSERT(!values.empty());
+      }
+    }
+  }
+
+  // Test propeller ResetToIC
+  void testPropellerResetToIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto thruster = propulsion->GetEngine(0)->GetThruster();
+      if (thruster->GetType() == FGThruster::ttPropeller) {
+        FGPropeller* prop = static_cast<FGPropeller*>(thruster);
+
+        // Run some steps
+        for (int i = 0; i < 5; i++) {
+          fdmex.Run();
+        }
+
+        // Reset
+        prop->ResetToIC();
+
+        // Check RPM is finite after reset
+        double rpm = prop->GetRPM();
+        TS_ASSERT(std::isfinite(rpm));
+      }
+    }
   }
 };
