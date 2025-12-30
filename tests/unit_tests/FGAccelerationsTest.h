@@ -3154,4 +3154,605 @@ public:
     // 10. Complete system verification passed
     TS_ASSERT(true);
   }
+
+  // ============================================================================
+  // C172x Model-Based Tests
+  // ============================================================================
+
+  void testC172xLoadModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto accel = fdmex.GetAccelerations();
+    TS_ASSERT(accel != nullptr);
+  }
+
+  void testC172xAccelerationsAfterRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // Values should be finite after initialization
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+    TS_ASSERT(!std::isnan(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)));
+  }
+
+  void testC172xAccelerationsAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // Values should still be finite after running
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+    TS_ASSERT(!std::isnan(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)));
+    TS_ASSERT(!std::isinf(uvwdot(1)));
+    TS_ASSERT(!std::isinf(uvwdot(2)));
+    TS_ASSERT(!std::isinf(uvwdot(3)));
+  }
+
+  void testC172xBodyAccelerations() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    // Get body frame accelerations (UVWdot)
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    double udot = accel->GetUVWdot(1);
+    double vdot = accel->GetUVWdot(2);
+    double wdot = accel->GetUVWdot(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(uvwdot(1), udot, epsilon);
+    TS_ASSERT_DELTA(uvwdot(2), vdot, epsilon);
+    TS_ASSERT_DELTA(uvwdot(3), wdot, epsilon);
+
+    // Accelerations should be finite for a stationary aircraft
+    // Note: Large values possible due to gear contact forces
+    TS_ASSERT(!std::isnan(udot) && !std::isinf(udot));
+    TS_ASSERT(!std::isnan(vdot) && !std::isinf(vdot));
+    TS_ASSERT(!std::isnan(wdot) && !std::isinf(wdot));
+  }
+
+  void testC172xAngularAccelerations() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    // Get angular accelerations (PQRdot)
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+    double pdot = accel->GetPQRdot(1);
+    double qdot = accel->GetPQRdot(2);
+    double rdot = accel->GetPQRdot(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(pqrdot(1), pdot, epsilon);
+    TS_ASSERT_DELTA(pqrdot(2), qdot, epsilon);
+    TS_ASSERT_DELTA(pqrdot(3), rdot, epsilon);
+
+    // Angular accelerations should be reasonable
+    // (within -10 to 10 rad/s^2 for ground operations)
+    TS_ASSERT(std::abs(pdot) < 10.0);
+    TS_ASSERT(std::abs(qdot) < 10.0);
+    TS_ASSERT(std::abs(rdot) < 10.0);
+  }
+
+  void testC172xECIAccelerations() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    // Get ECI frame accelerations
+    FGColumnVector3 uvwidot = accel->GetUVWidot();
+    FGColumnVector3 pqridot = accel->GetPQRidot();
+
+    // Indexed accessors
+    double uidot = accel->GetUVWidot(1);
+    double vidot = accel->GetUVWidot(2);
+    double widot = accel->GetUVWidot(3);
+    double pidot = accel->GetPQRidot(1);
+    double qidot = accel->GetPQRidot(2);
+    double ridot = accel->GetPQRidot(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(uvwidot(1), uidot, epsilon);
+    TS_ASSERT_DELTA(uvwidot(2), vidot, epsilon);
+    TS_ASSERT_DELTA(uvwidot(3), widot, epsilon);
+    TS_ASSERT_DELTA(pqridot(1), pidot, epsilon);
+    TS_ASSERT_DELTA(pqridot(2), qidot, epsilon);
+    TS_ASSERT_DELTA(pqridot(3), ridot, epsilon);
+
+    // ECI accelerations should be finite
+    TS_ASSERT(!std::isnan(uidot));
+    TS_ASSERT(!std::isnan(vidot));
+    TS_ASSERT(!std::isnan(widot));
+    TS_ASSERT(!std::isnan(pidot));
+    TS_ASSERT(!std::isnan(qidot));
+    TS_ASSERT(!std::isnan(ridot));
+  }
+
+  void testC172xGravityMagnitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    double gravMag = accel->GetGravAccelMagnitude();
+
+    // Gravity should be approximately 32.174 ft/s^2 at sea level
+    TS_ASSERT(gravMag > 30.0);
+    TS_ASSERT(gravMag < 35.0);
+  }
+
+  void testC172xForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 forces = accel->GetForces();
+    double fx = accel->GetForces(1);
+    double fy = accel->GetForces(2);
+    double fz = accel->GetForces(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(forces(1), fx, epsilon);
+    TS_ASSERT_DELTA(forces(2), fy, epsilon);
+    TS_ASSERT_DELTA(forces(3), fz, epsilon);
+
+    // Forces should be finite
+    TS_ASSERT(!std::isnan(fx));
+    TS_ASSERT(!std::isnan(fy));
+    TS_ASSERT(!std::isnan(fz));
+  }
+
+  void testC172xMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 moments = accel->GetMoments();
+    double mx = accel->GetMoments(1);
+    double my = accel->GetMoments(2);
+    double mz = accel->GetMoments(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(moments(1), mx, epsilon);
+    TS_ASSERT_DELTA(moments(2), my, epsilon);
+    TS_ASSERT_DELTA(moments(3), mz, epsilon);
+
+    // Moments should be finite
+    TS_ASSERT(!std::isnan(mx));
+    TS_ASSERT(!std::isnan(my));
+    TS_ASSERT(!std::isnan(mz));
+  }
+
+  void testC172xBodyAccel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    double ax = accel->GetBodyAccel(1);
+    double ay = accel->GetBodyAccel(2);
+    double az = accel->GetBodyAccel(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(bodyAccel(1), ax, epsilon);
+    TS_ASSERT_DELTA(bodyAccel(2), ay, epsilon);
+    TS_ASSERT_DELTA(bodyAccel(3), az, epsilon);
+
+    // Body accelerations should be finite and reasonable
+    TS_ASSERT(!std::isnan(ax));
+    TS_ASSERT(!std::isnan(ay));
+    TS_ASSERT(!std::isnan(az));
+  }
+
+  void testC172xGroundForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 groundForces = accel->GetGroundForces();
+    double gfx = accel->GetGroundForces(1);
+    double gfy = accel->GetGroundForces(2);
+    double gfz = accel->GetGroundForces(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(groundForces(1), gfx, epsilon);
+    TS_ASSERT_DELTA(groundForces(2), gfy, epsilon);
+    TS_ASSERT_DELTA(groundForces(3), gfz, epsilon);
+
+    // Ground forces should be finite
+    TS_ASSERT(!std::isnan(gfx));
+    TS_ASSERT(!std::isnan(gfy));
+    TS_ASSERT(!std::isnan(gfz));
+  }
+
+  void testC172xGroundMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 groundMoments = accel->GetGroundMoments();
+    double gmx = accel->GetGroundMoments(1);
+    double gmy = accel->GetGroundMoments(2);
+    double gmz = accel->GetGroundMoments(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(groundMoments(1), gmx, epsilon);
+    TS_ASSERT_DELTA(groundMoments(2), gmy, epsilon);
+    TS_ASSERT_DELTA(groundMoments(3), gmz, epsilon);
+
+    // Ground moments should be finite
+    TS_ASSERT(!std::isnan(gmx));
+    TS_ASSERT(!std::isnan(gmy));
+    TS_ASSERT(!std::isnan(gmz));
+  }
+
+  void testC172xWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 weight = accel->GetWeight();
+    double wx = accel->GetWeight(1);
+    double wy = accel->GetWeight(2);
+    double wz = accel->GetWeight(3);
+
+    // Vector and indexed access should match
+    TS_ASSERT_DELTA(weight(1), wx, epsilon);
+    TS_ASSERT_DELTA(weight(2), wy, epsilon);
+    TS_ASSERT_DELTA(weight(3), wz, epsilon);
+
+    // Weight should be finite and pointing downward (positive Z in body)
+    TS_ASSERT(!std::isnan(wx));
+    TS_ASSERT(!std::isnan(wy));
+    TS_ASSERT(!std::isnan(wz));
+
+    // For a level aircraft, most weight should be in Z direction
+    // C172x gross weight is about 2400 lbs
+    TS_ASSERT(std::abs(wz) > 100.0);
+  }
+
+  void testC172xMultipleRunCycles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    // Run multiple cycles and verify stability
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      FGColumnVector3 uvwdot = accel->GetUVWdot();
+      FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+      // Should remain finite over multiple iterations
+      TS_ASSERT(!std::isnan(uvwdot(1)));
+      TS_ASSERT(!std::isnan(uvwdot(2)));
+      TS_ASSERT(!std::isnan(uvwdot(3)));
+      TS_ASSERT(!std::isnan(pqrdot(1)));
+      TS_ASSERT(!std::isnan(pqrdot(2)));
+      TS_ASSERT(!std::isnan(pqrdot(3)));
+      TS_ASSERT(!std::isinf(uvwdot(1)));
+      TS_ASSERT(!std::isinf(uvwdot(2)));
+      TS_ASSERT(!std::isinf(uvwdot(3)));
+    }
+  }
+
+  void testC172xGravityPointsDown() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    // For a level aircraft, gravity should have positive Z component in body frame
+    // (body Z points down from pilot's perspective)
+    FGColumnVector3 weight = accel->GetWeight();
+
+    // Weight Z component should be positive (pointing down in body frame)
+    // for a level aircraft
+    TS_ASSERT(weight(3) > 0.0);
+  }
+
+  void testC172xAccelerationsPhysicallyReasonable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+
+    // For a stationary aircraft on the ground:
+    // - All accelerations should be finite
+    // Note: Values can be large due to ground reaction forces
+    TS_ASSERT(!std::isnan(uvwdot(1)) && !std::isinf(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)) && !std::isinf(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)) && !std::isinf(uvwdot(3)));
+
+    TS_ASSERT(!std::isnan(pqrdot(1)) && !std::isinf(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)) && !std::isinf(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)) && !std::isinf(pqrdot(3)));
+  }
+
+  void testC172xInitializeDerivatives() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    // Call InitializeDerivatives explicitly
+    accel->InitializeDerivatives();
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // Values should be finite after initialization
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+    TS_ASSERT(!std::isnan(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)));
+  }
+
+  void testC172xHoldDownEffect() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    // Enable hold-down
+    accel->SetHoldDown(true);
+    fdmex.Run();
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    // With hold-down, accelerations should still be finite
+    // Note: Hold-down prevents motion but forces still exist
+    TS_ASSERT(!std::isnan(uvwdot(1)) && !std::isinf(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)) && !std::isinf(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)) && !std::isinf(uvwdot(3)));
+    TS_ASSERT(!std::isnan(pqrdot(1)) && !std::isinf(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)) && !std::isinf(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)) && !std::isinf(pqrdot(3)));
+
+    // Disable hold-down
+    accel->SetHoldDown(false);
+  }
+
+  void testC172xECIvsBodyAccelerations() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 uvwidot = accel->GetUVWidot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+    FGColumnVector3 pqridot = accel->GetPQRidot();
+
+    // ECI and body frame accelerations will differ due to rotation
+    // but both should be finite
+    TS_ASSERT(!std::isnan(uvwdot.Magnitude()));
+    TS_ASSERT(!std::isnan(uvwidot.Magnitude()));
+    TS_ASSERT(!std::isnan(pqrdot.Magnitude()));
+    TS_ASSERT(!std::isnan(pqridot.Magnitude()));
+
+    // For a stationary aircraft, the difference relates to
+    // Earth rotation effects and reference frame transformations
+    double uvwDiff = (uvwdot - uvwidot).Magnitude();
+    double pqrDiff = (pqrdot - pqridot).Magnitude();
+
+    // Differences should be finite
+    TS_ASSERT(!std::isnan(uvwDiff) && !std::isinf(uvwDiff));
+    TS_ASSERT(!std::isnan(pqrDiff) && !std::isinf(pqrDiff));
+  }
+
+  void testC172xAccelModelRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    // Run the accelerations model directly
+    bool result = accel->Run(false);
+
+    // Run should not fail
+    TS_ASSERT(!result);
+
+    // Results should be valid
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    TS_ASSERT(!std::isnan(uvwdot.Magnitude()));
+  }
+
+  void testC172xAccelModelHolding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    // Run with holding = true (simulation paused)
+    bool result = accel->Run(true);
+
+    // Run should return false
+    TS_ASSERT(!result);
+  }
+
+  void testC172xConsistentForcesMoments() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    // Get forces and moments multiple times
+    FGColumnVector3 forces1 = accel->GetForces();
+    FGColumnVector3 forces2 = accel->GetForces();
+    FGColumnVector3 moments1 = accel->GetMoments();
+    FGColumnVector3 moments2 = accel->GetMoments();
+
+    // Should return consistent values
+    TS_ASSERT_DELTA(forces1(1), forces2(1), epsilon);
+    TS_ASSERT_DELTA(forces1(2), forces2(2), epsilon);
+    TS_ASSERT_DELTA(forces1(3), forces2(3), epsilon);
+    TS_ASSERT_DELTA(moments1(1), moments2(1), epsilon);
+    TS_ASSERT_DELTA(moments1(2), moments2(2), epsilon);
+    TS_ASSERT_DELTA(moments1(3), moments2(3), epsilon);
+  }
+
+  void testC172xTwoInstancesIndependent() {
+    FGFDMExec fdmex1;
+    FGFDMExec fdmex2;
+
+    fdmex1.LoadModel("c172x");
+    fdmex2.LoadModel("c172x");
+
+    fdmex1.RunIC();
+    fdmex2.RunIC();
+
+    fdmex1.Run();
+    fdmex2.Run();
+
+    auto accel1 = fdmex1.GetAccelerations();
+    auto accel2 = fdmex2.GetAccelerations();
+
+    // Both should have valid accelerations
+    FGColumnVector3 uvwdot1 = accel1->GetUVWdot();
+    FGColumnVector3 uvwdot2 = accel2->GetUVWdot();
+
+    TS_ASSERT(!std::isnan(uvwdot1.Magnitude()));
+    TS_ASSERT(!std::isnan(uvwdot2.Magnitude()));
+
+    // Both instances should produce similar results for same initial conditions
+    TS_ASSERT_DELTA(uvwdot1(1), uvwdot2(1), 1.0);
+    TS_ASSERT_DELTA(uvwdot1(2), uvwdot2(2), 1.0);
+    TS_ASSERT_DELTA(uvwdot1(3), uvwdot2(3), 1.0);
+  }
+
+  void testC172xAllAccessorsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    fdmex.Run();
+    auto accel = fdmex.GetAccelerations();
+
+    // Test all accessor methods return finite values
+    TS_ASSERT(!std::isnan(accel->GetUVWdot(1)));
+    TS_ASSERT(!std::isnan(accel->GetUVWdot(2)));
+    TS_ASSERT(!std::isnan(accel->GetUVWdot(3)));
+    TS_ASSERT(!std::isnan(accel->GetPQRdot(1)));
+    TS_ASSERT(!std::isnan(accel->GetPQRdot(2)));
+    TS_ASSERT(!std::isnan(accel->GetPQRdot(3)));
+    TS_ASSERT(!std::isnan(accel->GetUVWidot(1)));
+    TS_ASSERT(!std::isnan(accel->GetUVWidot(2)));
+    TS_ASSERT(!std::isnan(accel->GetUVWidot(3)));
+    TS_ASSERT(!std::isnan(accel->GetPQRidot(1)));
+    TS_ASSERT(!std::isnan(accel->GetPQRidot(2)));
+    TS_ASSERT(!std::isnan(accel->GetPQRidot(3)));
+    TS_ASSERT(!std::isnan(accel->GetBodyAccel(1)));
+    TS_ASSERT(!std::isnan(accel->GetBodyAccel(2)));
+    TS_ASSERT(!std::isnan(accel->GetBodyAccel(3)));
+    TS_ASSERT(!std::isnan(accel->GetForces(1)));
+    TS_ASSERT(!std::isnan(accel->GetForces(2)));
+    TS_ASSERT(!std::isnan(accel->GetForces(3)));
+    TS_ASSERT(!std::isnan(accel->GetMoments(1)));
+    TS_ASSERT(!std::isnan(accel->GetMoments(2)));
+    TS_ASSERT(!std::isnan(accel->GetMoments(3)));
+    TS_ASSERT(!std::isnan(accel->GetGroundForces(1)));
+    TS_ASSERT(!std::isnan(accel->GetGroundForces(2)));
+    TS_ASSERT(!std::isnan(accel->GetGroundForces(3)));
+    TS_ASSERT(!std::isnan(accel->GetGroundMoments(1)));
+    TS_ASSERT(!std::isnan(accel->GetGroundMoments(2)));
+    TS_ASSERT(!std::isnan(accel->GetGroundMoments(3)));
+    TS_ASSERT(!std::isnan(accel->GetWeight(1)));
+    TS_ASSERT(!std::isnan(accel->GetWeight(2)));
+    TS_ASSERT(!std::isnan(accel->GetWeight(3)));
+    TS_ASSERT(!std::isnan(accel->GetGravAccelMagnitude()));
+  }
+
+  void testC172xLongRunStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto accel = fdmex.GetAccelerations();
+
+    // Run for extended period
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    // After extended run, values should still be finite and reasonable
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    FGColumnVector3 pqrdot = accel->GetPQRdot();
+
+    TS_ASSERT(!std::isnan(uvwdot(1)));
+    TS_ASSERT(!std::isnan(uvwdot(2)));
+    TS_ASSERT(!std::isnan(uvwdot(3)));
+    TS_ASSERT(!std::isnan(pqrdot(1)));
+    TS_ASSERT(!std::isnan(pqrdot(2)));
+    TS_ASSERT(!std::isnan(pqrdot(3)));
+
+    // Accelerations should remain bounded
+    TS_ASSERT(std::abs(uvwdot(1)) < 200.0);
+    TS_ASSERT(std::abs(uvwdot(2)) < 200.0);
+    TS_ASSERT(std::abs(uvwdot(3)) < 200.0);
+  }
+
+  void testC172xInitModelAfterLoad() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto accel = fdmex.GetAccelerations();
+
+    // InitModel should succeed
+    bool result = accel->InitModel();
+    TS_ASSERT(result);
+
+    fdmex.RunIC();
+    fdmex.Run();
+
+    // Should still produce valid results
+    FGColumnVector3 uvwdot = accel->GetUVWdot();
+    TS_ASSERT(!std::isnan(uvwdot.Magnitude()));
+  }
 };

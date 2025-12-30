@@ -1286,4 +1286,571 @@ public:
     // Command should be preserved
     TS_ASSERT_DELTA(fcs->GetDaCmd(), before, epsilon);
   }
+
+  // ============================================================================
+  // C172x Model-Based Tests
+  // ============================================================================
+
+  void testC172xLoadModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+  }
+
+  void testC172xRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+    // After RunIC, FCS should be in a valid state
+    TS_ASSERT(std::isfinite(fcs->GetDaCmd()));
+    TS_ASSERT(std::isfinite(fcs->GetDeCmd()));
+    TS_ASSERT(std::isfinite(fcs->GetDrCmd()));
+  }
+
+  void testC172xThrottleCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // C172x has a single engine, throttle should be accessible
+    fcs->SetThrottleCmd(0, 0.5);
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 0.5, epsilon);
+
+    fcs->SetThrottleCmd(0, 1.0);
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 1.0, epsilon);
+
+    fcs->SetThrottleCmd(0, 0.0);
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 0.0, epsilon);
+  }
+
+  void testC172xThrottlePosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetThrottlePos(0, 0.75);
+    TS_ASSERT_DELTA(fcs->GetThrottlePos(0), 0.75, epsilon);
+
+    // Throttle position should be in valid range
+    TS_ASSERT(fcs->GetThrottlePos(0) >= 0.0);
+    TS_ASSERT(fcs->GetThrottlePos(0) <= 1.0);
+  }
+
+  void testC172xElevatorCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Test elevator commands
+    fcs->SetDeCmd(0.5);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), 0.5, epsilon);
+
+    fcs->SetDeCmd(-0.5);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), -0.5, epsilon);
+
+    // Full deflection
+    fcs->SetDeCmd(1.0);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), 1.0, epsilon);
+
+    fcs->SetDeCmd(-1.0);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), -1.0, epsilon);
+  }
+
+  void testC172xElevatorPositionAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDeCmd(0.3);
+    fdmex.Run();
+
+    // After running, elevator position should be set
+    double elevPos = fcs->GetDePos(ofNorm);
+    TS_ASSERT(std::isfinite(elevPos));
+    TS_ASSERT(elevPos >= -1.0 && elevPos <= 1.0);
+  }
+
+  void testC172xAileronCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Test aileron commands
+    fcs->SetDaCmd(0.4);
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), 0.4, epsilon);
+
+    fcs->SetDaCmd(-0.4);
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), -0.4, epsilon);
+  }
+
+  void testC172xAileronPositionAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDaCmd(0.5);
+    fdmex.Run();
+
+    // Check left and right aileron positions
+    double daLPos = fcs->GetDaLPos(ofNorm);
+    double daRPos = fcs->GetDaRPos(ofNorm);
+
+    TS_ASSERT(std::isfinite(daLPos));
+    TS_ASSERT(std::isfinite(daRPos));
+    TS_ASSERT(daLPos >= -1.0 && daLPos <= 1.0);
+    TS_ASSERT(daRPos >= -1.0 && daRPos <= 1.0);
+  }
+
+  void testC172xRudderCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDrCmd(0.6);
+    TS_ASSERT_DELTA(fcs->GetDrCmd(), 0.6, epsilon);
+
+    fcs->SetDrCmd(-0.6);
+    TS_ASSERT_DELTA(fcs->GetDrCmd(), -0.6, epsilon);
+  }
+
+  void testC172xRudderPositionAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDrCmd(0.5);
+    fdmex.Run();
+
+    double drPos = fcs->GetDrPos(ofNorm);
+    TS_ASSERT(std::isfinite(drPos));
+    TS_ASSERT(drPos >= -1.0 && drPos <= 1.0);
+  }
+
+  void testC172xFlapsCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Test flap detents: 0, 10, 20, 30 degrees (normalized)
+    fcs->SetDfCmd(0.0);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 0.0, epsilon);
+
+    fcs->SetDfCmd(0.25);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 0.25, epsilon);
+
+    fcs->SetDfCmd(0.5);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 0.5, epsilon);
+
+    fcs->SetDfCmd(1.0);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 1.0, epsilon);
+  }
+
+  void testC172xFlapsPositionAfterRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDfCmd(0.5);
+    // Run several frames for flaps to move
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double dfPos = fcs->GetDfPos(ofNorm);
+    TS_ASSERT(std::isfinite(dfPos));
+    TS_ASSERT(dfPos >= 0.0 && dfPos <= 1.0);
+  }
+
+  void testC172xGearCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // C172x has fixed gear, but the command should still work
+    fcs->SetGearCmd(1.0);
+    TS_ASSERT_DELTA(fcs->GetGearCmd(), 1.0, epsilon);
+
+    fcs->SetGearCmd(0.0);
+    TS_ASSERT_DELTA(fcs->GetGearCmd(), 0.0, epsilon);
+  }
+
+  void testC172xGearPosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // C172x has fixed gear - should stay down
+    double gearPos = fcs->GetGearPos();
+    TS_ASSERT(gearPos >= 0.0 && gearPos <= 1.0);
+  }
+
+  void testC172xLeftBrake() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetLBrake(0.0);
+    TS_ASSERT_DELTA(fcs->GetLBrake(), 0.0, epsilon);
+
+    fcs->SetLBrake(0.5);
+    TS_ASSERT_DELTA(fcs->GetLBrake(), 0.5, epsilon);
+
+    fcs->SetLBrake(1.0);
+    TS_ASSERT_DELTA(fcs->GetLBrake(), 1.0, epsilon);
+  }
+
+  void testC172xRightBrake() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetRBrake(0.0);
+    TS_ASSERT_DELTA(fcs->GetRBrake(), 0.0, epsilon);
+
+    fcs->SetRBrake(0.75);
+    TS_ASSERT_DELTA(fcs->GetRBrake(), 0.75, epsilon);
+
+    fcs->SetRBrake(1.0);
+    TS_ASSERT_DELTA(fcs->GetRBrake(), 1.0, epsilon);
+  }
+
+  void testC172xDifferentialBraking() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Apply differential braking for ground steering
+    fcs->SetLBrake(0.8);
+    fcs->SetRBrake(0.2);
+
+    TS_ASSERT(fcs->GetLBrake() > fcs->GetRBrake());
+    TS_ASSERT_DELTA(fcs->GetBrake(FGLGear::bgLeft), 0.8, epsilon);
+    TS_ASSERT_DELTA(fcs->GetBrake(FGLGear::bgRight), 0.2, epsilon);
+  }
+
+  void testC172xMixtureCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Full rich
+    fcs->SetMixtureCmd(0, 1.0);
+    TS_ASSERT_DELTA(fcs->GetMixtureCmd(0), 1.0, epsilon);
+
+    // Lean
+    fcs->SetMixtureCmd(0, 0.7);
+    TS_ASSERT_DELTA(fcs->GetMixtureCmd(0), 0.7, epsilon);
+
+    // Cutoff
+    fcs->SetMixtureCmd(0, 0.0);
+    TS_ASSERT_DELTA(fcs->GetMixtureCmd(0), 0.0, epsilon);
+  }
+
+  void testC172xMixturePosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetMixturePos(0, 0.85);
+    TS_ASSERT_DELTA(fcs->GetMixturePos(0), 0.85, epsilon);
+  }
+
+  void testC172xPropAdvanceCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // C172x has a constant-speed prop
+    fcs->SetPropAdvanceCmd(0, 1.0);
+    TS_ASSERT_DELTA(fcs->GetPropAdvanceCmd(0), 1.0, epsilon);
+
+    fcs->SetPropAdvanceCmd(0, 0.5);
+    TS_ASSERT_DELTA(fcs->GetPropAdvanceCmd(0), 0.5, epsilon);
+
+    fcs->SetPropAdvanceCmd(0, 0.0);
+    TS_ASSERT_DELTA(fcs->GetPropAdvanceCmd(0), 0.0, epsilon);
+  }
+
+  void testC172xPropAdvancePosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetPropAdvance(0, 0.9);
+    TS_ASSERT_DELTA(fcs->GetPropAdvance(0), 0.9, epsilon);
+  }
+
+  void testC172xPitchTrimCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetPitchTrimCmd(0.1);
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), 0.1, epsilon);
+
+    fcs->SetPitchTrimCmd(-0.1);
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), -0.1, epsilon);
+
+    fcs->SetPitchTrimCmd(0.5);
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), 0.5, epsilon);
+  }
+
+  void testC172xRollTrimCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetRollTrimCmd(0.05);
+    TS_ASSERT_DELTA(fcs->GetRollTrimCmd(), 0.05, epsilon);
+
+    fcs->SetRollTrimCmd(-0.05);
+    TS_ASSERT_DELTA(fcs->GetRollTrimCmd(), -0.05, epsilon);
+  }
+
+  void testC172xYawTrimCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetYawTrimCmd(0.02);
+    TS_ASSERT_DELTA(fcs->GetYawTrimCmd(), 0.02, epsilon);
+
+    fcs->SetYawTrimCmd(-0.02);
+    TS_ASSERT_DELTA(fcs->GetYawTrimCmd(), -0.02, epsilon);
+  }
+
+  void testC172xTakeoffConfiguration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Set typical takeoff configuration
+    fcs->SetThrottleCmd(0, 1.0);     // Full throttle
+    fcs->SetMixtureCmd(0, 1.0);      // Full rich
+    fcs->SetPropAdvanceCmd(0, 1.0);  // Full forward
+    fcs->SetDfCmd(0.25);             // Flaps 10
+    fcs->SetPitchTrimCmd(0.05);      // Slight nose-up trim
+
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetMixtureCmd(0), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetPropAdvanceCmd(0), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 0.25, epsilon);
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), 0.05, epsilon);
+  }
+
+  void testC172xLandingConfiguration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Set typical landing configuration
+    fcs->SetThrottleCmd(0, 0.3);     // Reduced power
+    fcs->SetMixtureCmd(0, 1.0);      // Full rich
+    fcs->SetPropAdvanceCmd(0, 1.0);  // Full forward
+    fcs->SetDfCmd(1.0);              // Full flaps
+    fcs->SetGearCmd(1.0);            // Gear down
+
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 0.3, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetGearCmd(), 1.0, epsilon);
+  }
+
+  void testC172xCruiseConfiguration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Set typical cruise configuration
+    fcs->SetThrottleCmd(0, 0.75);    // 75% power
+    fcs->SetMixtureCmd(0, 0.8);      // Leaned for altitude
+    fcs->SetPropAdvanceCmd(0, 0.8);  // Reduced RPM
+    fcs->SetDfCmd(0.0);              // Flaps up
+    fcs->SetPitchTrimCmd(0.1);       // Nose-up trim for cruise
+
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 0.75, epsilon);
+    TS_ASSERT_DELTA(fcs->GetMixtureCmd(0), 0.8, epsilon);
+    TS_ASSERT_DELTA(fcs->GetPropAdvanceCmd(0), 0.8, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDfCmd(), 0.0, epsilon);
+  }
+
+  void testC172xControlSurfaceRange() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Test full range of control surfaces
+    for (double val = -1.0; val <= 1.0; val += 0.25) {
+      fcs->SetDeCmd(val);
+      fcs->SetDaCmd(val);
+      fcs->SetDrCmd(val);
+
+      TS_ASSERT_DELTA(fcs->GetDeCmd(), val, epsilon);
+      TS_ASSERT_DELTA(fcs->GetDaCmd(), val, epsilon);
+      TS_ASSERT_DELTA(fcs->GetDrCmd(), val, epsilon);
+    }
+  }
+
+  void testC172xThrottleRange() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Test throttle through its full range
+    for (double val = 0.0; val <= 1.0; val += 0.1) {
+      fcs->SetThrottleCmd(0, val);
+      TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), val, epsilon);
+      TS_ASSERT(fcs->GetThrottleCmd(0) >= 0.0);
+      TS_ASSERT(fcs->GetThrottleCmd(0) <= 1.0);
+    }
+  }
+
+  void testC172xCoordinatedTurn() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Simulate a coordinated right turn
+    fcs->SetDaCmd(0.3);    // Right aileron
+    fcs->SetDrCmd(0.1);    // Right rudder (coordinated)
+    fcs->SetDeCmd(-0.05);  // Slight back pressure
+
+    fdmex.Run();
+
+    // All control inputs should be preserved
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), 0.3, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDrCmd(), 0.1, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), -0.05, epsilon);
+  }
+
+  void testC172xMultipleFrameExecution() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Set control inputs
+    fcs->SetDeCmd(0.2);
+    fcs->SetDaCmd(0.1);
+    fcs->SetThrottleCmd(0, 0.8);
+
+    // Run multiple frames
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Commands should persist
+    TS_ASSERT_DELTA(fcs->GetDeCmd(), 0.2, epsilon);
+    TS_ASSERT_DELTA(fcs->GetDaCmd(), 0.1, epsilon);
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 0.8, epsilon);
+
+    // Positions should be valid
+    TS_ASSERT(std::isfinite(fcs->GetDePos(ofNorm)));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos(ofNorm)));
+    TS_ASSERT(std::isfinite(fcs->GetDaRPos(ofNorm)));
+    TS_ASSERT(std::isfinite(fcs->GetThrottlePos(0)));
+  }
+
+  void testC172xControlPositionDegrees() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDeCmd(0.5);
+    fdmex.Run();
+
+    // Check position in different units
+    double posRad = fcs->GetDePos(ofRad);
+    double posDeg = fcs->GetDePos(ofDeg);
+    double posNorm = fcs->GetDePos(ofNorm);
+
+    TS_ASSERT(std::isfinite(posRad));
+    TS_ASSERT(std::isfinite(posDeg));
+    TS_ASSERT(std::isfinite(posNorm));
+
+    // Degree should be roughly 57.3 times radian
+    if (std::abs(posRad) > 1e-6) {
+      TS_ASSERT_DELTA(posDeg / posRad, 57.29577951, 1.0);
+    }
+  }
+
+  void testC172xParkingBrake() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Apply parking brake (both wheels locked)
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+
+    TS_ASSERT_DELTA(fcs->GetLBrake(), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetRBrake(), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetBrake(FGLGear::bgLeft), 1.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetBrake(FGLGear::bgRight), 1.0, epsilon);
+  }
+
+  void testC172xEngineShutdown() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Engine shutdown procedure
+    fcs->SetThrottleCmd(0, 0.0);     // Throttle idle
+    fcs->SetMixtureCmd(0, 0.0);      // Mixture cutoff
+
+    TS_ASSERT_DELTA(fcs->GetThrottleCmd(0), 0.0, epsilon);
+    TS_ASSERT_DELTA(fcs->GetMixtureCmd(0), 0.0, epsilon);
+  }
+
+  void testC172xTrimWithModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto fcs = fdmex.GetFCS();
+
+    // Set all trim axes
+    fcs->SetPitchTrimCmd(0.15);
+    fcs->SetRollTrimCmd(0.02);
+    fcs->SetYawTrimCmd(-0.01);
+
+    fdmex.Run();
+
+    // Verify trim values persist
+    TS_ASSERT_DELTA(fcs->GetPitchTrimCmd(), 0.15, epsilon);
+    TS_ASSERT_DELTA(fcs->GetRollTrimCmd(), 0.02, epsilon);
+    TS_ASSERT_DELTA(fcs->GetYawTrimCmd(), -0.01, epsilon);
+  }
 };
