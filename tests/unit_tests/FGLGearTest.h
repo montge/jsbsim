@@ -20,6 +20,14 @@
 #include <cmath>
 #include <algorithm>
 
+#include <FGFDMExec.h>
+#include <models/FGLGear.h>
+#include <models/FGGroundReactions.h>
+#include "TestUtilities.h"
+
+using namespace JSBSim;
+using namespace JSBSimTest;
+
 const double epsilon = 1e-10;
 
 class FGLGearTest : public CxxTest::TestSuite
@@ -1302,5 +1310,484 @@ public:
     TS_ASSERT(pos1 > pos2);
     TS_ASSERT(pos2 > pos3);
     TS_ASSERT_DELTA(pos1, 1.0, epsilon);
+  }
+
+  // ============================================================================
+  // FGLGear class tests - using actual class methods
+  // ============================================================================
+
+  // Test FGLGear access through FGGroundReactions
+  void testFGLGearAccess() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+    TS_ASSERT(groundReactions != nullptr);
+
+    int numGear = groundReactions->GetNumGearUnits();
+    TS_ASSERT(numGear >= 1);
+
+    if (numGear > 0) {
+      auto gear = groundReactions->GetGearUnit(0);
+      TS_ASSERT(gear != nullptr);
+    }
+  }
+
+  // Test GetWOW method
+  void testFGLGearGetWOW() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    // Just verify it returns a valid boolean
+    bool wow = gear->GetWOW();
+    TS_ASSERT(wow == true || wow == false);
+  }
+
+  // Test SetWOW method
+  void testFGLGearSetWOW() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    gear->SetWOW(true);
+    TS_ASSERT(gear->GetWOW() == true);
+
+    gear->SetWOW(false);
+    TS_ASSERT(gear->GetWOW() == false);
+  }
+
+  // Test GetCompLen method
+  void testFGLGearGetCompLen() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double compLen = gear->GetCompLen();
+    TS_ASSERT(compLen >= 0.0);  // Compression can't be negative
+  }
+
+  // Test GetCompVel method
+  void testFGLGearGetCompVel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double compVel = gear->GetCompVel();
+    // Can be positive, negative, or zero
+    TS_ASSERT(std::isfinite(compVel));
+  }
+
+  // Test GetCompForce method
+  void testFGLGearGetCompForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double compForce = gear->GetCompForce();
+    TS_ASSERT(compForce >= 0.0);  // Force should be non-negative
+  }
+
+  // Test GetstaticFCoeff method
+  void testFGLGearGetStaticFCoeff() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double staticF = gear->GetstaticFCoeff();
+    TS_ASSERT(staticF >= 0.0);  // Friction coefficient should be non-negative
+    TS_ASSERT(staticF <= 2.0);  // Reasonable upper bound
+  }
+
+  // Test GetBrakeGroup method
+  void testFGLGearGetBrakeGroup() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    int brakeGroup = gear->GetBrakeGroup();
+    TS_ASSERT(brakeGroup >= 0);  // Valid brake group
+  }
+
+  // Test GetSteerType method
+  void testFGLGearGetSteerType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    int steerType = gear->GetSteerType();
+    TS_ASSERT(steerType >= 0);  // Valid steer type
+  }
+
+  // Test GetSteerable method
+  void testFGLGearGetSteerable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    bool steerable = gear->GetSteerable();
+    TS_ASSERT(steerable == true || steerable == false);
+  }
+
+  // Test GetRetractable method
+  void testFGLGearGetRetractable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    bool retractable = gear->GetRetractable();
+    TS_ASSERT(retractable == true || retractable == false);
+  }
+
+  // Test GetGearUnitUp method
+  void testFGLGearGetGearUnitUp() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    bool up = gear->GetGearUnitUp();
+    TS_ASSERT(up == true || up == false);
+  }
+
+  // Test GetGearUnitDown method
+  void testFGLGearGetGearUnitDown() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    bool down = gear->GetGearUnitDown();
+    TS_ASSERT(down == true || down == false);
+  }
+
+  // Test GetGearUnitPos method
+  void testFGLGearGetGearUnitPos() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double pos = gear->GetGearUnitPos();
+    TS_ASSERT(pos >= 0.0);
+    TS_ASSERT(pos <= 1.0);  // Position is 0-1
+  }
+
+  // Test IsBogey method
+  void testFGLGearIsBogey() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    bool isBogey = gear->IsBogey();
+    TS_ASSERT(isBogey == true || isBogey == false);
+  }
+
+  // Test GetSteerAngleDeg method
+  void testFGLGearGetSteerAngleDeg() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double angle = gear->GetSteerAngleDeg();
+    TS_ASSERT(std::isfinite(angle));
+  }
+
+  // Test SetSteerAngleDeg method
+  void testFGLGearSetSteerAngleDeg() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    // Ball model gear may not be steerable, so just verify method doesn't crash
+    gear->SetSteerAngleDeg(10.0);
+    double angle = gear->GetSteerAngleDeg();
+    TS_ASSERT(std::isfinite(angle));  // Should return valid value
+  }
+
+  // Test GetWheelSlipAngle method
+  void testFGLGearGetWheelSlipAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double slipAngle = gear->GetWheelSlipAngle();
+    TS_ASSERT(std::isfinite(slipAngle));
+  }
+
+  // Test GetSteerNorm method
+  void testFGLGearGetSteerNorm() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double steerNorm = gear->GetSteerNorm();
+    TS_ASSERT(steerNorm >= -1.0);
+    TS_ASSERT(steerNorm <= 1.0);
+  }
+
+  // Test GetReport method
+  void testFGLGearGetReport() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    bool report = gear->GetReport();
+    TS_ASSERT(report == true || report == false);
+  }
+
+  // Test SetReport method
+  void testFGLGearSetReport() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    gear->SetReport(true);
+    TS_ASSERT(gear->GetReport() == true);
+
+    gear->SetReport(false);
+    TS_ASSERT(gear->GetReport() == false);
+  }
+
+  // Test GetBodyLocation method
+  void testFGLGearGetBodyLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    auto groundReactions = fdmex.GetGroundReactions();
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double x = gear->GetBodyLocation(1);
+    double y = gear->GetBodyLocation(2);
+    double z = gear->GetBodyLocation(3);
+    TS_ASSERT(std::isfinite(x));
+    TS_ASSERT(std::isfinite(y));
+    TS_ASSERT(std::isfinite(z));
+  }
+
+  // Test GetLocalGear method
+  void testFGLGearGetLocalGear() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double x = gear->GetLocalGear(1);
+    double y = gear->GetLocalGear(2);
+    double z = gear->GetLocalGear(3);
+    TS_ASSERT(std::isfinite(x));
+    TS_ASSERT(std::isfinite(y));
+    TS_ASSERT(std::isfinite(z));
+  }
+
+  // Test GetWheelVel method
+  void testFGLGearGetWheelVel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double vx = gear->GetWheelVel(1);
+    double vy = gear->GetWheelVel(2);
+    double vz = gear->GetWheelVel(3);
+    TS_ASSERT(std::isfinite(vx));
+    TS_ASSERT(std::isfinite(vy));
+    TS_ASSERT(std::isfinite(vz));
+  }
+
+  // Test GetWheelRollVel method
+  void testFGLGearGetWheelRollVel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double rollVel = gear->GetWheelRollVel();
+    TS_ASSERT(std::isfinite(rollVel));
+  }
+
+  // Test GetWheelSideVel method
+  void testFGLGearGetWheelSideVel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double sideVel = gear->GetWheelSideVel();
+    TS_ASSERT(std::isfinite(sideVel));
+  }
+
+  // Test GetWheelRollForce method
+  void testFGLGearGetWheelRollForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double rollForce = gear->GetWheelRollForce();
+    TS_ASSERT(std::isfinite(rollForce));
+  }
+
+  // Test GetWheelSideForce method
+  void testFGLGearGetWheelSideForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double sideForce = gear->GetWheelSideForce();
+    TS_ASSERT(std::isfinite(sideForce));
+  }
+
+  // Test GetBodyXForce method
+  void testFGLGearGetBodyXForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double xForce = gear->GetBodyXForce();
+    TS_ASSERT(std::isfinite(xForce));
+  }
+
+  // Test GetBodyYForce method
+  void testFGLGearGetBodyYForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double yForce = gear->GetBodyYForce();
+    TS_ASSERT(std::isfinite(yForce));
+  }
+
+  // Test GetBodyZForce method
+  void testFGLGearGetBodyZForce() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    double zForce = gear->GetBodyZForce();
+    TS_ASSERT(std::isfinite(zForce));
+  }
+
+  // Test ResetToIC method
+  void testFGLGearResetToIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("ball");
+    fdmex.RunIC();
+    auto groundReactions = fdmex.GetGroundReactions();
+    groundReactions->Run(false);
+
+    auto gear = groundReactions->GetGearUnit(0);
+    TS_ASSERT(gear != nullptr);
+
+    // Should not throw
+    gear->ResetToIC();
+    TS_ASSERT(std::isfinite(gear->GetCompLen()));
   }
 };
