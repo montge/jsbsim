@@ -3,7 +3,9 @@
 #include <cmath>
 
 #include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
 #include <models/propulsion/FGEngine.h>
+#include <models/propulsion/FGPiston.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1489,5 +1491,298 @@ public:
     // Verify mp1 unchanged
     double mp1_verify = seaLevelMP * std::exp(-altitude1 / 27000.0);
     TS_ASSERT_DELTA(mp1, mp1_verify, 0.001);
+  }
+
+  //==========================================================================
+  // Class-based tests using FGFDMExec and actual FGPiston
+  //==========================================================================
+
+  // Test getting piston engine from c172x model
+  void testGetPistonEngine() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    TS_ASSERT(propulsion != nullptr);
+
+    int numEngines = propulsion->GetNumEngines();
+    TS_ASSERT(numEngines > 0);
+
+    if (numEngines > 0) {
+      auto engine = propulsion->GetEngine(0);
+      TS_ASSERT(engine != nullptr);
+      // c172x has a piston engine
+      TS_ASSERT_EQUALS(engine->GetType(), FGEngine::etPiston);
+    }
+  }
+
+  // Test piston engine RPM
+  void testPistonRPM() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double rpm = piston->getRPM();
+        TS_ASSERT(std::isfinite(rpm));
+        TS_ASSERT(rpm >= 0.0);
+      }
+    }
+  }
+
+  // Test piston manifold pressure
+  void testPistonManifoldPressure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double mp = piston->getManifoldPressure_inHg();
+        TS_ASSERT(std::isfinite(mp));
+        TS_ASSERT(mp >= 0.0);
+      }
+    }
+  }
+
+  // Test piston exhaust gas temperature
+  void testPistonEGT() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double egt = piston->GetEGT();
+        TS_ASSERT(std::isfinite(egt));
+      }
+    }
+  }
+
+  // Test piston cylinder head temperature
+  void testPistonCHT() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double cht = piston->getCylinderHeadTemp_degF();
+        TS_ASSERT(std::isfinite(cht));
+      }
+    }
+  }
+
+  // Test piston oil pressure
+  void testPistonOilPressure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double oilP = piston->getOilPressure_psi();
+        TS_ASSERT(std::isfinite(oilP));
+        TS_ASSERT(oilP >= 0.0);
+      }
+    }
+  }
+
+  // Test piston magnetos
+  void testPistonMagnetos() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        int mags = piston->GetMagnetos();
+        TS_ASSERT(mags >= 0);
+        TS_ASSERT(mags <= 3);  // 0=off, 1=left, 2=right, 3=both
+      }
+    }
+  }
+
+  // Test piston set magnetos
+  void testPistonSetMagnetos() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+
+        piston->SetMagnetos(3);  // Both
+        TS_ASSERT_EQUALS(piston->GetMagnetos(), 3);
+
+        piston->SetMagnetos(0);  // Off
+        TS_ASSERT_EQUALS(piston->GetMagnetos(), 0);
+      }
+    }
+  }
+
+  // Test piston power available
+  void testPistonPowerAvailable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double power = piston->GetPowerAvailable();
+        TS_ASSERT(std::isfinite(power));
+        TS_ASSERT(power >= 0.0);
+      }
+    }
+  }
+
+  // Test piston air-fuel ratio
+  void testPistonAFR() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double afr = piston->getAFR();
+        TS_ASSERT(std::isfinite(afr) || std::isinf(afr));  // May be infinity if no fuel flow
+      }
+    }
+  }
+
+  // Test piston engine labels
+  void testPistonEngineLabels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        std::string labels = piston->GetEngineLabels(",");
+        TS_ASSERT(!labels.empty());
+      }
+    }
+  }
+
+  // Test piston engine values
+  void testPistonEngineValues() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        std::string values = piston->GetEngineValues(",");
+        TS_ASSERT(!values.empty());
+      }
+    }
+  }
+
+  // Test piston Calculate method
+  void testPistonCalculate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+
+        // Run a few simulation steps
+        for (int i = 0; i < 5; i++) {
+          fdmex.Run();
+        }
+
+        // Check values are still valid after Calculate
+        double rpm = piston->getRPM();
+        TS_ASSERT(std::isfinite(rpm));
+      }
+    }
+  }
+
+  // Test piston ResetToIC
+  void testPistonResetToIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+
+        // Run some steps
+        for (int i = 0; i < 5; i++) {
+          fdmex.Run();
+        }
+
+        // Reset
+        piston->ResetToIC();
+
+        // Check RPM is finite after reset
+        double rpm = piston->getRPM();
+        TS_ASSERT(std::isfinite(rpm));
+      }
+    }
+  }
+
+  // Test piston exhaust gas temp in Fahrenheit
+  void testPistonEGT_degF() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double egt_f = piston->getExhaustGasTemp_degF();
+        TS_ASSERT(std::isfinite(egt_f));
+      }
+    }
+  }
+
+  // Test piston CalcFuelNeed
+  void testPistonCalcFuelNeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propulsion = fdmex.GetPropulsion();
+    if (propulsion->GetNumEngines() > 0) {
+      auto engine = propulsion->GetEngine(0);
+      if (engine->GetType() == FGEngine::etPiston) {
+        FGPiston* piston = static_cast<FGPiston*>(engine.get());
+        double fuelNeed = piston->CalcFuelNeed();
+        TS_ASSERT(std::isfinite(fuelNeed));
+        TS_ASSERT(fuelNeed >= 0.0);
+      }
+    }
   }
 };
