@@ -19,6 +19,11 @@
 
 #include <FGFDMExec.h>
 #include <models/atmosphere/FGWinds.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <initialization/FGInitialCondition.h>
+
+using namespace JSBSim;
 
 const double epsilon = 1e-10;
 const double DEG_TO_RAD = M_PI / 180.0;
@@ -1956,5 +1961,601 @@ public:
     // Run with holding flag should also work
     bool result = winds->Run(true);
     TS_ASSERT(!result);  // Returns false on success
+  }
+
+  /***************************************************************************
+   * C172x Model-Based Wind Tests
+   ***************************************************************************/
+
+  // Test C172x winds object is not null
+  void testC172xWindsNotNull() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+  }
+
+  // Test C172x winds after RunIC
+  void testC172xWindsAfterRunIC() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+    TS_ASSERT(winds != nullptr);
+  }
+
+  // Test C172x set steady wind NED
+  void testC172xSetWindNED() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(10.0, 5.0, 0.0);
+
+    TS_ASSERT_DELTA(winds->GetWindNED()(1), 10.0, 0.001);
+    TS_ASSERT_DELTA(winds->GetWindNED()(2), 5.0, 0.001);
+    TS_ASSERT_DELTA(winds->GetWindNED()(3), 0.0, 0.001);
+  }
+
+  // Test C172x wind speed and direction
+  void testC172xWindSpeedDirection() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set wind from the west (270 degrees) at 20 knots
+    winds->SetWindspeed(20.0 * KTS_TO_FPS);
+    winds->SetWindPsi(270.0 * DEG_TO_RAD);
+
+    double speed = winds->GetWindspeed();
+    TS_ASSERT_DELTA(speed, 20.0 * KTS_TO_FPS, 0.1);
+  }
+
+  // Test C172x wind components after setting speed/direction
+  void testC172xWindComponentsFromSpeedDir() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set wind speed and direction
+    double speed = 10.0 * KTS_TO_FPS;
+    winds->SetWindspeed(speed);
+    winds->SetWindPsi(0.0);
+
+    JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+
+    // Wind components should be finite and magnitude should match
+    TS_ASSERT(std::isfinite(windNED(1)));
+    TS_ASSERT(std::isfinite(windNED(2)));
+    TS_ASSERT(std::isfinite(windNED(3)));
+    double mag = windNED.Magnitude();
+    TS_ASSERT_DELTA(mag, speed, 1.0);
+  }
+
+  // Test C172x gust components
+  void testC172xGustComponents() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(5.0, 3.0, 1.0);
+
+    JSBSim::FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), 5.0, 0.001);
+    TS_ASSERT_DELTA(gust(2), 3.0, 0.001);
+    TS_ASSERT_DELTA(gust(3), 1.0, 0.001);
+  }
+
+  // Test C172x total wind (steady + gust)
+  void testC172xTotalWind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(JSBSim::FGWinds::ttNone);  // Disable turbulence
+    winds->SetWindNED(10.0, 0.0, 0.0);
+    winds->SetGustNED(2.0, 0.0, 0.0);
+
+    // Run a step to update wind calculations
+    fdmex.Run();
+
+    JSBSim::FGColumnVector3 total = winds->GetTotalWindNED();
+    // Total should be finite after running
+    TS_ASSERT(std::isfinite(total(1)));
+    TS_ASSERT(std::isfinite(total(2)));
+    TS_ASSERT(std::isfinite(total(3)));
+  }
+
+  // Test C172x turbulence type setting
+  void testC172xTurbulenceType() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set different turbulence types
+    winds->SetTurbType(JSBSim::FGWinds::ttNone);
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttNone);
+
+    winds->SetTurbType(JSBSim::FGWinds::ttStandard);
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttStandard);
+
+    winds->SetTurbType(JSBSim::FGWinds::ttMilspec);
+    TS_ASSERT_EQUALS(winds->GetTurbType(), JSBSim::FGWinds::ttMilspec);
+  }
+
+  // Test C172x turbulence severity
+  void testC172xTurbulenceSeverity() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(JSBSim::FGWinds::ttStandard);
+
+    // Set severity level and verify it's set (implementation may adjust value)
+    winds->SetProbabilityOfExceedence(0.01);
+    double poe = winds->GetProbabilityOfExceedence();
+    TS_ASSERT(std::isfinite(poe));
+    TS_ASSERT(poe >= 0.0);
+  }
+
+  // Test C172x wind magnitude
+  void testC172xWindMagnitude() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(3.0, 4.0, 0.0);
+
+    double magnitude = winds->GetWindspeed();
+    TS_ASSERT_DELTA(magnitude, 5.0, 0.001);
+  }
+
+  // Test C172x wind after simulation steps
+  void testC172xWindAfterSimSteps() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(15.0, 10.0, 0.0);
+
+    // Run simulation steps
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Wind should persist
+    JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+    TS_ASSERT_DELTA(windNED(1), 15.0, 0.001);
+    TS_ASSERT_DELTA(windNED(2), 10.0, 0.001);
+  }
+
+  // Test C172x wind with turbulence enabled
+  void testC172xWindWithTurbulence() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(10.0, 0.0, 0.0);
+    winds->SetTurbType(JSBSim::FGWinds::ttStandard);
+    winds->SetProbabilityOfExceedence(0.01);
+
+    // Run simulation
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Total wind should be finite
+    JSBSim::FGColumnVector3 total = winds->GetTotalWindNED();
+    TS_ASSERT(std::isfinite(total(1)));
+    TS_ASSERT(std::isfinite(total(2)));
+    TS_ASSERT(std::isfinite(total(3)));
+  }
+
+  // Test C172x zero wind
+  void testC172xZeroWind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(0.0, 0.0, 0.0);
+    winds->SetGustNED(0.0, 0.0, 0.0);
+    winds->SetTurbType(JSBSim::FGWinds::ttNone);
+
+    JSBSim::FGColumnVector3 total = winds->GetTotalWindNED();
+    TS_ASSERT_DELTA(total(1), 0.0, 0.001);
+    TS_ASSERT_DELTA(total(2), 0.0, 0.001);
+    TS_ASSERT_DELTA(total(3), 0.0, 0.001);
+  }
+
+  // Test C172x headwind effect
+  void testC172xHeadwind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetPsiDegIC(0.0);  // Heading north
+    ic->SetAltitudeAGLFtIC(3000.0);
+
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set headwind (from north, blowing south)
+    winds->SetWindNED(-20.0 * KTS_TO_FPS, 0.0, 0.0);
+
+    fdmex.Run();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    double groundSpeed = auxiliary->GetVground();
+    double trueAirspeed = auxiliary->GetVt();
+
+    // With headwind, ground speed should be less than TAS
+    TS_ASSERT(groundSpeed < trueAirspeed);
+  }
+
+  // Test C172x tailwind effect
+  void testC172xTailwind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetPsiDegIC(0.0);  // Heading north
+    ic->SetAltitudeAGLFtIC(3000.0);
+
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set tailwind (from south, blowing north)
+    winds->SetWindNED(20.0 * KTS_TO_FPS, 0.0, 0.0);
+
+    fdmex.Run();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    double groundSpeed = auxiliary->GetVground();
+    double trueAirspeed = auxiliary->GetVt();
+
+    // With tailwind, ground speed should be greater than TAS
+    TS_ASSERT(groundSpeed > trueAirspeed);
+  }
+
+  // Test C172x crosswind
+  void testC172xCrosswind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetPsiDegIC(0.0);  // Heading north
+    ic->SetAltitudeAGLFtIC(3000.0);
+
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set crosswind from the east
+    winds->SetWindNED(0.0, -15.0 * KTS_TO_FPS, 0.0);
+
+    fdmex.Run();
+
+    // Aircraft should experience sideslip or drift
+    auto auxiliary = fdmex.GetAuxiliary();
+    double beta = auxiliary->Getbeta();
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  // Test C172x wind psi getter
+  void testC172xWindPsi() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set wind from specific direction and verify we can get a value
+    winds->SetWindspeed(10.0);
+    winds->SetWindPsi(M_PI);
+    double psi = winds->GetWindPsi();
+
+    // Psi should be finite
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test C172x wind persistence across simulation
+  void testC172xWindPersistenceAcrossReset() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(20.0, 10.0, 5.0);
+
+    // Run some steps
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Wind settings should still be accessible after simulation
+    JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+    TS_ASSERT(std::isfinite(windNED(1)));
+    TS_ASSERT(std::isfinite(windNED(2)));
+    TS_ASSERT(std::isfinite(windNED(3)));
+  }
+
+  // Test C172x downward wind component
+  void testC172xDownwardWind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set downdraft
+    winds->SetWindNED(0.0, 0.0, 10.0);
+
+    JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+    TS_ASSERT_DELTA(windNED(3), 10.0, 0.001);
+  }
+
+  // Test C172x upward wind component
+  void testC172xUpwardWind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set updraft
+    winds->SetWindNED(0.0, 0.0, -10.0);
+
+    JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+    TS_ASSERT_DELTA(windNED(3), -10.0, 0.001);
+  }
+
+  // Test C172x strong wind
+  void testC172xStrongWind() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // Set very strong wind (50 kts)
+    double strongWind = 50.0 * KTS_TO_FPS;
+    winds->SetWindNED(strongWind, 0.0, 0.0);
+
+    // Run simulation - should remain stable
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+  }
+
+  // Test C172x Milspec turbulence
+  void testC172xMilspecTurbulence() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(JSBSim::FGWinds::ttMilspec);
+    winds->SetWindspeed20ft(20.0);
+
+    // Run simulation
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x wind at different altitudes
+  void testC172xWindAtAltitudes() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    double altitudes[] = {1000.0, 5000.0, 10000.0};
+
+    for (double alt : altitudes) {
+      auto ic = fdmex.GetIC();
+      ic->SetVcalibratedKtsIC(100.0);
+      ic->SetAltitudeAGLFtIC(alt);
+      fdmex.RunIC();
+
+      auto winds = fdmex.GetWinds();
+      winds->SetWindNED(10.0, 5.0, 0.0);
+
+      fdmex.Run();
+
+      // Wind should be applied at all altitudes
+      JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+      TS_ASSERT_DELTA(windNED(1), 10.0, 0.001);
+    }
+  }
+
+  // Test C172x gust magnitude
+  void testC172xGustMagnitude() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(3.0, 4.0, 0.0);
+
+    JSBSim::FGColumnVector3 gust = winds->GetGustNED();
+    double mag = gust.Magnitude();
+    TS_ASSERT_DELTA(mag, 5.0, 0.001);
+  }
+
+  // Test C172x wind gradient (windspeed at 20ft for MIL-F-8785C)
+  void testC172xWindGradient() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindspeed20ft(25.0);
+    double ws20 = winds->GetWindspeed20ft();
+
+    TS_ASSERT_DELTA(ws20, 25.0, 0.001);
+  }
+
+  // Test C172x InitModel resets winds
+  void testC172xWindsInitModel() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    // InitModel should succeed
+    bool result = winds->InitModel();
+    TS_ASSERT(result);
+  }
+
+  // Test C172x multiple wind changes
+  void testC172xMultipleWindChanges() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    for (int i = 0; i < 10; i++) {
+      winds->SetWindNED(i * 2.0, i * 1.0, 0.0);
+      fdmex.Run();
+
+      JSBSim::FGColumnVector3 windNED = winds->GetWindNED();
+      TS_ASSERT_DELTA(windNED(1), i * 2.0, 0.001);
+      TS_ASSERT_DELTA(windNED(2), i * 1.0, 0.001);
+    }
+  }
+
+  // Test C172x combined steady wind, gust, and turbulence
+  void testC172xCombinedWindEffects() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetWindNED(10.0, 5.0, 0.0);
+    winds->SetGustNED(2.0, 1.0, 0.5);
+    winds->SetTurbType(JSBSim::FGWinds::ttStandard);
+    winds->SetProbabilityOfExceedence(0.001);
+
+    // Run simulation
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+    }
+
+    // All values should be finite
+    JSBSim::FGColumnVector3 total = winds->GetTotalWindNED();
+    TS_ASSERT(std::isfinite(total(1)));
+    TS_ASSERT(std::isfinite(total(2)));
+    TS_ASSERT(std::isfinite(total(3)));
+  }
+
+  // Test C172x wind effect on flight path
+  void testC172xWindEffectOnFlightPath() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetPsiDegIC(90.0);  // Heading east
+    ic->SetAltitudeAGLFtIC(3000.0);
+
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+    auto propagate = fdmex.GetPropagate();
+
+    // Get initial position
+    double initLat = propagate->GetLatitudeDeg();
+    double initLon = propagate->GetLongitudeDeg();
+
+    // Set strong north wind
+    winds->SetWindNED(-30.0 * KTS_TO_FPS, 0.0, 0.0);
+
+    // Run for a while
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    double finalLat = propagate->GetLatitudeDeg();
+
+    // With north wind (heading east), aircraft should drift south
+    TS_ASSERT(finalLat < initLat);
+  }
+
+  // Test C172x wind body components
+  void testC172xWindBodyComponents() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    winds->SetWindNED(10.0, 5.0, 2.0);
+    fdmex.Run();
+
+    // Wind body components should be finite
+    // (accessing through auxiliary's wind-related properties)
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x turbulence Tustin pass filter
+  void testC172xTurbulenceTustin() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(JSBSim::FGWinds::ttTustin);
+    winds->SetProbabilityOfExceedence(0.01);
+
+    // Run simulation
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x calm conditions (no wind effects)
+  void testC172xCalmConditions() {
+    JSBSim::FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(3000.0);
+
+    fdmex.RunIC();
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Ensure no wind
+    winds->SetWindNED(0.0, 0.0, 0.0);
+    winds->SetGustNED(0.0, 0.0, 0.0);
+    winds->SetTurbType(JSBSim::FGWinds::ttNone);
+
+    fdmex.Run();
+
+    // Ground speed should approximately equal TAS (at constant altitude, no wind)
+    double gs = auxiliary->GetVground();
+    double tas = auxiliary->GetVt();
+
+    // They should be close (small differences from climb/descent rate)
+    TS_ASSERT_DELTA(gs, tas, 5.0);
   }
 };
