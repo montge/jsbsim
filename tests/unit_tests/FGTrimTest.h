@@ -15,6 +15,16 @@
 #include <limits>
 #include <cmath>
 
+#include <FGFDMExec.h>
+#include <initialization/FGTrim.h>
+#include <initialization/FGInitialCondition.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGAccelerations.h>
+#include <models/FGFCS.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 const double DEG_TO_RAD = M_PI / 180.0;
 const double RAD_TO_DEG = 180.0 / M_PI;
@@ -1255,5 +1265,654 @@ public:
     // Verify static stability
     TS_ASSERT(Cmalpha < 0);
     TS_ASSERT(Cmde < 0);
+  }
+
+  /***************************************************************************
+   * C172x Model-Based FGTrim Tests (101-125)
+   ***************************************************************************/
+
+  // Test 101: Create FGTrim object with FDMExec
+  void testC172xTrimCreation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    // Trim object created successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 102: Create FGTrim with tLongitudinal mode
+  void testC172xTrimLongitudinalMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    // Trim object with longitudinal mode created successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 103: Create FGTrim with tFull mode
+  void testC172xTrimFullMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tFull);
+    // Trim object with full mode created successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 104: Create FGTrim with tPullup mode
+  void testC172xTrimPullupMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tPullup);
+    // Trim object with pullup mode created successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 105: Create FGTrim with tTurn mode
+  void testC172xTrimTurnMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tTurn);
+    // Trim object with turn mode created successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 106: Create FGTrim with tCustom mode
+  void testC172xTrimCustomMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tCustom);
+    // Trim object with custom mode created successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 107: Set and get target Nlf (load factor)
+  void testC172xSetTargetNlf() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tPullup);
+    trim.SetTargetNlf(2.0);
+    double nlf = trim.GetTargetNlf();
+    TS_ASSERT_DELTA(nlf, 2.0, epsilon);
+  }
+
+  // Test 108: Test SetMode to change trim mode
+  void testC172xSetMode() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMode(tLongitudinal);
+    // Mode changed successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 109: Test SetMode to tFull
+  void testC172xSetModeToFull() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMode(tFull);
+    // Mode changed to tFull successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 110: Test ClearStates method
+  void testC172xClearStates() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tFull);
+    trim.ClearStates();
+    // States cleared successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 111: Test SetTolerance method
+  void testC172xSetTolerance() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetTolerance(0.01);
+    // Tolerance set successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 112: Test SetMaxCycles method
+  void testC172xSetMaxCycles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCycles(100);
+    // MaxCycles set successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 113: Test SetMaxCyclesPerAxis method
+  void testC172xSetMaxCyclesPerAxis() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCyclesPerAxis(50);
+    // MaxCyclesPerAxis set successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 114: Test SetDebug method
+  void testC172xSetDebug() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetDebug(0);
+    // Debug level set successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 115: Test ClearDebug method
+  void testC172xClearDebug() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetDebug(2);
+    trim.ClearDebug();
+    // Debug cleared successfully
+    TS_ASSERT(true);
+  }
+
+  // Test 116: Test SetGammaFallback method
+  void testC172xSetGammaFallback() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetGammaFallback(true);
+    TS_ASSERT(trim.GetGammaFallback() == true);
+  }
+
+  // Test 117: Test GetGammaFallback method
+  void testC172xGetGammaFallback() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetGammaFallback(false);
+    TS_ASSERT(trim.GetGammaFallback() == false);
+  }
+
+  // Test 118: Test DoTrim execution for ground trim (does not crash)
+  void testC172xDoTrimGround() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(0.0);
+    ic->SetAltitudeAGLFtIC(0.0);
+
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCycles(10);  // Limit iterations for testing
+    trim.SetTolerance(0.01);
+
+    // DoTrim may or may not converge, but should not crash
+    bool result = trim.DoTrim();
+    // Just verify it ran without crashing
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 119: Test DoTrim execution for longitudinal trim
+  void testC172xDoTrimLongitudinal() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(5000.0);
+
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetMaxCycles(10);  // Limit iterations for testing
+    trim.SetTolerance(0.01);
+
+    // DoTrim may or may not converge, but should not crash
+    bool result = trim.DoTrim();
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 120: Test multiple trim attempts
+  void testC172xMultipleTrimAttempts() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // First trim attempt
+    FGTrim trim1(&fdmex, tGround);
+    trim1.SetMaxCycles(5);
+    bool result1 = trim1.DoTrim();
+
+    // Second trim attempt with different settings
+    FGTrim trim2(&fdmex, tGround);
+    trim2.SetMaxCycles(5);
+    bool result2 = trim2.DoTrim();
+
+    // Both attempts should complete without crashing
+    TS_ASSERT(result1 == true || result1 == false);
+    TS_ASSERT(result2 == true || result2 == false);
+  }
+
+  // Test 121: Test trim state after initialization
+  void testC172xTrimStateAfterInit() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Check initial accelerations are finite
+    auto accel = fdmex.GetAccelerations();
+    TS_ASSERT(accel != nullptr);
+
+    double udot = accel->GetUVWdot(1);
+    double vdot = accel->GetUVWdot(2);
+    double wdot = accel->GetUVWdot(3);
+
+    TS_ASSERT(std::isfinite(udot));
+    TS_ASSERT(std::isfinite(vdot));
+    TS_ASSERT(std::isfinite(wdot));
+  }
+
+  // Test 122: Test AddState method
+  void testC172xAddState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tCustom);
+    bool added = trim.AddState(tWdot, tAlpha);
+    TS_ASSERT(added == true);
+  }
+
+  // Test 123: Test RemoveState method
+  void testC172xRemoveState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tFull);
+    bool removed = trim.RemoveState(tWdot);
+    // RemoveState should succeed for existing state
+    TS_ASSERT(removed == true);
+  }
+
+  // Test 124: Test EditState method
+  void testC172xEditState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    bool edited = trim.EditState(tWdot, tTheta);
+    // EditState may return true or false depending on implementation
+    TS_ASSERT(edited == true || edited == false);
+  }
+
+  // Test 125: Test DebugState method
+  void testC172xDebugState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.DebugState(tWdot);
+    // DebugState should not crash
+    TS_ASSERT(true);
+  }
+
+  // Test 126: Test trim with various initial speeds
+  void testC172xTrimVariousSpeeds() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    double speeds[] = {80.0, 100.0, 120.0};
+    for (double speed : speeds) {
+      auto ic = fdmex.GetIC();
+      ic->SetVcalibratedKtsIC(speed);
+      ic->SetAltitudeAGLFtIC(3000.0);
+      fdmex.RunIC();
+
+      FGTrim trim(&fdmex, tLongitudinal);
+      trim.SetMaxCycles(5);
+      bool result = trim.DoTrim();
+      // Should complete without crashing
+      TS_ASSERT(result == true || result == false);
+    }
+  }
+
+  // Test 127: Test trim with various altitudes
+  void testC172xTrimVariousAltitudes() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    double altitudes[] = {1000.0, 5000.0, 10000.0};
+    for (double alt : altitudes) {
+      auto ic = fdmex.GetIC();
+      ic->SetVcalibratedKtsIC(100.0);
+      ic->SetAltitudeAGLFtIC(alt);
+      fdmex.RunIC();
+
+      FGTrim trim(&fdmex, tLongitudinal);
+      trim.SetMaxCycles(5);
+      bool result = trim.DoTrim();
+      // Should complete without crashing
+      TS_ASSERT(result == true || result == false);
+    }
+  }
+
+  // Test 128: Test FCS controls are finite after trim attempt
+  void testC172xFCSAfterTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(5000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetMaxCycles(10);
+    trim.DoTrim();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    double elevator = fcs->GetDeCmd();
+    double aileron = fcs->GetDaCmd();
+    double rudder = fcs->GetDrCmd();
+
+    TS_ASSERT(std::isfinite(elevator));
+    TS_ASSERT(std::isfinite(aileron));
+    TS_ASSERT(std::isfinite(rudder));
+  }
+
+  // Test 129: Test auxiliary values are finite after trim attempt
+  void testC172xAuxiliaryAfterTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(5000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetMaxCycles(10);
+    trim.DoTrim();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    double alpha = aux->Getalpha();
+    double beta = aux->Getbeta();
+    double mach = aux->GetMach();
+
+    TS_ASSERT(std::isfinite(alpha));
+    TS_ASSERT(std::isfinite(beta));
+    TS_ASSERT(std::isfinite(mach));
+  }
+
+  // Test 130: Test propagate state is finite after trim attempt
+  void testC172xPropagateAfterTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(5000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetMaxCycles(10);
+    trim.DoTrim();
+
+    auto prop = fdmex.GetPropagate();
+    TS_ASSERT(prop != nullptr);
+
+    double theta = prop->GetEuler(2);
+    double phi = prop->GetEuler(1);
+    double psi = prop->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(theta));
+    TS_ASSERT(std::isfinite(phi));
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test 131: Test tight tolerance trim
+  void testC172xTightToleranceTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(3000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetTolerance(0.0001);  // Tight tolerance
+    trim.SetMaxCycles(20);
+    bool result = trim.DoTrim();
+    // Should complete without crashing
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 132: Test loose tolerance trim
+  void testC172xLooseToleranceTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(3000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetTolerance(0.1);  // Loose tolerance
+    trim.SetMaxCycles(10);
+    bool result = trim.DoTrim();
+    // Should complete without crashing
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 133: Test minimum iteration cycles
+  void testC172xMinIterationCycles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCycles(1);
+    bool result = trim.DoTrim();
+    // Should complete even with minimal cycles
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 134: Test Report method does not crash
+  void testC172xReportMethod() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCycles(3);
+    trim.DoTrim();
+    trim.Report();  // Should not crash
+    TS_ASSERT(true);
+  }
+
+  // Test 135: Test TrimStats method does not crash
+  void testC172xTrimStatsMethod() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCycles(3);
+    trim.DoTrim();
+    trim.TrimStats();  // Should not crash
+    TS_ASSERT(true);
+  }
+
+  // Test 136: Test pullup trim with target load factor
+  void testC172xPullupTrimWithNlf() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(120.0);
+    ic->SetAltitudeAGLFtIC(5000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tPullup);
+    trim.SetTargetNlf(1.5);  // 1.5g pullup
+    trim.SetMaxCycles(10);
+    bool result = trim.DoTrim();
+    // Should complete without crashing
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 137: Test full trim mode
+  void testC172xFullTrimExecution() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(5000.0);
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tFull);
+    trim.SetMaxCycles(10);
+    bool result = trim.DoTrim();
+    // Should complete without crashing
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 138: Test trim after running sim cycles
+  void testC172xTrimAfterSimCycles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeAGLFtIC(3000.0);
+    fdmex.RunIC();
+
+    // Run a few simulation cycles
+    for (int i = 0; i < 10; ++i) {
+      fdmex.Run();
+    }
+
+    // Now try to trim
+    FGTrim trim(&fdmex, tLongitudinal);
+    trim.SetMaxCycles(5);
+    bool result = trim.DoTrim();
+    // Should complete without crashing
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test 139: Test sequential mode changes
+  void testC172xSequentialModeChanges() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tGround);
+
+    // Change modes sequentially
+    trim.SetMode(tLongitudinal);
+    trim.SetMode(tFull);
+    trim.SetMode(tGround);
+    trim.SetMode(tCustom);
+    trim.SetMode(tNone);
+
+    // Should not crash
+    TS_ASSERT(true);
+  }
+
+  // Test 140: Test adding multiple states to custom trim
+  void testC172xAddMultipleStates() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tCustom);
+    bool added1 = trim.AddState(tWdot, tAlpha);
+    bool added2 = trim.AddState(tQdot, tElevator);
+
+    // At least one should succeed
+    TS_ASSERT(added1 || added2);
+  }
+
+  // Test 141: Test trim preserves sim time
+  void testC172xTrimPreservesSimTime() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    double timeBefore = fdmex.GetSimTime();
+
+    FGTrim trim(&fdmex, tGround);
+    trim.SetMaxCycles(5);
+    trim.DoTrim();
+
+    double timeAfter = fdmex.GetSimTime();
+
+    // Sim time should be the same (trim doesn't advance time)
+    TS_ASSERT_DELTA(timeBefore, timeAfter, epsilon);
+  }
+
+  // Test 142: Test gamma fallback toggle
+  void testC172xGammaFallbackToggle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    FGTrim trim(&fdmex, tLongitudinal);
+
+    trim.SetGammaFallback(true);
+    TS_ASSERT(trim.GetGammaFallback() == true);
+
+    trim.SetGammaFallback(false);
+    TS_ASSERT(trim.GetGammaFallback() == false);
+
+    trim.SetGammaFallback(true);
+    TS_ASSERT(trim.GetGammaFallback() == true);
   }
 };

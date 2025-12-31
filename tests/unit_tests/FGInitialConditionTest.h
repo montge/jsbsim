@@ -1966,4 +1966,479 @@ public:
     TS_ASSERT_DELTA(ic.GetLongitudeDegIC(), 0.0, 0.1);
     TS_ASSERT_DELTA(ic.GetAltitudeASLFtIC(), 0.0, 1.0);
   }
+
+  /***************************************************************************
+   * C172x Model-Based FGInitialCondition Tests
+   ***************************************************************************/
+
+  // Test setting latitude with C172x model
+  void testC172xSetLatitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetLatitudeDegIC(45.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetLatitudeDegIC(), 45.0, 0.01);
+    TS_ASSERT_DELTA(ic->GetLatitudeRadIC(), 45.0 * M_PI / 180.0, epsilon);
+  }
+
+  // Test setting longitude with C172x model
+  void testC172xSetLongitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetLongitudeDegIC(-122.4);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetLongitudeDegIC(), -122.4, 0.01);
+    TS_ASSERT_DELTA(ic->GetLongitudeRadIC(), -122.4 * M_PI / 180.0, epsilon);
+  }
+
+  // Test setting altitude ASL with C172x model
+  void testC172xSetAltitudeASL() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetAltitudeASLFtIC(), 5000.0, 10.0);
+  }
+
+  // Test setting altitude AGL with C172x model
+  void testC172xSetAltitudeAGL() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetTerrainElevationFtIC(1000.0);
+    ic->SetAltitudeAGLFtIC(3000.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetAltitudeAGLFtIC(), 3000.0, 10.0);
+    TS_ASSERT_DELTA(ic->GetAltitudeASLFtIC(), 4000.0, 20.0);
+  }
+
+  // Test setting U body velocity with C172x model
+  void testC172xSetUBodyVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetUBodyFpsIC(200.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetUBodyFpsIC(), 200.0, 1.0);
+  }
+
+  // Test setting V body velocity with C172x model
+  void testC172xSetVBodyVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetUBodyFpsIC(200.0);
+    ic->SetVBodyFpsIC(10.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVBodyFpsIC(), 10.0, 1.0);
+  }
+
+  // Test setting W body velocity with C172x model
+  void testC172xSetWBodyVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetUBodyFpsIC(200.0);
+    ic->SetWBodyFpsIC(5.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetWBodyFpsIC(), 5.0, 1.0);
+  }
+
+  // Test setting VNorth velocity with C172x model
+  void testC172xSetVNorthVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetVNorthFpsIC(150.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVNorthFpsIC(), 150.0, 1.0);
+  }
+
+  // Test setting VEast velocity with C172x model
+  void testC172xSetVEastVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetVNorthFpsIC(150.0);
+    ic->SetVEastFpsIC(50.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVEastFpsIC(), 50.0, 1.0);
+  }
+
+  // Test setting VDown velocity with C172x model
+  void testC172xSetVDownVelocity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetVNorthFpsIC(150.0);
+    ic->SetVDownFpsIC(-10.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVDownFpsIC(), -10.0, 1.0);
+  }
+
+  // Test setting heading (psi) with C172x model
+  void testC172xSetHeading() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetPsiDegIC(270.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetPsiDegIC(), 270.0, 0.1);
+    TS_ASSERT_DELTA(ic->GetPsiRadIC(), 270.0 * M_PI / 180.0, epsilon);
+  }
+
+  // Test setting pitch (theta) with C172x model
+  void testC172xSetPitch() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetThetaDegIC(5.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetThetaDegIC(), 5.0, 0.1);
+    TS_ASSERT_DELTA(ic->GetThetaRadIC(), 5.0 * M_PI / 180.0, epsilon);
+  }
+
+  // Test setting roll (phi) with C172x model
+  void testC172xSetRoll() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetPhiDegIC(15.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetPhiDegIC(), 15.0, 0.1);
+    TS_ASSERT_DELTA(ic->GetPhiRadIC(), 15.0 * M_PI / 180.0, epsilon);
+  }
+
+  // Test setting flight path angle with C172x model
+  void testC172xSetFlightPathAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetVtrueFpsIC(200.0);
+    ic->SetFlightPathAngleDegIC(3.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetFlightPathAngleDegIC(), 3.0, 0.5);
+  }
+
+  // Test setting climb rate with C172x model
+  void testC172xSetClimbRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetVtrueFpsIC(200.0);
+    ic->SetClimbRateFpsIC(15.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetClimbRateFpsIC(), 15.0, 1.0);
+  }
+
+  // Test setting Mach number with C172x model
+  void testC172xSetMach() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetAltitudeASLFtIC(10000.0);
+    ic->SetMachIC(0.3);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetMachIC(), 0.3, 0.01);
+  }
+
+  // Test setting calibrated airspeed with C172x model
+  void testC172xSetCalibratedAirspeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(120.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVcalibratedKtsIC(), 120.0, 1.0);
+  }
+
+  // Test setting equivalent airspeed with C172x model
+  void testC172xSetEquivalentAirspeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetAltitudeASLFtIC(8000.0);
+    ic->SetVequivalentKtsIC(150.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVequivalentKtsIC(), 150.0, 2.0);
+  }
+
+  // Test values persist after RunIC with C172x model
+  void testC172xValuesPersistAfterRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    // Set comprehensive initial conditions
+    ic->SetLatitudeDegIC(37.6);
+    ic->SetLongitudeDegIC(-122.4);
+    ic->SetAltitudeASLFtIC(3000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetPsiDegIC(180.0);
+    ic->SetPhiDegIC(0.0);
+    ic->SetThetaDegIC(3.0);
+
+    fdmex.RunIC();
+
+    // Verify all values persist
+    TS_ASSERT_DELTA(ic->GetLatitudeDegIC(), 37.6, 0.1);
+    TS_ASSERT_DELTA(ic->GetLongitudeDegIC(), -122.4, 0.1);
+    TS_ASSERT_DELTA(ic->GetAltitudeASLFtIC(), 3000.0, 20.0);
+    TS_ASSERT_DELTA(ic->GetVcalibratedKtsIC(), 100.0, 2.0);
+    TS_ASSERT_DELTA(ic->GetPsiDegIC(), 180.0, 0.5);
+    TS_ASSERT_DELTA(ic->GetPhiDegIC(), 0.0, 0.1);
+    TS_ASSERT_DELTA(ic->GetThetaDegIC(), 3.0, 0.5);
+  }
+
+  // Test latitude bounds with C172x model
+  void testC172xLatitudeBounds() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    // Test near north pole
+    ic->SetLatitudeDegIC(89.0);
+    fdmex.RunIC();
+    TS_ASSERT_DELTA(ic->GetLatitudeDegIC(), 89.0, 0.1);
+
+    // Test near south pole
+    ic->SetLatitudeDegIC(-89.0);
+    fdmex.RunIC();
+    TS_ASSERT_DELTA(ic->GetLatitudeDegIC(), -89.0, 0.1);
+
+    // Test equator
+    ic->SetLatitudeDegIC(0.0);
+    fdmex.RunIC();
+    TS_ASSERT_DELTA(ic->GetLatitudeDegIC(), 0.0, 0.01);
+  }
+
+  // Test longitude bounds with C172x model
+  void testC172xLongitudeBounds() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    // Test international date line (positive)
+    ic->SetLongitudeDegIC(180.0);
+    fdmex.RunIC();
+    TS_ASSERT_DELTA(ic->GetLongitudeDegIC(), 180.0, 0.1);
+
+    // Test international date line (negative)
+    ic->SetLongitudeDegIC(-180.0);
+    fdmex.RunIC();
+    TS_ASSERT_DELTA(ic->GetLongitudeDegIC(), -180.0, 0.1);
+
+    // Test prime meridian
+    ic->SetLongitudeDegIC(0.0);
+    fdmex.RunIC();
+    TS_ASSERT_DELTA(ic->GetLongitudeDegIC(), 0.0, 0.01);
+  }
+
+  // Test velocity consistency with C172x model
+  void testC172xVelocityConsistency() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    // Set body velocities
+    double u = 180.0, v = 10.0, w = 5.0;
+    ic->SetUBodyFpsIC(u);
+    ic->SetVBodyFpsIC(v);
+    ic->SetWBodyFpsIC(w);
+    fdmex.RunIC();
+
+    // Verify UVW vector matches individual components
+    FGColumnVector3 uvw = ic->GetUVWFpsIC();
+    TS_ASSERT_DELTA(uvw(1), u, 2.0);
+    TS_ASSERT_DELTA(uvw(2), v, 2.0);
+    TS_ASSERT_DELTA(uvw(3), w, 2.0);
+
+    // True speed should match vector magnitude
+    double vt_expected = sqrt(u*u + v*v + w*w);
+    TS_ASSERT_DELTA(ic->GetVtrueFpsIC(), vt_expected, 5.0);
+  }
+
+  // Test multiple simulation runs don't corrupt IC with C172x model
+  void testC172xMultipleRunsNoCorruption() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    // Set initial conditions
+    ic->SetLatitudeDegIC(40.0);
+    ic->SetLongitudeDegIC(-74.0);
+    ic->SetAltitudeASLFtIC(2000.0);
+    ic->SetVcalibratedKtsIC(110.0);
+    ic->SetPsiDegIC(90.0);
+
+    // Run multiple times
+    for (int i = 0; i < 5; i++) {
+      fdmex.RunIC();
+      for (int j = 0; j < 10; j++) {
+        fdmex.Run();
+      }
+    }
+
+    // IC values should still be accessible (though simulation state may have changed)
+    TS_ASSERT(!std::isnan(ic->GetLatitudeDegIC()));
+    TS_ASSERT(!std::isnan(ic->GetLongitudeDegIC()));
+    TS_ASSERT(!std::isnan(ic->GetAltitudeASLFtIC()));
+  }
+
+  // Test PQR rates with C172x model
+  void testC172xSetPQRRates() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetPRadpsIC(0.05);
+    ic->SetQRadpsIC(0.02);
+    ic->SetRRadpsIC(0.01);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetPRadpsIC(), 0.05, 0.01);
+    TS_ASSERT_DELTA(ic->GetQRadpsIC(), 0.02, 0.01);
+    TS_ASSERT_DELTA(ic->GetRRadpsIC(), 0.01, 0.01);
+
+    // Verify PQR vector
+    FGColumnVector3 pqr = ic->GetPQRRadpsIC();
+    TS_ASSERT_DELTA(pqr(1), 0.05, 0.01);
+    TS_ASSERT_DELTA(pqr(2), 0.02, 0.01);
+    TS_ASSERT_DELTA(pqr(3), 0.01, 0.01);
+  }
+
+  // Test true airspeed with C172x model
+  void testC172xSetTrueAirspeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVtrueKtsIC(150.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVtrueKtsIC(), 150.0, 1.0);
+    TS_ASSERT_DELTA(ic->GetVtrueFpsIC(), 150.0 * ktstofps, 2.0);
+  }
+
+  // Test ground speed with C172x model
+  void testC172xSetGroundSpeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetPsiDegIC(0.0);
+    ic->SetVgroundKtsIC(120.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetVgroundKtsIC(), 120.0, 2.0);
+  }
+
+  // Test orientation quaternion with C172x model
+  void testC172xGetOrientation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetPhiDegIC(10.0);
+    ic->SetThetaDegIC(5.0);
+    ic->SetPsiDegIC(45.0);
+    fdmex.RunIC();
+
+    const FGQuaternion& quat = ic->GetOrientation();
+
+    // Quaternion should be normalized
+    double mag = sqrt(quat(1)*quat(1) + quat(2)*quat(2) +
+                      quat(3)*quat(3) + quat(4)*quat(4));
+    TS_ASSERT_DELTA(mag, 1.0, epsilon);
+
+    // Euler angles from quaternion should match inputs
+    TS_ASSERT_DELTA(quat.GetEulerDeg(FGJSBBase::ePhi), 10.0, 0.5);
+    TS_ASSERT_DELTA(quat.GetEulerDeg(FGJSBBase::eTht), 5.0, 0.5);
+    TS_ASSERT_DELTA(quat.GetEulerDeg(FGJSBBase::ePsi), 45.0, 0.5);
+  }
+
+  // Test position access with C172x model
+  void testC172xGetPosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetLatitudeDegIC(51.5);
+    ic->SetLongitudeDegIC(-0.1);
+    ic->SetAltitudeASLFtIC(1500.0);
+    fdmex.RunIC();
+
+    const FGLocation& pos = ic->GetPosition();
+
+    TS_ASSERT_DELTA(pos.GetLatitudeDeg(), 51.5, 0.1);
+    TS_ASSERT_DELTA(pos.GetLongitudeDeg(), -0.1, 0.1);
+  }
+
+  // Test wind settings with C172x model
+  void testC172xSetWind() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetWindNEDFpsIC(10.0, 5.0, 0.0);
+    fdmex.RunIC();
+
+    FGColumnVector3 wind = ic->GetWindNEDFpsIC();
+    TS_ASSERT_DELTA(wind(1), 10.0, 0.5);
+    TS_ASSERT_DELTA(wind(2), 5.0, 0.5);
+    TS_ASSERT_DELTA(wind(3), 0.0, 0.5);
+  }
+
+  // Test terrain elevation with C172x model
+  void testC172xSetTerrainElevation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto ic = fdmex.GetIC();
+
+    ic->SetTerrainElevationFtIC(2500.0);
+    fdmex.RunIC();
+
+    TS_ASSERT_DELTA(ic->GetTerrainElevationFtIC(), 2500.0, 10.0);
+  }
 };

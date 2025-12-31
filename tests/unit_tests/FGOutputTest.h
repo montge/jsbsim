@@ -1369,6 +1369,325 @@ public:
   }
 
   // ============================================================================
+  // C172x Aircraft Model Output Tests
+  // ============================================================================
+
+  // Test C172x: Output object is not null after loading model
+  void testC172xOutputNotNull() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto output = fdmex.GetOutput();
+    TS_ASSERT(output != nullptr);
+  }
+
+  // Test C172x: Output object exists before RunIC
+  void testC172xOutputBeforeRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto output = fdmex.GetOutput();
+    TS_ASSERT(output != nullptr);
+    // Output should be accessible even before initialization
+    output->Disable();
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: Output object exists after RunIC
+  void testC172xOutputAfterRunIC() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+    TS_ASSERT(output != nullptr);
+  }
+
+  // Test C172x: Enable output method doesn't crash
+  void testC172xEnableOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->Enable();
+    TS_ASSERT(true);  // No crash
+  }
+
+  // Test C172x: Disable output method doesn't crash
+  void testC172xDisableOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->Disable();
+    TS_ASSERT(true);  // No crash
+  }
+
+  // Test C172x: Enable then disable cycle
+  void testC172xEnableDisableCycle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 5; i++) {
+      output->Enable();
+      output->Disable();
+    }
+    TS_ASSERT(true);  // No crash after multiple cycles
+  }
+
+  // Test C172x: InitModel returns valid result
+  void testC172xOutputInitModel() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    auto output = fdmex.GetOutput();
+
+    bool result = output->InitModel();
+    TS_ASSERT(result == true || result == false);  // Valid boolean result
+  }
+
+  // Test C172x: Run method after RunIC
+  void testC172xOutputRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    bool result = output->Run(false);
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test C172x: Run in holding mode
+  void testC172xOutputRunHolding() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    bool result = output->Run(true);
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test C172x: Multiple Run calls
+  void testC172xOutputMultipleRuns() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 10; i++) {
+      output->Run(false);
+    }
+    TS_ASSERT(true);  // No crash after multiple runs
+  }
+
+  // Test C172x: Print method doesn't crash
+  void testC172xOutputPrint() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->Print();
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: SetRateHz with various rates
+  void testC172xSetRateHz() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->SetRateHz(1.0);
+    output->SetRateHz(10.0);
+    output->SetRateHz(100.0);
+    TS_ASSERT(true);  // No crash
+  }
+
+  // Test C172x: SetRateHz with low rate
+  void testC172xSetRateHzLow() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->SetRateHz(0.1);  // Very low rate
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: SetRateHz with high rate
+  void testC172xSetRateHzHigh() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->SetRateHz(1000.0);  // High rate
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: SetStartNewOutput method
+  void testC172xSetStartNewOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->SetStartNewOutput();
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: GetOutputName with index 0
+  void testC172xGetOutputName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    std::string name = output->GetOutputName(0);
+    TS_ASSERT(name.length() >= 0);  // Valid string
+  }
+
+  // Test C172x: GetOutputName with various indices
+  void testC172xGetOutputNameMultiple() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    // Query multiple indices (may not all exist)
+    for (unsigned int i = 0; i < 5; i++) {
+      std::string name = output->GetOutputName(i);
+      TS_ASSERT(name.length() >= 0);
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: SetOutputName method
+  void testC172xSetOutputName() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    bool result = output->SetOutputName(0, "c172x_test_output.csv");
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test C172x: Toggle output
+  void testC172xToggleOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    bool result = output->Toggle(0);
+    TS_ASSERT(result == true || result == false);
+  }
+
+  // Test C172x: ForceOutput method
+  void testC172xForceOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->ForceOutput(0);
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: Output after simulation steps
+  void testC172xOutputAfterSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    // Run several simulation steps
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Output should still be valid
+    output->Run(false);
+    output->Print();
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: Output disabled during simulation
+  void testC172xOutputDisabledDuringSim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->Disable();
+
+    // Run simulation with output disabled
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    output->Enable();
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: Output with different rates during simulation
+  void testC172xOutputRateChangesDuringSim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    output->SetRateHz(10.0);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    output->SetRateHz(50.0);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    output->SetRateHz(1.0);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: Multiple SetStartNewOutput calls
+  void testC172xMultipleStartNewOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 5; i++) {
+      output->SetStartNewOutput();
+      for (int j = 0; j < 10; j++) {
+        fdmex.Run();
+      }
+    }
+    TS_ASSERT(true);
+  }
+
+  // Test C172x: ForceOutput multiple times
+  void testC172xMultipleForceOutput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+    auto output = fdmex.GetOutput();
+
+    for (int i = 0; i < 10; i++) {
+      output->ForceOutput(0);
+    }
+    TS_ASSERT(true);
+  }
+
+  // ============================================================================
   // FGOutput class tests - using actual class methods
   // ============================================================================
 

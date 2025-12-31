@@ -2669,4 +2669,541 @@ public:
     double a_sl = atm->GetSoundSpeedSL();
     TS_ASSERT_DELTA(a / a_sl, sqrt(theta), epsilon);
   }
+
+  /***************************************************************************
+   * C172x Model-Based Tests
+   *
+   * These tests verify atmosphere behavior using the actual C172x aircraft
+   * model loaded through FGFDMExec.
+   ***************************************************************************/
+
+  // Test that atmosphere object is not null after loading c172x
+  void testC172xAtmosphereNotNull() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    TS_ASSERT(atm != nullptr);
+  }
+
+  // Test sea level temperature is positive and reasonable
+  void testC172xTemperatureSLPositive() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double T_sl = atm->GetTemperatureSL();
+
+    TS_ASSERT(T_sl > 0.0);
+    // Standard day SL temp is 518.67 R, should be reasonably close
+    TS_ASSERT(T_sl > 400.0);
+    TS_ASSERT(T_sl < 600.0);
+  }
+
+  // Test temperature at altitude is valid
+  void testC172xTemperatureAtAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // Temperature should decrease with altitude in troposphere
+    double T_0 = atm->GetTemperature(0.0);
+    double T_5000 = atm->GetTemperature(5000.0);
+    double T_10000 = atm->GetTemperature(10000.0);
+
+    TS_ASSERT(T_0 > T_5000);
+    TS_ASSERT(T_5000 > T_10000);
+    TS_ASSERT(T_10000 > 0.0);
+  }
+
+  // Test temperature ratio is calculated correctly
+  void testC172xTemperatureRatio() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double T = atm->GetTemperature(10000.0);
+    double T_sl = atm->GetTemperatureSL();
+    double theta = atm->GetTemperatureRatio(10000.0);
+
+    TS_ASSERT_DELTA(theta, T / T_sl, epsilon);
+  }
+
+  // Test sea level pressure is positive and standard
+  void testC172xPressureSLPositive() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double P_sl = atm->GetPressureSL();
+
+    TS_ASSERT(P_sl > 0.0);
+    // Standard day SL pressure is 2116.228 psf
+    TS_ASSERT(P_sl > 2000.0);
+    TS_ASSERT(P_sl < 2300.0);
+  }
+
+  // Test pressure at altitude decreases with altitude
+  void testC172xPressureAtAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double P_0 = atm->GetPressure(0.0);
+    double P_5000 = atm->GetPressure(5000.0);
+    double P_10000 = atm->GetPressure(10000.0);
+    double P_20000 = atm->GetPressure(20000.0);
+
+    TS_ASSERT(P_0 > P_5000);
+    TS_ASSERT(P_5000 > P_10000);
+    TS_ASSERT(P_10000 > P_20000);
+    TS_ASSERT(P_20000 > 0.0);
+  }
+
+  // Test pressure ratio is calculated correctly
+  void testC172xPressureRatio() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double P = atm->GetPressure();
+    double P_sl = atm->GetPressureSL();
+    double delta = atm->GetPressureRatio();
+
+    TS_ASSERT_DELTA(delta, P / P_sl, epsilon);
+  }
+
+  // Test sea level density is positive and reasonable
+  void testC172xDensitySLPositive() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double rho_sl = atm->GetDensitySL();
+
+    TS_ASSERT(rho_sl > 0.0);
+    // Standard day SL density is ~0.002377 slugs/ft^3
+    TS_ASSERT(rho_sl > 0.002);
+    TS_ASSERT(rho_sl < 0.003);
+  }
+
+  // Test density at altitude decreases with altitude
+  void testC172xDensityAtAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double rho_0 = atm->GetDensity(0.0);
+    double rho_5000 = atm->GetDensity(5000.0);
+    double rho_10000 = atm->GetDensity(10000.0);
+
+    TS_ASSERT(rho_0 > rho_5000);
+    TS_ASSERT(rho_5000 > rho_10000);
+    TS_ASSERT(rho_10000 > 0.0);
+  }
+
+  // Test density ratio is calculated correctly
+  void testC172xDensityRatio() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double rho = atm->GetDensity();
+    double rho_sl = atm->GetDensitySL();
+    double sigma = atm->GetDensityRatio();
+
+    TS_ASSERT_DELTA(sigma, rho / rho_sl, epsilon);
+  }
+
+  // Test speed of sound at sea level is positive and reasonable
+  void testC172xSoundSpeedSLPositive() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double a_sl = atm->GetSoundSpeedSL();
+
+    TS_ASSERT(a_sl > 0.0);
+    // Standard day SL sound speed is ~1116.45 ft/s
+    TS_ASSERT(a_sl > 1000.0);
+    TS_ASSERT(a_sl < 1200.0);
+  }
+
+  // Test speed of sound at altitude (decreases with decreasing temperature)
+  void testC172xSoundSpeedAtAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double a_0 = atm->GetSoundSpeed(0.0);
+    double a_5000 = atm->GetSoundSpeed(5000.0);
+    double a_10000 = atm->GetSoundSpeed(10000.0);
+
+    // Sound speed decreases with altitude in troposphere
+    TS_ASSERT(a_0 > a_5000);
+    TS_ASSERT(a_5000 > a_10000);
+    TS_ASSERT(a_10000 > 0.0);
+  }
+
+  // Test sound speed ratio equals sqrt of temperature ratio
+  void testC172xSoundSpeedRatioRelation() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double theta = atm->GetTemperatureRatio(15000.0);
+    double a = atm->GetSoundSpeed(15000.0);
+    double a_sl = atm->GetSoundSpeedSL();
+
+    TS_ASSERT_DELTA(a / a_sl, sqrt(theta), epsilon);
+  }
+
+  // Test absolute viscosity is positive
+  void testC172xAbsoluteViscosityPositive() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double mu = atm->GetAbsoluteViscosity();
+
+    TS_ASSERT(mu > 0.0);
+  }
+
+  // Test kinematic viscosity is positive
+  void testC172xKinematicViscosityPositive() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double nu = atm->GetKinematicViscosity();
+
+    TS_ASSERT(nu > 0.0);
+  }
+
+  // Test kinematic viscosity is absolute viscosity / density
+  void testC172xViscosityRelation() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double mu = atm->GetAbsoluteViscosity();
+    double nu = atm->GetKinematicViscosity();
+    double rho = atm->GetDensity();
+
+    TS_ASSERT_DELTA(nu, mu / rho, epsilon);
+  }
+
+  // Test atmosphere values after running simulation steps
+  void testC172xAtmosphereAfterSimSteps() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double T_initial = atm->GetTemperature();
+    double P_initial = atm->GetPressure();
+
+    // Run a few simulation steps
+    for (int i = 0; i < 10; i++) {
+      fdm.Run();
+    }
+
+    // Values should remain valid and finite
+    double T = atm->GetTemperature();
+    double P = atm->GetPressure();
+    double rho = atm->GetDensity();
+
+    TS_ASSERT(T > 0.0);
+    TS_ASSERT(P > 0.0);
+    TS_ASSERT(rho > 0.0);
+    TS_ASSERT(!std::isnan(T));
+    TS_ASSERT(!std::isnan(P));
+    TS_ASSERT(!std::isnan(rho));
+    TS_ASSERT(!std::isinf(T));
+    TS_ASSERT(!std::isinf(P));
+    TS_ASSERT(!std::isinf(rho));
+  }
+
+  // Test density altitude is valid
+  void testC172xDensityAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double da = atm->GetDensityAltitude();
+
+    // Density altitude should be finite
+    TS_ASSERT(!std::isnan(da));
+    TS_ASSERT(!std::isinf(da));
+  }
+
+  // Test pressure altitude is valid
+  void testC172xPressureAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+    double pa = atm->GetPressureAltitude();
+
+    // Pressure altitude should be finite
+    TS_ASSERT(!std::isnan(pa));
+    TS_ASSERT(!std::isinf(pa));
+  }
+
+  // Test atmosphere consistency: P = rho * R * T (ideal gas law)
+  void testC172xIdealGasLaw() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // Get values at sea level
+    double P = atm->GetPressureSL();
+    double T = atm->GetTemperatureSL();
+    double rho = atm->GetDensitySL();
+
+    // R for air (Reng0) from DummyAtmosphere
+    // P = rho * R * T => rho = P / (R * T)
+    double rho_calculated = P / (R * T);
+
+    TS_ASSERT_DELTA(rho, rho_calculated, epsilon);
+  }
+
+  // Test atmosphere consistency at altitude
+  void testC172xIdealGasLawAtAltitude() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double h = 10000.0;
+    double P = atm->GetPressure(h);
+    double T = atm->GetTemperature(h);
+    double rho = atm->GetDensity(h);
+
+    double rho_calculated = P / (R * T);
+
+    TS_ASSERT_DELTA(rho, rho_calculated, epsilon);
+  }
+
+  // Test atmosphere is consistent across multiple model loads
+  void testC172xAtmosphereConsistency() {
+    FGFDMExec fdm1;
+    fdm1.LoadModel("c172x");
+    fdm1.RunIC();
+
+    FGFDMExec fdm2;
+    fdm2.LoadModel("c172x");
+    fdm2.RunIC();
+
+    auto atm1 = fdm1.GetAtmosphere();
+    auto atm2 = fdm2.GetAtmosphere();
+
+    // Same model should produce same atmosphere values
+    TS_ASSERT_DELTA(atm1->GetTemperatureSL(), atm2->GetTemperatureSL(), epsilon);
+    TS_ASSERT_DELTA(atm1->GetPressureSL(), atm2->GetPressureSL(), epsilon);
+    TS_ASSERT_DELTA(atm1->GetDensitySL(), atm2->GetDensitySL(), epsilon);
+    TS_ASSERT_DELTA(atm1->GetSoundSpeedSL(), atm2->GetSoundSpeedSL(), epsilon);
+  }
+
+  // Test standard day values at sea level match expected
+  void testC172xStandardDayValues() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // Standard day values (from FGAtmosphere constants)
+    double T_sl = atm->GetTemperatureSL();
+    double P_sl = atm->GetPressureSL();
+
+    // Standard day SL temperature is 518.67 R
+    TS_ASSERT_DELTA(T_sl, FGAtmosphere::StdDaySLtemperature, 1.0);
+
+    // Standard day SL pressure is 2116.228 psf
+    TS_ASSERT_DELTA(P_sl, FGAtmosphere::StdDaySLpressure, 1.0);
+  }
+
+  // Test temperature lapse rate in troposphere
+  void testC172xTemperatureLapseRate() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // Standard lapse rate is about 3.57 deg R per 1000 ft
+    double T_0 = atm->GetTemperature(0.0);
+    double T_10000 = atm->GetTemperature(10000.0);
+
+    double lapse = (T_0 - T_10000) / 10.0;  // per 1000 ft
+
+    // Should be approximately 3.57 R/1000ft
+    TS_ASSERT(lapse > 3.0);
+    TS_ASSERT(lapse < 4.0);
+  }
+
+  // Test sound speed formula: a = sqrt(gamma * R * T)
+  void testC172xSoundSpeedFormula() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double T = atm->GetTemperature(5000.0);
+    double a = atm->GetSoundSpeed(5000.0);
+
+    // a = sqrt(gamma * R * T) where gamma = 1.4
+    double a_calculated = sqrt(gama * R * T);
+
+    TS_ASSERT_DELTA(a, a_calculated, epsilon);
+  }
+
+  // Test atmosphere Run method returns false (no error)
+  void testC172xAtmosphereRun() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // Run should return false (no error)
+    bool result = atm->Run(false);
+    TS_ASSERT_EQUALS(result, false);
+  }
+
+  // Test atmosphere values at high altitude
+  void testC172xHighAltitudeValues() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // At 35000 ft (typical cruise altitude for jets)
+    double T = atm->GetTemperature(35000.0);
+    double P = atm->GetPressure(35000.0);
+    double rho = atm->GetDensity(35000.0);
+
+    // Values should still be positive
+    TS_ASSERT(T > 0.0);
+    TS_ASSERT(P > 0.0);
+    TS_ASSERT(rho > 0.0);
+
+    // Temperature at 35000 ft should be much lower than SL
+    TS_ASSERT(T < atm->GetTemperatureSL());
+
+    // Pressure and density should be much lower than SL
+    TS_ASSERT(P < atm->GetPressureSL() * 0.5);
+    TS_ASSERT(rho < atm->GetDensitySL() * 0.5);
+  }
+
+  // Test atmosphere values at negative altitude (below sea level)
+  void testC172xBelowSeaLevel() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    // Dead Sea is about -1400 ft below sea level
+    double T = atm->GetTemperature(-1000.0);
+    double P = atm->GetPressure(-1000.0);
+    double rho = atm->GetDensity(-1000.0);
+
+    // Values should be positive and higher than SL
+    TS_ASSERT(T > 0.0);
+    TS_ASSERT(P > 0.0);
+    TS_ASSERT(rho > 0.0);
+
+    // Temperature, pressure, and density should be higher than SL
+    TS_ASSERT(T > atm->GetTemperatureSL());
+    TS_ASSERT(P > atm->GetPressureSL());
+    TS_ASSERT(rho > atm->GetDensitySL());
+  }
+
+  // Test atmosphere properties are accessible via property manager
+  void testC172xAtmosphereProperties() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+    auto atm = fdm.GetAtmosphere();
+
+    // Check that atmosphere properties exist and match
+    auto T_node = pm->GetNode("atmosphere/T-R");
+    auto P_node = pm->GetNode("atmosphere/P-psf");
+    auto rho_node = pm->GetNode("atmosphere/rho-slugs_ft3");
+
+    TS_ASSERT(T_node != nullptr);
+    TS_ASSERT(P_node != nullptr);
+    TS_ASSERT(rho_node != nullptr);
+
+    if (T_node) {
+      TS_ASSERT_DELTA(T_node->getDoubleValue(), atm->GetTemperature(), epsilon);
+    }
+    if (P_node) {
+      TS_ASSERT_DELTA(P_node->getDoubleValue(), atm->GetPressure(), epsilon);
+    }
+    if (rho_node) {
+      TS_ASSERT_DELTA(rho_node->getDoubleValue(), atm->GetDensity(), epsilon);
+    }
+  }
+
+  // Test multiple altitude samples for monotonic behavior
+  void testC172xMonotonicBehavior() {
+    FGFDMExec fdm;
+    fdm.LoadModel("c172x");
+    fdm.RunIC();
+
+    auto atm = fdm.GetAtmosphere();
+
+    double prev_P = atm->GetPressure(0.0);
+    double prev_rho = atm->GetDensity(0.0);
+
+    // Check that pressure and density monotonically decrease up to 30000 ft
+    for (double h = 1000.0; h <= 30000.0; h += 1000.0) {
+      double P = atm->GetPressure(h);
+      double rho = atm->GetDensity(h);
+
+      TS_ASSERT(P < prev_P);
+      TS_ASSERT(rho < prev_rho);
+      TS_ASSERT(P > 0.0);
+      TS_ASSERT(rho > 0.0);
+
+      prev_P = P;
+      prev_rho = rho;
+    }
+  }
 };
