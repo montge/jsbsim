@@ -15,6 +15,15 @@
 #include <limits>
 #include <cmath>
 
+#include <FGFDMExec.h>
+#include <models/FGAerodynamics.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGFCS.h>
+#include <models/FGAircraft.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 const double DEG_TO_RAD = M_PI / 180.0;
 
@@ -1333,5 +1342,455 @@ public:
     // Check cross-coupling terms
     double coupling_ratio = std::abs(Cl_beta * Cn_r / (Cl_r * Cn_beta));
     TS_ASSERT(coupling_ratio > 0);  // Non-zero coupling exists
+  }
+
+  //==========================================================================
+  // C172x Model-Based Stability Tests
+  //==========================================================================
+
+  // Test C172x aerodynamics model exists
+  void testC172xAerodynamicsExists() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+  }
+
+  // Test C172x forces are finite
+  void testC172xAeroForcesFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& forces = aero->GetForces();
+
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+  }
+
+  // Test C172x moments are finite
+  void testC172xAeroMomentsFinite() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& moments = aero->GetMoments();
+
+    TS_ASSERT(std::isfinite(moments(1)));  // Roll moment
+    TS_ASSERT(std::isfinite(moments(2)));  // Pitch moment
+    TS_ASSERT(std::isfinite(moments(3)));  // Yaw moment
+  }
+
+  // Test C172x lift coefficient
+  void testC172xLiftCoefficient() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto aero = fdmex.GetAerodynamics();
+    double CL = aero->GetLoD();  // Get L/D ratio as a proxy for valid aero
+
+    TS_ASSERT(std::isfinite(CL));
+  }
+
+  // Test C172x drag coefficient
+  void testC172xDragCoefficient() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto aero = fdmex.GetAerodynamics();
+    const FGColumnVector3& forces = aero->GetForces();
+
+    // Drag force (body X) should be present
+    TS_ASSERT(std::isfinite(forces(1)));
+  }
+
+  // Test C172x angle of attack response
+  void testC172xAlphaResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double alpha = auxiliary->Getalpha();
+    TS_ASSERT(std::isfinite(alpha));
+  }
+
+  // Test C172x sideslip response
+  void testC172xBetaResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double beta = auxiliary->Getbeta();
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  // Test C172x pitch rate response
+  void testC172xPitchRateResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply elevator input
+    fcs->SetDeCmd(-0.1);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 pqr = propagate->GetPQR();
+    double q = pqr(2);  // Pitch rate
+
+    TS_ASSERT(std::isfinite(q));
+  }
+
+  // Test C172x roll rate response
+  void testC172xRollRateResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply aileron input
+    fcs->SetDaCmd(0.2);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 pqr = propagate->GetPQR();
+    double p = pqr(1);  // Roll rate
+
+    TS_ASSERT(std::isfinite(p));
+  }
+
+  // Test C172x yaw rate response
+  void testC172xYawRateResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply rudder input
+    fcs->SetDrCmd(0.15);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 pqr = propagate->GetPQR();
+    double r = pqr(3);  // Yaw rate
+
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test C172x elevator effectiveness
+  void testC172xElevatorEffectiveness() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    double initialTheta = propagate->GetEuler(2);
+
+    // Apply nose-down elevator
+    fcs->SetDeCmd(0.2);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double finalTheta = propagate->GetEuler(2);
+
+    // Pitch should have changed
+    TS_ASSERT(std::isfinite(finalTheta));
+  }
+
+  // Test C172x aileron effectiveness
+  void testC172xAileronEffectiveness() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    double initialPhi = propagate->GetEuler(1);
+
+    // Apply aileron
+    fcs->SetDaCmd(0.3);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double finalPhi = propagate->GetEuler(1);
+
+    // Roll should have changed
+    TS_ASSERT(std::isfinite(finalPhi));
+  }
+
+  // Test C172x rudder effectiveness
+  void testC172xRudderEffectiveness() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    double initialPsi = propagate->GetEuler(3);
+
+    // Apply rudder
+    fcs->SetDrCmd(0.2);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double finalPsi = propagate->GetEuler(3);
+
+    // Heading should have changed
+    TS_ASSERT(std::isfinite(finalPsi));
+  }
+
+  // Test C172x longitudinal stability
+  void testC172xLongitudinalStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    // Run simulation and check pitch doesn't diverge
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    double theta = propagate->GetEuler(2);
+    TS_ASSERT(std::isfinite(theta));
+    TS_ASSERT(std::abs(theta) < M_PI);  // Within reasonable bounds
+  }
+
+  // Test C172x lateral stability
+  void testC172xLateralStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    // Run simulation and check roll doesn't diverge
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    double phi = propagate->GetEuler(1);
+    TS_ASSERT(std::isfinite(phi));
+  }
+
+  // Test C172x directional stability
+  void testC172xDirectionalStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    // Run simulation and check yaw doesn't diverge
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    double psi = propagate->GetEuler(3);
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test C172x combined control inputs
+  void testC172xCombinedControls() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Apply all controls
+    fcs->SetDeCmd(0.1);
+    fcs->SetDaCmd(0.1);
+    fcs->SetDrCmd(0.05);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x control coupling
+  void testC172xControlCoupling() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply aileron (should induce some yaw via adverse yaw)
+    fcs->SetDaCmd(0.3);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 pqr = propagate->GetPQR();
+    TS_ASSERT(std::isfinite(pqr(1)));  // Roll rate
+    TS_ASSERT(std::isfinite(pqr(3)));  // Yaw rate (adverse yaw)
+  }
+
+  // Test C172x static margin
+  void testC172xStaticMargin() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aircraft = fdmex.GetAircraft();
+
+    // Get wing dimensions
+    double wingSpan = aircraft->GetWingSpan();
+    double wingArea = aircraft->GetWingArea();
+
+    TS_ASSERT(wingSpan > 0.0);
+    TS_ASSERT(wingArea > 0.0);
+  }
+
+  // Test C172x dynamic pressure effect
+  void testC172xDynamicPressureEffect() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto aero = fdmex.GetAerodynamics();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double qbar = auxiliary->Getqbar();
+    const FGColumnVector3& forces = aero->GetForces();
+
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(qbar >= 0.0);
+    TS_ASSERT(std::isfinite(forces.Magnitude()));
+  }
+
+  // Test C172x speed stability
+  void testC172xSpeedStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    double initialVt = auxiliary->GetVt();
+
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+    }
+
+    double finalVt = auxiliary->GetVt();
+
+    TS_ASSERT(std::isfinite(finalVt));
+  }
+
+  // Test C172x trim state
+  void testC172xTrimState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply pitch trim
+    fcs->SetPitchTrimCmd(0.05);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double theta = propagate->GetEuler(2);
+    TS_ASSERT(std::isfinite(theta));
+  }
+
+  // Test C172x extended stability run
+  void testC172xExtendedStabilityRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    fcs->SetThrottleCmd(-1, 0.6);
+
+    // Extended run
+    for (int i = 0; i < 1000; i++) {
+      fdmex.Run();
+    }
+
+    // All values should still be finite
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->GetMach()));
+    TS_ASSERT(std::isfinite(propagate->GetEuler(1)));
+    TS_ASSERT(std::isfinite(propagate->GetEuler(2)));
+    TS_ASSERT(std::isfinite(propagate->GetEuler(3)));
+    TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
   }
 };

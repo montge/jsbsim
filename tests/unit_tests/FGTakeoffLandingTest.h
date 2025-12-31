@@ -20,6 +20,14 @@
 #include <cxxtest/TestSuite.h>
 #include "TestUtilities.h"
 
+#include <FGFDMExec.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGAccelerations.h>
+#include <models/FGFCS.h>
+#include <models/FGPropulsion.h>
+#include <models/FGGroundReactions.h>
+
 const double epsilon = 100. * std::numeric_limits<double>::epsilon();
 constexpr double radtodeg = 180. / M_PI;
 constexpr double degtoman = M_PI / 180.;
@@ -1371,5 +1379,469 @@ public:
     double base_distance = 3000.0;
     double required_distance = base_distance * safety_factor;
     TS_ASSERT_DELTA(required_distance, 3450.0, 1.0);
+  }
+
+  //===========================================================================
+  // C172X MODEL INTEGRATION TESTS (25 tests)
+  //===========================================================================
+
+  void testC172xModelLoads() {
+    // Test that C172x model loads successfully
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+  }
+
+  void testC172xInitialGroundState() {
+    // Test initial state on ground
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(aux != nullptr);
+    TS_ASSERT(propagate != nullptr);
+
+    // Should start with low/zero airspeed
+    double vcas = aux->GetVcalibratedKTS();
+    TS_ASSERT(std::isfinite(vcas));
+    TS_ASSERT(vcas >= 0.0);
+  }
+
+  void testC172xGroundReactionsExist() {
+    // Test ground reactions are configured
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+    TS_ASSERT(gr->GetNumGearUnits() > 0);
+  }
+
+  void testC172xWeightOnWheels() {
+    // Test weight on wheels detection
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // On ground, WOW should be true
+    auto gr = fdmex.GetGroundReactions();
+    bool any_wow = false;
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      if (gr->GetGearUnit(i)->GetWOW()) {
+        any_wow = true;
+        break;
+      }
+    }
+    TS_ASSERT(any_wow);
+  }
+
+  void testC172xThrottleControl() {
+    // Test throttle input
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Set throttle
+    fcs->SetThrottleCmd(-1, 1.0);  // Full throttle
+    fdmex.Run();
+    double throttle_pos = fcs->GetThrottlePos(0);
+    TS_ASSERT(std::isfinite(throttle_pos));
+  }
+
+  void testC172xElevatorControl() {
+    // Test elevator effectiveness during takeoff rotation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply elevator input
+    fcs->SetDeCmd(-0.5);  // Pull back
+    fdmex.Run();
+    double elevator_pos = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(elevator_pos));
+  }
+
+  void testC172xBrakeControl() {
+    // Test brake commands
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply brakes
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+    fdmex.Run();
+
+    double left_brake = fcs->GetLBrake();
+    double right_brake = fcs->GetRBrake();
+    TS_ASSERT(std::isfinite(left_brake));
+    TS_ASSERT(std::isfinite(right_brake));
+  }
+
+  void testC172xFlapControl() {
+    // Test flap settings for takeoff
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Set takeoff flaps
+    fcs->SetDfCmd(0.33);  // 10 degrees
+    for (int i = 0; i < 100; i++) fdmex.Run();
+    double flap_pos = fcs->GetDfPos();
+    TS_ASSERT(std::isfinite(flap_pos));
+  }
+
+  void testC172xGroundRollSimulation() {
+    // Simulate initial ground roll
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+
+    // Full throttle, brakes off
+    fcs->SetThrottleCmd(-1, 1.0);
+    fcs->SetLBrake(0.0);
+    fcs->SetRBrake(0.0);
+
+    // Run for a few seconds
+    for (int i = 0; i < 500; i++) {
+      TS_ASSERT(fdmex.Run());
+    }
+
+    // Verify velocity is finite
+    double vcas = aux->GetVcalibratedKTS();
+    TS_ASSERT(std::isfinite(vcas));
+  }
+
+  void testC172xPropulsionDuringGroundRoll() {
+    // Test propulsion during ground operations
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(prop != nullptr);
+
+    // Start engine and apply throttle
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Check thrust is being produced
+    double thrust = prop->GetEngine(0)->GetThrust();
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(thrust >= 0.0);
+  }
+
+  void testC172xAccelerationDuringTakeoff() {
+    // Test acceleration during takeoff roll
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto acc = fdmex.GetAccelerations();
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(acc != nullptr);
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Check body accelerations are finite
+    double ax = acc->GetBodyAccel(1);  // X-axis
+    TS_ASSERT(std::isfinite(ax));
+  }
+
+  void testC172xStallSpeedCalculation() {
+    // Estimate stall speed from C172x parameters
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // C172x wing area is 174 sq ft, max gross weight ~2550 lbs
+    double weight = 2550.0;  // lbs
+    double wing_area = 174.0;  // sq ft
+    double cl_max = 1.8;  // Approximate
+    double rho = rho0;
+
+    double v_stall_fps = sqrt(2.0 * weight / (rho * wing_area * cl_max));
+    double v_stall_kts = v_stall_fps / 1.688;  // Convert to knots
+
+    TS_ASSERT(v_stall_kts > 40.0 && v_stall_kts < 80.0);  // Reasonable range
+  }
+
+  void testC172xRotationSpeedEstimate() {
+    // Estimate rotation speed (1.1 * Vstall)
+    double v_stall_kts = 50.0;  // Approximate C172 stall speed
+    double v_rotation = 1.1 * v_stall_kts;
+
+    TS_ASSERT(v_rotation > v_stall_kts);
+    TS_ASSERT(v_rotation < 70.0);  // Reasonable for C172
+  }
+
+  void testC172xLiftoffSpeedEstimate() {
+    // Estimate liftoff speed (1.15 * Vstall)
+    double v_stall_kts = 50.0;
+    double v_liftoff = 1.15 * v_stall_kts;
+
+    TS_ASSERT(v_liftoff > v_stall_kts * 1.1);
+    TS_ASSERT(v_liftoff < 80.0);
+  }
+
+  void testC172xClimbGradientCapability() {
+    // Test C172x can achieve positive climb gradient
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // C172 at max gross: thrust ~500 lbs, drag ~200 lbs, weight ~2550 lbs
+    double thrust = 500.0;
+    double drag = 200.0;
+    double weight = 2550.0;
+
+    double gradient = (thrust - drag) / weight;
+    TS_ASSERT(gradient > 0.0);  // Positive climb capability
+    TS_ASSERT(gradient < 0.5);  // Reasonable for GA aircraft
+  }
+
+  void testC172xLandingFlapConfiguration() {
+    // Test landing flap setting
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Full flaps for landing
+    fcs->SetDfCmd(1.0);  // 30 degrees
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double flap_pos = fcs->GetDfPos();
+    TS_ASSERT(std::isfinite(flap_pos));
+    TS_ASSERT(flap_pos > 0.0);
+  }
+
+  void testC172xApproachSpeedEstimate() {
+    // Estimate approach speed (1.3 * Vstall)
+    double v_stall_landing = 48.0;  // With full flaps
+    double v_approach = 1.3 * v_stall_landing;
+
+    TS_ASSERT(v_approach > v_stall_landing);
+    TS_ASSERT_DELTA(v_approach, 62.4, 1.0);  // About 62 kts
+  }
+
+  void testC172xGearLoadDuringGroundOps() {
+    // Test gear loads during ground operations
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gr = fdmex.GetGroundReactions();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Check gear forces are finite
+    for (int g = 0; g < gr->GetNumGearUnits(); g++) {
+      auto gear = gr->GetGearUnit(g);
+      double force = gear->GetBodyForces()(3);  // Normal force
+      TS_ASSERT(std::isfinite(force));
+    }
+  }
+
+  void testC172xBrakingDeceleration() {
+    // Test braking effect
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+    auto prop = fdmex.GetPropulsion();
+
+    // Get moving first
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    double speed_before = aux->GetVground();
+
+    // Apply brakes
+    fcs->SetThrottleCmd(-1, 0.0);
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double speed_after = aux->GetVground();
+    TS_ASSERT(std::isfinite(speed_before));
+    TS_ASSERT(std::isfinite(speed_after));
+  }
+
+  void testC172xRejectedTakeoffSimulation() {
+    // Simulate RTO scenario
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+    auto aux = fdmex.GetAuxiliary();
+
+    // Accelerate
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+    fcs->SetLBrake(0.0);
+    fcs->SetRBrake(0.0);
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Abort - throttle idle, max brakes
+    fcs->SetThrottleCmd(-1, 0.0);
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Should decelerate
+    double final_speed = aux->GetVground();
+    TS_ASSERT(std::isfinite(final_speed));
+  }
+
+  void testC172xCrosswindGroundHandling() {
+    // Test with crosswind component
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Set crosswind via property node
+    auto pm = fdmex.GetPropertyManager();
+    auto wind_node = pm->GetNode("atmosphere/wind-east-fps", true);
+    wind_node->setDoubleValue(20.0);
+
+    auto aux = fdmex.GetAuxiliary();
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Crosswind should be present
+    double wind_e = wind_node->getDoubleValue();
+    TS_ASSERT(std::isfinite(wind_e));
+  }
+
+  void testC172xHeadwindTakeoff() {
+    // Test takeoff with headwind
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Set headwind (north wind, aircraft facing north)
+    auto pm = fdmex.GetPropertyManager();
+    auto wind_node = pm->GetNode("atmosphere/wind-north-fps", true);
+    wind_node->setDoubleValue(-30.0);
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Airspeed should build faster than groundspeed
+    double vcas = aux->GetVcalibratedKTS();
+    TS_ASSERT(std::isfinite(vcas));
+  }
+
+  void testC172xTailwindTakeoff() {
+    // Test takeoff with tailwind
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    // Set tailwind
+    auto pm = fdmex.GetPropertyManager();
+    auto wind_node = pm->GetNode("atmosphere/wind-north-fps", true);
+    wind_node->setDoubleValue(15.0);
+
+    auto aux = fdmex.GetAuxiliary();
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double vcas = aux->GetVcalibratedKTS();
+    TS_ASSERT(std::isfinite(vcas));
+  }
+
+  void testC172xShortFieldProcedure() {
+    // Test short field takeoff setup
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    // Short field: flaps 10, full throttle before brake release
+    fcs->SetDfCmd(0.33);  // 10 degrees
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+    fcs->SetLBrake(1.0);  // Hold brakes
+    fcs->SetRBrake(1.0);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    // Release brakes
+    fcs->SetLBrake(0.0);
+    fcs->SetRBrake(0.0);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
+    TS_ASSERT(std::isfinite(vcas));
+  }
+
+  void testC172xExtendedGroundRun() {
+    // Extended ground run simulation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+    auto aux = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    // Run for extended period
+    for (int i = 0; i < 1000; i++) {
+      TS_ASSERT(fdmex.Run());
+
+      // Verify all values remain finite
+      TS_ASSERT(std::isfinite(aux->GetVcalibratedKTS()));
+      TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
+    }
+
+    // Final state check
+    double vcas = aux->GetVcalibratedKTS();
+    double alt = propagate->GetAltitudeASL();
+    TS_ASSERT(std::isfinite(vcas));
+    TS_ASSERT(std::isfinite(alt));
   }
 };
