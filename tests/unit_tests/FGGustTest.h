@@ -21,8 +21,15 @@
 #include <cxxtest/TestSuite.h>
 #include <limits>
 #include <cmath>
+
+#include <FGFDMExec.h>
+#include <models/atmosphere/FGWinds.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGAccelerations.h>
 #include "TestUtilities.h"
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 const double PI = 3.14159265358979323846;
@@ -1439,5 +1446,383 @@ public:
     // Verify individual components unchanged
     double gust_w_verify = (Ude_w / 2.0) * (1.0 - std::cos(PI * s / H));
     TS_ASSERT_DELTA(gust_w, gust_w_verify, DEFAULT_TOLERANCE);
+  }
+
+  //==========================================================================
+  // C172x Model-Based Gust Tests
+  //==========================================================================
+
+  // Test C172x gust NED setting
+  void testC172xGustNED() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(5.0, 3.0, 2.0);
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), 5.0, 0.001);
+    TS_ASSERT_DELTA(gust(2), 3.0, 0.001);
+    TS_ASSERT_DELTA(gust(3), 2.0, 0.001);
+  }
+
+  // Test C172x gust effect on simulation
+  void testC172xGustEffect() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Apply gust
+    winds->SetGustNED(10.0, 0.0, 5.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Airspeed and angles should still be finite
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+  }
+
+  // Test C172x vertical gust
+  void testC172xVerticalGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Apply vertical gust (positive down)
+    winds->SetGustNED(0.0, 0.0, 10.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(3), 10.0, 0.001);
+  }
+
+  // Test C172x horizontal gust
+  void testC172xHorizontalGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Apply horizontal gust (north)
+    winds->SetGustNED(15.0, 0.0, 0.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), 15.0, 0.001);
+  }
+
+  // Test C172x lateral gust
+  void testC172xLateralGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Apply lateral gust (east)
+    winds->SetGustNED(0.0, 12.0, 0.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(2), 12.0, 0.001);
+  }
+
+  // Test C172x combined gust
+  void testC172xCombinedGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Apply combined gust
+    winds->SetGustNED(8.0, 6.0, 4.0);
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    double magnitude = gust.Magnitude();
+
+    TS_ASSERT(magnitude > 0.0);
+    TS_ASSERT(std::isfinite(magnitude));
+  }
+
+  // Test C172x gust magnitude
+  void testC172xGustMagnitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(3.0, 4.0, 0.0);
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    double magnitude = gust.Magnitude();
+
+    // 3-4-5 triangle
+    TS_ASSERT_DELTA(magnitude, 5.0, 0.001);
+  }
+
+  // Test C172x gust with wind
+  void testC172xGustWithWind() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Set steady wind
+    winds->SetWindNED(10.0, 5.0, 0.0);
+
+    // Add gust
+    winds->SetGustNED(5.0, 2.0, 3.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Values should still be valid
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+  }
+
+  // Test C172x zero gust
+  void testC172xZeroGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(0.0, 0.0, 0.0);
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), 0.0, 0.001);
+    TS_ASSERT_DELTA(gust(2), 0.0, 0.001);
+    TS_ASSERT_DELTA(gust(3), 0.0, 0.001);
+  }
+
+  // Test C172x gust acceleration response
+  void testC172xGustAccelerationResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto accel = fdmex.GetAccelerations();
+
+    // Apply significant gust
+    winds->SetGustNED(20.0, 0.0, 10.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    TS_ASSERT(std::isfinite(bodyAccel(1)));
+    TS_ASSERT(std::isfinite(bodyAccel(2)));
+    TS_ASSERT(std::isfinite(bodyAccel(3)));
+  }
+
+  // Test C172x gust stability
+  void testC172xGustStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply moderate gust
+    winds->SetGustNED(10.0, 5.0, 5.0);
+
+    // Run extended simulation
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    // Simulation should remain stable
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
+    TS_ASSERT(std::isfinite(propagate->GetLatitudeDeg()));
+  }
+
+  // Test C172x gust modification
+  void testC172xGustModification() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Set initial gust
+    winds->SetGustNED(5.0, 5.0, 5.0);
+
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    // Modify gust
+    winds->SetGustNED(10.0, 10.0, 10.0);
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), 10.0, 0.001);
+    TS_ASSERT_DELTA(gust(2), 10.0, 0.001);
+    TS_ASSERT_DELTA(gust(3), 10.0, 0.001);
+  }
+
+  // Test C172x negative gust
+  void testC172xNegativeGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(-10.0, -5.0, -3.0);
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), -10.0, 0.001);
+    TS_ASSERT_DELTA(gust(2), -5.0, 0.001);
+    TS_ASSERT_DELTA(gust(3), -3.0, 0.001);
+  }
+
+  // Test C172x large gust
+  void testC172xLargeGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Apply large gust
+    winds->SetGustNED(50.0, 30.0, 20.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Values should still be finite (even if unrealistic)
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+  }
+
+  // Test C172x updraft gust
+  void testC172xUpdraftGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Apply updraft (negative down)
+    winds->SetGustNED(0.0, 0.0, -15.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(3), -15.0, 0.001);
+  }
+
+  // Test C172x downdraft gust
+  void testC172xDowndraftGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Apply downdraft (positive down)
+    winds->SetGustNED(0.0, 0.0, 15.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(3), 15.0, 0.001);
+  }
+
+  // Test C172x headwind gust
+  void testC172xHeadwindGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Apply headwind gust (from north while facing north)
+    winds->SetGustNED(-20.0, 0.0, 0.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x crosswind gust
+  void testC172xCrosswindGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Apply crosswind gust
+    winds->SetGustNED(0.0, 25.0, 0.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+  }
+
+  // Test C172x gust direction persistence
+  void testC172xGustDirectionPersistence() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetGustNED(10.0, 5.0, 2.0);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Gust should still be set
+    FGColumnVector3 gust = winds->GetGustNED();
+    TS_ASSERT_DELTA(gust(1), 10.0, 0.001);
+    TS_ASSERT_DELTA(gust(2), 5.0, 0.001);
+    TS_ASSERT_DELTA(gust(3), 2.0, 0.001);
   }
 };

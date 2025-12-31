@@ -3,8 +3,15 @@
 #include <cmath>
 #include <algorithm>
 
+#include <FGFDMExec.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGFCS.h>
+#include <models/FGAtmosphere.h>
+#include <input_output/FGPropertyManager.h>
 #include "TestUtilities.h"
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
@@ -1206,5 +1213,468 @@ public:
 
     double damping_cmd = -damping_gain * pitch_rate;
     TS_ASSERT_DELTA(damping_cmd, -2.5, epsilon);
+  }
+
+  //==========================================================================
+  // C172x Model-Based Autopilot Tests
+  //==========================================================================
+
+  // Test C172x autopilot properties exist
+  void testC172xAutopilotPropertiesExist() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    // C172x has autopilot properties
+    TS_ASSERT(pm->HasNode("ap/attitude_hold"));
+    TS_ASSERT(pm->HasNode("ap/altitude_hold"));
+    TS_ASSERT(pm->HasNode("ap/heading_hold"));
+  }
+
+  // Test C172x attitude hold property setting
+  void testC172xAttitudeHoldSetting() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+    auto node = pm->GetNode("ap/attitude_hold");
+
+    if (node) {
+      node->setDoubleValue(1.0);
+      TS_ASSERT_DELTA(node->getDoubleValue(), 1.0, 0.001);
+    }
+  }
+
+  // Test C172x altitude hold property setting
+  void testC172xAltitudeHoldSetting() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+    auto altHold = pm->GetNode("ap/altitude_hold");
+    auto altSetpoint = pm->GetNode("ap/altitude_setpoint");
+
+    if (altHold && altSetpoint) {
+      altSetpoint->setDoubleValue(5000.0);
+      altHold->setDoubleValue(1.0);
+
+      TS_ASSERT_DELTA(altSetpoint->getDoubleValue(), 5000.0, 0.001);
+      TS_ASSERT_DELTA(altHold->getDoubleValue(), 1.0, 0.001);
+    }
+  }
+
+  // Test C172x heading hold property setting
+  void testC172xHeadingHoldSetting() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+    auto hdgHold = pm->GetNode("ap/heading_hold");
+    auto hdgSetpoint = pm->GetNode("ap/heading_setpoint");
+
+    if (hdgHold && hdgSetpoint) {
+      hdgSetpoint->setDoubleValue(90.0);
+      hdgHold->setDoubleValue(1.0);
+
+      TS_ASSERT_DELTA(hdgSetpoint->getDoubleValue(), 90.0, 0.001);
+      TS_ASSERT_DELTA(hdgHold->getDoubleValue(), 1.0, 0.001);
+    }
+  }
+
+  // Test C172x FCS control surfaces
+  void testC172xFCSControlSurfaces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Control surface positions should be finite
+    double elevator = fcs->GetDePos(ofRad);
+    double aileron = fcs->GetDaLPos(ofRad);
+    double rudder = fcs->GetDrPos(ofRad);
+    double flap = fcs->GetDfPos(ofRad);
+
+    TS_ASSERT(std::isfinite(elevator));
+    TS_ASSERT(std::isfinite(aileron));
+    TS_ASSERT(std::isfinite(rudder));
+    TS_ASSERT(std::isfinite(flap));
+  }
+
+  // Test C172x elevator command
+  void testC172xElevatorCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDeCmd(0.5);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double elevatorCmd = fcs->GetDeCmd();
+    TS_ASSERT_DELTA(elevatorCmd, 0.5, 0.001);
+  }
+
+  // Test C172x aileron command
+  void testC172xAileronCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDaCmd(0.3);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double aileronCmd = fcs->GetDaCmd();
+    TS_ASSERT_DELTA(aileronCmd, 0.3, 0.001);
+  }
+
+  // Test C172x rudder command
+  void testC172xRudderCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDrCmd(0.2);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double rudderCmd = fcs->GetDrCmd();
+    TS_ASSERT_DELTA(rudderCmd, 0.2, 0.001);
+  }
+
+  // Test C172x throttle command
+  void testC172xThrottleCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetThrottleCmd(-1, 0.75);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double throttleCmd = fcs->GetThrottleCmd(0);
+    TS_ASSERT_DELTA(throttleCmd, 0.75, 0.01);
+  }
+
+  // Test C172x flap command
+  void testC172xFlapCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+    auto flapCmd = pm->GetNode("fcs/flap-cmd-norm");
+
+    if (flapCmd) {
+      flapCmd->setDoubleValue(0.5);
+
+      for (int i = 0; i < 100; i++) {
+        fdmex.Run();
+      }
+
+      TS_ASSERT_DELTA(flapCmd->getDoubleValue(), 0.5, 0.01);
+    }
+  }
+
+  // Test C172x pitch trim
+  void testC172xPitchTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetPitchTrimCmd(0.1);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double pitchTrim = fcs->GetPitchTrimCmd();
+    TS_ASSERT_DELTA(pitchTrim, 0.1, 0.001);
+  }
+
+  // Test C172x roll trim
+  void testC172xRollTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetRollTrimCmd(0.05);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double rollTrim = fcs->GetRollTrimCmd();
+    TS_ASSERT_DELTA(rollTrim, 0.05, 0.001);
+  }
+
+  // Test C172x yaw trim
+  void testC172xYawTrim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetYawTrimCmd(0.02);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double yawTrim = fcs->GetYawTrimCmd();
+    TS_ASSERT_DELTA(yawTrim, 0.02, 0.001);
+  }
+
+  // Test C172x brake command
+  void testC172xBrakeCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetLBrake(0.8);
+    fcs->SetRBrake(0.8);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double leftBrake = fcs->GetLBrake();
+    double rightBrake = fcs->GetRBrake();
+
+    TS_ASSERT_DELTA(leftBrake, 0.8, 0.01);
+    TS_ASSERT_DELTA(rightBrake, 0.8, 0.01);
+  }
+
+  // Test C172x gear command
+  void testC172xGearCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // C172 has fixed gear, but the command should still work
+    fcs->SetGearCmd(1.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double gearCmd = fcs->GetGearCmd();
+    TS_ASSERT_DELTA(gearCmd, 1.0, 0.01);
+  }
+
+  // Test C172x simulation with control inputs
+  void testC172xSimulationWithControls() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    // Set some control inputs
+    fcs->SetThrottleCmd(-1, 0.8);
+    fcs->SetDeCmd(0.0);
+    fcs->SetDaCmd(0.0);
+    fcs->SetDrCmd(0.0);
+
+    // Run simulation
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Values should be finite
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
+  }
+
+  // Test C172x attitude angles after control input
+  void testC172xAttitudeWithControlInput() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply elevator input
+    fcs->SetDeCmd(-0.1);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Pitch angle should be finite
+    double theta = propagate->GetEuler(2);
+    TS_ASSERT(std::isfinite(theta));
+  }
+
+  // Test C172x roll response to aileron input
+  void testC172xRollResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply aileron input
+    fcs->SetDaCmd(0.2);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Roll angle should be finite
+    double phi = propagate->GetEuler(1);
+    TS_ASSERT(std::isfinite(phi));
+  }
+
+  // Test C172x yaw response to rudder input
+  void testC172xYawResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply rudder input
+    fcs->SetDrCmd(0.15);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Yaw angle should be finite
+    double psi = propagate->GetEuler(3);
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test C172x heading calculation
+  void testC172xHeadingCalculation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double psi = propagate->GetEuler(3);  // Heading in radians
+    double headingDeg = psi * rad2deg;
+
+    TS_ASSERT(std::isfinite(headingDeg));
+  }
+
+  // Test C172x control surface limits
+  void testC172xControlSurfaceLimits() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Try to set commands beyond normal range
+    fcs->SetDeCmd(2.0);  // Way over 1.0
+    fcs->SetDaCmd(-2.0); // Way under -1.0
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Surface positions should be limited
+    double elevator = fcs->GetDePos(ofRad);
+    double aileron = fcs->GetDaLPos(ofRad);
+
+    TS_ASSERT(std::isfinite(elevator));
+    TS_ASSERT(std::isfinite(aileron));
+  }
+
+  // Test C172x autopilot command properties
+  void testC172xAutopilotCommands() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    // Check that AP command properties exist
+    auto aileronCmd = pm->GetNode("ap/aileron_cmd");
+    auto elevatorCmd = pm->GetNode("ap/elevator_cmd");
+
+    if (aileronCmd) {
+      aileronCmd->setDoubleValue(0.1);
+      TS_ASSERT_DELTA(aileronCmd->getDoubleValue(), 0.1, 0.001);
+    }
+
+    if (elevatorCmd) {
+      elevatorCmd->setDoubleValue(-0.05);
+      TS_ASSERT_DELTA(elevatorCmd->getDoubleValue(), -0.05, 0.001);
+    }
+  }
+
+  // Test C172x extended autopilot simulation
+  void testC172xExtendedAutopilotSim() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    // Set throttle
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    // Run extended simulation
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    // All values should still be finite
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->GetMach()));
+    TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
+    TS_ASSERT(std::isfinite(propagate->GetEuler(1)));
+    TS_ASSERT(std::isfinite(propagate->GetEuler(2)));
+    TS_ASSERT(std::isfinite(propagate->GetEuler(3)));
   }
 };

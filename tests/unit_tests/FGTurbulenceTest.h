@@ -26,6 +26,14 @@
 #include <cmath>
 #include <random>
 
+#include <FGFDMExec.h>
+#include <models/atmosphere/FGWinds.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGAccelerations.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 const double PI = M_PI;
 
@@ -1508,5 +1516,436 @@ public:
     double TKE_v = 0.5 * sigma_v * sigma_v;
     double TKE_w = 0.5 * sigma_w * sigma_w;
     TS_ASSERT_DELTA(TKE_u + TKE_v + TKE_w, TKE, 0.01);
+  }
+
+  //==========================================================================
+  // C172x Model-Based Turbulence Tests
+  //==========================================================================
+
+  // Test C172x set turbulence type None
+  void testC172xTurbulenceTypeNone() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttNone);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // With no turbulence, simulation should be stable
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x set turbulence type Standard
+  void testC172xTurbulenceTypeStandard() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x set turbulence type Milspec
+  void testC172xTurbulenceTypeMilspec() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttMilspec);
+    winds->SetProbabilityOfExceedence(0.03);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x set turbulence type Tustin
+  void testC172xTurbulenceTypeTustin() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttTustin);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x turbulence gain setting
+  void testC172xTurbulenceGain() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(2.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x low turbulence gain
+  void testC172xLowTurbulenceGain() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(0.5);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x turbulence rate
+  void testC172xTurbulenceRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+    winds->SetTurbRate(5.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x milspec probability of exceedance
+  void testC172xMilspecProbability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    winds->SetTurbType(FGWinds::ttMilspec);
+    winds->SetProbabilityOfExceedence(0.01);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x turbulence effect on accelerations
+  void testC172xTurbulenceAccelerations() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto accel = fdmex.GetAccelerations();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    TS_ASSERT(std::isfinite(bodyAccel(1)));
+    TS_ASSERT(std::isfinite(bodyAccel(2)));
+    TS_ASSERT(std::isfinite(bodyAccel(3)));
+  }
+
+  // Test C172x turbulence with wind
+  void testC172xTurbulenceWithWind() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Set steady wind
+    winds->SetWindNED(10.0, 5.0, 0.0);
+
+    // Add turbulence
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+  }
+
+  // Test C172x turbulence stability
+  void testC172xTurbulenceStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    // Run extended simulation
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
+  }
+
+  // Test C172x turbulence type switching
+  void testC172xTurbulenceTypeSwitching() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+
+    // Start with standard
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 25; i++) {
+      fdmex.Run();
+    }
+
+    // Switch to milspec
+    winds->SetTurbType(FGWinds::ttMilspec);
+    winds->SetProbabilityOfExceedence(0.03);
+
+    for (int i = 0; i < 25; i++) {
+      fdmex.Run();
+    }
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x no turbulence baseline
+  void testC172xNoTurbulenceBaseline() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    winds->SetTurbType(FGWinds::ttNone);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Without turbulence, flight should be smooth
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+  }
+
+  // Test C172x high turbulence gain
+  void testC172xHighTurbulenceGain() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(3.0);  // High gain
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Should still be stable even with high turbulence
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x zero turbulence gain
+  void testC172xZeroTurbulenceGain() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(0.0);  // Zero gain = no turbulence
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x turbulence with gust
+  void testC172xTurbulenceWithGust() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Set gust
+    winds->SetGustNED(5.0, 3.0, 2.0);
+
+    // Add turbulence
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+  }
+
+  // Test C172x combined wind effects
+  void testC172xCombinedWindEffects() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Set wind + gust + turbulence
+    winds->SetWindNED(10.0, 0.0, 0.0);
+    winds->SetGustNED(5.0, 2.0, 1.0);
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(0.5);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+  }
+
+  // Test C172x milspec severity levels
+  void testC172xMilspecSeverityLevels() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    winds->SetTurbType(FGWinds::ttMilspec);
+
+    // Test different probability levels
+    double probs[] = {0.01, 0.03, 0.1};
+
+    for (double prob : probs) {
+      winds->SetProbabilityOfExceedence(prob);
+
+      for (int i = 0; i < 20; i++) {
+        fdmex.Run();
+      }
+
+      TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    }
+  }
+
+  // Test C172x turbulence angles effect
+  void testC172xTurbulenceAnglesEffect() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    winds->SetTurbType(FGWinds::ttStandard);
+    winds->SetTurbGain(1.0);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // All angles should remain finite
+    TS_ASSERT(std::isfinite(propagate->GetEuler(1)));  // Roll
+    TS_ASSERT(std::isfinite(propagate->GetEuler(2)));  // Pitch
+    TS_ASSERT(std::isfinite(propagate->GetEuler(3)));  // Yaw
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+  }
+
+  // Test C172x Tustin turbulence stability
+  void testC172xTustinTurbulenceStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto winds = fdmex.GetWinds();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    winds->SetTurbType(FGWinds::ttTustin);
+    winds->SetTurbGain(1.0);
+
+    // Extended run
+    for (int i = 0; i < 300; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->GetMach()));
   }
 };

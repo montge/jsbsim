@@ -5,8 +5,15 @@
 #include <algorithm>
 #include <deque>
 
+#include <FGFDMExec.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGFCS.h>
+#include <models/FGAtmosphere.h>
+#include <models/FGAccelerations.h>
 #include "TestUtilities.h"
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
@@ -1464,5 +1471,429 @@ public:
 
     double dutyCycle = onTime / period * 100.0;
     TS_ASSERT_DELTA(dutyCycle, 30.0, epsilon);
+  }
+
+  //==========================================================================
+  // C172x Model-Based Sensor Tests
+  //==========================================================================
+
+  // Test airspeed sensor values from C172x
+  void testC172xAirspeedSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    // Run a few iterations
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Airspeed values should be finite
+    double vt = auxiliary->GetVt();
+    double vcas = auxiliary->GetVcalibratedKTS();
+    double veas = auxiliary->GetVequivalentKTS();
+    double vtas = auxiliary->GetVtrueKTS();
+
+    TS_ASSERT(std::isfinite(vt));
+    TS_ASSERT(std::isfinite(vcas));
+    TS_ASSERT(std::isfinite(veas));
+    TS_ASSERT(std::isfinite(vtas));
+  }
+
+  // Test altitude sensor values from C172x
+  void testC172xAltitudeSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double altASL = propagate->GetAltitudeASL();
+    double altAGL = propagate->GetDistanceAGL();
+
+    TS_ASSERT(std::isfinite(altASL));
+    TS_ASSERT(std::isfinite(altAGL));
+  }
+
+  // Test attitude sensor values from C172x
+  void testC172xAttitudeSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Euler angles should be finite
+    double phi = propagate->GetEuler(1);   // Roll
+    double theta = propagate->GetEuler(2); // Pitch
+    double psi = propagate->GetEuler(3);   // Yaw
+
+    TS_ASSERT(std::isfinite(phi));
+    TS_ASSERT(std::isfinite(theta));
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test angular rate sensor values from C172x
+  void testC172xAngularRateSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Angular rates should be finite
+    FGColumnVector3 pqr = propagate->GetPQR();
+    TS_ASSERT(std::isfinite(pqr(1)));  // P (roll rate)
+    TS_ASSERT(std::isfinite(pqr(2)));  // Q (pitch rate)
+    TS_ASSERT(std::isfinite(pqr(3)));  // R (yaw rate)
+  }
+
+  // Test acceleration sensor values from C172x
+  void testC172xAccelerationSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto accel = fdmex.GetAccelerations();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 bodyAccel = accel->GetBodyAccel();
+    TS_ASSERT(std::isfinite(bodyAccel(1)));
+    TS_ASSERT(std::isfinite(bodyAccel(2)));
+    TS_ASSERT(std::isfinite(bodyAccel(3)));
+  }
+
+  // Test angle of attack sensor from C172x
+  void testC172xAOASensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double alpha = auxiliary->Getalpha();
+    double beta = auxiliary->Getbeta();
+
+    TS_ASSERT(std::isfinite(alpha));
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  // Test Mach number sensor from C172x
+  void testC172xMachSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double mach = auxiliary->GetMach();
+    TS_ASSERT(std::isfinite(mach));
+    TS_ASSERT(mach >= 0.0);
+    TS_ASSERT(mach < 1.0);  // C172 is subsonic
+  }
+
+  // Test dynamic pressure sensor from C172x
+  void testC172xDynamicPressureSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double qbar = auxiliary->Getqbar();
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(qbar >= 0.0);
+  }
+
+  // Test temperature sensor from C172x
+  void testC172xTemperatureSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto atm = fdmex.GetAtmosphere();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double temp = atm->GetTemperature();
+    double totalTemp = auxiliary->GetTotalTemperature();
+
+    TS_ASSERT(std::isfinite(temp));
+    TS_ASSERT(std::isfinite(totalTemp));
+    TS_ASSERT(temp > 0.0);  // Kelvin or Rankine
+  }
+
+  // Test pressure sensor from C172x
+  void testC172xPressureSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto atm = fdmex.GetAtmosphere();
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double pressure = atm->GetPressure();
+    double totalPressure = auxiliary->GetTotalPressure();
+
+    TS_ASSERT(std::isfinite(pressure));
+    TS_ASSERT(std::isfinite(totalPressure));
+    TS_ASSERT(pressure > 0.0);
+    TS_ASSERT(totalPressure >= pressure);
+  }
+
+  // Test heading sensor from C172x
+  void testC172xHeadingSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double psi = propagate->GetEuler(3);  // Heading
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test ground speed sensor from C172x
+  void testC172xGroundSpeedSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double groundSpeed = auxiliary->GetVground();
+    TS_ASSERT(std::isfinite(groundSpeed));
+    TS_ASSERT(groundSpeed >= 0.0);
+  }
+
+  // Test ground track sensor from C172x
+  void testC172xGroundTrackSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double groundTrack = auxiliary->GetGroundTrack();
+    TS_ASSERT(std::isfinite(groundTrack));
+  }
+
+  // Test climb rate sensor from C172x
+  void testC172xClimbRateSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 vel = propagate->GetVel();
+    double hdot = -vel(3);  // Vertical velocity (positive up)
+    TS_ASSERT(std::isfinite(hdot));
+  }
+
+  // Test G-load sensor from C172x
+  void testC172xGLoadSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double nx = auxiliary->GetNx();
+    double ny = auxiliary->GetNy();
+    double nz = auxiliary->GetNz();
+
+    TS_ASSERT(std::isfinite(nx));
+    TS_ASSERT(std::isfinite(ny));
+    TS_ASSERT(std::isfinite(nz));
+  }
+
+  // Test Reynolds number from C172x
+  void testC172xReynoldsNumber() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double Re = auxiliary->GetReynoldsNumber();
+    TS_ASSERT(std::isfinite(Re));
+    TS_ASSERT(Re >= 0.0);
+  }
+
+  // Test flight path angle from C172x
+  void testC172xFlightPathAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double gamma = auxiliary->GetGamma();
+    TS_ASSERT(std::isfinite(gamma));
+  }
+
+  // Test position sensor from C172x
+  void testC172xPositionSensor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double lat = propagate->GetLatitudeDeg();
+    double lon = propagate->GetLongitudeDeg();
+
+    TS_ASSERT(std::isfinite(lat));
+    TS_ASSERT(std::isfinite(lon));
+    TS_ASSERT(lat >= -90.0 && lat <= 90.0);
+    TS_ASSERT(lon >= -180.0 && lon <= 180.0);
+  }
+
+  // Test sensor values stability over extended run
+  void testC172xSensorStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    // Run for extended period
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    // All sensor values should still be finite
+    TS_ASSERT(std::isfinite(auxiliary->GetVt()));
+    TS_ASSERT(std::isfinite(auxiliary->GetMach()));
+    TS_ASSERT(std::isfinite(auxiliary->Getalpha()));
+    TS_ASSERT(std::isfinite(auxiliary->Getbeta()));
+    TS_ASSERT(std::isfinite(propagate->GetAltitudeASL()));
+    TS_ASSERT(std::isfinite(propagate->GetLatitudeDeg()));
+    TS_ASSERT(std::isfinite(propagate->GetLongitudeDeg()));
+  }
+
+  // Test load factor calculation from C172x
+  void testC172xLoadFactor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double nlf = auxiliary->GetNlf();
+    TS_ASSERT(std::isfinite(nlf));
+  }
+
+  // Test velocity components from C172x
+  void testC172xVelocityComponents() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    FGColumnVector3 uvw = propagate->GetUVW();
+    TS_ASSERT(std::isfinite(uvw(1)));
+    TS_ASSERT(std::isfinite(uvw(2)));
+    TS_ASSERT(std::isfinite(uvw(3)));
+  }
+
+  // Test FCS position sensors from C172x
+  void testC172xFCSPositionSensors() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double elevator = fcs->GetDePos(ofRad);
+    double aileron = fcs->GetDaLPos(ofRad);
+    double rudder = fcs->GetDrPos(ofRad);
+
+    TS_ASSERT(std::isfinite(elevator));
+    TS_ASSERT(std::isfinite(aileron));
+    TS_ASSERT(std::isfinite(rudder));
   }
 };
