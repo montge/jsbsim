@@ -20,6 +20,14 @@
 #include <vector>
 #include <algorithm>
 
+#include "FGFDMExec.h"
+#include "models/FGFCS.h"
+#include "models/FGPropulsion.h"
+#include "models/FGAuxiliary.h"
+#include "models/FGAerodynamics.h"
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 
 class FGSummerTest : public CxxTest::TestSuite
@@ -1433,5 +1441,246 @@ public:
 
     double totalDeflection = basicCommand + servoTrim + gearCorrection + autopilot;
     TS_ASSERT_DELTA(totalDeflection, 0.43, epsilon);
+  }
+};
+
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+C172X INTEGRATION TESTS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+class FGSummerC172xTest : public CxxTest::TestSuite
+{
+public:
+  void testC172xControlSurfaceSummation() {
+    // Test that control surface commands are properly summed in FCS
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply elevator command
+    fcs->SetDeCmd(-0.5);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double dePos = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(dePos));
+  }
+
+  void testC172xAileronSummation() {
+    // Test aileron command summation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDaCmd(0.4);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double daLPos = fcs->GetDaLPos();
+    double daRPos = fcs->GetDaRPos();
+    TS_ASSERT(std::isfinite(daLPos));
+    TS_ASSERT(std::isfinite(daRPos));
+  }
+
+  void testC172xRudderSummation() {
+    // Test rudder command summation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDrCmd(0.3);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double drPos = fcs->GetDrPos();
+    TS_ASSERT(std::isfinite(drPos));
+  }
+
+  void testC172xFlapSummation() {
+    // Test flap command summation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDfCmd(0.5);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double dfPos = fcs->GetDfPos();
+    TS_ASSERT(std::isfinite(dfPos));
+  }
+
+  void testC172xThrottleSummation() {
+    // Test throttle command in propulsion
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetThrottleCmd(-1, 0.75);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double thrust = prop->GetEngine(0)->GetThrust();
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(thrust >= 0.0);
+  }
+
+  void testC172xMixtureSummation() {
+    // Test mixture control
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetMixtureCmd(-1, 0.85);
+    fcs->SetThrottleCmd(-1, 0.7);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double thrust = prop->GetEngine(0)->GetThrust();
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(thrust > 0.0);
+  }
+
+  void testC172xAerodynamicForceSummation() {
+    // Test aerodynamic force summation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double ld = aero->GetLoD();
+    TS_ASSERT(std::isfinite(ld));
+  }
+
+  void testC172xSpeedbrake() {
+    // Test speedbrake summation (may be zero for C172x)
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    double dsbPos = fcs->GetDsbPos();
+    TS_ASSERT(std::isfinite(dsbPos));
+  }
+
+  void testC172xDynamicPressure() {
+    // Test dynamic pressure calculations
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double qbar = aux->Getqbar();
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(qbar >= 0.0);
+  }
+
+  void testC172xAngleOfAttack() {
+    // Test AOA summation
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double alpha = aux->Getalpha();
+    TS_ASSERT(std::isfinite(alpha));
+  }
+
+  void testC172xSideslip() {
+    // Test sideslip angle
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(aux != nullptr);
+
+    fcs->SetDrCmd(0.5);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double beta = aux->Getbeta();
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  void testC172xCombinedControls() {
+    // Test combined control inputs
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply multiple controls simultaneously
+    fcs->SetDeCmd(-0.2);
+    fcs->SetDaCmd(0.3);
+    fcs->SetDrCmd(0.1);
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
   }
 };

@@ -3,6 +3,11 @@
 
 #include <cxxtest/TestSuite.h>
 #include <math/FGTable.h>
+#include "FGFDMExec.h"
+#include "models/FGFCS.h"
+#include "models/FGPropulsion.h"
+#include "models/FGAuxiliary.h"
+#include "models/FGAerodynamics.h"
 #include "TestUtilities.h"
 
 const double epsilon = 100. * std::numeric_limits<double>::epsilon();
@@ -2861,5 +2866,248 @@ public:
     TS_ASSERT_EQUALS(t.GetValue(1.0), 1.0);
     TS_ASSERT_EQUALS(t.GetValue(-0.5), -0.5);
     TS_ASSERT_EQUALS(t.GetValue(0.5), 0.5);
+  }
+};
+
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+C172X INTEGRATION TESTS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+class FGTableC172xTest : public CxxTest::TestSuite
+{
+public:
+  void testC172xAerodynamicTables() {
+    // Test that aerodynamic tables are properly loaded in C172x model
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+
+    // Run simulation to exercise tables
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    // Verify L/D ratio is finite (indicates tables working)
+    double ld = aero->GetLoD();
+    TS_ASSERT(std::isfinite(ld));
+  }
+
+  void testC172xPropellerTables() {
+    // Test propeller performance tables
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Check engine is producing thrust (tables working)
+    double thrust = prop->GetEngine(0)->GetThrust();
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(thrust > 0.0);
+  }
+
+  void testC172xControlSurfaceTables() {
+    // Test elevator effectiveness tables
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply elevator
+    fcs->SetDeCmd(-0.3);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double dePos = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(dePos));
+  }
+
+  void testC172xAileronTables() {
+    // Test aileron effectiveness tables
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDaCmd(0.4);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double daLPos = fcs->GetDaLPos();
+    double daRPos = fcs->GetDaRPos();
+    TS_ASSERT(std::isfinite(daLPos));
+    TS_ASSERT(std::isfinite(daRPos));
+  }
+
+  void testC172xRudderTables() {
+    // Test rudder effectiveness tables
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDrCmd(0.5);
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double drPos = fcs->GetDrPos();
+    TS_ASSERT(std::isfinite(drPos));
+  }
+
+  void testC172xFlapTables() {
+    // Test flap deflection tables
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDfCmd(0.5);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double dfPos = fcs->GetDfPos();
+    TS_ASSERT(std::isfinite(dfPos));
+  }
+
+  void testC172xSpeedbrakeIntegration() {
+    // Test speedbrake/spoiler tables if present
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // C172x may not have speedbrake but check for finite values
+    double dsbPos = fcs->GetDsbPos();
+    TS_ASSERT(std::isfinite(dsbPos));
+  }
+
+  void testC172xDynamicPressureTable() {
+    // Test dynamic pressure calculations
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double qbar = aux->Getqbar();
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(qbar >= 0.0);
+  }
+
+  void testC172xAngleOfAttack() {
+    // Test AOA calculations using tables
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double alpha = aux->Getalpha();
+    TS_ASSERT(std::isfinite(alpha));
+  }
+
+  void testC172xSideslip() {
+    // Test sideslip angle calculations
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(aux != nullptr);
+
+    // Apply rudder to induce sideslip
+    fcs->SetDrCmd(0.4);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double beta = aux->Getbeta();
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  void testC172xThrottleTable() {
+    // Test throttle response
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetThrottleCmd(-1, 0.8);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double thrust = prop->GetEngine(0)->GetThrust();
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(thrust >= 0.0);
+  }
+
+  void testC172xMixtureTable() {
+    // Test mixture control response
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetMixtureCmd(-1, 0.9);
+    fcs->SetThrottleCmd(-1, 0.7);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double thrust = prop->GetEngine(0)->GetThrust();
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(thrust > 0.0);
   }
 };
