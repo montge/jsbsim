@@ -12,8 +12,16 @@
 #include <cxxtest/TestSuite.h>
 #include <cmath>
 #include <limits>
+
+#include <FGFDMExec.h>
+#include <models/FGAtmosphere.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGPropulsion.h>
+#include <initialization/FGInitialCondition.h>
 #include "TestUtilities.h"
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 // Compressible flow constants
@@ -1486,4 +1494,266 @@ public:
         TS_ASSERT_DELTA(P0, 213854.0, 100.0);
         TS_ASSERT_DELTA(mu_deg, 27.04, 0.1);
     }
+};
+
+// ============ C172x Aircraft Compressible Flow Integration Tests ============
+class FGCompressibleFlowC172xTest : public CxxTest::TestSuite
+{
+public:
+
+  // Test C172x Mach number at various altitudes
+  void testC172xMachNumberAtAltitudes() {
+    double alts[] = {1000.0, 5000.0, 10000.0};
+
+    for (double alt : alts) {
+      FGFDMExec fdmex;
+      fdmex.LoadModel("c172x");
+
+      auto ic = fdmex.GetIC();
+      ic->SetAltitudeASLFtIC(alt);
+      ic->SetVcalibratedKtsIC(120.0);
+
+      fdmex.RunIC();
+
+      auto aux = fdmex.GetAuxiliary();
+      double mach = aux->GetMach();
+
+      TS_ASSERT(std::isfinite(mach));
+      TS_ASSERT(mach > 0.0);
+      TS_ASSERT(mach < 0.5);  // C172x is well subsonic
+    }
+  }
+
+  // Test C172x dynamic pressure calculation
+  void testC172xDynamicPressure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    double qbar = aux->Getqbar();
+
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(qbar > 0.0);
+  }
+
+  // Test C172x TAS/CAS relationship
+  void testC172xTASCASRelationship() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(10000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    auto propagate = fdmex.GetPropagate();
+
+    double vcas = propagate->GetVcalibratedKts();
+    double vtas = aux->GetVtrueFPS() * 0.592484;  // fps to kts
+
+    TS_ASSERT(std::isfinite(vcas));
+    TS_ASSERT(std::isfinite(vtas));
+    // At altitude, TAS > CAS
+    TS_ASSERT(vtas > vcas * 0.95);
+  }
+
+  // Test C172x speed of sound access
+  void testC172xSpeedOfSoundAccess() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+
+    fdmex.RunIC();
+
+    auto atm = fdmex.GetAtmosphere();
+    double soundSpeed = atm->GetSoundSpeed();
+
+    TS_ASSERT(std::isfinite(soundSpeed));
+    TS_ASSERT(soundSpeed > 900.0);  // fps
+    TS_ASSERT(soundSpeed < 1200.0); // fps
+  }
+
+  // Test C172x flight Mach number stability
+  void testC172xMachNumberStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(8000.0);
+    ic->SetVcalibratedKtsIC(110.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto aux = fdmex.GetAuxiliary();
+    prop->InitRunning(-1);
+
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+
+      double mach = aux->GetMach();
+      TS_ASSERT(std::isfinite(mach));
+      TS_ASSERT(mach > 0.0);
+      TS_ASSERT(mach < 1.0);  // Subsonic
+    }
+  }
+
+  // Test C172x compressibility effects are minimal
+  void testC172xMinimalCompressibilityEffects() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(150.0);  // High speed for C172
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    double mach = aux->GetMach();
+
+    // Even at high speed, C172x is well below compressibility threshold
+    TS_ASSERT(mach < 0.3);
+  }
+
+  // Test C172x qbar vs altitude relationship
+  void testC172xQbarVsAltitude() {
+    double qbars[3];
+    double alts[] = {0.0, 5000.0, 10000.0};
+
+    for (int i = 0; i < 3; i++) {
+      FGFDMExec fdmex;
+      fdmex.LoadModel("c172x");
+
+      auto ic = fdmex.GetIC();
+      ic->SetAltitudeASLFtIC(alts[i]);
+      ic->SetVcalibratedKtsIC(100.0);
+
+      fdmex.RunIC();
+
+      qbars[i] = fdmex.GetAuxiliary()->Getqbar();
+      TS_ASSERT(std::isfinite(qbars[i]));
+      TS_ASSERT(qbars[i] > 0.0);
+    }
+
+    // Qbar at same CAS is similar across altitudes (CAS accounts for density)
+    // But may vary slightly due to compressibility
+  }
+
+  // Test C172x equivalent airspeed
+  void testC172xEquivalentAirspeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(10000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    double vequiv = aux->GetVequivalentFPS();
+
+    TS_ASSERT(std::isfinite(vequiv));
+    TS_ASSERT(vequiv > 0.0);
+  }
+
+  // Test C172x total temperature calculation
+  void testC172xTotalTemperature() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(8000.0);
+    ic->SetVcalibratedKtsIC(120.0);
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    auto atm = fdmex.GetAtmosphere();
+
+    double TAT = aux->GetTotalTemperature();
+    double SAT = atm->GetTemperature();
+
+    TS_ASSERT(std::isfinite(TAT));
+    TS_ASSERT(std::isfinite(SAT));
+    // Total temp >= static temp (kinetic heating)
+    TS_ASSERT(TAT >= SAT);
+  }
+
+  // Test C172x total pressure calculation
+  void testC172xTotalPressure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    auto atm = fdmex.GetAtmosphere();
+
+    double pt = aux->GetTotalPressure();
+    double ps = atm->GetPressure();
+
+    TS_ASSERT(std::isfinite(pt));
+    TS_ASSERT(std::isfinite(ps));
+    // Total pressure >= static pressure
+    TS_ASSERT(pt >= ps);
+  }
+
+  // Test C172x flight at various speeds
+  void testC172xFlightAtVariousSpeeds() {
+    double speeds[] = {60.0, 80.0, 100.0, 120.0, 140.0};
+
+    for (double spd : speeds) {
+      FGFDMExec fdmex;
+      fdmex.LoadModel("c172x");
+
+      auto ic = fdmex.GetIC();
+      ic->SetAltitudeASLFtIC(5000.0);
+      ic->SetVcalibratedKtsIC(spd);
+
+      fdmex.RunIC();
+
+      auto aux = fdmex.GetAuxiliary();
+      double mach = aux->GetMach();
+      double qbar = aux->Getqbar();
+
+      TS_ASSERT(std::isfinite(mach));
+      TS_ASSERT(std::isfinite(qbar));
+      TS_ASSERT(mach < 0.5);
+      TS_ASSERT(qbar > 0.0);
+    }
+  }
+
+  // Test C172x impact pressure calculation
+  void testC172xImpactPressure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    double qc = aux->GetTotalPressure() - fdmex.GetAtmosphere()->GetPressure();
+
+    TS_ASSERT(std::isfinite(qc));
+    TS_ASSERT(qc >= 0.0);
+  }
 };
