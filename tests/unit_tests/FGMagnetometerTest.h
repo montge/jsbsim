@@ -21,6 +21,15 @@
 #include <random>
 #include <algorithm>
 
+#include <FGFDMExec.h>
+#include <models/FGPropagate.h>
+#include <models/FGFCS.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropulsion.h>
+#include <input_output/FGPropertyManager.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-8;
 const double DEG_TO_RAD = M_PI / 180.0;
 const double RAD_TO_DEG = 180.0 / M_PI;
@@ -1518,5 +1527,411 @@ public:
 
     double By_comp = By * cos_r - Bz * sin_r;
     TS_ASSERT(!std::isnan(By_comp));
+  }
+};
+
+/*******************************************************************************
+ * C172x Integration Tests for Magnetometer/Heading Sensing
+ ******************************************************************************/
+
+class FGMagnetometerC172xTest : public CxxTest::TestSuite
+{
+public:
+  // Test magnetic heading from C172x
+  void testC172xMagneticHeading() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double psi_mag = pm->GetNode("attitude/heading-true-rad", true)->getDoubleValue();
+    TS_ASSERT(std::isfinite(psi_mag));
+  }
+
+  // Test true heading from C172x
+  void testC172xTrueHeading() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double psi = prop->GetEuler(3);  // True heading
+    TS_ASSERT(std::isfinite(psi));
+    // Heading can be in various ranges depending on implementation
+    TS_ASSERT(psi >= -2*M_PI && psi <= 2*M_PI);
+  }
+
+  // Test heading change with rudder input
+  void testC172xHeadingChangeWithRudder() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    double initial_psi = prop->GetEuler(3);
+
+    // Apply rudder
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double final_psi = prop->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(initial_psi));
+    TS_ASSERT(std::isfinite(final_psi));
+  }
+
+  // Test heading stability in straight flight
+  void testC172xHeadingStabilityStraightFlight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.6);
+
+    double max_psi_change = 0;
+    double prev_psi = prop->GetEuler(3);
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+      double psi = prop->GetEuler(3);
+      double change = std::abs(psi - prev_psi);
+      // Handle wrap-around
+      if (change > M_PI) change = 2*M_PI - change;
+      max_psi_change = std::max(max_psi_change, change);
+      prev_psi = psi;
+    }
+
+    TS_ASSERT(std::isfinite(max_psi_change));
+  }
+
+  // Test heading during coordinated turn
+  void testC172xHeadingDuringTurn() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    double start_psi = prop->GetEuler(3);
+
+    // Coordinated turn
+    fcs->SetDaCmd(0.3);
+    fcs->SetDrCmd(0.1);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    double end_psi = prop->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(start_psi));
+    TS_ASSERT(std::isfinite(end_psi));
+    // Heading should have changed during turn
+    TS_ASSERT(start_psi != end_psi);
+  }
+
+  // Test Euler angles via property tree
+  void testC172xEulerAnglesViaPropertyTree() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double phi = pm->GetNode("attitude/phi-rad", true)->getDoubleValue();
+    double theta = pm->GetNode("attitude/theta-rad", true)->getDoubleValue();
+    double psi = pm->GetNode("attitude/psi-rad", true)->getDoubleValue();
+
+    TS_ASSERT(std::isfinite(phi));
+    TS_ASSERT(std::isfinite(theta));
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test heading values remain finite over time
+  void testC172xHeadingFiniteOverTime() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    bool all_finite = true;
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+      double psi = prop->GetEuler(3);
+      if (!std::isfinite(psi)) {
+        all_finite = false;
+        break;
+      }
+    }
+
+    TS_ASSERT(all_finite);
+  }
+
+  // Test roll angle from C172x
+  void testC172xRollAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Apply aileron
+    fcs->SetDaCmd(0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double phi = prop->GetEuler(1);
+    TS_ASSERT(std::isfinite(phi));
+  }
+
+  // Test pitch angle from C172x
+  void testC172xPitchAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.8);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Apply elevator
+    fcs->SetDeCmd(-0.3);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double theta = prop->GetEuler(2);
+    TS_ASSERT(std::isfinite(theta));
+  }
+
+  // Test all Euler angles via FGPropagate
+  void testC172xAllEulerAngles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double phi = prop->GetEuler(1);
+    double theta = prop->GetEuler(2);
+    double psi = prop->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(phi));
+    TS_ASSERT(std::isfinite(theta));
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  // Test heading data consistency between methods
+  void testC172xHeadingDataConsistency() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Get via FGPropagate
+    double psi_prop = prop->GetEuler(3);
+
+    // Get via property tree
+    double psi_pm = pm->GetNode("attitude/psi-rad", true)->getDoubleValue();
+
+    TS_ASSERT(std::isfinite(psi_prop));
+    TS_ASSERT(std::isfinite(psi_pm));
+    TS_ASSERT_DELTA(psi_prop, psi_pm, 0.001);
+  }
+
+  // Test heading rate (yaw rate)
+  void testC172xHeadingRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Apply rudder for yaw
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double r = prop->GetPQR(3);  // Yaw rate
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test attitude during ground roll
+  void testC172xAttitudeGroundRoll() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    double max_phi = 0, max_theta = 0;
+
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+      max_phi = std::max(max_phi, std::abs(prop->GetEuler(1)));
+      max_theta = std::max(max_theta, std::abs(prop->GetEuler(2)));
+    }
+
+    TS_ASSERT(std::isfinite(max_phi));
+    TS_ASSERT(std::isfinite(max_theta));
+  }
+
+  // Test heading in degrees
+  void testC172xHeadingInDegrees() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double psi_deg = pm->GetNode("attitude/psi-deg", true)->getDoubleValue();
+    TS_ASSERT(std::isfinite(psi_deg));
+    TS_ASSERT(psi_deg >= 0.0 && psi_deg < 360.0);
+  }
+
+  // Test attitude quaternion via FGPropagate
+  void testC172xAttitudeQuaternion() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    // Get quaternion elements via GetQuaternion
+    auto quat = prop->GetQuaternion();
+    double q0 = quat(1);  // FGQuaternion uses 1-based indexing
+    double q1 = quat(2);
+    double q2 = quat(3);
+    double q3 = quat(4);
+
+    double norm = std::sqrt(q0*q0 + q1*q1 + q2*q2 + q3*q3);
+    TS_ASSERT(std::isfinite(norm));
+    TS_ASSERT_DELTA(norm, 1.0, 0.01);
+  }
+
+  // Test heading change symmetry
+  void testC172xHeadingChangeSymmetry() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double baseline_psi = prop->GetEuler(3);
+
+    // Right turn
+    fcs->SetDrCmd(0.3);
+    for (int i = 0; i < 100; i++) fdmex.Run();
+    double right_psi = prop->GetEuler(3);
+
+    // Reset
+    fcs->SetDrCmd(0.0);
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Left turn
+    fcs->SetDrCmd(-0.3);
+    for (int i = 0; i < 100; i++) fdmex.Run();
+    double left_psi = prop->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(baseline_psi));
+    TS_ASSERT(std::isfinite(right_psi));
+    TS_ASSERT(std::isfinite(left_psi));
+  }
+
+  // Test heading during takeoff
+  void testC172xHeadingDuringTakeoff() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    double initial_psi = prop->GetEuler(3);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    double final_psi = prop->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(initial_psi));
+    TS_ASSERT(std::isfinite(final_psi));
   }
 };

@@ -5,7 +5,13 @@
 
 #include "TestUtilities.h"
 
+#include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropulsion.h>
+
 using namespace JSBSimTest;
+using namespace JSBSim;
 
 const double epsilon = 1e-8;
 
@@ -1516,5 +1522,361 @@ public:
 
     TS_ASSERT_DELTA(C1_1, 10.0, 0.1);
     TS_ASSERT_DELTA(C1_2, 2.0, 0.1);
+  }
+
+  //===========================================================================
+  // C172X MODEL INTEGRATION TESTS (20 tests)
+  //===========================================================================
+
+  void testC172xFilterModelLoads() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+  }
+
+  void testC172xFCSExists() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+  }
+
+  void testC172xElevatorResponseFiltered() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Apply step input
+    fcs->SetDeCmd(0.5);
+
+    // Run several frames
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    // Elevator position should be finite
+    double de = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(de));
+  }
+
+  void testC172xAileronResponseFiltered() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDaCmd(0.5);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double da = fcs->GetDaLPos();
+    TS_ASSERT(std::isfinite(da));
+  }
+
+  void testC172xRudderResponseFiltered() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double dr = fcs->GetDrPos();
+    TS_ASSERT(std::isfinite(dr));
+  }
+
+  void testC172xThrottleResponseFiltered() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.8);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double throttle = fcs->GetThrottlePos(0);
+    TS_ASSERT(std::isfinite(throttle));
+  }
+
+  void testC172xFlapResponseFiltered() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDfCmd(0.5);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double df = fcs->GetDfPos();
+    TS_ASSERT(std::isfinite(df));
+  }
+
+  void testC172xControlSurfaceSmoothing() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Apply rapid input changes
+    for (int cycle = 0; cycle < 5; cycle++) {
+      fcs->SetDeCmd(1.0);
+      for (int i = 0; i < 20; i++) fdmex.Run();
+      fcs->SetDeCmd(-1.0);
+      for (int i = 0; i < 20; i++) fdmex.Run();
+    }
+
+    double de = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(de));
+  }
+
+  void testC172xStepResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    double de_initial = fcs->GetDePos();
+
+    // Apply step
+    fcs->SetDeCmd(0.5);
+
+    // Record response
+    double de_prev = de_initial;
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+      double de_now = fcs->GetDePos();
+      TS_ASSERT(std::isfinite(de_now));
+      de_prev = de_now;
+    }
+  }
+
+  void testC172xMultipleInputsFiltered() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Apply all inputs simultaneously
+    fcs->SetDeCmd(0.3);
+    fcs->SetDaCmd(0.2);
+    fcs->SetDrCmd(0.1);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+  }
+
+  void testC172xZeroInputResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Zero inputs
+    fcs->SetDeCmd(0.0);
+    fcs->SetDaCmd(0.0);
+    fcs->SetDrCmd(0.0);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    // Outputs should be near zero or trim values
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+  }
+
+  void testC172xNegativeInputResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDeCmd(-0.5);
+    fcs->SetDaCmd(-0.3);
+    fcs->SetDrCmd(-0.2);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+  }
+
+  void testC172xFullDeflectionResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDeCmd(1.0);
+    fcs->SetDaCmd(1.0);
+    fcs->SetDrCmd(1.0);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+  }
+
+  void testC172xBrakeFiltering() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetLBrake(0.8);
+    fcs->SetRBrake(0.8);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double lb = fcs->GetLBrake();
+    double rb = fcs->GetRBrake();
+    TS_ASSERT(std::isfinite(lb));
+    TS_ASSERT(std::isfinite(rb));
+  }
+
+  void testC172xGearCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // C172x has fixed gear, but test command handling
+    fcs->SetGearCmd(1.0);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double gear = fcs->GetGearPos();
+    TS_ASSERT(std::isfinite(gear));
+  }
+
+  void testC172xMixtureControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetMixtureCmd(-1, 0.9);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double mixture = fcs->GetMixturePos(0);
+    TS_ASSERT(std::isfinite(mixture));
+  }
+
+  void testC172xTrimCommand() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetPitchTrimCmd(0.1);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double trim = fcs->GetPitchTrimCmd();
+    TS_ASSERT(std::isfinite(trim));
+  }
+
+  void testC172xExtendedFilterSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.8);
+
+    // Extended run with varying inputs
+    for (int i = 0; i < 1000; i++) {
+      double cmd = 0.3 * std::sin(i * 0.1);
+      fcs->SetDeCmd(cmd);
+      fcs->SetDaCmd(cmd * 0.5);
+
+      TS_ASSERT(fdmex.Run());
+      TS_ASSERT(std::isfinite(fcs->GetDePos()));
+      TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    }
+  }
+
+  void testC172xFilterStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    // Run extended simulation checking for stability
+    double max_de = 0.0;
+    for (int i = 0; i < 2000; i++) {
+      fdmex.Run();
+      double de = std::abs(fcs->GetDePos());
+      max_de = std::max(max_de, de);
+
+      // Elevator should not grow unboundedly (stability)
+      TS_ASSERT(de < 100.0);  // Reasonable bound
+    }
+    TS_ASSERT(std::isfinite(max_de));
+  }
+
+  void testC172xFilterIntegrity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.75);
+
+    // Run and verify all FCS outputs remain valid
+    for (int i = 0; i < 1500; i++) {
+      TS_ASSERT(fdmex.Run());
+
+      // All control surfaces should have finite values
+      TS_ASSERT(std::isfinite(fcs->GetDePos()));
+      TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+      TS_ASSERT(std::isfinite(fcs->GetDaRPos()));
+      TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+      TS_ASSERT(std::isfinite(fcs->GetDfPos()));
+      TS_ASSERT(std::isfinite(fcs->GetThrottlePos(0)));
+    }
+
+    // Final values should be finite
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(aux->GetVcalibratedKTS()));
   }
 };

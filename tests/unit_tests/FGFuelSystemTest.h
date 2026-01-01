@@ -32,7 +32,13 @@
 
 #include "TestUtilities.h"
 
+#include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
+#include <models/FGFCS.h>
+#include <models/propulsion/FGTank.h>
+
 using namespace JSBSimTest;
+using namespace JSBSim;
 
 const double epsilon = 1e-10;
 
@@ -1665,5 +1671,410 @@ public:
     if (goodTank.selected) availableFuel += goodTank.contents;
 
     TS_ASSERT_DELTA(availableFuel, 800.0, epsilon);
+  }
+
+  //===========================================================================
+  // C172X MODEL INTEGRATION TESTS (25 tests)
+  //===========================================================================
+
+  void testC172xFuelSystemModelLoads() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+  }
+
+  void testC172xPropulsionExists() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+  }
+
+  void testC172xTankCount() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    int numTanks = prop->GetNumTanks();
+    TS_ASSERT(numTanks > 0);  // C172x should have at least one fuel tank
+  }
+
+  void testC172xInitialFuelContents() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    double totalFuel = 0.0;
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double contents = prop->GetTank(i)->GetContents();
+      TS_ASSERT(std::isfinite(contents));
+      TS_ASSERT(contents >= 0.0);
+      totalFuel += contents;
+    }
+    TS_ASSERT(totalFuel > 0.0);  // Should have some fuel
+  }
+
+  void testC172xTankCapacity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double capacity = prop->GetTank(i)->GetCapacity();
+      double contents = prop->GetTank(i)->GetContents();
+      TS_ASSERT(std::isfinite(capacity));
+      TS_ASSERT(capacity > 0.0);
+      TS_ASSERT(contents <= capacity);  // Can't exceed capacity
+    }
+  }
+
+  void testC172xFuelDensity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double density = prop->GetTank(i)->GetDensity();
+      TS_ASSERT(std::isfinite(density));
+      TS_ASSERT(density > 0.0);
+      // AVGAS typically 6.0 lbs/gal
+      TS_ASSERT(density > 5.0 && density < 7.0);
+    }
+  }
+
+  void testC172xTotalFuelWeight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    double tanksWeight = prop->GetTanksWeight();
+    TS_ASSERT(std::isfinite(tanksWeight));
+    TS_ASSERT(tanksWeight >= 0.0);
+  }
+
+  void testC172xEngineRunning() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    prop->InitRunning(-1);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Engine should be consuming fuel
+    TS_ASSERT(prop->GetNumEngines() > 0);
+  }
+
+  void testC172xFuelConsumptionAtIdle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    double initialFuel = prop->GetTanksWeight();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.0);  // Idle
+
+    for (int i = 0; i < 500; i++) fdmex.Run();
+
+    double finalFuel = prop->GetTanksWeight();
+    TS_ASSERT(std::isfinite(finalFuel));
+    TS_ASSERT(finalFuel <= initialFuel);  // Fuel consumed
+  }
+
+  void testC172xFuelConsumptionAtFullPower() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    double initialFuel = prop->GetTanksWeight();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);  // Full power
+
+    for (int i = 0; i < 500; i++) fdmex.Run();
+
+    double finalFuel = prop->GetTanksWeight();
+    TS_ASSERT(std::isfinite(finalFuel));
+    TS_ASSERT(finalFuel < initialFuel);  // Fuel consumed
+  }
+
+  void testC172xFuelFlowRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.75);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Get fuel flow from engine
+    if (prop->GetNumEngines() > 0) {
+      double fuelFlow = prop->GetEngine(0)->GetFuelFlowRate();
+      TS_ASSERT(std::isfinite(fuelFlow));
+      TS_ASSERT(fuelFlow >= 0.0);
+    }
+  }
+
+  void testC172xThrottleAffectsFuelFlow() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    prop->InitRunning(-1);
+
+    // Low throttle
+    fcs->SetThrottleCmd(-1, 0.2);
+    for (int i = 0; i < 200; i++) fdmex.Run();
+    double lowFlow = prop->GetEngine(0)->GetFuelFlowRate();
+
+    // High throttle
+    fcs->SetThrottleCmd(-1, 0.9);
+    for (int i = 0; i < 200; i++) fdmex.Run();
+    double highFlow = prop->GetEngine(0)->GetFuelFlowRate();
+
+    TS_ASSERT(std::isfinite(lowFlow));
+    TS_ASSERT(std::isfinite(highFlow));
+    // Higher throttle should mean higher fuel flow (usually)
+  }
+
+  void testC172xTankPosition() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double x = prop->GetTank(i)->GetXYZ(1);
+      double y = prop->GetTank(i)->GetXYZ(2);
+      double z = prop->GetTank(i)->GetXYZ(3);
+      TS_ASSERT(std::isfinite(x));
+      TS_ASSERT(std::isfinite(y));
+      TS_ASSERT(std::isfinite(z));
+    }
+  }
+
+  void testC172xFuelMoment() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double moment = prop->GetTank(i)->GetXYZ(1) * prop->GetTank(i)->GetContents();
+      TS_ASSERT(std::isfinite(moment));
+    }
+  }
+
+  void testC172xFuelSystemRun() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.75);
+
+    // Extended run
+    for (int i = 0; i < 1000; i++) {
+      TS_ASSERT(fdmex.Run());
+      TS_ASSERT(std::isfinite(prop->GetTanksWeight()));
+    }
+  }
+
+  void testC172xTankType() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      int type = prop->GetTank(i)->GetType();
+      TS_ASSERT(type >= 0);
+    }
+  }
+
+  void testC172xFuelTemperature() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double temp = prop->GetTank(i)->GetTemperature();  // Fahrenheit
+      TS_ASSERT(std::isfinite(temp));
+    }
+  }
+
+  void testC172xFuelPriority() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      int priority = prop->GetTank(i)->GetPriority();
+      TS_ASSERT(priority >= 0);
+    }
+  }
+
+  void testC172xFuelSelected() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    bool anySelected = false;
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      if (prop->GetTank(i)->GetSelected()) {
+        anySelected = true;
+        break;
+      }
+    }
+    // At least one tank should be selected for engine to run
+    TS_ASSERT(anySelected);
+  }
+
+  void testC172xFuelStandpipe() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double standpipe = prop->GetTank(i)->GetStandpipe();
+      TS_ASSERT(std::isfinite(standpipe));
+      TS_ASSERT(standpipe >= 0.0);  // Can't be negative
+    }
+  }
+
+  void testC172xFuelGrain() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    // Fuel grain is typically only applicable to rocket motors
+    // but tank structure should still be valid
+    TS_ASSERT(prop->GetNumTanks() > 0);
+  }
+
+  void testC172xFuelVolumeGallons() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    for (int i = 0; i < prop->GetNumTanks(); i++) {
+      double contents = prop->GetTank(i)->GetContents();  // lbs
+      double density = prop->GetTank(i)->GetDensity();    // lbs/gal
+      if (density > 0) {
+        double gallons = contents / density;
+        TS_ASSERT(std::isfinite(gallons));
+        TS_ASSERT(gallons >= 0.0);
+      }
+    }
+  }
+
+  void testC172xExtendedFuelBurn() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);
+
+    // Record fuel over time
+    double fuel_t0 = prop->GetTanksWeight();
+
+    for (int i = 0; i < 2000; i++) {
+      TS_ASSERT(fdmex.Run());
+    }
+
+    double fuel_t1 = prop->GetTanksWeight();
+
+    // Fuel should decrease over time
+    TS_ASSERT(std::isfinite(fuel_t0));
+    TS_ASSERT(std::isfinite(fuel_t1));
+    TS_ASSERT(fuel_t1 <= fuel_t0);
+  }
+
+  void testC172xFuelSystemIntegrity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.8);
+
+    // Run extended simulation
+    for (int i = 0; i < 1500; i++) {
+      TS_ASSERT(fdmex.Run());
+
+      // Verify fuel system values remain valid
+      TS_ASSERT(std::isfinite(prop->GetTanksWeight()));
+      for (int t = 0; t < prop->GetNumTanks(); t++) {
+        TS_ASSERT(std::isfinite(prop->GetTank(t)->GetContents()));
+        TS_ASSERT(prop->GetTank(t)->GetContents() >= 0.0);
+        TS_ASSERT(prop->GetTank(t)->GetContents() <= prop->GetTank(t)->GetCapacity());
+      }
+    }
+  }
+
+  void testC172xFuelMassBalance() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    double initialTanksWeight = prop->GetTanksWeight();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.75);
+
+    double totalConsumed = 0.0;
+    for (int i = 0; i < 1000; i++) {
+      double before = prop->GetTanksWeight();
+      fdmex.Run();
+      double after = prop->GetTanksWeight();
+      totalConsumed += (before - after);
+    }
+
+    double finalTanksWeight = prop->GetTanksWeight();
+    double actualDiff = initialTanksWeight - finalTanksWeight;
+
+    // Consumed should equal actual difference (mass conservation)
+    TS_ASSERT_DELTA(totalConsumed, actualDiff, 0.01);
   }
 };

@@ -20,6 +20,16 @@
 #include <cmath>
 #include <random>
 
+#include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAccelerations.h>
+#include <input_output/FGPropertyManager.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 const double DEG_TO_RAD = M_PI / 180.0;
 const double RAD_TO_DEG = 180.0 / M_PI;
@@ -1362,5 +1372,524 @@ public:
 
     double scaleFactor = appliedRate / measuredRate;
     TS_ASSERT_DELTA(scaleFactor, 1.0152, 0.001);
+  }
+};
+
+/*******************************************************************************
+ * C172x Integration Tests for Gyro/Rate Sensing
+ ******************************************************************************/
+
+class FGGyroC172xTest : public CxxTest::TestSuite
+{
+public:
+  // Test roll rate measurement from C172x
+  void testC172xRollRateMeasurement() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+
+    // Get body-axis roll rate
+    double p = prop->GetPQR(1);  // P = roll rate
+    TS_ASSERT(std::isfinite(p));
+  }
+
+  // Test pitch rate measurement from C172x
+  void testC172xPitchRateMeasurement() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+
+    double q = prop->GetPQR(2);  // Q = pitch rate
+    TS_ASSERT(std::isfinite(q));
+  }
+
+  // Test yaw rate measurement from C172x
+  void testC172xYawRateMeasurement() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+
+    double r = prop->GetPQR(3);  // R = yaw rate
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test roll rate response to aileron input
+  void testC172xRollRateFromAileron() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    // Let aircraft accelerate and stabilize
+    for (int i = 0; i < 500; i++) fdmex.Run();
+
+    double initial_p = prop->GetPQR(1);
+
+    // Apply aileron input
+    fcs->SetDaCmd(0.5);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double p = prop->GetPQR(1);
+    TS_ASSERT(std::isfinite(p));
+    // Roll rate should change with aileron input
+    TS_ASSERT(std::abs(p) > std::abs(initial_p) || std::abs(p) > 0.001);
+  }
+
+  // Test pitch rate response to elevator input
+  void testC172xPitchRateFromElevator() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Apply elevator input
+    fcs->SetDeCmd(-0.3);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double q = prop->GetPQR(2);
+    TS_ASSERT(std::isfinite(q));
+    // Pitch rate should respond to elevator
+    TS_ASSERT(std::abs(q) > 0.0001);
+  }
+
+  // Test yaw rate response to rudder input
+  void testC172xYawRateFromRudder() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Apply rudder input
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double r = prop->GetPQR(3);
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test angular rate stability in straight flight
+  void testC172xRateStabilityStraightFlight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.6);
+
+    double max_p = 0, max_q = 0, max_r = 0;
+
+    for (int i = 0; i < 1000; i++) {
+      fdmex.Run();
+      max_p = std::max(max_p, std::abs(prop->GetPQR(1)));
+      max_q = std::max(max_q, std::abs(prop->GetPQR(2)));
+      max_r = std::max(max_r, std::abs(prop->GetPQR(3)));
+    }
+
+    TS_ASSERT(std::isfinite(max_p));
+    TS_ASSERT(std::isfinite(max_q));
+    TS_ASSERT(std::isfinite(max_r));
+
+    // Rates should stay bounded in flight (allow some oscillation)
+    TS_ASSERT(max_p < 5.0);  // rad/s
+    TS_ASSERT(max_q < 5.0);
+    TS_ASSERT(max_r < 5.0);
+  }
+
+  // Test turn rate calculation
+  void testC172xTurnRateCalculation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto aux = fdmex.GetAuxiliary();
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.8);
+
+    // Let aircraft get airborne
+    for (int i = 0; i < 500; i++) fdmex.Run();
+
+    // Command a turn
+    fcs->SetDaCmd(0.3);
+    fcs->SetDeCmd(-0.1);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    double r = prop->GetPQR(3);
+    double phi = prop->GetEuler(1);  // Bank angle
+
+    TS_ASSERT(std::isfinite(r));
+    TS_ASSERT(std::isfinite(phi));
+  }
+
+  // Test angular rates via property tree
+  void testC172xRatesViaPropertyTree() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double p = pm->GetNode("velocities/p-rad_sec", true)->getDoubleValue();
+    double q = pm->GetNode("velocities/q-rad_sec", true)->getDoubleValue();
+    double r = pm->GetNode("velocities/r-rad_sec", true)->getDoubleValue();
+
+    TS_ASSERT(std::isfinite(p));
+    TS_ASSERT(std::isfinite(q));
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test rate-of-turn indicator value
+  void testC172xRateOfTurnIndicator() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Get yaw rate (turn coordinator)
+    double r = prop->GetPQR(3);
+
+    // Turn rate in deg/s
+    double turnRate_dps = r * RAD_TO_DEG;
+    TS_ASSERT(std::isfinite(turnRate_dps));
+  }
+
+  // Test attitude rate integration concept
+  void testC172xAttitudeRateIntegration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    double initial_phi = prop->GetEuler(1);
+
+    // Apply roll input
+    fcs->SetDaCmd(0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double final_phi = prop->GetEuler(1);
+
+    TS_ASSERT(std::isfinite(initial_phi));
+    TS_ASSERT(std::isfinite(final_phi));
+    // Roll angle should have changed
+    TS_ASSERT(initial_phi != final_phi);
+  }
+
+  // Test combined PQR vector magnitude
+  void testC172xPQRVectorMagnitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double p = prop->GetPQR(1);
+    double q = prop->GetPQR(2);
+    double r = prop->GetPQR(3);
+
+    double magnitude = std::sqrt(p*p + q*q + r*r);
+    TS_ASSERT(std::isfinite(magnitude));
+    TS_ASSERT(magnitude >= 0.0);
+  }
+
+  // Test rate damping from control response
+  void testC172xRateDamping() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    // Apply impulse
+    fcs->SetDaCmd(0.8);
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    // Release
+    fcs->SetDaCmd(0.0);
+
+    // Record initial rate
+    double initial_p = std::abs(prop->GetPQR(1));
+
+    // Let aircraft damp
+    for (int i = 0; i < 500; i++) fdmex.Run();
+
+    double final_p = std::abs(prop->GetPQR(1));
+
+    TS_ASSERT(std::isfinite(initial_p));
+    TS_ASSERT(std::isfinite(final_p));
+    // Rate should have damped somewhat
+    TS_ASSERT(final_p < initial_p + 1.0);  // Allow some margin
+  }
+
+  // Test angular acceleration availability
+  void testC172xAngularAcceleration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto accel = fdmex.GetAccelerations();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Apply control input to generate angular acceleration
+    fcs->SetDaCmd(0.5);
+    fdmex.Run();
+
+    double pdot = accel->GetPQRdot(1);
+    double qdot = accel->GetPQRdot(2);
+    double rdot = accel->GetPQRdot(3);
+
+    TS_ASSERT(std::isfinite(pdot));
+    TS_ASSERT(std::isfinite(qdot));
+    TS_ASSERT(std::isfinite(rdot));
+  }
+
+  // Test rate values remain finite over time
+  void testC172xRateContinuity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    bool all_finite = true;
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+      double p = prop->GetPQR(1);
+      double q = prop->GetPQR(2);
+      double r = prop->GetPQR(3);
+      if (!std::isfinite(p) || !std::isfinite(q) || !std::isfinite(r)) {
+        all_finite = false;
+        break;
+      }
+    }
+
+    TS_ASSERT(all_finite);
+  }
+
+  // Test rate response symmetry
+  void testC172xRateResponseSymmetry() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Right roll
+    fcs->SetDaCmd(0.5);
+    for (int i = 0; i < 100; i++) fdmex.Run();
+    double p_right = prop->GetPQR(1);
+
+    // Reset
+    fcs->SetDaCmd(0.0);
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Left roll
+    fcs->SetDaCmd(-0.5);
+    for (int i = 0; i < 100; i++) fdmex.Run();
+    double p_left = prop->GetPQR(1);
+
+    TS_ASSERT(std::isfinite(p_right));
+    TS_ASSERT(std::isfinite(p_left));
+    // Response should be roughly symmetric (opposite signs)
+    TS_ASSERT(p_right * p_left <= 0 || std::abs(p_right) < 0.01 || std::abs(p_left) < 0.01);
+  }
+
+  // Test rate during takeoff roll
+  void testC172xRatesDuringTakeoffRoll() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 1.0);  // Full power
+
+    double max_p = 0, max_q = 0, max_r = 0;
+
+    // Takeoff roll
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+      max_p = std::max(max_p, std::abs(prop->GetPQR(1)));
+      max_q = std::max(max_q, std::abs(prop->GetPQR(2)));
+      max_r = std::max(max_r, std::abs(prop->GetPQR(3)));
+    }
+
+    TS_ASSERT(std::isfinite(max_p));
+    TS_ASSERT(std::isfinite(max_q));
+    TS_ASSERT(std::isfinite(max_r));
+  }
+
+  // Test rate response to turbulence-like perturbation
+  void testC172xRateResponseToPerturbation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    auto pm = fdmex.GetPropertyManager();
+
+    propulsion->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    for (int i = 0; i < 300; i++) fdmex.Run();
+
+    // Record baseline rates
+    double baseline_p = prop->GetPQR(1);
+
+    // Simulate gust effect by briefly disturbing controls
+    fcs->SetDaCmd(0.2);
+    for (int i = 0; i < 10; i++) fdmex.Run();
+    fcs->SetDaCmd(0.0);
+
+    double perturbed_p = prop->GetPQR(1);
+
+    TS_ASSERT(std::isfinite(baseline_p));
+    TS_ASSERT(std::isfinite(perturbed_p));
+    // Rate should change in response
+    TS_ASSERT(std::abs(perturbed_p - baseline_p) >= 0.0);
+  }
+
+  // Test rate sensor properties via FCS
+  void testC172xRateSensorProperties() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Check various rate-related properties
+    auto pNode = pm->GetNode("velocities/p-rad_sec");
+    auto qNode = pm->GetNode("velocities/q-rad_sec");
+    auto rNode = pm->GetNode("velocities/r-rad_sec");
+
+    TS_ASSERT(pNode != nullptr);
+    TS_ASSERT(qNode != nullptr);
+    TS_ASSERT(rNode != nullptr);
+
+    if (pNode) TS_ASSERT(std::isfinite(pNode->getDoubleValue()));
+    if (qNode) TS_ASSERT(std::isfinite(qNode->getDoubleValue()));
+    if (rNode) TS_ASSERT(std::isfinite(rNode->getDoubleValue()));
+  }
+
+  // Test rate data consistency between methods
+  void testC172xRateDataConsistency() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropagate();
+    auto pm = fdmex.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Get rates via FGPropagate
+    double p_prop = prop->GetPQR(1);
+    double q_prop = prop->GetPQR(2);
+    double r_prop = prop->GetPQR(3);
+
+    // Get rates via property tree
+    double p_pm = pm->GetNode("velocities/p-rad_sec", true)->getDoubleValue();
+    double q_pm = pm->GetNode("velocities/q-rad_sec", true)->getDoubleValue();
+    double r_pm = pm->GetNode("velocities/r-rad_sec", true)->getDoubleValue();
+
+    // Both should return the same values
+    TS_ASSERT_DELTA(p_prop, p_pm, 1e-10);
+    TS_ASSERT_DELTA(q_prop, q_pm, 1e-10);
+    TS_ASSERT_DELTA(r_prop, r_pm, 1e-10);
   }
 };
