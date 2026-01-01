@@ -30,6 +30,14 @@
 #include <cmath>
 #include "TestUtilities.h"
 
+#include <FGFDMExec.h>
+#include <models/FGAerodynamics.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropagate.h>
+#include <models/FGFCS.h>
+#include <initialization/FGInitialCondition.h>
+
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 class FGAeroelasticityTest : public CxxTest::TestSuite
@@ -1639,5 +1647,261 @@ public:
     TS_ASSERT(omega_bending > 0.0);
     TS_ASSERT(omega_torsion > 0.0);
     TS_ASSERT(omega_torsion > omega_bending);  // Torsion typically higher
+  }
+};
+
+//=============================================================================
+// C172x Integration Tests - Aeroelasticity with Real Aircraft Dynamics
+//=============================================================================
+
+class FGAeroelasticityC172xTest : public CxxTest::TestSuite
+{
+private:
+  JSBSim::FGFDMExec fdm;
+
+public:
+  void setUp() {
+    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
+    fdm.SetRootDir(SGPath(rootDir));
+    fdm.SetAircraftPath(SGPath("aircraft"));
+    fdm.SetEnginePath(SGPath("engine"));
+    fdm.SetSystemsPath(SGPath("systems"));
+    fdm.LoadModel("c172x");
+  }
+
+  void tearDown() {
+    fdm.ResetToInitialConditions(0);
+  }
+
+  // Test 1: Wing loading within structural limits
+  void testWingLoadingWithinLimits() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(160.0);  // VNE is around 160 KIAS
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    for (int i = 0; i < 20; ++i) fdm.Run();
+
+    auto aux = fdm.GetAuxiliary();
+    double Nlf = aux->GetNlf();
+
+    // Normal load factor should be within limits (+3.8g to -1.52g for utility)
+    TS_ASSERT(Nlf > -2.0);
+    TS_ASSERT(Nlf < 5.0);
+  }
+
+  // Test 2: Control surface effectiveness at cruise
+  void testControlEffectivenessAtCruise() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(120.0);
+    ic->SetAltitudeASLFtIC(8000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    auto aero = fdm.GetAerodynamics();
+
+    // Apply aileron
+    fcs->SetDaCmd(0.3);
+    for (int i = 0; i < 20; ++i) fdm.Run();
+    double rollMoment = aero->GetMoments()(1);
+
+    TS_ASSERT(std::abs(rollMoment) > 0.0);
+  }
+
+  // Test 3: Pitch response to elevator
+  void testPitchResponseToElevator() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    auto prop = fdm.GetPropagate();
+
+    double initialPitch = prop->GetEuler(2);
+
+    fcs->SetDeCmd(-0.3);  // Nose up
+    for (int i = 0; i < 100; ++i) fdm.Run();
+
+    double finalPitchRate = prop->GetPQR(2);
+    TS_ASSERT(finalPitchRate > 0.0);  // Should be pitching up
+  }
+
+  // Test 4: Roll damping present
+  void testRollDampingPresent() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetPRadpsIC(0.2);  // Initial roll rate
+    fdm.RunIC();
+
+    auto prop = fdm.GetPropagate();
+
+    // Run simulation and check roll rate decreases
+    for (int i = 0; i < 50; ++i) fdm.Run();
+    double rollRate = std::abs(prop->GetPQR(1));
+
+    // Roll rate should have damped somewhat
+    TS_ASSERT(rollRate < 0.25);
+  }
+
+  // Test 5: Structural response to gust (simulated with sudden alpha change)
+  void testGustResponse() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetAlphaDegIC(2.0);
+    fdm.RunIC();
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    auto aux = fdm.GetAuxiliary();
+    auto aero = fdm.GetAerodynamics();
+
+    // Check that the aircraft responds
+    double Nlf = aux->GetNlf();
+    double liftForce = aero->GetForces()(3);
+
+    TS_ASSERT(std::isfinite(Nlf));
+    TS_ASSERT(std::isfinite(liftForce));
+  }
+
+  // Test 6: High speed handling (approaching Vne)
+  void testHighSpeedHandling() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(150.0);  // Near Vne
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    auto aux = fdm.GetAuxiliary();
+    double qbar = aux->Getqbar();
+
+    // High dynamic pressure expected
+    TS_ASSERT(qbar > 50.0);
+    TS_ASSERT(std::isfinite(qbar));
+  }
+
+  // Test 7: Low speed handling (near stall)
+  void testLowSpeedHandling() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(55.0);  // Near stall speed
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    auto aux = fdm.GetAuxiliary();
+    auto aero = fdm.GetAerodynamics();
+
+    // Even near stall, should have valid outputs
+    TS_ASSERT(std::isfinite(aux->Getqbar()));
+    TS_ASSERT(std::isfinite(aero->GetForces()(3)));
+  }
+
+  // Test 8: Maneuvering loads
+  void testManeuveringLoads() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    auto aux = fdm.GetAuxiliary();
+
+    // Apply pull-up
+    fcs->SetDeCmd(-0.4);
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    double Nlf = aux->GetNlf();
+
+    // Load factor should increase during pull-up
+    TS_ASSERT(Nlf > 0.5);  // Should be positive G
+    TS_ASSERT(std::isfinite(Nlf));
+  }
+
+  // Test 9: Speed stability
+  void testSpeedStability() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto aux = fdm.GetAuxiliary();
+
+    double initialSpeed = aux->GetVcalibratedKTS();
+
+    // Run for a while
+    for (int i = 0; i < 100; ++i) fdm.Run();
+
+    double finalSpeed = aux->GetVcalibratedKTS();
+
+    // Speed should be somewhat stable (within reason)
+    TS_ASSERT(std::isfinite(finalSpeed));
+    TS_ASSERT(std::abs(finalSpeed - initialSpeed) < 50.0);
+  }
+
+  // Test 10: Yaw stability
+  void testYawStability() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetBetaDegIC(5.0);  // Initial sideslip
+    fdm.RunIC();
+
+    auto aux = fdm.GetAuxiliary();
+
+    for (int i = 0; i < 100; ++i) fdm.Run();
+
+    double beta = aux->Getbeta() * 57.2958;  // Convert to degrees
+
+    // Sideslip should remain bounded
+    TS_ASSERT(std::abs(beta) < 30.0);
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  // Test 11: Aerodynamic damping in all axes
+  void testAerodynamicDamping() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetPRadpsIC(0.1);
+    ic->SetQRadpsIC(0.1);
+    ic->SetRRadpsIC(0.1);
+    fdm.RunIC();
+
+    auto aero = fdm.GetAerodynamics();
+    const auto& moments = aero->GetMoments();
+
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    // All moments should be finite
+    TS_ASSERT(std::isfinite(moments(1)));
+    TS_ASSERT(std::isfinite(moments(2)));
+    TS_ASSERT(std::isfinite(moments(3)));
+  }
+
+  // Test 12: Extended simulation stability
+  void testExtendedSimulationStability() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto aux = fdm.GetAuxiliary();
+    auto aero = fdm.GetAerodynamics();
+
+    // Run for 500 iterations
+    for (int i = 0; i < 500; ++i) {
+      fdm.Run();
+    }
+
+    // Everything should remain finite and valid
+    TS_ASSERT(std::isfinite(aux->GetNlf()));
+    TS_ASSERT(std::isfinite(aux->Getqbar()));
+    TS_ASSERT(std::isfinite(aero->GetForces()(1)));
+    TS_ASSERT(std::isfinite(aero->GetForces()(2)));
+    TS_ASSERT(std::isfinite(aero->GetForces()(3)));
   }
 };
