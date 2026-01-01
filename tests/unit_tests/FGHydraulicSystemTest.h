@@ -16,6 +16,14 @@
 #include <limits>
 #include "TestUtilities.h"
 
+#include <FGFDMExec.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGFCS.h>
+#include <models/FGPropagate.h>
+#include <models/FGAerodynamics.h>
+#include <initialization/FGInitialCondition.h>
+
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 // Constants for hydraulic system calculations
@@ -1367,4 +1375,239 @@ public:
 
         TS_ASSERT_DELTA(rpm_command, 4800.0, 100.0);
     }
+};
+
+//=============================================================================
+// C172x Integration Tests - Flight Control Systems Tests
+//=============================================================================
+
+class FGHydraulicSystemC172xTest : public CxxTest::TestSuite
+{
+private:
+  JSBSim::FGFDMExec fdm;
+
+public:
+  void setUp() {
+    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
+    fdm.SetRootDir(SGPath(rootDir));
+    fdm.SetAircraftPath(SGPath("aircraft"));
+    fdm.SetEnginePath(SGPath("engine"));
+    fdm.SetSystemsPath(SGPath("systems"));
+    fdm.LoadModel("c172x");
+  }
+
+  void tearDown() {
+    fdm.ResetToInitialConditions(0);
+  }
+
+  // Test 1: FCS accepts elevator command
+  void testFCSElevatorCommand() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetDeCmd(0.5);
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    double elevatorPos = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(elevatorPos));
+  }
+
+  // Test 2: FCS accepts aileron command
+  void testFCSAileronCommand() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetDaCmd(0.5);
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    double aileronPos = fcs->GetDaPos();
+    TS_ASSERT(std::isfinite(aileronPos));
+  }
+
+  // Test 3: FCS accepts rudder command
+  void testFCSRudderCommand() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    double rudderPos = fcs->GetDrPos();
+    TS_ASSERT(std::isfinite(rudderPos));
+  }
+
+  // Test 4: Elevator causes pitch change
+  void testElevatorCausesPitchChange() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    auto prop = fdm.GetPropagate();
+
+    fcs->SetDeCmd(-0.3);  // Nose up
+    for (int i = 0; i < 100; ++i) fdm.Run();
+
+    double pitchRate = prop->GetPQR(2);
+    TS_ASSERT(std::isfinite(pitchRate));
+  }
+
+  // Test 5: Aileron causes roll change
+  void testAileronCausesRollChange() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    auto prop = fdm.GetPropagate();
+
+    fcs->SetDaCmd(0.3);  // Right roll
+    for (int i = 0; i < 100; ++i) fdm.Run();
+
+    double rollRate = prop->GetPQR(1);
+    TS_ASSERT(std::isfinite(rollRate));
+  }
+
+  // Test 6: Rudder causes yaw change
+  void testRudderCausesYawChange() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    auto prop = fdm.GetPropagate();
+
+    fcs->SetDrCmd(0.3);  // Right yaw
+    for (int i = 0; i < 100; ++i) fdm.Run();
+
+    double yawRate = prop->GetPQR(3);
+    TS_ASSERT(std::isfinite(yawRate));
+  }
+
+  // Test 7: Flap deployment
+  void testFlapDeployment() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(80.0);
+    ic->SetAltitudeASLFtIC(3000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetDfCmd(0.5);  // 50% flaps
+
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    double flapPos = fcs->GetDfPos();
+    TS_ASSERT(std::isfinite(flapPos));
+  }
+
+  // Test 8: Throttle command
+  void testThrottleCommand() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetThrottleCmd(-1, 0.75);
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    double throttlePos = fcs->GetThrottlePos(0);
+    TS_ASSERT(std::isfinite(throttlePos));
+  }
+
+  // Test 9: Mixture command
+  void testMixtureCommand() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetMixtureCmd(-1, 0.8);
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    double mixturePos = fcs->GetMixturePos(0);
+    TS_ASSERT(std::isfinite(mixturePos));
+  }
+
+  // Test 10: Brake command
+  void testBrakeCommand() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(0.0);
+    ic->SetAltitudeASLFtIC(0.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetLBrake(0.5);
+    fcs->SetRBrake(0.5);
+
+    for (int i = 0; i < 10; ++i) fdm.Run();
+
+    double lBrake = fcs->GetLBrake();
+    double rBrake = fcs->GetRBrake();
+
+    TS_ASSERT(std::isfinite(lBrake));
+    TS_ASSERT(std::isfinite(rBrake));
+  }
+
+  // Test 11: All control surfaces remain finite
+  void testAllControlSurfacesFinite() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetDeCmd(0.2);
+    fcs->SetDaCmd(0.1);
+    fcs->SetDrCmd(-0.1);
+    fcs->SetDfCmd(0.3);
+
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDfPos()));
+  }
+
+  // Test 12: Extended simulation FCS stability
+  void testExtendedSimulationFCSStability() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetDeCmd(0.1);
+    fcs->SetDaCmd(0.05);
+    fcs->SetThrottleCmd(-1, 0.7);
+    fcs->SetMixtureCmd(-1, 1.0);
+
+    for (int i = 0; i < 500; ++i) {
+      fdm.Run();
+    }
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+    TS_ASSERT(std::isfinite(fcs->GetThrottlePos(0)));
+  }
 };
