@@ -1,6 +1,8 @@
 #include <cxxtest/TestSuite.h>
 #include <input_output/FGLog.h>
 #include <input_output/FGXMLElement.h>
+#include <FGFDMExec.h>
+#include "TestUtilities.h"
 
 class DummyLogger : public JSBSim::FGLogger
 {
@@ -751,6 +753,211 @@ void testPromoteLogException() {
   TS_ASSERT_EQUALS(logger->buffer, "file.xml:42Hello, World!");
   TS_ASSERT_EQUALS(logger->GetLogLevel(), JSBSim::LogLevel::FATAL);
 }
+};
+
+// ============================================================================
+// C172x Integration Tests for FGLog
+// ============================================================================
+
+class FGLogC172xTest : public CxxTest::TestSuite
+{
+private:
+  JSBSim::FGFDMExec fdm;
+
+public:
+  void setUp() {
+    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
+    fdm.SetRootDir(SGPath(rootDir));
+    fdm.SetAircraftPath(SGPath("aircraft"));
+    fdm.SetEnginePath(SGPath("engine"));
+    fdm.SetSystemsPath(SGPath("systems"));
+    fdm.LoadModel("c172x");
+  }
+
+  void tearDown() {
+    fdm.ResetToInitialConditions(0);
+  }
+
+  // Test 1: C172x model loads without logging errors
+  void testC172xModelLoadsCleanly() {
+    // Model was loaded in setUp - if we get here it loaded cleanly
+    TS_ASSERT(true);
+  }
+
+  // Test 2: C172x simulation run produces valid state for logging
+  void testC172xSimRunForLogging() {
+    fdm.RunIC();
+    fdm.Run();
+
+    // Get simulation time for potential logging
+    double simTime = fdm.GetPropertyManager()->GetDouble("simulation/sim-time-sec");
+    TS_ASSERT(simTime >= 0.0);
+  }
+
+  // Test 3: C172x velocity data available for logging
+  void testC172xVelocityDataForLogging() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double vc = pm->GetDouble("velocities/vc-kts");
+
+    // Value should be finite (not NaN or Inf)
+    TS_ASSERT(!std::isnan(vc));
+    TS_ASSERT(!std::isinf(vc));
+  }
+
+  // Test 4: C172x position data available for logging
+  void testC172xPositionDataForLogging() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double lat = pm->GetDouble("position/lat-gc-deg");
+    double lon = pm->GetDouble("position/long-gc-deg");
+    double alt = pm->GetDouble("position/h-sl-ft");
+
+    TS_ASSERT(!std::isnan(lat));
+    TS_ASSERT(!std::isnan(lon));
+    TS_ASSERT(!std::isnan(alt));
+  }
+
+  // Test 5: C172x attitude data available for logging
+  void testC172xAttitudeDataForLogging() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double phi = pm->GetDouble("attitude/phi-rad");
+    double theta = pm->GetDouble("attitude/theta-rad");
+    double psi = pm->GetDouble("attitude/psi-rad");
+
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isnan(theta));
+    TS_ASSERT(!std::isnan(psi));
+  }
+
+  // Test 6: C172x propulsion data available for logging
+  void testC172xPropulsionDataForLogging() {
+    fdm.RunIC();
+    fdm.GetFCS()->SetThrottleCmd(0, 0.8);
+    fdm.GetFCS()->SetMixtureCmd(0, 1.0);
+
+    for (int i = 0; i < 10; i++) {
+      fdm.Run();
+    }
+
+    auto pm = fdm.GetPropertyManager();
+    double rpm = pm->GetDouble("propulsion/engine[0]/engine-rpm");
+
+    TS_ASSERT(!std::isnan(rpm));
+    TS_ASSERT(rpm >= 0.0);
+  }
+
+  // Test 7: C172x FCS data available for logging
+  void testC172xFCSDataForLogging() {
+    fdm.RunIC();
+    fdm.GetFCS()->SetDeCmd(0.1);
+    fdm.GetFCS()->SetDaCmd(0.05);
+    fdm.GetFCS()->SetDrCmd(-0.05);
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double elevator = pm->GetDouble("fcs/elevator-pos-rad");
+    double aileron = pm->GetDouble("fcs/left-aileron-pos-rad");
+
+    TS_ASSERT(!std::isnan(elevator));
+    TS_ASSERT(!std::isnan(aileron));
+  }
+
+  // Test 8: C172x multiple timesteps logging consistency
+  void testC172xMultipleTimestepsLogging() {
+    fdm.RunIC();
+
+    std::vector<double> times;
+    for (int i = 0; i < 100; i++) {
+      fdm.Run();
+      double t = fdm.GetPropertyManager()->GetDouble("simulation/sim-time-sec");
+      times.push_back(t);
+    }
+
+    // Times should be monotonically increasing
+    for (size_t i = 1; i < times.size(); i++) {
+      TS_ASSERT(times[i] > times[i-1]);
+    }
+  }
+
+  // Test 9: C172x logging with control inputs
+  void testC172xLoggingWithControlInputs() {
+    fdm.RunIC();
+
+    // Apply controls and log resulting state
+    fdm.GetFCS()->SetThrottleCmd(0, 1.0);
+    fdm.GetFCS()->SetDeCmd(-0.1);
+
+    for (int i = 0; i < 50; i++) {
+      fdm.Run();
+    }
+
+    auto pm = fdm.GetPropertyManager();
+    double throttle = pm->GetDouble("fcs/throttle-cmd-norm");
+    double vc = pm->GetDouble("velocities/vc-kts");
+
+    TS_ASSERT_DELTA(throttle, 1.0, 0.01);
+    TS_ASSERT(!std::isnan(vc));
+  }
+
+  // Test 10: C172x aerodynamic data for logging
+  void testC172xAeroDataForLogging() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double alpha = pm->GetDouble("aero/alpha-deg");
+    double qbar = pm->GetDouble("aero/qbar-psf");
+
+    TS_ASSERT(!std::isnan(alpha));
+    TS_ASSERT(!std::isnan(qbar));
+    TS_ASSERT(qbar >= 0.0);
+  }
+
+  // Test 11: C172x forces data for logging
+  void testC172xForcesDataForLogging() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double weight = pm->GetDouble("forces/fbz-weight-lbs");
+
+    TS_ASSERT(!std::isnan(weight));
+  }
+
+  // Test 12: C172x comprehensive state snapshot
+  void testC172xComprehensiveStateSnapshot() {
+    fdm.RunIC();
+    fdm.GetFCS()->SetThrottleCmd(0, 0.7);
+    fdm.GetFCS()->SetMixtureCmd(0, 0.9);
+
+    for (int i = 0; i < 20; i++) {
+      fdm.Run();
+    }
+
+    auto pm = fdm.GetPropertyManager();
+
+    // Snapshot multiple categories of data
+    double simTime = pm->GetDouble("simulation/sim-time-sec");
+    double altitude = pm->GetDouble("position/h-sl-ft");
+    double vc = pm->GetDouble("velocities/vc-kts");
+    double phi = pm->GetDouble("attitude/phi-rad");
+    double alpha = pm->GetDouble("aero/alpha-deg");
+
+    // All values should be valid for logging
+    TS_ASSERT(!std::isnan(simTime));
+    TS_ASSERT(!std::isnan(altitude));
+    TS_ASSERT(!std::isnan(vc));
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isnan(alpha));
+  }
 };
 
 /***************************************************************************

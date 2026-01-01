@@ -1,7 +1,10 @@
 #include <cxxtest/TestSuite.h>
 #include <math/FGParameter.h>
+#include <FGFDMExec.h>
+#include "TestUtilities.h"
 
 using namespace JSBSim;
+using namespace JSBSimTest;
 
 
 // Dummy class that inherits the abstract class `FGParameter`.
@@ -903,5 +906,205 @@ public:
     TS_ASSERT(x.GetValue() != y.GetValue());
     // But very close
     TS_ASSERT_DELTA(x.GetValue(), y.GetValue(), 2 * epsilon);
+  }
+};
+
+// ============================================================================
+// C172x Integration Tests for FGParameter
+// ============================================================================
+
+class FGParameterC172xTest : public CxxTest::TestSuite
+{
+private:
+  JSBSim::FGFDMExec fdm;
+
+public:
+  void setUp() {
+    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
+    fdm.SetRootDir(SGPath(rootDir));
+    fdm.SetAircraftPath(SGPath("aircraft"));
+    fdm.SetEnginePath(SGPath("engine"));
+    fdm.SetSystemsPath(SGPath("systems"));
+    fdm.LoadModel("c172x");
+  }
+
+  void tearDown() {
+    fdm.ResetToInitialConditions(0);
+  }
+
+  // Test 1: C172x model properties are accessible as parameters
+  void testC172xPropertiesAsParameters() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double altitude = pm->GetDouble("position/h-sl-ft");
+
+    TS_ASSERT(!std::isnan(altitude));
+  }
+
+  // Test 2: C172x parameter value retrieval consistency
+  void testC172xParameterValueConsistency() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+    double v1 = pm->GetDouble("velocities/vc-kts");
+    double v2 = pm->GetDouble("velocities/vc-kts");
+
+    TS_ASSERT_EQUALS(v1, v2);
+  }
+
+  // Test 3: C172x parameter setting and getting
+  void testC172xParameterSetGet() {
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+    pm->SetDouble("fcs/throttle-cmd-norm", 0.75);
+
+    double val = pm->GetDouble("fcs/throttle-cmd-norm");
+    TS_ASSERT_DELTA(val, 0.75, 0.001);
+  }
+
+  // Test 4: C172x multiple parameter access
+  void testC172xMultipleParameterAccess() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+
+    double lat = pm->GetDouble("position/lat-gc-deg");
+    double lon = pm->GetDouble("position/long-gc-deg");
+    double alt = pm->GetDouble("position/h-sl-ft");
+    double phi = pm->GetDouble("attitude/phi-rad");
+    double theta = pm->GetDouble("attitude/theta-rad");
+    double psi = pm->GetDouble("attitude/psi-rad");
+
+    TS_ASSERT(!std::isnan(lat));
+    TS_ASSERT(!std::isnan(lon));
+    TS_ASSERT(!std::isnan(alt));
+    TS_ASSERT(!std::isnan(phi));
+    TS_ASSERT(!std::isnan(theta));
+    TS_ASSERT(!std::isnan(psi));
+  }
+
+  // Test 5: C172x parameter zero value
+  void testC172xParameterZeroValue() {
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+    pm->SetDouble("fcs/throttle-cmd-norm", 0.0);
+
+    double val = pm->GetDouble("fcs/throttle-cmd-norm");
+    TS_ASSERT_DELTA(val, 0.0, 1e-10);
+  }
+
+  // Test 6: C172x parameter negative values
+  void testC172xParameterNegativeValues() {
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+    pm->SetDouble("fcs/elevator-cmd-norm", -0.5);
+
+    double val = pm->GetDouble("fcs/elevator-cmd-norm");
+    TS_ASSERT_DELTA(val, -0.5, 0.001);
+  }
+
+  // Test 7: C172x parameter value bounds
+  void testC172xParameterValueBounds() {
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+
+    // Set throttle to max and min
+    pm->SetDouble("fcs/throttle-cmd-norm", 1.0);
+    TS_ASSERT_DELTA(pm->GetDouble("fcs/throttle-cmd-norm"), 1.0, 0.001);
+
+    pm->SetDouble("fcs/throttle-cmd-norm", 0.0);
+    TS_ASSERT_DELTA(pm->GetDouble("fcs/throttle-cmd-norm"), 0.0, 0.001);
+  }
+
+  // Test 8: C172x parameter after simulation steps
+  void testC172xParameterAfterSimSteps() {
+    fdm.RunIC();
+    fdm.GetFCS()->SetThrottleCmd(0, 0.8);
+
+    for (int i = 0; i < 50; i++) {
+      fdm.Run();
+    }
+
+    auto pm = fdm.GetPropertyManager();
+    double simTime = pm->GetDouble("simulation/sim-time-sec");
+
+    TS_ASSERT(simTime > 0.0);
+  }
+
+  // Test 9: C172x computed parameter values
+  void testC172xComputedParameterValues() {
+    fdm.RunIC();
+    fdm.Run();
+
+    auto pm = fdm.GetPropertyManager();
+
+    // These are computed parameters, not directly set
+    double qbar = pm->GetDouble("aero/qbar-psf");
+    double mach = pm->GetDouble("velocities/mach");
+
+    TS_ASSERT(!std::isnan(qbar));
+    TS_ASSERT(!std::isnan(mach));
+    TS_ASSERT(qbar >= 0.0);
+    TS_ASSERT(mach >= 0.0);
+  }
+
+  // Test 10: C172x parameter precision
+  void testC172xParameterPrecision() {
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+
+    // Set precise value
+    double preciseValue = 0.123456789;
+    pm->SetDouble("fcs/throttle-cmd-norm", preciseValue);
+
+    double retrieved = pm->GetDouble("fcs/throttle-cmd-norm");
+    TS_ASSERT_DELTA(retrieved, preciseValue, 1e-9);
+  }
+
+  // Test 11: C172x parameter rapid updates
+  void testC172xParameterRapidUpdates() {
+    fdm.RunIC();
+
+    auto pm = fdm.GetPropertyManager();
+
+    for (int i = 0; i < 100; i++) {
+      double val = static_cast<double>(i) / 100.0;
+      pm->SetDouble("fcs/throttle-cmd-norm", val);
+      fdm.Run();
+
+      double retrieved = pm->GetDouble("fcs/throttle-cmd-norm");
+      TS_ASSERT_DELTA(retrieved, val, 0.001);
+    }
+  }
+
+  // Test 12: C172x parameter stability
+  void testC172xParameterStability() {
+    fdm.RunIC();
+    fdm.GetFCS()->SetThrottleCmd(0, 0.5);
+    fdm.GetFCS()->SetMixtureCmd(0, 0.9);
+
+    auto pm = fdm.GetPropertyManager();
+
+    // Run and check parameter stability
+    for (int i = 0; i < 100; i++) {
+      fdm.Run();
+
+      double altitude = pm->GetDouble("position/h-sl-ft");
+      double velocity = pm->GetDouble("velocities/vc-kts");
+
+      TS_ASSERT(!std::isnan(altitude));
+      TS_ASSERT(!std::isnan(velocity));
+      TS_ASSERT(!std::isinf(altitude));
+      TS_ASSERT(!std::isinf(velocity));
+    }
   }
 };
