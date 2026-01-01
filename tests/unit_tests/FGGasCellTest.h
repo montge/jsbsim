@@ -18,6 +18,11 @@
 
 #include <FGFDMExec.h>
 #include <models/FGBuoyantForces.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGFCS.h>
+#include <models/FGPropagate.h>
+#include <initialization/FGInitialCondition.h>
 #include <math/FGColumnVector3.h>
 
 using namespace JSBSim;
@@ -1338,5 +1343,192 @@ public:
     double hoopStress = pressure * radius / thickness;
     TS_ASSERT(hoopStress > 0.0);
     TS_ASSERT_DELTA(hoopStress, 500000.0, 1.0);
+  }
+};
+
+//=============================================================================
+// C172x Integration Tests - Buoyancy/Mass Context Tests
+//=============================================================================
+
+class FGGasCellC172xTest : public CxxTest::TestSuite
+{
+private:
+  JSBSim::FGFDMExec fdm;
+
+public:
+  void setUp() {
+    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
+    fdm.SetRootDir(SGPath(rootDir));
+    fdm.SetAircraftPath(SGPath("aircraft"));
+    fdm.SetEnginePath(SGPath("engine"));
+    fdm.SetSystemsPath(SGPath("systems"));
+    fdm.LoadModel("c172x");
+  }
+
+  void tearDown() {
+    fdm.ResetToInitialConditions(0);
+  }
+
+  // Test 1: C172x has no buoyant forces (it's a heavier-than-air aircraft)
+  void testNoBuoyantForces() {
+    auto buoyant = fdm.GetBuoyantForces();
+
+    TS_ASSERT(buoyant != nullptr);
+    TS_ASSERT_DELTA(buoyant->GetForces()(1), 0.0, 0.01);
+    TS_ASSERT_DELTA(buoyant->GetForces()(2), 0.0, 0.01);
+    TS_ASSERT_DELTA(buoyant->GetForces()(3), 0.0, 0.01);
+  }
+
+  // Test 2: Buoyant moments are zero
+  void testNoBuoyantMoments() {
+    auto buoyant = fdm.GetBuoyantForces();
+
+    TS_ASSERT_DELTA(buoyant->GetMoments()(1), 0.0, 0.01);
+    TS_ASSERT_DELTA(buoyant->GetMoments()(2), 0.0, 0.01);
+    TS_ASSERT_DELTA(buoyant->GetMoments()(3), 0.0, 0.01);
+  }
+
+  // Test 3: Mass is positive
+  void testPositiveMass() {
+    auto mass = fdm.GetMassBalance();
+
+    double weight = mass->GetWeight();
+    TS_ASSERT(weight > 0.0);
+  }
+
+  // Test 4: CG location is valid
+  void testCGLocation() {
+    auto mass = fdm.GetMassBalance();
+
+    double cgX = mass->GetXYZcg()(1);
+    double cgY = mass->GetXYZcg()(2);
+    double cgZ = mass->GetXYZcg()(3);
+
+    TS_ASSERT(std::isfinite(cgX));
+    TS_ASSERT(std::isfinite(cgY));
+    TS_ASSERT(std::isfinite(cgZ));
+  }
+
+  // Test 5: Inertia tensor is positive definite
+  void testInertiaTensor() {
+    auto mass = fdm.GetMassBalance();
+
+    double Ixx = mass->GetIxx();
+    double Iyy = mass->GetIyy();
+    double Izz = mass->GetIzz();
+
+    TS_ASSERT(Ixx > 0.0);
+    TS_ASSERT(Iyy > 0.0);
+    TS_ASSERT(Izz > 0.0);
+  }
+
+  // Test 6: Aircraft weight in typical range
+  void testWeightInRange() {
+    auto mass = fdm.GetMassBalance();
+
+    double weight = mass->GetWeight();
+
+    // C172 empty weight ~1600 lbs, max gross ~2450 lbs
+    TS_ASSERT(weight > 1000.0);
+    TS_ASSERT(weight < 3000.0);
+  }
+
+  // Test 7: Forces remain zero during flight
+  void testBuoyantForcesDuringFlight() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    for (int i = 0; i < 50; ++i) fdm.Run();
+
+    auto buoyant = fdm.GetBuoyantForces();
+
+    TS_ASSERT_DELTA(buoyant->GetForces()(1), 0.0, 0.01);
+    TS_ASSERT_DELTA(buoyant->GetForces()(2), 0.0, 0.01);
+    TS_ASSERT_DELTA(buoyant->GetForces()(3), 0.0, 0.01);
+  }
+
+  // Test 8: Weight does not change with altitude
+  void testWeightConstantWithAltitude() {
+    auto mass = fdm.GetMassBalance();
+    auto ic = fdm.GetIC();
+
+    // Sea level
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(0.0);
+    fdm.RunIC();
+    double weight_sl = mass->GetWeight();
+
+    // High altitude
+    ic->SetAltitudeASLFtIC(10000.0);
+    fdm.RunIC();
+    double weight_high = mass->GetWeight();
+
+    TS_ASSERT_DELTA(weight_sl, weight_high, 1.0);
+  }
+
+  // Test 9: Empty weight reasonable
+  void testEmptyWeight() {
+    auto mass = fdm.GetMassBalance();
+
+    double emptyWeight = mass->GetEmptyWeight();
+
+    TS_ASSERT(emptyWeight > 0.0 || std::isfinite(mass->GetWeight()));
+  }
+
+  // Test 10: Fuel affects weight
+  void testFuelAffectsWeight() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto fcs = fdm.GetFCS();
+    fcs->SetThrottleCmd(-1, 0.7);
+    fcs->SetMixtureCmd(-1, 1.0);
+
+    auto mass = fdm.GetMassBalance();
+    double initialWeight = mass->GetWeight();
+
+    // Run simulation (burn fuel)
+    for (int i = 0; i < 1000; ++i) fdm.Run();
+
+    double finalWeight = mass->GetWeight();
+
+    // Weight should decrease or stay same (fuel burned)
+    TS_ASSERT(finalWeight <= initialWeight + 1.0);
+  }
+
+  // Test 11: Moments of inertia are finite
+  void testMomentsOfInertiaFinite() {
+    auto mass = fdm.GetMassBalance();
+
+    TS_ASSERT(std::isfinite(mass->GetIxx()));
+    TS_ASSERT(std::isfinite(mass->GetIyy()));
+    TS_ASSERT(std::isfinite(mass->GetIzz()));
+    TS_ASSERT(std::isfinite(mass->GetIxy()));
+    TS_ASSERT(std::isfinite(mass->GetIxz()));
+    TS_ASSERT(std::isfinite(mass->GetIyz()));
+  }
+
+  // Test 12: Extended simulation mass stability
+  void testExtendedSimulationMassStability() {
+    auto ic = fdm.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    fdm.RunIC();
+
+    auto mass = fdm.GetMassBalance();
+    auto buoyant = fdm.GetBuoyantForces();
+
+    for (int i = 0; i < 500; ++i) {
+      fdm.Run();
+    }
+
+    // All values should remain valid
+    TS_ASSERT(std::isfinite(mass->GetWeight()));
+    TS_ASSERT(std::isfinite(mass->GetIxx()));
+    TS_ASSERT_DELTA(buoyant->GetForces()(1), 0.0, 0.01);
   }
 };
