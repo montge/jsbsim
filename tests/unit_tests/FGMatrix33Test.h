@@ -2,6 +2,11 @@
 #include <cxxtest/TestSuite.h>
 #include <math/FGMatrix33.h>
 #include <math/FGQuaternion.h>
+#include <FGFDMExec.h>
+#include <models/FGPropagate.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGAerodynamics.h>
+#include <initialization/FGInitialCondition.h>
 
 class FGMatrix33Test : public CxxTest::TestSuite
 {
@@ -2336,5 +2341,299 @@ public:
     for (int i = 1; i <= 3; i++)
       for (int j = 1; j <= 3; j++)
         TS_ASSERT_DELTA(m3(i, j), m(i, j), 1E-10);
+  }
+};
+
+/*******************************************************************************
+ * FGMatrix33 C172x Integration Tests
+ * Tests matrix operations using real C172x aircraft transformation matrices
+ ******************************************************************************/
+class FGMatrix33C172xTest : public CxxTest::TestSuite
+{
+public:
+  JSBSim::FGFDMExec fdmex;
+  std::string aircraft_path;
+
+  void setUp() {
+    aircraft_path = std::string(JSBSIM_TEST_PATH) + "/aircraft";
+    fdmex.SetAircraftPath(aircraft_path);
+    fdmex.SetEnginePath(std::string(JSBSIM_TEST_PATH) + "/engine");
+    fdmex.SetSystemsPath(std::string(JSBSIM_TEST_PATH) + "/systems");
+  }
+
+  void tearDown() {
+    fdmex.ResetToInitialConditions(0);
+  }
+
+  // Test body-to-local transformation matrix
+  void testC172xTb2lMatrix() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetPhiDegIC(0.0);
+    ic->SetThetaDegIC(3.0);
+    ic->SetPsiDegIC(90.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+
+    // Matrix should be orthogonal (determinant = +1)
+    double det = Tb2l.Determinant();
+    TS_ASSERT_DELTA(det, 1.0, 1e-10);
+
+    // Transpose should equal inverse for rotation matrix
+    JSBSim::FGMatrix33 Tb2lT = Tb2l.Transposed();
+    JSBSim::FGMatrix33 Tb2lInv = Tb2l.Inverse();
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(Tb2lT(i, j), Tb2lInv(i, j), 1e-10);
+      }
+    }
+  }
+
+  // Test local-to-body transformation matrix
+  void testC172xTl2bMatrix() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(110.0);
+    ic->SetAltitudeASLFtIC(4000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tl2b = propagate->GetTl2b();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+
+    // Product should be identity
+    JSBSim::FGMatrix33 product = Tl2b * Tb2l;
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        double expected = (i == j) ? 1.0 : 0.0;
+        TS_ASSERT_DELTA(product(i, j), expected, 1e-10);
+      }
+    }
+  }
+
+  // Test ECEF to local transformation
+  void testC172xTec2lMatrix() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetLatitudeDegIC(45.0);
+    ic->SetLongitudeDegIC(-120.0);
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tec2l = propagate->GetTec2l();
+
+    // Should be orthogonal rotation matrix
+    double det = Tec2l.Determinant();
+    TS_ASSERT_DELTA(det, 1.0, 1e-10);
+  }
+
+  // Test velocity transformation body to local
+  void testC172xVelocityTransformation() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(120.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetPsiDegIC(0.0);  // Heading north
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 uvwBody = propagate->GetUVW();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+
+    // Transform to local frame
+    JSBSim::FGColumnVector3 vLocal = Tb2l * uvwBody;
+
+    // Magnitude should be preserved
+    TS_ASSERT_DELTA(vLocal.Magnitude(), uvwBody.Magnitude(), 1e-9);
+
+    // Heading north, forward velocity should map mostly to north component
+    TS_ASSERT(fabs(vLocal(1)) > fabs(vLocal(2)));
+  }
+
+  // Test matrix multiplication with velocity vector
+  void testC172xMatrixVectorMultiply() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(4000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 uvw = propagate->GetUVW();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+    JSBSim::FGMatrix33 Tl2b = propagate->GetTl2b();
+
+    // Transform to local and back
+    JSBSim::FGColumnVector3 vLocal = Tb2l * uvw;
+    JSBSim::FGColumnVector3 vBack = Tl2b * vLocal;
+
+    // Should recover original
+    TS_ASSERT_DELTA(vBack(1), uvw(1), 1e-9);
+    TS_ASSERT_DELTA(vBack(2), uvw(2), 1e-9);
+    TS_ASSERT_DELTA(vBack(3), uvw(3), 1e-9);
+  }
+
+  // Test inertial transformation matrix
+  void testC172xTi2bMatrix() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Ti2b = propagate->GetTi2b();
+    JSBSim::FGMatrix33 Tb2i = propagate->GetTb2i();
+
+    // Product should be identity
+    JSBSim::FGMatrix33 product = Ti2b * Tb2i;
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        double expected = (i == j) ? 1.0 : 0.0;
+        TS_ASSERT_DELTA(product(i, j), expected, 1e-10);
+      }
+    }
+  }
+
+  // Test quaternion to matrix conversion
+  void testC172xQuaternionToMatrix() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetPhiDegIC(10.0);
+    ic->SetThetaDegIC(5.0);
+    ic->SetPsiDegIC(45.0);
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGQuaternion quat = propagate->GetQuaternion();
+    JSBSim::FGMatrix33 Tl2b = propagate->GetTl2b();
+
+    // Matrix from quaternion should match propagate's matrix
+    JSBSim::FGMatrix33 fromQuat = quat.GetT();
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(fromQuat(i, j), Tl2b(i, j), 1e-10);
+      }
+    }
+  }
+
+  // Test matrix determinant for rotation matrices
+  void testC172xRotationMatrixDeterminant() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetPhiDegIC(15.0);
+    ic->SetThetaDegIC(-5.0);
+    ic->SetPsiDegIC(120.0);
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(4000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+    JSBSim::FGMatrix33 Tl2b = propagate->GetTl2b();
+    JSBSim::FGMatrix33 Tec2l = propagate->GetTec2l();
+
+    // All rotation matrices should have determinant = 1
+    TS_ASSERT_DELTA(Tb2l.Determinant(), 1.0, 1e-10);
+    TS_ASSERT_DELTA(Tl2b.Determinant(), 1.0, 1e-10);
+    TS_ASSERT_DELTA(Tec2l.Determinant(), 1.0, 1e-10);
+  }
+
+  // Test matrix column extraction
+  void testC172xMatrixColumns() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+
+    // Unit vectors transformed by rotation matrix
+    JSBSim::FGColumnVector3 xBody(1.0, 0.0, 0.0);
+    JSBSim::FGColumnVector3 yBody(0.0, 1.0, 0.0);
+    JSBSim::FGColumnVector3 zBody(0.0, 0.0, 1.0);
+
+    JSBSim::FGColumnVector3 xLocal = Tb2l * xBody;
+    JSBSim::FGColumnVector3 yLocal = Tb2l * yBody;
+    JSBSim::FGColumnVector3 zLocal = Tb2l * zBody;
+
+    // Transformed unit vectors should remain unit length
+    TS_ASSERT_DELTA(xLocal.Magnitude(), 1.0, 1e-12);
+    TS_ASSERT_DELTA(yLocal.Magnitude(), 1.0, 1e-12);
+    TS_ASSERT_DELTA(zLocal.Magnitude(), 1.0, 1e-12);
+
+    // Transformed axes should be orthogonal
+    TS_ASSERT_DELTA(DotProduct(xLocal, yLocal), 0.0, 1e-10);
+    TS_ASSERT_DELTA(DotProduct(yLocal, zLocal), 0.0, 1e-10);
+    TS_ASSERT_DELTA(DotProduct(xLocal, zLocal), 0.0, 1e-10);
+  }
+
+  // Test matrix addition and subtraction
+  void testC172xMatrixArithmetic() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+
+    // Add matrix to itself
+    JSBSim::FGMatrix33 doubled = Tb2l + Tb2l;
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(doubled(i, j), 2.0 * Tb2l(i, j), 1e-10);
+      }
+    }
+
+    // Subtract matrix from itself
+    JSBSim::FGMatrix33 zero = Tb2l - Tb2l;
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(zero(i, j), 0.0, 1e-10);
+      }
+    }
+  }
+
+  // Test scalar multiplication of matrix
+  void testC172xMatrixScalarMultiply() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGMatrix33 Tb2l = propagate->GetTb2l();
+
+    // Scalar multiply
+    JSBSim::FGMatrix33 scaled = 3.0 * Tb2l;
+    for (int i = 1; i <= 3; i++) {
+      for (int j = 1; j <= 3; j++) {
+        TS_ASSERT_DELTA(scaled(i, j), 3.0 * Tb2l(i, j), 1e-10);
+      }
+    }
   }
 };

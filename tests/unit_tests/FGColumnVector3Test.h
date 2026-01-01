@@ -1,5 +1,11 @@
 #include <cxxtest/TestSuite.h>
 #include <math/FGColumnVector3.h>
+#include <FGFDMExec.h>
+#include <models/FGPropagate.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGAccelerations.h>
+#include <models/FGAerodynamics.h>
+#include <initialization/FGInitialCondition.h>
 
 class FGColumnVector3Test : public CxxTest::TestSuite
 {
@@ -1360,5 +1366,286 @@ public:
 
     // v1 should be normalized
     TS_ASSERT_DELTA(v1.Magnitude(), 1.0, 1e-12);
+  }
+};
+
+/*******************************************************************************
+ * FGColumnVector3 C172x Integration Tests
+ * Tests vector operations using real C172x aircraft simulation data
+ ******************************************************************************/
+class FGColumnVector3C172xTest : public CxxTest::TestSuite
+{
+public:
+  JSBSim::FGFDMExec fdmex;
+  std::string aircraft_path;
+
+  void setUp() {
+    aircraft_path = std::string(JSBSIM_TEST_PATH) + "/aircraft";
+    fdmex.SetAircraftPath(aircraft_path);
+    fdmex.SetEnginePath(std::string(JSBSIM_TEST_PATH) + "/engine");
+    fdmex.SetSystemsPath(std::string(JSBSIM_TEST_PATH) + "/systems");
+  }
+
+  void tearDown() {
+    fdmex.ResetToInitialConditions(0);
+  }
+
+  // Test velocity vector from C172x in cruise flight
+  void testC172xVelocityVector() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(120.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 vBody = propagate->GetUVW();
+
+    // Verify body velocity components exist
+    TS_ASSERT(std::isfinite(vBody(1)));
+    TS_ASSERT(std::isfinite(vBody(2)));
+    TS_ASSERT(std::isfinite(vBody(3)));
+
+    // Forward velocity should be positive (u component)
+    TS_ASSERT(vBody(1) > 0.0);
+
+    // Speed should be approximately the set calibrated airspeed
+    double speed = vBody.Magnitude();
+    TS_ASSERT(speed > 150.0);  // ~120 KCAS in ft/s
+    TS_ASSERT(speed < 250.0);
+  }
+
+  // Test acceleration vector magnitude in level flight
+  void testC172xAccelerationVector() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(3000.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto accelerations = fdmex.GetAccelerations();
+    JSBSim::FGColumnVector3 accelBody = accelerations->GetUVWdot();
+
+    // All acceleration components should be finite
+    TS_ASSERT(std::isfinite(accelBody(1)));
+    TS_ASSERT(std::isfinite(accelBody(2)));
+    TS_ASSERT(std::isfinite(accelBody(3)));
+
+    // In quasi-steady flight, accelerations should be small
+    TS_ASSERT(fabs(accelBody(1)) < 50.0);
+    TS_ASSERT(fabs(accelBody(2)) < 50.0);
+    TS_ASSERT(fabs(accelBody(3)) < 50.0);
+  }
+
+  // Test angular velocity vector in straight flight
+  void testC172xAngularVelocityVector() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(110.0);
+    ic->SetAltitudeASLFtIC(4000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 pqr = propagate->GetPQR();
+
+    // Angular rates should be finite
+    TS_ASSERT(std::isfinite(pqr(1)));
+    TS_ASSERT(std::isfinite(pqr(2)));
+    TS_ASSERT(std::isfinite(pqr(3)));
+
+    // In steady flight, rates should be small
+    TS_ASSERT(fabs(pqr(1)) < 1.0);  // Roll rate
+    TS_ASSERT(fabs(pqr(2)) < 1.0);  // Pitch rate
+    TS_ASSERT(fabs(pqr(3)) < 1.0);  // Yaw rate
+  }
+
+  // Test ECEF position vector
+  void testC172xECEFPositionVector() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetLatitudeDegIC(37.0);
+    ic->SetLongitudeDegIC(-122.0);
+    ic->SetAltitudeASLFtIC(1000.0);
+    ic->SetVcalibratedKtsIC(80.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 ecef = propagate->GetLocation();
+
+    // ECEF position should be near Earth's surface
+    double radius = ecef.Magnitude();
+    TS_ASSERT(radius > 20000000.0);  // > 6000 km in feet
+    TS_ASSERT(radius < 22000000.0);
+  }
+
+  // Test velocity vector addition/subtraction
+  void testC172xVelocityVectorOperations() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 uvw = propagate->GetUVW();
+
+    // Test addition with wind-like vector
+    JSBSim::FGColumnVector3 wind(-10.0, 5.0, 0.0);
+    JSBSim::FGColumnVector3 ground = uvw + wind;
+
+    TS_ASSERT_EQUALS(ground(1), uvw(1) + wind(1));
+    TS_ASSERT_EQUALS(ground(2), uvw(2) + wind(2));
+    TS_ASSERT_EQUALS(ground(3), uvw(3) + wind(3));
+
+    // Test subtraction
+    JSBSim::FGColumnVector3 diff = ground - wind;
+    TS_ASSERT_DELTA(diff(1), uvw(1), 1e-10);
+    TS_ASSERT_DELTA(diff(2), uvw(2), 1e-10);
+    TS_ASSERT_DELTA(diff(3), uvw(3), 1e-10);
+  }
+
+  // Test velocity vector scaling
+  void testC172xVelocityScaling() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(120.0);
+    ic->SetAltitudeASLFtIC(6000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 uvw = propagate->GetUVW();
+    double origMag = uvw.Magnitude();
+
+    // Scale velocity by 2
+    JSBSim::FGColumnVector3 doubled = 2.0 * uvw;
+    TS_ASSERT_DELTA(doubled.Magnitude(), 2.0 * origMag, 1e-9);
+
+    // Scale velocity by 0.5
+    JSBSim::FGColumnVector3 halved = uvw / 2.0;
+    TS_ASSERT_DELTA(halved.Magnitude(), 0.5 * origMag, 1e-9);
+  }
+
+  // Test velocity dot product for angle calculation
+  void testC172xVelocityDotProduct() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(4000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 uvw = propagate->GetUVW();
+
+    // Dot product with self equals magnitude squared
+    double dot = DotProduct(uvw, uvw);
+    double magSq = uvw.Magnitude() * uvw.Magnitude();
+    TS_ASSERT_DELTA(dot, magSq, 1e-9);
+
+    // Dot product with perpendicular should be ~0
+    JSBSim::FGColumnVector3 lateral(0.0, 1.0, 0.0);
+    double latDot = DotProduct(uvw, lateral);
+    // Not exactly zero due to sideslip, but small compared to forward velocity
+    TS_ASSERT(fabs(latDot) < uvw(1));
+  }
+
+  // Test cross product for moment calculation
+  void testC172xMomentCrossProduct() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(110.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    // Simulate moment arm and force
+    JSBSim::FGColumnVector3 arm(5.0, 0.0, 0.0);  // 5 ft forward of CG
+    JSBSim::FGColumnVector3 force(0.0, 0.0, -100.0);  // 100 lbs down
+
+    // Compute moment = arm × force
+    JSBSim::FGColumnVector3 moment = arm * force;
+
+    // Should create pitching moment (y-component)
+    TS_ASSERT_DELTA(moment(1), 0.0, 1e-9);      // No roll
+    TS_ASSERT_DELTA(moment(2), 500.0, 1e-9);   // Pitch up
+    TS_ASSERT_DELTA(moment(3), 0.0, 1e-9);      // No yaw
+
+    // Verify cross product is perpendicular to both inputs
+    TS_ASSERT_DELTA(DotProduct(moment, arm), 0.0, 1e-9);
+    TS_ASSERT_DELTA(DotProduct(moment, force), 0.0, 1e-9);
+  }
+
+  // Test vector normalization for unit vectors
+  void testC172xVelocityNormalization() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(4000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 uvw = propagate->GetUVW();
+
+    // Create a copy and normalize
+    JSBSim::FGColumnVector3 unitVel = uvw;
+    unitVel.Normalize();
+
+    // Should be unit vector
+    TS_ASSERT_DELTA(unitVel.Magnitude(), 1.0, 1e-12);
+
+    // Direction should be preserved (ratio of components)
+    if (uvw(2) != 0.0) {
+      TS_ASSERT_DELTA(unitVel(1)/unitVel(2), uvw(1)/uvw(2), 1e-9);
+    }
+  }
+
+  // Test NED velocity components
+  void testC172xNEDVelocityVector() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetPsiDegIC(90.0);  // Heading east
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 vNED = propagate->GetVel();
+
+    // All components should be finite
+    TS_ASSERT(std::isfinite(vNED(1)));  // North
+    TS_ASSERT(std::isfinite(vNED(2)));  // East
+    TS_ASSERT(std::isfinite(vNED(3)));  // Down
+
+    // Heading east, should have larger east component
+    TS_ASSERT(fabs(vNED(2)) > fabs(vNED(1)) * 0.5);
+  }
+
+  // Test inertial velocity vector
+  void testC172xInertialVelocityVector() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetLatitudeDegIC(45.0);
+    ic->SetLongitudeDegIC(0.0);
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    JSBSim::FGColumnVector3 vInertial = propagate->GetInertialVelocity();
+
+    // Inertial velocity includes Earth rotation
+    double speed = vInertial.Magnitude();
+    TS_ASSERT(speed > 100.0);  // Should include some Earth rotation contribution
+    TS_ASSERT(std::isfinite(speed));
   }
 };
