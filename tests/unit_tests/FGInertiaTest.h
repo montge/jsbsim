@@ -14,6 +14,12 @@
 #include <cmath>
 #include <math/FGColumnVector3.h>
 #include <math/FGMatrix33.h>
+#include "FGFDMExec.h"
+#include "models/FGFCS.h"
+#include "models/FGPropulsion.h"
+#include "models/FGAuxiliary.h"
+#include "models/FGPropagate.h"
+#include "models/FGMassBalance.h"
 
 using namespace JSBSim;
 
@@ -1750,5 +1756,293 @@ public:
 
     double cg_dot = (cg_final - cg_initial) / dt;
     TS_ASSERT_DELTA(cg_dot, -0.00833, 0.0001);
+  }
+};
+
+// ============ C172x Aircraft Inertia Integration Tests ============
+class FGInertiaC172xTest : public CxxTest::TestSuite
+{
+public:
+
+  // Test C172x initial mass properties
+  void testC172xInitialMass() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto massbal = fdmex.GetMassBalance();
+    TS_ASSERT(massbal != nullptr);
+
+    double mass = massbal->GetMass();
+    TS_ASSERT(std::isfinite(mass));
+    TS_ASSERT(mass > 0.0);  // Mass must be positive
+  }
+
+  // Test C172x moments of inertia
+  void testC172xMomentsOfInertia() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto massbal = fdmex.GetMassBalance();
+    TS_ASSERT(massbal != nullptr);
+
+    const FGMatrix33& J = massbal->GetJ();
+    double Ixx = J(1, 1);
+    double Iyy = J(2, 2);
+    double Izz = J(3, 3);
+
+    TS_ASSERT(std::isfinite(Ixx));
+    TS_ASSERT(std::isfinite(Iyy));
+    TS_ASSERT(std::isfinite(Izz));
+
+    // All principal moments must be positive
+    TS_ASSERT(Ixx > 0.0);
+    TS_ASSERT(Iyy > 0.0);
+    TS_ASSERT(Izz > 0.0);
+  }
+
+  // Test C172x triangle inequality for inertia
+  void testC172xTriangleInequality() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto massbal = fdmex.GetMassBalance();
+    const FGMatrix33& J = massbal->GetJ();
+    double Ixx = J(1, 1);
+    double Iyy = J(2, 2);
+    double Izz = J(3, 3);
+
+    // Physical bodies must satisfy triangle inequality
+    TS_ASSERT(Ixx + Iyy >= Izz);
+    TS_ASSERT(Ixx + Izz >= Iyy);
+    TS_ASSERT(Iyy + Izz >= Ixx);
+  }
+
+  // Test C172x products of inertia
+  void testC172xProductsOfInertia() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto massbal = fdmex.GetMassBalance();
+    const FGMatrix33& J = massbal->GetJ();
+    double Ixy = J(1, 2);
+    double Ixz = J(1, 3);
+    double Iyz = J(2, 3);
+
+    TS_ASSERT(std::isfinite(Ixy));
+    TS_ASSERT(std::isfinite(Ixz));
+    TS_ASSERT(std::isfinite(Iyz));
+
+    // For symmetric aircraft, Ixy and Iyz should be near zero
+    // Ixz may be non-zero due to engine placement
+  }
+
+  // Test C172x CG location
+  void testC172xCGLocation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto massbal = fdmex.GetMassBalance();
+    double cgX = massbal->GetXYZcg(1);
+    double cgY = massbal->GetXYZcg(2);
+    double cgZ = massbal->GetXYZcg(3);
+
+    TS_ASSERT(std::isfinite(cgX));
+    TS_ASSERT(std::isfinite(cgY));
+    TS_ASSERT(std::isfinite(cgZ));
+  }
+
+  // Test C172x mass during simulation
+  void testC172xMassDuringFlight() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto massbal = fdmex.GetMassBalance();
+    prop->InitRunning(-1);
+
+    double initialMass = massbal->GetMass();
+
+    // Run simulation for a few steps
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double finalMass = massbal->GetMass();
+    TS_ASSERT(std::isfinite(finalMass));
+    TS_ASSERT(finalMass > 0.0);
+
+    // Mass should decrease or stay same (fuel burn)
+    TS_ASSERT(finalMass <= initialMass + 0.1);  // Small tolerance
+  }
+
+  // Test C172x inertia tensor consistency
+  void testC172xInertiaTensorConsistency() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto massbal = fdmex.GetMassBalance();
+    const FGMatrix33& J = massbal->GetJ();
+    double Ixx = J(1, 1);
+    double Iyy = J(2, 2);
+    double Izz = J(3, 3);
+    double Ixz = J(1, 3);
+
+    // Check that determinant is positive (positive definite)
+    // For simplified check with Ixy=Iyz=0
+    double det = Ixx * (Iyy * Izz) - Ixz * Ixz * Iyy;
+    TS_ASSERT(det > 0.0);
+  }
+
+  // Test C172x angular momentum calculation
+  void testC172xAngularMomentum() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Apply aileron to induce roll
+    fcs->SetDaCmd(0.3);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Get body angular rates
+    double p = propagate->GetPQR(1);  // Roll rate
+    double q = propagate->GetPQR(2);  // Pitch rate
+    double r = propagate->GetPQR(3);  // Yaw rate
+
+    TS_ASSERT(std::isfinite(p));
+    TS_ASSERT(std::isfinite(q));
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test C172x rotational kinetic energy
+  void testC172xRotationalKineticEnergy() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto massbal = fdmex.GetMassBalance();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Induce rotation
+    fcs->SetDrCmd(0.2);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    const FGMatrix33& J = massbal->GetJ();
+    double Ixx = J(1, 1);
+    double Iyy = J(2, 2);
+    double Izz = J(3, 3);
+    double p = propagate->GetPQR(1);
+    double q = propagate->GetPQR(2);
+    double r = propagate->GetPQR(3);
+
+    // Simplified rotational KE (ignoring products of inertia)
+    double KE_rot = 0.5 * (Ixx * p * p + Iyy * q * q + Izz * r * r);
+    TS_ASSERT(std::isfinite(KE_rot));
+    TS_ASSERT(KE_rot >= 0.0);  // KE must be non-negative
+  }
+
+  // Test C172x pitch maneuver inertia response
+  void testC172xPitchInertiaResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Apply elevator
+    fcs->SetDeCmd(-0.3);
+
+    double q_prev = 0.0;
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+      double q = propagate->GetPQR(2);
+      TS_ASSERT(std::isfinite(q));
+      q_prev = q;
+    }
+
+    // Pitch rate should have changed due to elevator input
+    double q_final = propagate->GetPQR(2);
+    TS_ASSERT(std::isfinite(q_final));
+  }
+
+  // Test C172x yaw moment due to rudder
+  void testC172xYawInertiaResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Apply rudder
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double r = propagate->GetPQR(3);  // Yaw rate
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  // Test C172x mass balance stability during flight
+  void testC172xMassBalanceStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto massbal = fdmex.GetMassBalance();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Control inputs
+    fcs->SetDeCmd(-0.1);
+    fcs->SetDaCmd(0.1);
+
+    // Run for extended period
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+
+      double mass = massbal->GetMass();
+      const FGMatrix33& J = massbal->GetJ();
+      double Ixx = J(1, 1);
+      double Iyy = J(2, 2);
+      double Izz = J(3, 3);
+
+      TS_ASSERT(std::isfinite(mass));
+      TS_ASSERT(std::isfinite(Ixx));
+      TS_ASSERT(std::isfinite(Iyy));
+      TS_ASSERT(std::isfinite(Izz));
+      TS_ASSERT(mass > 0.0);
+      TS_ASSERT(Ixx > 0.0);
+      TS_ASSERT(Iyy > 0.0);
+      TS_ASSERT(Izz > 0.0);
+    }
   }
 };

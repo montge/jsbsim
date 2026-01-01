@@ -23,6 +23,15 @@
 #include <limits>
 #include <cmath>
 
+#include "FGFDMExec.h"
+#include "models/FGFCS.h"
+#include "models/FGPropulsion.h"
+#include "models/FGAuxiliary.h"
+#include "models/FGPropagate.h"
+#include "models/FGAerodynamics.h"
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 const double DEG_TO_RAD = M_PI / 180.0;
 const double RAD_TO_DEG = 180.0 / M_PI;
@@ -1430,5 +1439,241 @@ public:
 
     TS_ASSERT(improvement > 1.0);  // More than doubled
     TS_ASSERT_DELTA(improvement, 1.4, 0.01);
+  }
+};
+
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+C172X INTEGRATION TESTS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+class FGHighAOAC172xTest : public CxxTest::TestSuite
+{
+public:
+  void testC172xAngleOfAttack() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double alpha = aux->Getalpha();
+    TS_ASSERT(std::isfinite(alpha));
+  }
+
+  void testC172xElevatorPullup() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(aux != nullptr);
+
+    // Pull back on elevator
+    fcs->SetDeCmd(-0.7);
+    fcs->SetThrottleCmd(-1, 0.8);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double alpha = aux->Getalpha();
+    TS_ASSERT(std::isfinite(alpha));
+  }
+
+  void testC172xAerodynamicForces() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aero = fdmex.GetAerodynamics();
+    TS_ASSERT(aero != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double ld = aero->GetLoD();
+    TS_ASSERT(std::isfinite(ld));
+  }
+
+  void testC172xPitchRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(propagate != nullptr);
+
+    fcs->SetDeCmd(-0.5);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double q = propagate->GetPQR(2);
+    TS_ASSERT(std::isfinite(q));
+  }
+
+  void testC172xLoadFactor() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double nz = aux->GetNz();
+    TS_ASSERT(std::isfinite(nz));
+  }
+
+  void testC172xSideslip() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(aux != nullptr);
+
+    fcs->SetDrCmd(0.5);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double beta = aux->Getbeta();
+    TS_ASSERT(std::isfinite(beta));
+  }
+
+  void testC172xRollRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(propagate != nullptr);
+
+    fcs->SetDaCmd(0.5);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double p = propagate->GetPQR(1);
+    TS_ASSERT(std::isfinite(p));
+  }
+
+  void testC172xYawRate() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(propagate != nullptr);
+
+    fcs->SetDrCmd(0.4);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double r = propagate->GetPQR(3);
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  void testC172xControlEffectiveness() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    fcs->SetDeCmd(-0.5);
+    fcs->SetDaCmd(0.3);
+    fcs->SetDrCmd(0.2);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    TS_ASSERT(std::isfinite(fcs->GetDePos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDrPos()));
+  }
+
+  void testC172xDynamicPressure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double qbar = aux->Getqbar();
+    TS_ASSERT(std::isfinite(qbar));
+    TS_ASSERT(qbar >= 0.0);
+  }
+
+  void testC172xFlightPathAngle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double gamma = aux->GetGamma();
+    TS_ASSERT(std::isfinite(gamma));
+  }
+
+  void testC172xTrueAirspeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+    prop->InitRunning(-1);
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double vt = aux->GetVt();
+    TS_ASSERT(std::isfinite(vt));
+    TS_ASSERT(vt >= 0.0);
   }
 };

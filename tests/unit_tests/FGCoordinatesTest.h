@@ -15,6 +15,13 @@
 #include <limits>
 #include <cmath>
 
+#include "FGFDMExec.h"
+#include "models/FGFCS.h"
+#include "models/FGPropagate.h"
+#include "models/FGAuxiliary.h"
+
+using namespace JSBSim;
+
 const double epsilon = 1e-8;
 const double DEG_TO_RAD = M_PI / 180.0;
 const double RAD_TO_DEG = 180.0 / M_PI;
@@ -1673,5 +1680,217 @@ public:
     TS_ASSERT_DELTA(c1, 0.707, 0.01);
     TS_ASSERT_DELTA(c2, 0.0, 0.01);
     TS_ASSERT_DELTA(s2, 1.0, 0.01);
+  }
+};
+
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+C172X INTEGRATION TESTS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+class FGCoordinatesC172xTest : public CxxTest::TestSuite
+{
+public:
+  void testC172xLatitudeLongitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    double lat = propagate->GetLatitudeDeg();
+    double lon = propagate->GetLongitudeDeg();
+
+    TS_ASSERT(std::isfinite(lat));
+    TS_ASSERT(std::isfinite(lon));
+    TS_ASSERT(lat >= -90.0 && lat <= 90.0);
+    TS_ASSERT(lon >= -180.0 && lon <= 180.0);
+  }
+
+  void testC172xAltitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    double alt = propagate->GetAltitudeASL();
+    TS_ASSERT(std::isfinite(alt));
+  }
+
+  void testC172xEulerAngles() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    for (int i = 0; i < 20; i++) {
+      fdmex.Run();
+    }
+
+    double phi = propagate->GetEuler(1);
+    double theta = propagate->GetEuler(2);
+    double psi = propagate->GetEuler(3);
+
+    TS_ASSERT(std::isfinite(phi));
+    TS_ASSERT(std::isfinite(theta));
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  void testC172xQuaternion() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    const auto& quat = propagate->GetQuaternion();
+    double mag = std::sqrt(quat(1)*quat(1) + quat(2)*quat(2) +
+                          quat(3)*quat(3) + quat(4)*quat(4));
+    TS_ASSERT_DELTA(mag, 1.0, 1e-6);
+  }
+
+  void testC172xVelocityNED() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double vn = propagate->GetVel(1);
+    double ve = propagate->GetVel(2);
+    double vd = propagate->GetVel(3);
+
+    TS_ASSERT(std::isfinite(vn));
+    TS_ASSERT(std::isfinite(ve));
+    TS_ASSERT(std::isfinite(vd));
+  }
+
+  void testC172xPositionECEF() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    const auto& ecef = propagate->GetLocation();
+    TS_ASSERT(std::isfinite(ecef(1)));
+    TS_ASSERT(std::isfinite(ecef(2)));
+    TS_ASSERT(std::isfinite(ecef(3)));
+  }
+
+  void testC172xAngularRates() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double p = propagate->GetPQR(1);
+    double q = propagate->GetPQR(2);
+    double r = propagate->GetPQR(3);
+
+    TS_ASSERT(std::isfinite(p));
+    TS_ASSERT(std::isfinite(q));
+    TS_ASSERT(std::isfinite(r));
+  }
+
+  void testC172xLocalRadius() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    double radius = propagate->GetRadius();
+    TS_ASSERT(std::isfinite(radius));
+    TS_ASSERT(radius > 20000000.0);  // Earth radius in feet
+  }
+
+  void testC172xHeadingChange() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(propagate != nullptr);
+
+    fcs->SetDrCmd(0.4);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double psi = propagate->GetEuler(3);
+    TS_ASSERT(std::isfinite(psi));
+  }
+
+  void testC172xBankChange() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(fcs != nullptr);
+    TS_ASSERT(propagate != nullptr);
+
+    fcs->SetDaCmd(0.3);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double phi = propagate->GetEuler(1);
+    TS_ASSERT(std::isfinite(phi));
+  }
+
+  void testC172xVerticalSpeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+    TS_ASSERT(propagate != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double hdot = propagate->Gethdot();
+    TS_ASSERT(std::isfinite(hdot));
+  }
+
+  void testC172xGroundSpeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto aux = fdmex.GetAuxiliary();
+    TS_ASSERT(aux != nullptr);
+
+    for (int i = 0; i < 30; i++) {
+      fdmex.Run();
+    }
+
+    double vg = aux->GetVground();
+    TS_ASSERT(std::isfinite(vg));
+    TS_ASSERT(vg >= 0.0);
   }
 };
