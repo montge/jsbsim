@@ -233,6 +233,43 @@ class TestMyFeature(JSBSimTestCase):
 - **System Tests**: Test full simulation scenarios
 - **Regression Tests**: Validate against known-good results
 
+## Aircraft Validation
+
+The `ValidateAircrafts.py` test performs validation checks on all aircraft configurations:
+
+### Checks Performed
+
+1. **Metadata Validation**
+   - Presence of `<fileheader>` with `<author>`, `<description>`, and `<license>`
+   - License must include `licenseName` or `licenseURL` attribute
+
+2. **Physical Plausibility**
+   - Positive wing area, empty weight, and inertia values (Ixx, Iyy, Izz)
+   - Wing loading within reasonable range (5-150 lb/ft²)
+   - CG location defined in mass_balance
+
+### Running Validation
+
+```bash
+# Run as part of test suite
+ctest -R ValidateAircrafts
+
+# View detailed output
+ctest -R ValidateAircrafts -V
+```
+
+### Behavior
+
+- Validation emits **warnings only** - tests always pass
+- Warnings are visible in CI logs for visibility
+- Does not block merges or fail builds
+
+### Adding New Checks
+
+To add validation checks, edit `ValidateAircrafts.py`:
+- Metadata checks: `_validate_metadata()` method
+- Plausibility checks: `_validate_physical_plausibility()` method
+
 ## Best Practices
 
 1. **One concept per test**: Each test should verify one specific behavior
