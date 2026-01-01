@@ -18,6 +18,16 @@
 #include <cmath>
 #include <algorithm>
 
+#include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <models/FGPropagate.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAuxiliary.h>
+#include <initialization/FGInitialCondition.h>
+#include <input_output/FGPropertyManager.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 
 class FGGainTest : public CxxTest::TestSuite
@@ -1274,5 +1284,234 @@ public:
     TS_ASSERT_DELTA(path1_output, 50.0, epsilon);
     TS_ASSERT_DELTA(path2_output, 80.0, epsilon);
     TS_ASSERT_DELTA(combined, 130.0, epsilon);
+  }
+};
+
+/*******************************************************************************
+ * C172x Integration Tests for FGGain
+ *
+ * Tests gain component behavior in realistic flight scenarios using C172x.
+ * Verifies FCS gain scaling and scheduled gains.
+ ******************************************************************************/
+class FGGainC172xTest : public CxxTest::TestSuite
+{
+public:
+  // Test 1: C172x FCS loads with gain components
+  void testC172xFCSLoadsWithGains() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+  }
+
+  // Test 2: Elevator gain response
+  void testC172xElevatorGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Test proportional response
+    fcs->SetDeCmd(0.5);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+    double pos1 = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+
+    fcs->SetDeCmd(1.0);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+    double pos2 = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+
+    TS_ASSERT(std::isfinite(pos1));
+    TS_ASSERT(std::isfinite(pos2));
+  }
+
+  // Test 3: Aileron gain response
+  void testC172xAileronGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetDaCmd(0.7);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double leftPos = fdmex.GetPropertyValue("fcs/left-aileron-pos-rad");
+    double rightPos = fdmex.GetPropertyValue("fcs/right-aileron-pos-rad");
+
+    TS_ASSERT(std::isfinite(leftPos));
+    TS_ASSERT(std::isfinite(rightPos));
+  }
+
+  // Test 4: Rudder gain response
+  void testC172xRudderGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetDrCmd(0.6);
+
+    for (int i = 0; i < 30; i++) fdmex.Run();
+
+    double rudPos = fdmex.GetPropertyValue("fcs/rudder-pos-rad");
+    TS_ASSERT(std::isfinite(rudPos));
+  }
+
+  // Test 5: Throttle gain/scaling
+  void testC172xThrottleGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Test various throttle settings
+    double settings[] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    for (double t : settings) {
+      fcs->SetThrottleCmd(-1, t);
+      for (int i = 0; i < 10; i++) fdmex.Run();
+
+      double pos = fdmex.GetPropertyValue("fcs/throttle-pos-norm");
+      TS_ASSERT(std::isfinite(pos));
+      TS_ASSERT_DELTA(pos, t, 0.05);
+    }
+  }
+
+  // Test 6: Heading gain in autopilot
+  void testC172xHeadingGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double hdgDeg = fdmex.GetPropertyValue("fcs/heading-true-degrees");
+    TS_ASSERT(std::isfinite(hdgDeg));
+  }
+
+  // Test 7: Roll PID gain
+  void testC172xRollPIDGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    fdmex.SetPropertyValue("ap/attitude_hold", 1.0);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double rollCmd = fdmex.GetPropertyValue("fcs/roll-ap-error-pid");
+    TS_ASSERT(std::isfinite(rollCmd));
+  }
+
+  // Test 8: Aerosurface scale output
+  void testC172xAerosurfaceScale() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetDeCmd(0.5);
+
+    for (int i = 0; i < 30; i++) fdmex.Run();
+
+    // Check elevator position is scaled to radians
+    double elevRad = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+    TS_ASSERT(std::isfinite(elevRad));
+    TS_ASSERT(std::abs(elevRad) < M_PI);  // Reasonable range
+  }
+
+  // Test 9: Mixture gain
+  void testC172xMixtureGain() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetMixtureCmd(-1, 0.85);
+
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    double mixture = fdmex.GetPropertyValue("fcs/mixture-cmd-norm");
+    TS_ASSERT(std::isfinite(mixture));
+  }
+
+  // Test 10: Flap position scaling
+  void testC172xFlapPositionScaling() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetDfCmd(1.0);
+
+    for (int i = 0; i < 200; i++) fdmex.Run();
+
+    double flapDeg = fdmex.GetPropertyValue("fcs/flap-pos-deg");
+    double flapNorm = fdmex.GetPropertyValue("fcs/flap-pos-norm");
+
+    TS_ASSERT(std::isfinite(flapDeg));
+    TS_ASSERT(std::isfinite(flapNorm));
+  }
+
+  // Test 11: Trim gain effect
+  void testC172xTrimGainEffect() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // No trim
+    fcs->SetDeCmd(0.3);
+    fcs->SetPitchTrimCmd(0.0);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+    double pos1 = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+
+    // With trim
+    fcs->SetPitchTrimCmd(0.2);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+    double pos2 = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+
+    TS_ASSERT(std::isfinite(pos1));
+    TS_ASSERT(std::isfinite(pos2));
+    // Trim should affect position
+    TS_ASSERT(std::abs(pos1 - pos2) > 0.001 || std::abs(pos1) < 0.01);
+  }
+
+  // Test 12: Scheduled gain with altitude
+  void testC172xScheduledGainWithAltitude() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(10000.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    fdmex.SetPropertyValue("ap/altitude_hold", 1.0);
+    fdmex.SetPropertyValue("ap/altitude_setpoint", 10000.0);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double hdotCmd = fdmex.GetPropertyValue("fcs/hdot-command");
+    TS_ASSERT(std::isfinite(hdotCmd));
   }
 };

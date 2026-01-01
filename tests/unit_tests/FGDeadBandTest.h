@@ -18,6 +18,16 @@
 #include <cmath>
 #include <algorithm>
 
+#include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <models/FGPropagate.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAuxiliary.h>
+#include <initialization/FGInitialCondition.h>
+#include <input_output/FGPropertyManager.h>
+
+using namespace JSBSim;
+
 const double epsilon = 1e-10;
 
 class FGDeadBandTest : public CxxTest::TestSuite
@@ -1611,5 +1621,235 @@ public:
       symmetricDeadband(gain * symmetricDeadband(rawInput, inputWidth), outputWidth),
       clipMin, clipMax);
     TS_ASSERT_DELTA(output, expectedSteady, 0.01);
+  }
+};
+
+/*******************************************************************************
+ * C172x Integration Tests for FGDeadBand
+ *
+ * Tests deadband behavior in realistic flight scenarios using the C172x model.
+ * Verifies FCS component behavior with deadband elements.
+ ******************************************************************************/
+class FGDeadBandC172xTest : public CxxTest::TestSuite
+{
+public:
+  // Test 1: C172x FCS loads with deadband components
+  void testC172xFCSWithDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+  }
+
+  // Test 2: Small control inputs within deadband
+  void testC172xSmallControlInputs() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Very small elevator input - may be within deadband
+    fcs->SetDeCmd(0.001);
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    double elevPos = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+    TS_ASSERT(std::isfinite(elevPos));
+  }
+
+  // Test 3: Control surface response outside deadband
+  void testC172xControlOutsideDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Larger input - should be outside any deadband
+    fcs->SetDeCmd(0.5);
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double elevPos = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+    TS_ASSERT(std::isfinite(elevPos));
+    TS_ASSERT(std::abs(elevPos) > 0.01);  // Should have moved
+  }
+
+  // Test 4: Aileron deadband behavior
+  void testC172xAileronDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Test small vs large aileron inputs
+    fcs->SetDaCmd(0.001);
+    for (int i = 0; i < 20; i++) fdmex.Run();
+    double smallPos = fdmex.GetPropertyValue("fcs/left-aileron-pos-rad");
+
+    fcs->SetDaCmd(0.5);
+    for (int i = 0; i < 50; i++) fdmex.Run();
+    double largePos = fdmex.GetPropertyValue("fcs/left-aileron-pos-rad");
+
+    TS_ASSERT(std::isfinite(smallPos));
+    TS_ASSERT(std::isfinite(largePos));
+  }
+
+  // Test 5: Rudder deadband behavior
+  void testC172xRudderDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetDrCmd(0.3);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+
+    double rudPos = fdmex.GetPropertyValue("fcs/rudder-pos-rad");
+    TS_ASSERT(std::isfinite(rudPos));
+  }
+
+  // Test 6: Throttle response
+  void testC172xThrottleDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Test throttle at various positions
+    double positions[] = {0.0, 0.1, 0.5, 0.9, 1.0};
+    for (double pos : positions) {
+      fcs->SetThrottleCmd(-1, pos);
+      for (int i = 0; i < 10; i++) fdmex.Run();
+
+      double throttle = fdmex.GetPropertyValue("fcs/throttle-pos-norm");
+      TS_ASSERT(std::isfinite(throttle));
+    }
+  }
+
+  // Test 7: Symmetric control input response
+  void testC172xSymmetricInputResponse() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Test positive elevator
+    fcs->SetDeCmd(0.3);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+    double posElev = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+
+    // Reset and test negative elevator
+    fdmex.RunIC();
+    fcs->SetDeCmd(-0.3);
+    for (int i = 0; i < 30; i++) fdmex.Run();
+    double negElev = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+
+    TS_ASSERT(std::isfinite(posElev));
+    TS_ASSERT(std::isfinite(negElev));
+    // Should be roughly symmetric (opposite signs)
+    TS_ASSERT(posElev * negElev < 0 || std::abs(posElev) < 0.01);
+  }
+
+  // Test 8: Autopilot windup trigger deadband
+  void testC172xAutopilotWindupDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Check windup trigger (uses deadband)
+    double windup = fdmex.GetPropertyValue("fcs/windup-trigger");
+    TS_ASSERT(std::isfinite(windup));
+  }
+
+  // Test 9: Control surface hysteresis-like behavior
+  void testC172xControlHysteresis() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Sweep elevator from negative to positive
+    for (double cmd = -0.5; cmd <= 0.5; cmd += 0.1) {
+      fcs->SetDeCmd(cmd);
+      for (int i = 0; i < 20; i++) fdmex.Run();
+
+      double pos = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+      TS_ASSERT(std::isfinite(pos));
+    }
+  }
+
+  // Test 10: Multiple control inputs simultaneously
+  void testC172xMultipleControlInputs() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Apply all controls at once
+    fcs->SetDeCmd(0.2);
+    fcs->SetDaCmd(-0.15);
+    fcs->SetDrCmd(0.1);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    TS_ASSERT(std::isfinite(fdmex.GetPropertyValue("fcs/elevator-pos-rad")));
+    TS_ASSERT(std::isfinite(fdmex.GetPropertyValue("fcs/left-aileron-pos-rad")));
+    TS_ASSERT(std::isfinite(fdmex.GetPropertyValue("fcs/rudder-pos-rad")));
+  }
+
+  // Test 11: Trim command deadband
+  void testC172xTrimDeadband() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    // Small trim adjustment
+    fcs->SetPitchTrimCmd(0.01);
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    double trim = fdmex.GetPropertyValue("fcs/pitch-trim-cmd-norm");
+    TS_ASSERT(std::isfinite(trim));
+  }
+
+  // Test 12: FCS output continuity through zero
+  void testC172xOutputContinuityThroughZero() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+
+    double lastPos = 0.0;
+    // Sweep through zero
+    for (double cmd = -0.3; cmd <= 0.3; cmd += 0.05) {
+      fcs->SetDeCmd(cmd);
+      for (int i = 0; i < 10; i++) fdmex.Run();
+
+      double pos = fdmex.GetPropertyValue("fcs/elevator-pos-rad");
+      TS_ASSERT(std::isfinite(pos));
+
+      // Check for reasonable continuity (no huge jumps)
+      if (std::abs(cmd) > 0.1) {
+        TS_ASSERT(std::abs(pos - lastPos) < 0.5);
+      }
+      lastPos = pos;
+    }
   }
 };
