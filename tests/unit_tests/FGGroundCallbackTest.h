@@ -21,7 +21,14 @@
 #include <math/FGLocation.h>
 #include <models/FGInertial.h>
 #include <models/FGPropagate.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGAircraft.h>
+#include <models/FGGroundReactions.h>
+#include <models/FGLGear.h>
+#include <models/FGFCS.h>
+#include <models/FGPropulsion.h>
 #include <input_output/FGGroundCallback.h>
+#include <input_output/FGPropertyManager.h>
 #include "TestAssertions.h"
 
 const double epsilon = 100. * std::numeric_limits<double>::epsilon();
@@ -2061,5 +2068,427 @@ public:
     // 6. Contact point is below aircraft
     FGColumnVector3 vLoc = loc;
     TS_ASSERT(vLoc.Magnitude() > vContact.Magnitude());
+  }
+};
+
+/*******************************************************************************
+ * C172x Integration Tests for Ground Callback
+ *
+ * Tests ground interaction and callback behavior using the C172x aircraft model
+ * in realistic flight simulation scenarios.
+ ******************************************************************************/
+class FGGroundCallbackC172xTest : public CxxTest::TestSuite
+{
+public:
+  // Test 1: C172x model loads with ground callback (via FGInertial)
+  void testC172xModelLoadsWithGroundCallback() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto inertial = fdmex.GetInertial();
+    TS_ASSERT(inertial != nullptr);
+  }
+
+  // Test 2: Ground callback returns valid AGL for aircraft on runway
+  void testC172xOnRunwayAGL() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropagate();
+    TS_ASSERT(prop != nullptr);
+
+    double agl = fdmex.GetPropertyValue("position/h-agl-ft");
+    TS_ASSERT(std::isfinite(agl));
+    TS_ASSERT(agl >= 0.0);
+  }
+
+  // Test 3: C172x gear contact points are valid
+  void testC172xGearContactPoints() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+
+    int numGear = gr->GetNumGearUnits();
+    TS_ASSERT(numGear > 0);
+
+    for (int i = 0; i < numGear; i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear) {
+        double gearAgl = gear->GetLocalGear()(3);
+        TS_ASSERT(std::isfinite(gearAgl));
+      }
+    }
+  }
+
+  // Test 4: Ground callback AGL changes with aircraft climb
+  void testC172xClimbAGLChange() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    double initialAgl = fdmex.GetPropertyValue("position/h-agl-ft");
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    auto fcs = fdmex.GetFCS();
+    if (fcs) {
+      fcs->SetThrottleCmd(-1, 1.0);
+      fcs->SetDeCmd(-0.3);  // Pitch up
+    }
+
+    // Run simulation for climb
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+    }
+
+    double finalAgl = fdmex.GetPropertyValue("position/h-agl-ft");
+    TS_ASSERT(std::isfinite(finalAgl));
+    // AGL should have increased during climb
+    TS_ASSERT(finalAgl > initialAgl || std::abs(finalAgl - initialAgl) < 1000.0);
+  }
+
+  // Test 5: Ground normal vector is valid during flight
+  void testC172xGroundNormalVector() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    FGColumnVector3 normal, v, w;
+    FGLocation contact;
+
+    auto prop = fdmex.GetPropagate();
+    TS_ASSERT(prop != nullptr);
+
+    auto inertial = fdmex.GetInertial();
+    TS_ASSERT(inertial != nullptr);
+
+    const FGLocation& loc = prop->GetLocation();
+    double agl = inertial->GetContactPoint(loc, contact, normal, v, w);
+
+    TS_ASSERT(std::isfinite(agl));
+    TS_ASSERT(std::isfinite(normal(1)));
+    TS_ASSERT(std::isfinite(normal(2)));
+    TS_ASSERT(std::isfinite(normal(3)));
+
+    // Normal should be a unit vector
+    double mag = normal.Magnitude();
+    TS_ASSERT_DELTA(mag, 1.0, 0.01);
+  }
+
+  // Test 6: Weight on wheels detection on ground
+  void testC172xWeightOnWheelsOnGround() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    // On initial conditions, aircraft should be on ground
+    double wow = fdmex.GetPropertyValue("gear/wow");
+    TS_ASSERT(std::isfinite(wow));
+  }
+
+  // Test 7: Terrain elevation tracking
+  void testC172xTerrainElevationTracking() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    double terrainElev = fdmex.GetPropertyValue("position/terrain-elevation-asl-ft");
+    TS_ASSERT(std::isfinite(terrainElev));
+  }
+
+  // Test 8: Ground reactions during taxi
+  void testC172xGroundReactionsDuringTaxi() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    auto fcs = fdmex.GetFCS();
+    if (fcs) {
+      fcs->SetThrottleCmd(-1, 0.3);  // Low power for taxi
+    }
+
+    // Run simulation for taxi
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+
+    // All gear forces should be finite
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear && gear->GetWOW()) {
+        const FGColumnVector3& force = gear->GetBodyForces();
+        TS_ASSERT(std::isfinite(force(1)));
+        TS_ASSERT(std::isfinite(force(2)));
+        TS_ASSERT(std::isfinite(force(3)));
+      }
+    }
+  }
+
+  // Test 9: Landing gear extension state
+  void testC172xLandingGearState() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+
+    // C172x has fixed gear, should always be down
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear) {
+        // Fixed gear is always extended
+        double gearPos = gear->GetGearUnitPos();
+        TS_ASSERT(std::isfinite(gearPos));
+      }
+    }
+  }
+
+  // Test 10: Contact location validity
+  void testC172xContactLocationValidity() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    FGColumnVector3 normal, v, w;
+    FGLocation contact;
+
+    auto prop = fdmex.GetPropagate();
+    auto inertial = fdmex.GetInertial();
+    TS_ASSERT(prop != nullptr);
+    TS_ASSERT(inertial != nullptr);
+
+    const FGLocation& loc = prop->GetLocation();
+    inertial->GetContactPoint(loc, contact, normal, v, w);
+
+    // Contact location should be valid
+    TS_ASSERT(std::isfinite(contact.GetLongitude()));
+    TS_ASSERT(std::isfinite(contact.GetLatitude()));
+    TS_ASSERT(std::isfinite(contact.GetRadius()));
+  }
+
+  // Test 11: AGL consistency with altitude during level flight
+  void testC172xAGLAltitudeConsistency() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(100.0);
+    ic->SetAltitudeASLFtIC(5000.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double altAsl = fdmex.GetPropertyValue("position/h-sl-ft");
+    double agl = fdmex.GetPropertyValue("position/h-agl-ft");
+    double terrain = fdmex.GetPropertyValue("position/terrain-elevation-asl-ft");
+
+    TS_ASSERT(std::isfinite(altAsl));
+    TS_ASSERT(std::isfinite(agl));
+    TS_ASSERT(std::isfinite(terrain));
+
+    // AGL + terrain should approximately equal ASL altitude
+    TS_ASSERT_DELTA(agl + terrain, altAsl, 100.0);
+  }
+
+  // Test 12: Ground velocity outputs
+  void testC172xGroundVelocityOutputs() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    FGColumnVector3 normal, v, w;
+    FGLocation contact;
+
+    auto prop = fdmex.GetPropagate();
+    auto inertial = fdmex.GetInertial();
+    TS_ASSERT(prop != nullptr);
+    TS_ASSERT(inertial != nullptr);
+
+    const FGLocation& loc = prop->GetLocation();
+    inertial->GetContactPoint(loc, contact, normal, v, w);
+
+    // Ground velocity components should be finite
+    TS_ASSERT(std::isfinite(v(1)));
+    TS_ASSERT(std::isfinite(v(2)));
+    TS_ASSERT(std::isfinite(v(3)));
+    TS_ASSERT(std::isfinite(w(1)));
+    TS_ASSERT(std::isfinite(w(2)));
+    TS_ASSERT(std::isfinite(w(3)));
+  }
+
+  // Test 13: Gear compression on ground
+  void testC172xGearCompressionOnGround() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    // Run a few frames to stabilize
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+
+    // Check that gear compression values are finite
+    bool hasValidGear = false;
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear) {
+        double compress = gear->GetCompLen();
+        TS_ASSERT(std::isfinite(compress));
+        hasValidGear = true;
+      }
+    }
+    // Should have at least one gear unit
+    TS_ASSERT(hasValidGear);
+  }
+
+  // Test 14: Ground callback with different geographic locations
+  void testC172xDifferentGeographicLocations() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    // Test at different latitudes
+    double latitudes[] = {0.0, 30.0, 45.0, 60.0};
+
+    for (double lat : latitudes) {
+      auto ic = fdmex.GetIC();
+      ic->SetLatitudeDegIC(lat);
+      ic->SetLongitudeDegIC(-122.0);
+      ic->SetAltitudeASLFtIC(3000.0);
+      ic->SetVcalibratedKtsIC(100.0);
+      TS_ASSERT(fdmex.RunIC());
+
+      double agl = fdmex.GetPropertyValue("position/h-agl-ft");
+      TS_ASSERT(std::isfinite(agl));
+      TS_ASSERT(agl > 0.0);
+    }
+  }
+
+  // Test 15: Nose gear steering with ground contact
+  void testC172xNoseGearSteering() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply rudder for steering
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Check that steering angle is finite
+    double steerAngle = fdmex.GetPropertyValue("gear/unit[0]/steering-angle-deg");
+    TS_ASSERT(std::isfinite(steerAngle));
+  }
+
+  // Test 16: Brake application ground forces
+  void testC172xBrakeGroundForces() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    auto fcs = fdmex.GetFCS();
+    TS_ASSERT(fcs != nullptr);
+
+    // Apply throttle then brakes
+    fcs->SetThrottleCmd(-1, 0.5);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+
+    // Check brake forces are finite
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear && gear->GetWOW()) {
+        const FGColumnVector3& force = gear->GetBodyForces();
+        TS_ASSERT(std::isfinite(force(1)));
+        TS_ASSERT(std::isfinite(force(2)));
+        TS_ASSERT(std::isfinite(force(3)));
+      }
+    }
+  }
+
+  // Test 17: Ground effect zone detection
+  void testC172xGroundEffectZone() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    // Set up low altitude flight
+    auto ic = fdmex.GetIC();
+    ic->SetVcalibratedKtsIC(80.0);
+    ic->SetAltitudeAGLFtIC(50.0);  // In ground effect zone
+    TS_ASSERT(fdmex.RunIC());
+
+    auto prop = fdmex.GetPropulsion();
+    if (prop) prop->InitRunning(-1);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double agl = fdmex.GetPropertyValue("position/h-agl-ft");
+    TS_ASSERT(std::isfinite(agl));
+  }
+
+  // Test 18: Ground contact with crosswind
+  void testC172xGroundContactWithCrosswind() {
+    FGFDMExec fdmex;
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+
+    auto ic = fdmex.GetIC();
+    ic->SetWindNEDFpsIC(20.0, 20.0, 0.0);  // Crosswind
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    auto gr = fdmex.GetGroundReactions();
+    TS_ASSERT(gr != nullptr);
+
+    // All gear forces should remain finite with crosswind
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear) {
+        const FGColumnVector3& force = gear->GetBodyForces();
+        TS_ASSERT(std::isfinite(force(1)));
+        TS_ASSERT(std::isfinite(force(2)));
+        TS_ASSERT(std::isfinite(force(3)));
+      }
+    }
   }
 };

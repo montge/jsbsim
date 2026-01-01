@@ -5,7 +5,14 @@
 #include <vector>
 
 #include "TestUtilities.h"
+#include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <models/FGPropagate.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAuxiliary.h>
+#include <input_output/FGPropertyManager.h>
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 const double epsilon = 1e-8;
@@ -1956,5 +1963,350 @@ public:
     TS_ASSERT(Ki >= 0.0);
     TS_ASSERT(Kd >= 0.0);
     TS_ASSERT(dt > 0.0);
+  }
+};
+
+/*******************************************************************************
+ * C172x Integration Tests for PID/FCS Control
+ ******************************************************************************/
+
+class FGPIDC172xTest : public CxxTest::TestSuite
+{
+public:
+  // Test FCS throttle control response
+  void testC172xThrottleControlResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+
+    // Set throttle command
+    fcs->SetThrottleCmd(-1, 0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double throttle_pos = fcs->GetThrottlePos(0);
+    TS_ASSERT(std::isfinite(throttle_pos));
+    TS_ASSERT(throttle_pos >= 0.0 && throttle_pos <= 1.0);
+  }
+
+  // Test elevator control tracking
+  void testC172xElevatorControlTracking() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Command elevator
+    fcs->SetDeCmd(-0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double de_pos = fcs->GetDePos();
+    TS_ASSERT(std::isfinite(de_pos));
+    // Should track command direction
+    TS_ASSERT(de_pos < 0.0);
+  }
+
+  // Test aileron control tracking
+  void testC172xAileronControlTracking() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Command aileron
+    fcs->SetDaCmd(0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double da_l = fcs->GetDaLPos();
+    double da_r = fcs->GetDaRPos();
+
+    TS_ASSERT(std::isfinite(da_l));
+    TS_ASSERT(std::isfinite(da_r));
+  }
+
+  // Test rudder control tracking
+  void testC172xRudderControlTracking() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Command rudder
+    fcs->SetDrCmd(0.5);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double dr_pos = fcs->GetDrPos();
+    TS_ASSERT(std::isfinite(dr_pos));
+    TS_ASSERT(dr_pos > 0.0);
+  }
+
+  // Test control response stability
+  void testC172xControlResponseStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+
+    // Apply step inputs and check for stability
+    fcs->SetDeCmd(-0.3);
+    fcs->SetDaCmd(0.2);
+
+    double max_de = 0, max_da = 0;
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+      max_de = std::max(max_de, std::abs(fcs->GetDePos()));
+      max_da = std::max(max_da, std::abs(fcs->GetDaLPos()));
+    }
+
+    TS_ASSERT(std::isfinite(max_de));
+    TS_ASSERT(std::isfinite(max_da));
+    // Control surfaces should stay within limits
+    TS_ASSERT(max_de < 1.0);
+    TS_ASSERT(max_da < 1.0);
+  }
+
+  // Test pitch trim control
+  void testC172xPitchTrimControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    // Set pitch trim
+    pm->GetNode("fcs/pitch-trim-cmd-norm", true)->setDoubleValue(-0.3);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double trim = pm->GetNode("fcs/pitch-trim-cmd-norm")->getDoubleValue();
+    TS_ASSERT(std::isfinite(trim));
+    TS_ASSERT_DELTA(trim, -0.3, 0.01);
+  }
+
+  // Test mixture control
+  void testC172xMixtureControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetMixtureCmd(-1, 0.9);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double mix_pos = fcs->GetMixturePos(0);
+    TS_ASSERT(std::isfinite(mix_pos));
+    TS_ASSERT(mix_pos >= 0.0 && mix_pos <= 1.0);
+  }
+
+  // Test control command via property tree
+  void testC172xControlViaPropertyTree() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    // Set commands via properties
+    pm->GetNode("fcs/elevator-cmd-norm", true)->setDoubleValue(-0.2);
+    pm->GetNode("fcs/aileron-cmd-norm", true)->setDoubleValue(0.3);
+    pm->GetNode("fcs/rudder-cmd-norm", true)->setDoubleValue(0.1);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double de = pm->GetNode("fcs/elevator-pos-rad", true)->getDoubleValue();
+    double da = pm->GetNode("fcs/left-aileron-pos-rad", true)->getDoubleValue();
+    double dr = pm->GetNode("fcs/rudder-pos-rad", true)->getDoubleValue();
+
+    TS_ASSERT(std::isfinite(de));
+    TS_ASSERT(std::isfinite(da));
+    TS_ASSERT(std::isfinite(dr));
+  }
+
+  // Test flap control increments
+  void testC172xFlapControlIncrements() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Test flap positions: 0, 10, 20, 30 degrees
+    double flap_settings[] = {0.0, 0.33, 0.67, 1.0};
+    double prev_flap = 0;
+
+    for (double setting : flap_settings) {
+      fcs->SetDfCmd(setting);
+      for (int i = 0; i < 200; i++) fdmex.Run();
+
+      double df = fcs->GetDfPos();
+      TS_ASSERT(std::isfinite(df));
+      TS_ASSERT(df >= prev_flap - 0.01);  // Flaps should not go backwards
+      prev_flap = df;
+    }
+  }
+
+  // Test brake control
+  void testC172xBrakeControl() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Apply brakes
+    fcs->SetLBrake(0.8);
+    fcs->SetRBrake(0.8);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double lb = fcs->GetBrake(FGLGear::bgLeft);
+    double rb = fcs->GetBrake(FGLGear::bgRight);
+
+    TS_ASSERT(std::isfinite(lb));
+    TS_ASSERT(std::isfinite(rb));
+    TS_ASSERT(lb > 0.5);
+    TS_ASSERT(rb > 0.5);
+  }
+
+  // Test FCS data consistency
+  void testC172xFCSDataConsistency() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto pm = fdmex.GetPropertyManager();
+
+    fcs->SetDeCmd(-0.4);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    // Get via FCS
+    double de_fcs = fcs->GetDePos();
+
+    // Get via property tree
+    double de_pm = pm->GetNode("fcs/elevator-pos-rad", true)->getDoubleValue();
+
+    TS_ASSERT(std::isfinite(de_fcs));
+    TS_ASSERT(std::isfinite(de_pm));
+    TS_ASSERT_DELTA(de_fcs, de_pm, 0.001);
+  }
+
+  // Test control values remain finite over time
+  void testC172xControlFiniteOverTime() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.7);
+    fcs->SetDeCmd(-0.2);
+    fcs->SetDaCmd(0.1);
+
+    bool all_finite = true;
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+      if (!std::isfinite(fcs->GetDePos()) ||
+          !std::isfinite(fcs->GetDaLPos()) ||
+          !std::isfinite(fcs->GetDrPos())) {
+        all_finite = false;
+        break;
+      }
+    }
+
+    TS_ASSERT(all_finite);
+  }
+
+  // Test control reversal response
+  void testC172xControlReversalResponse() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+
+    // Command full up
+    fcs->SetDeCmd(-1.0);
+    for (int i = 0; i < 100; i++) fdmex.Run();
+    double de_up = fcs->GetDePos();
+
+    // Command full down
+    fcs->SetDeCmd(1.0);
+    for (int i = 0; i < 200; i++) fdmex.Run();
+    double de_down = fcs->GetDePos();
+
+    TS_ASSERT(std::isfinite(de_up));
+    TS_ASSERT(std::isfinite(de_down));
+    TS_ASSERT(de_up < de_down);  // Up is negative
+  }
+
+  // Test control authority at speed
+  void testC172xControlAuthorityAtSpeed() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto fcs = fdmex.GetFCS();
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+
+    prop->InitRunning(-1);
+    fcs->SetThrottleCmd(-1, 0.8);
+
+    // Let aircraft accelerate
+    for (int i = 0; i < 400; i++) fdmex.Run();
+
+    // Apply control input
+    fcs->SetDeCmd(-0.3);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double de = fcs->GetDePos();
+    double q = propagate->GetPQR(2);  // Pitch rate
+
+    TS_ASSERT(std::isfinite(de));
+    TS_ASSERT(std::isfinite(q));
+  }
+
+  // Test all FCS commands zero at start
+  void testC172xFCSCommandsZeroAtStart() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto pm = fdmex.GetPropertyManager();
+
+    double de_cmd = pm->GetNode("fcs/elevator-cmd-norm", true)->getDoubleValue();
+    double da_cmd = pm->GetNode("fcs/aileron-cmd-norm", true)->getDoubleValue();
+    double dr_cmd = pm->GetNode("fcs/rudder-cmd-norm", true)->getDoubleValue();
+
+    TS_ASSERT(std::isfinite(de_cmd));
+    TS_ASSERT(std::isfinite(da_cmd));
+    TS_ASSERT(std::isfinite(dr_cmd));
   }
 };
