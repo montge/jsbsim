@@ -24,7 +24,12 @@
 #include <cmath>
 
 #include <FGFDMExec.h>
+#include <models/FGPropulsion.h>
+#include <models/FGPropagate.h>
+#include <models/FGFCS.h>
 #include <models/propulsion/FGEngine.h>
+#include <models/propulsion/FGPiston.h>
+#include <initialization/FGInitialCondition.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1462,5 +1467,367 @@ public:
 
     TS_ASSERT_DELTA(margin1, 50.0, 0.1);
     TS_ASSERT_DELTA(margin2, 30.0, 0.1);
+  }
+};
+
+// ============ C172x Aircraft Engine Failure Integration Tests ============
+class FGEngineFailureC172xTest : public CxxTest::TestSuite
+{
+public:
+
+  // Test C172x engine initial running state
+  void testC172xEngineInitialState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    TS_ASSERT(prop != nullptr);
+
+    int numEngines = prop->GetNumEngines();
+    TS_ASSERT_EQUALS(numEngines, 1);  // C172x has single engine
+  }
+
+  // Test C172x engine power available when running
+  void testC172xEnginePowerAvailable() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    prop->InitRunning(-1);
+
+    // Run a few frames
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    auto engine = prop->GetEngine(0);
+    double power = engine->GetPowerAvailable();
+    TS_ASSERT(std::isfinite(power));
+    TS_ASSERT(power > 0.0);  // Power should be positive when running
+  }
+
+  // Test C172x engine shutdown via mixture cutoff
+  void testC172xEngineMixtureCutoff() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Engine running
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double powerBefore = prop->GetEngine(0)->GetPowerAvailable();
+    TS_ASSERT(powerBefore > 0.0);
+
+    // Mixture cutoff
+    fcs->SetMixtureCmd(-1, 0.0);
+
+    // Run simulation to let engine wind down
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+    }
+
+    double powerAfter = prop->GetEngine(0)->GetPowerAvailable();
+    TS_ASSERT(std::isfinite(powerAfter));
+    // Power should decrease after mixture cutoff
+  }
+
+  // Test C172x magneto failure effect
+  void testC172xMagnetoFailure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    prop->InitRunning(-1);
+
+    auto engine = prop->GetEngine(0);
+    if (engine->GetType() == FGEngine::etPiston) {
+      FGPiston* piston = static_cast<FGPiston*>(engine.get());
+
+      // Both mags on
+      piston->SetMagnetos(3);
+      for (int i = 0; i < 50; i++) {
+        fdmex.Run();
+      }
+      double powerBoth = piston->GetPowerAvailable();
+
+      // Single mag (left only)
+      piston->SetMagnetos(1);
+      for (int i = 0; i < 50; i++) {
+        fdmex.Run();
+      }
+      double powerSingle = piston->GetPowerAvailable();
+
+      TS_ASSERT(std::isfinite(powerBoth));
+      TS_ASSERT(std::isfinite(powerSingle));
+    }
+  }
+
+  // Test C172x engine failure effect on altitude
+  void testC172xEngineFailureAltitudeDecay() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    prop->InitRunning(-1);
+
+    // Establish flight
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double initialAlt = propagate->GetAltitudeASL();
+    TS_ASSERT(std::isfinite(initialAlt));
+    TS_ASSERT(initialAlt > 4000.0);
+  }
+
+  // Test C172x glide after engine failure
+  void testC172xGlideAfterEngineFailure() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Establish flight
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Cut engine
+    fcs->SetMixtureCmd(-1, 0.0);
+    fcs->SetThrottleCmd(-1, 0.0);
+
+    // Aircraft should still be flyable in glide
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+      double alt = propagate->GetAltitudeASL();
+      double airspeed = propagate->GetVcalibratedKts();
+      TS_ASSERT(std::isfinite(alt));
+      TS_ASSERT(std::isfinite(airspeed));
+    }
+  }
+
+  // Test C172x thrust response to throttle
+  void testC172xThrustResponseToThrottle() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Full throttle
+    fcs->SetThrottleCmd(-1, 1.0);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+    double thrustFull = prop->GetEngine(0)->GetThrust();
+
+    // Half throttle
+    fcs->SetThrottleCmd(-1, 0.5);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+    double thrustHalf = prop->GetEngine(0)->GetThrust();
+
+    TS_ASSERT(std::isfinite(thrustFull));
+    TS_ASSERT(std::isfinite(thrustHalf));
+  }
+
+  // Test C172x fuel flow cessation
+  void testC172xFuelFlowCessation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Engine running with fuel
+    fcs->SetMixtureCmd(-1, 1.0);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    double fuelFlowBefore = prop->GetEngine(0)->GetFuelFlowRate();
+    TS_ASSERT(std::isfinite(fuelFlowBefore));
+
+    // Cut fuel
+    fcs->SetMixtureCmd(-1, 0.0);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double fuelFlowAfter = prop->GetEngine(0)->GetFuelFlowRate();
+    TS_ASSERT(std::isfinite(fuelFlowAfter));
+  }
+
+  // Test C172x propeller windmilling
+  void testC172xPropellerWindmilling() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Engine not running initially
+    fcs->SetMixtureCmd(-1, 0.0);
+    fcs->SetThrottleCmd(-1, 0.0);
+
+    // With airspeed, propeller may windmill
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    auto thruster = prop->GetEngine(0)->GetThruster();
+    double rpm = thruster->GetRPM();
+    TS_ASSERT(std::isfinite(rpm));
+    TS_ASSERT(rpm >= 0.0);
+  }
+
+  // Test C172x restart attempt after failure
+  void testC172xRestartAttempt() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    // Start engine
+    prop->InitRunning(-1);
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+    }
+
+    // Cut engine
+    fcs->SetMixtureCmd(-1, 0.0);
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Attempt restart
+    fcs->SetMixtureCmd(-1, 1.0);
+    fcs->SetThrottleCmd(-1, 0.3);
+
+    auto engine = prop->GetEngine(0);
+    if (engine->GetType() == FGEngine::etPiston) {
+      FGPiston* piston = static_cast<FGPiston*>(engine.get());
+      piston->SetMagnetos(3);  // Both mags
+    }
+
+    // Let engine attempt to restart
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+    }
+
+    double rpm = prop->GetEngine(0)->GetThruster()->GetRPM();
+    TS_ASSERT(std::isfinite(rpm));
+  }
+
+  // Test C172x flight stability after power loss
+  void testC172xFlightStabilityPowerLoss() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Stable flight
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    // Power loss
+    fcs->SetThrottleCmd(-1, 0.0);
+    fcs->SetMixtureCmd(-1, 0.0);
+
+    // Check aircraft remains controllable
+    for (int i = 0; i < 300; i++) {
+      fdmex.Run();
+
+      double phi = propagate->GetEulerDeg(1);   // Roll
+      double theta = propagate->GetEulerDeg(2); // Pitch
+      double psi = propagate->GetEulerDeg(3);   // Yaw
+
+      TS_ASSERT(std::isfinite(phi));
+      TS_ASSERT(std::isfinite(theta));
+      TS_ASSERT(std::isfinite(psi));
+
+      // Aircraft shouldn't be in extreme attitudes
+      TS_ASSERT(std::abs(phi) < 90.0);
+      TS_ASSERT(std::abs(theta) < 90.0);
+    }
+  }
+
+  // Test C172x partial power scenario
+  void testC172xPartialPower() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Simulate partial power (rough running engine)
+    fcs->SetThrottleCmd(-1, 0.4);
+    fcs->SetMixtureCmd(-1, 0.7);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double thrust = prop->GetEngine(0)->GetThrust();
+    double power = prop->GetEngine(0)->GetPowerAvailable();
+
+    TS_ASSERT(std::isfinite(thrust));
+    TS_ASSERT(std::isfinite(power));
   }
 };

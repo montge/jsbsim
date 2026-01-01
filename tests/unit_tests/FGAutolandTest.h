@@ -13,8 +13,17 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+
+#include <FGFDMExec.h>
+#include <models/FGPropagate.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGFCS.h>
+#include <models/FGGroundReactions.h>
+#include <initialization/FGInitialCondition.h>
 #include "TestUtilities.h"
 
+using namespace JSBSim;
 using namespace JSBSimTest;
 
 class FGAutolandTest : public CxxTest::TestSuite
@@ -1320,5 +1329,364 @@ public:
     TS_ASSERT(flare_height_ft >= 30.0 && flare_height_ft <= 60.0);
     TS_ASSERT(touchdown_zone_ft >= 500.0 && touchdown_zone_ft <= 1500.0);
     TS_ASSERT(sink_rate_limit_fps <= 6.0);
+  }
+};
+
+// ============ C172x Aircraft Approach and Landing Integration Tests ============
+class FGAutolandC172xTest : public CxxTest::TestSuite
+{
+public:
+
+  // Test C172x initial approach configuration
+  void testC172xInitialApproachConfiguration() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(3000.0);
+    ic->SetVcalibratedKtsIC(90.0);
+
+    fdmex.RunIC();
+
+    auto propagate = fdmex.GetPropagate();
+
+    double alt = propagate->GetAltitudeASL();
+    double vcas = propagate->GetVcalibratedKts();
+
+    TS_ASSERT(std::isfinite(alt));
+    TS_ASSERT(std::isfinite(vcas));
+    TS_ASSERT(alt > 2500.0);
+  }
+
+  // Test C172x glideslope tracking descent
+  void testC172xGlideslopeTracking() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(2000.0);
+    ic->SetVcalibratedKtsIC(80.0);
+    ic->SetFlightPathAngleDegIC(-3.0);  // 3 degree descent
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.3);
+
+    double initialAlt = propagate->GetAltitudeASL();
+
+    for (int i = 0; i < 200; i++) {
+      fdmex.Run();
+
+      double alt = propagate->GetAltitudeASL();
+      TS_ASSERT(std::isfinite(alt));
+    }
+
+    double finalAlt = propagate->GetAltitudeASL();
+    // Should have descended
+    TS_ASSERT(finalAlt < initialAlt);
+  }
+
+  // Test C172x approach speed stability
+  void testC172xApproachSpeedStability() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(1500.0);
+    ic->SetVcalibratedKtsIC(70.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.35);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      double vcas = propagate->GetVcalibratedKts();
+      TS_ASSERT(std::isfinite(vcas));
+      TS_ASSERT(vcas > 40.0);  // Above stall
+      TS_ASSERT(vcas < 150.0); // Reasonable speed
+    }
+  }
+
+  // Test C172x pitch attitude during approach
+  void testC172xPitchAttitudeApproach() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(1000.0);
+    ic->SetVcalibratedKtsIC(75.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.3);
+    fcs->SetDeCmd(-0.05);  // Slight nose up for approach
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      double theta = propagate->GetEulerDeg(2);
+      TS_ASSERT(std::isfinite(theta));
+      TS_ASSERT(std::abs(theta) < 30.0);  // Reasonable pitch angle
+    }
+  }
+
+  // Test C172x descent rate calculation
+  void testC172xDescentRateCalculation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(2000.0);
+    ic->SetVcalibratedKtsIC(80.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto aux = fdmex.GetAuxiliary();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.2);
+    fcs->SetDeCmd(0.05);  // Nose down
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double hdot = propagate->Gethdot();
+    TS_ASSERT(std::isfinite(hdot));
+  }
+
+  // Test C172x landing gear state
+  void testC172xLandingGearState() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+    fdmex.RunIC();
+
+    auto gear = fdmex.GetGroundReactions();
+    TS_ASSERT(gear != nullptr);
+
+    int numGear = gear->GetNumGearUnits();
+    TS_ASSERT(numGear > 0);
+
+    // C172x has fixed gear, always extended
+    for (int i = 0; i < numGear; i++) {
+      auto gearUnit = gear->GetGearUnit(i);
+      TS_ASSERT(gearUnit != nullptr);
+    }
+  }
+
+  // Test C172x final approach flight path
+  void testC172xFinalApproachFlightPath() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(500.0);
+    ic->SetVcalibratedKtsIC(65.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.25);
+
+    for (int i = 0; i < 150; i++) {
+      fdmex.Run();
+
+      double alt = propagate->GetAltitudeASL();
+      double vcas = propagate->GetVcalibratedKts();
+      double gamma = propagate->GetGamma();
+
+      TS_ASSERT(std::isfinite(alt));
+      TS_ASSERT(std::isfinite(vcas));
+      TS_ASSERT(std::isfinite(gamma));
+    }
+  }
+
+  // Test C172x wings level approach
+  void testC172xWingsLevelApproach() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(1000.0);
+    ic->SetVcalibratedKtsIC(75.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    prop->InitRunning(-1);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      double phi = propagate->GetEulerDeg(1);
+      TS_ASSERT(std::isfinite(phi));
+      // Should be relatively wings level
+      TS_ASSERT(std::abs(phi) < 45.0);
+    }
+  }
+
+  // Test C172x approach at various airspeeds
+  void testC172xApproachAtVariousAirspeeds() {
+    double speeds[] = {65.0, 70.0, 75.0, 80.0};
+
+    for (double spd : speeds) {
+      FGFDMExec fdmex;
+      fdmex.LoadModel("c172x");
+
+      auto ic = fdmex.GetIC();
+      ic->SetAltitudeASLFtIC(1500.0);
+      ic->SetVcalibratedKtsIC(spd);
+
+      fdmex.RunIC();
+
+      auto prop = fdmex.GetPropulsion();
+      auto propagate = fdmex.GetPropagate();
+      prop->InitRunning(-1);
+
+      for (int i = 0; i < 50; i++) {
+        fdmex.Run();
+      }
+
+      double vcas = propagate->GetVcalibratedKts();
+      TS_ASSERT(std::isfinite(vcas));
+    }
+  }
+
+  // Test C172x power management during descent
+  void testC172xPowerManagementDescent() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(3000.0);
+    ic->SetVcalibratedKtsIC(90.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    // Reduce power for descent
+    fcs->SetThrottleCmd(-1, 0.2);
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+    }
+
+    double power = prop->GetEngine(0)->GetPowerAvailable();
+    TS_ASSERT(std::isfinite(power));
+  }
+
+  // Test C172x ground proximity
+  void testC172xGroundProximity() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(200.0);
+    ic->SetVcalibratedKtsIC(70.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    prop->InitRunning(-1);
+
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+
+      double altAGL = propagate->GetDistanceAGL();
+      TS_ASSERT(std::isfinite(altAGL));
+    }
+  }
+
+  // Test C172x flare initiation altitude
+  void testC172xFlareInitiationAltitude() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(50.0);  // Flare initiation height
+    ic->SetVcalibratedKtsIC(65.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.1);
+    fcs->SetDeCmd(-0.1);  // Flare nose up
+
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+
+      double alt = propagate->GetDistanceAGL();
+      double theta = propagate->GetEulerDeg(2);
+
+      TS_ASSERT(std::isfinite(alt));
+      TS_ASSERT(std::isfinite(theta));
+    }
+  }
+
+  // Test C172x extended approach simulation
+  void testC172xExtendedApproachSimulation() {
+    FGFDMExec fdmex;
+    fdmex.LoadModel("c172x");
+
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(2500.0);
+    ic->SetVcalibratedKtsIC(85.0);
+
+    fdmex.RunIC();
+
+    auto prop = fdmex.GetPropulsion();
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+    prop->InitRunning(-1);
+
+    fcs->SetThrottleCmd(-1, 0.3);
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+
+      double alt = propagate->GetAltitudeASL();
+      double vcas = propagate->GetVcalibratedKts();
+      double phi = propagate->GetEulerDeg(1);
+      double theta = propagate->GetEulerDeg(2);
+
+      TS_ASSERT(std::isfinite(alt));
+      TS_ASSERT(std::isfinite(vcas));
+      TS_ASSERT(std::isfinite(phi));
+      TS_ASSERT(std::isfinite(theta));
+      TS_ASSERT(alt > -1000.0);  // Not crashed through ground
+    }
   }
 };
