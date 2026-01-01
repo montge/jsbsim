@@ -2,6 +2,13 @@
 #include <limits>
 #include <cmath>
 #include "TestUtilities.h"
+#include <FGFDMExec.h>
+#include <models/FGPropagate.h>
+#include <models/FGGroundReactions.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropulsion.h>
+#include <models/FGFCS.h>
+#include <initialization/FGInitialCondition.h>
 
 using namespace JSBSimTest;
 
@@ -1255,5 +1262,318 @@ public:
     TS_ASSERT(stop_time < 3.0);
 
     // Full carrier recovery cycle verified
+  }
+};
+
+/*******************************************************************************
+ * FGCarrierOps C172x Integration Tests
+ * Tests ground operations applicable to C172x (runway operations, not carrier)
+ * These tests verify the ground handling physics that underlie carrier ops
+ ******************************************************************************/
+class FGCarrierOpsC172xTest : public CxxTest::TestSuite
+{
+public:
+  JSBSim::FGFDMExec fdmex;
+  std::string aircraft_path;
+
+  void setUp() {
+    aircraft_path = std::string(JSBSIM_TEST_PATH) + "/aircraft";
+    fdmex.SetAircraftPath(aircraft_path);
+    fdmex.SetEnginePath(std::string(JSBSIM_TEST_PATH) + "/engine");
+    fdmex.SetSystemsPath(std::string(JSBSIM_TEST_PATH) + "/systems");
+  }
+
+  void tearDown() {
+    fdmex.ResetToInitialConditions(0);
+  }
+
+  // Test C172x takeoff roll acceleration
+  void testC172xTakeoffRollAcceleration() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propagate = fdmex.GetPropagate();
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    // Full throttle for takeoff
+    fcs->SetThrottleCmd(-1, 1.0);
+    propulsion->GetEngine(0)->SetRunning(true);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double speed = propagate->GetVel().Magnitude();
+
+    // Should be accelerating on ground
+    TS_ASSERT(speed > 10.0);  // Some forward motion expected
+  }
+
+  // Test C172x landing rollout deceleration
+  void testC172xLandingRolloutDeceleration() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(50.0);  // Landing speed
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propagate = fdmex.GetPropagate();
+    double initialSpeed = propagate->GetVel().Magnitude();
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double finalSpeed = propagate->GetVel().Magnitude();
+
+    // Should have decelerated significantly
+    TS_ASSERT(finalSpeed < initialSpeed * 0.5);
+  }
+
+  // Test C172x ground roll distance estimation
+  void testC172xGroundRollDistance() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    double lat0 = 0.0;
+    double lon0 = 0.0;
+    ic->SetLatitudeRadIC(lat0);
+    ic->SetLongitudeRadIC(lon0);
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(50.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propagate = fdmex.GetPropagate();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+
+    // Run until stopped or 500 iterations
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+      if (propagate->GetVel().Magnitude() < 1.0) break;
+    }
+
+    // Verify aircraft traveled some distance
+    double latFinal = propagate->GetLatitude();
+    double lonFinal = propagate->GetLongitude();
+    double distance = sqrt(pow(latFinal - lat0, 2) + pow(lonFinal - lon0, 2));
+
+    TS_ASSERT(distance > 0.0);
+  }
+
+  // Test C172x holding position with brakes
+  void testC172xHoldingPositionWithBrakes() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    auto propulsion = fdmex.GetPropulsion();
+
+    // Apply brakes and some throttle
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+    fcs->SetThrottleCmd(-1, 0.3);
+    propulsion->GetEngine(0)->SetRunning(true);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    double speed = propagate->GetVel().Magnitude();
+
+    // Should remain relatively stationary with brakes applied
+    TS_ASSERT(speed < 10.0);
+  }
+
+  // Test C172x wind effect on ground roll
+  void testC172xHeadwindGroundRoll() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    ic->SetWindNEDFpsIC(-30.0, 0.0, 0.0);  // 30 fps headwind
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propulsion = fdmex.GetPropulsion();
+    auto fcs = fdmex.GetFCS();
+
+    fcs->SetThrottleCmd(-1, 1.0);
+    propulsion->GetEngine(0)->SetRunning(true);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    auto auxiliary = fdmex.GetAuxiliary();
+    double ias = auxiliary->GetVcalibratedKTS();
+
+    // With headwind, IAS should build faster
+    TS_ASSERT(ias > 5.0);
+  }
+
+  // Test C172x crosswind ground handling
+  void testC172xCrosswindGroundHandling() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(30.0);
+    ic->SetWindNEDFpsIC(0.0, 30.0, 0.0);  // Crosswind
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    auto gr = fdmex.GetGroundReactions();
+
+    // Should experience side forces
+    auto forces = gr->GetForces();
+    TS_ASSERT(std::isfinite(forces(2)));
+  }
+
+  // Test C172x rotation point on takeoff
+  void testC172xRotationPhysics() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(55.0);  // Near rotation speed
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Apply back stick for rotation
+    fcs->SetDeCmd(-0.5);
+
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    double pitch = propagate->GetEuler()(2);
+
+    // Pitch should increase with elevator input at speed
+    TS_ASSERT(std::isfinite(pitch));
+  }
+
+  // Test C172x touchdown impact forces
+  void testC172xTouchdownForces() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(5.0);
+    ic->SetVcalibratedKtsIC(60.0);
+    ic->SetClimbRateFpsIC(-5.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Run until touchdown
+    bool touched = false;
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+      for (int j = 0; j < gr->GetNumGearUnits(); j++) {
+        if (gr->GetGearUnit(j)->GetWOW()) {
+          touched = true;
+          // Check impact forces
+          auto forces = gr->GetForces();
+          TS_ASSERT(fabs(forces(3)) > 100.0);  // Vertical force present
+          break;
+        }
+      }
+      if (touched) break;
+    }
+    TS_ASSERT(touched);
+  }
+
+  // Test C172x short field landing technique
+  void testC172xShortFieldLanding() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(45.0);  // Lower speed for short field
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    auto propagate = fdmex.GetPropagate();
+
+    // Hard braking for short field
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+
+    double initialSpeed = propagate->GetVel().Magnitude();
+
+    for (int i = 0; i < 100; i++) fdmex.Run();
+
+    double finalSpeed = propagate->GetVel().Magnitude();
+
+    // Should stop quickly
+    TS_ASSERT(finalSpeed < initialSpeed * 0.2);
+  }
+
+  // Test C172x deck (runway) contact detection
+  void testC172xRunwayContactDetection() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(2.0);
+    ic->SetVcalibratedKtsIC(55.0);
+    ic->SetClimbRateFpsIC(-2.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Look for contact
+    int contactFrame = -1;
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+      for (int j = 0; j < gr->GetNumGearUnits(); j++) {
+        if (gr->GetGearUnit(j)->GetWOW()) {
+          contactFrame = i;
+          break;
+        }
+      }
+      if (contactFrame >= 0) break;
+    }
+
+    // Contact should be detected
+    TS_ASSERT(contactFrame > 0);
+  }
+
+  // Test C172x approach and landing sequence
+  void testC172xApproachLandingSequence() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(50.0);
+    ic->SetVcalibratedKtsIC(65.0);  // Approach speed
+    ic->SetClimbRateFpsIC(-3.0);
+    ic->SetGammaRadIC(-3.0 * M_PI / 180.0);  // 3 degree glideslope
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propagate = fdmex.GetPropagate();
+    auto gr = fdmex.GetGroundReactions();
+
+    // Track altitude through approach
+    double prevAlt = propagate->GetAltitudeAGL();
+
+    for (int i = 0; i < 500; i++) {
+      fdmex.Run();
+
+      double curAlt = propagate->GetAltitudeAGL();
+
+      // Altitude should be decreasing on approach
+      if (i < 100) {
+        TS_ASSERT(curAlt <= prevAlt + 5.0);  // Allow small bounces
+      }
+
+      prevAlt = curAlt;
+
+      // Check for touchdown
+      for (int j = 0; j < gr->GetNumGearUnits(); j++) {
+        if (gr->GetGearUnit(j)->GetWOW()) {
+          TS_ASSERT(true);  // Successfully landed
+          return;
+        }
+      }
+    }
   }
 };

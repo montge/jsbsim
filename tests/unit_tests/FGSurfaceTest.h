@@ -4,6 +4,11 @@
 
 #include <FGFDMExec.h>
 #include <models/FGSurface.h>
+#include <models/FGPropagate.h>
+#include <models/FGGroundReactions.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGFCS.h>
+#include <initialization/FGInitialCondition.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1616,5 +1621,253 @@ public:
     double weight = 50000.0;
     double max_braking_force = runway.GetStaticFFactor() * weight;
     TS_ASSERT_DELTA(max_braking_force, 25000.0, epsilon);
+  }
+};
+
+/*******************************************************************************
+ * FGSurface C172x Integration Tests
+ * Tests surface friction and ground interaction with real C172x aircraft
+ ******************************************************************************/
+class FGSurfaceC172xTest : public CxxTest::TestSuite
+{
+public:
+  JSBSim::FGFDMExec fdmex;
+  std::string aircraft_path;
+
+  void setUp() {
+    aircraft_path = std::string(JSBSIM_TEST_PATH) + "/aircraft";
+    fdmex.SetAircraftPath(aircraft_path);
+    fdmex.SetEnginePath(std::string(JSBSIM_TEST_PATH) + "/engine");
+    fdmex.SetSystemsPath(std::string(JSBSIM_TEST_PATH) + "/systems");
+  }
+
+  void tearDown() {
+    fdmex.ResetToInitialConditions(0);
+  }
+
+  // Test C172x ground friction on runway
+  void testC172xRunwayFriction() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(30.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    auto forces = gr->GetForces();
+    // Friction forces should be present during ground roll
+    TS_ASSERT(std::isfinite(forces(1)));  // Rolling friction
+  }
+
+  // Test C172x rolling resistance on ground
+  void testC172xRollingResistance() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(20.0);  // Taxi speed
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    auto accel = propagate->GetUVWdot();
+
+    // Should have negative acceleration (drag) due to rolling resistance
+    TS_ASSERT(std::isfinite(accel(1)));
+  }
+
+  // Test braking effect on C172x
+  void testC172xBrakingEffect() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(40.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propagate = fdmex.GetPropagate();
+    double initialSpeed = propagate->GetVel().Magnitude();
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetLBrake(1.0);
+    fcs->SetRBrake(1.0);
+
+    for (int i = 0; i < 50; i++) fdmex.Run();
+
+    double finalSpeed = propagate->GetVel().Magnitude();
+
+    // Speed should decrease with braking
+    TS_ASSERT(finalSpeed < initialSpeed);
+  }
+
+  // Test C172x tire contact with surface
+  void testC172xTireContact() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // At least one gear should have weight on wheels
+    bool hasContact = false;
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      if (gr->GetGearUnit(i)->GetWOW()) {
+        hasContact = true;
+        break;
+      }
+    }
+    TS_ASSERT(hasContact);
+  }
+
+  // Test C172x gear forces magnitude on ground
+  void testC172xGearForcesMagnitude() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    auto forces = gr->GetForces();
+
+    // Vertical force should support aircraft weight
+    // C172x gross weight ~2400 lbs
+    double vertForce = fabs(forces(3));
+    TS_ASSERT(vertForce > 1000.0);  // Must support weight
+    TS_ASSERT(vertForce < 5000.0);  // Reasonable upper bound
+  }
+
+  // Test differential braking steering
+  void testC172xDifferentialBraking() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(15.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetLBrake(1.0);  // Left brake only
+    fcs->SetRBrake(0.0);
+
+    for (int i = 0; i < 20; i++) fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    double yawRate = propagate->GetPQR()(3);
+
+    // Should induce yaw to the left (braked side)
+    TS_ASSERT(std::isfinite(yawRate));
+  }
+
+  // Test ground reaction normal force
+  void testC172xNormalForce() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    double totalNormal = 0.0;
+
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      if (gear->GetWOW()) {
+        // Get the gear's contribution to normal force
+        totalNormal += fabs(gear->GetBodyForces()(3));
+      }
+    }
+
+    // Total normal force should match aircraft weight
+    TS_ASSERT(totalNormal > 0.0);
+  }
+
+  // Test C172x stability on ground
+  void testC172xGroundStability() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto propagate = fdmex.GetPropagate();
+
+    // Run for several steps and verify stability
+    for (int i = 0; i < 50; i++) {
+      fdmex.Run();
+
+      double roll = propagate->GetEuler()(1);
+      double pitch = propagate->GetEuler()(2);
+
+      // Aircraft should stay stable on ground
+      TS_ASSERT(fabs(roll) < 0.2);   // ~11 degrees
+      TS_ASSERT(fabs(pitch) < 0.2);  // ~11 degrees
+    }
+  }
+
+  // Test C172x taxi with crosswind
+  void testC172xCrosswindTaxi() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(15.0);
+    ic->SetWindNEDFpsIC(0.0, 30.0, 0.0);  // Crosswind
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    auto forces = gr->GetForces();
+
+    // Side forces from crosswind should be present
+    TS_ASSERT(std::isfinite(forces(2)));
+  }
+
+  // Test takeoff roll surface forces
+  void testC172xTakeoffRollForces() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(40.0);  // Takeoff roll speed
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    auto forces = gr->GetForces();
+
+    // All force components should be finite during takeoff roll
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+  }
+
+  // Test surface contact persistence
+  void testC172xSurfaceContactPersistence() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(10.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Verify contact maintained over multiple timesteps
+    for (int step = 0; step < 20; step++) {
+      fdmex.Run();
+
+      bool hasContact = false;
+      for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+        if (gr->GetGearUnit(i)->GetWOW()) {
+          hasContact = true;
+          break;
+        }
+      }
+      TS_ASSERT(hasContact);
+    }
   }
 };

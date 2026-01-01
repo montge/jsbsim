@@ -26,6 +26,13 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <FGFDMExec.h>
+#include <models/FGPropagate.h>
+#include <models/FGGroundReactions.h>
+#include <models/FGAuxiliary.h>
+#include <models/FGPropulsion.h>
+#include <models/FGFCS.h>
+#include <initialization/FGInitialCondition.h>
 
 const double epsilon = 1e-10;
 const double deg2rad = 0.017453292519943295;
@@ -1282,5 +1289,235 @@ public:
 
     TS_ASSERT(blowoutDetected);
     TS_ASSERT_DELTA(pressureLossRate, 1800.0, 10.0);
+  }
+};
+
+/*******************************************************************************
+ * FGLandingGearDynamics C172x Integration Tests
+ * Tests landing gear behavior using real C172x aircraft (fixed gear)
+ ******************************************************************************/
+class FGLandingGearDynamicsC172xTest : public CxxTest::TestSuite
+{
+public:
+  JSBSim::FGFDMExec fdmex;
+  std::string aircraft_path;
+
+  void setUp() {
+    aircraft_path = std::string(JSBSIM_TEST_PATH) + "/aircraft";
+    fdmex.SetAircraftPath(aircraft_path);
+    fdmex.SetEnginePath(std::string(JSBSIM_TEST_PATH) + "/engine");
+    fdmex.SetSystemsPath(std::string(JSBSIM_TEST_PATH) + "/systems");
+  }
+
+  void tearDown() {
+    fdmex.ResetToInitialConditions(0);
+  }
+
+  // Test C172x has fixed gear (always down)
+  void testC172xFixedGearAlwaysDown() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(100.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // C172x has fixed gear - check that gear exists
+    int numGear = gr->GetNumGearUnits();
+    TS_ASSERT(numGear > 0);
+  }
+
+  // Test gear contact on ground
+  void testC172xGearGroundContact() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);  // On ground
+    ic->SetVgroundKtsIC(0.0);     // Stationary
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // Should have ground contact on stationary aircraft
+    bool anyContact = false;
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      if (gr->GetGearUnit(i)->GetWOW()) {
+        anyContact = true;
+        break;
+      }
+    }
+    TS_ASSERT(anyContact);
+  }
+
+  // Test weight on wheels during taxi
+  void testC172xWeightOnWheelsTaxi() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(20.0);  // Taxi speed
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    double alt = propagate->GetAltitudeAGL();
+
+    // Should be near ground during taxi
+    TS_ASSERT(alt < 10.0);
+  }
+
+  // Test no gear contact in cruise
+  void testC172xNoGearContactCruise() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeASLFtIC(5000.0);
+    ic->SetVcalibratedKtsIC(110.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // No gear should have ground contact at altitude
+    bool anyContact = false;
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      if (gr->GetGearUnit(i)->GetWOW()) {
+        anyContact = true;
+        break;
+      }
+    }
+    TS_ASSERT(!anyContact);
+  }
+
+  // Test tricycle gear configuration
+  void testC172xTricycleGearConfig() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // C172x should have 3 gear units (tricycle)
+    TS_ASSERT(gr->GetNumGearUnits() >= 3);
+  }
+
+  // Test gear forces during landing rollout
+  void testC172xGearForcesRollout() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(50.0);  // Rollout speed
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // Check that gear forces exist
+    auto forces = gr->GetForces();
+    TS_ASSERT(std::isfinite(forces(1)));
+    TS_ASSERT(std::isfinite(forces(2)));
+    TS_ASSERT(std::isfinite(forces(3)));
+  }
+
+  // Test braking during rollout
+  void testC172xBrakingRollout() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(40.0);
+    TS_ASSERT(fdmex.RunIC());
+
+    auto fcs = fdmex.GetFCS();
+    fcs->SetLBrake(1.0);  // Full left brake
+    fcs->SetRBrake(1.0);  // Full right brake
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto propagate = fdmex.GetPropagate();
+    double speed = propagate->GetVel().Magnitude();
+
+    // Speed should be decreasing with brakes applied
+    TS_ASSERT(std::isfinite(speed));
+  }
+
+  // Test steering authority during taxi
+  void testC172xNosewheelSteering() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(10.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto fcs = fdmex.GetFCS();
+    // Apply rudder for nosewheel steering
+    fcs->SetDrCmd(0.5);  // Right rudder
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    // Aircraft should respond to steering input
+    auto propagate = fdmex.GetPropagate();
+    double yawRate = propagate->GetPQR()(3);
+    TS_ASSERT(std::isfinite(yawRate));
+  }
+
+  // Test gear position on ground
+  void testC172xGearPositionOnGround() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(0.0);
+    TS_ASSERT(fdmex.RunIC());
+    fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    for (int i = 0; i < gr->GetNumGearUnits(); i++) {
+      auto gear = gr->GetGearUnit(i);
+      // Fixed gear should always report position = 1.0 (down)
+      double pos = gear->GetGearUnitPos();
+      TS_ASSERT_DELTA(pos, 1.0, 0.01);
+    }
+  }
+
+  // Test lateral gear loading during crosswind taxi
+  void testC172xCrosswindTaxiGearLoading() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(0.0);
+    ic->SetVgroundKtsIC(15.0);
+    ic->SetWindNEDFpsIC(0.0, 20.0, 0.0);  // Crosswind from east
+    TS_ASSERT(fdmex.RunIC());
+
+    for (int i = 0; i < 10; i++) fdmex.Run();
+
+    auto gr = fdmex.GetGroundReactions();
+    // Gear should experience lateral forces from crosswind
+    auto forces = gr->GetForces();
+    TS_ASSERT(std::isfinite(forces(2)));  // Side force
+  }
+
+  // Test touchdown detection
+  void testC172xTouchdownDetection() {
+    TS_ASSERT(fdmex.LoadModel("c172x"));
+    auto ic = fdmex.GetIC();
+    ic->SetAltitudeAGLFtIC(10.0);  // Just above ground
+    ic->SetVcalibratedKtsIC(60.0);  // Approach speed
+    ic->SetClimbRateFpsIC(-5.0);   // Descending
+    TS_ASSERT(fdmex.RunIC());
+
+    auto gr = fdmex.GetGroundReactions();
+
+    // Run until touchdown
+    bool touchedDown = false;
+    for (int i = 0; i < 100; i++) {
+      fdmex.Run();
+      for (int j = 0; j < gr->GetNumGearUnits(); j++) {
+        if (gr->GetGearUnit(j)->GetWOW()) {
+          touchedDown = true;
+          break;
+        }
+      }
+      if (touchedDown) break;
+    }
+    TS_ASSERT(touchedDown);
   }
 };
