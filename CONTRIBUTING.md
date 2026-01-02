@@ -9,6 +9,7 @@ Thank you for your interest in contributing to JSBSim! This document provides gu
 - [Testing Requirements](#testing-requirements)
 - [Code Style and Standards](#code-style-and-standards)
 - [Pull Request Process](#pull-request-process)
+- [Release Process](#release-process)
 - [Community Guidelines](#community-guidelines)
 
 ## Getting Started
@@ -258,6 +259,68 @@ Your pull request must include:
 3. Maintainers will review your code
 4. Address any review comments
 5. Once approved, your PR will be merged
+
+## Release Process
+
+This fork uses automated releases triggered by git tags.
+
+### Commit Message Format
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) for automatic changelog generation:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `perf`: Performance improvement
+- `refactor`: Code refactoring
+- `style`: Code style changes (formatting, etc.)
+- `test`: Adding or updating tests
+- `chore`: Maintenance tasks
+- `ci`: CI/CD changes
+
+**Examples:**
+```bash
+feat(aerodynamics): add ground effect model
+fix(propulsion): correct fuel flow calculation
+docs: update build instructions
+```
+
+### Creating a Release
+
+1. **Update version** using bump-my-version:
+   ```bash
+   # For a patch release (1.2.4 -> 1.2.5)
+   bump-my-version bump patch
+
+   # For a minor release (1.2.4 -> 1.3.0)
+   bump-my-version bump minor
+
+   # For a major release (1.2.4 -> 2.0.0)
+   bump-my-version bump major
+   ```
+
+2. **Push the tag**:
+   ```bash
+   git push origin master --tags
+   ```
+
+3. **Automatic release**: The release workflow will:
+   - Generate changelog from conventional commits
+   - Create a GitHub release with release notes
+   - Update CHANGELOG.md
+
+### Changelog
+
+The changelog is automatically generated using [git-cliff](https://git-cliff.org/) from conventional commit messages. See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 ## Community Guidelines
 
