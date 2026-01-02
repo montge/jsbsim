@@ -1553,12 +1553,12 @@ public:
     auto gr = fdmex.GetGroundReactions();
 
     // Track altitude through approach
-    double prevAlt = propagate->GetAltitudeAGL();
+    double prevAlt = propagate->GetDistanceAGL();
 
     for (int i = 0; i < 500; i++) {
       fdmex.Run();
 
-      double curAlt = propagate->GetAltitudeAGL();
+      double curAlt = propagate->GetDistanceAGL();
 
       // Altitude should be decreasing on approach
       if (i < 100) {
