@@ -18,6 +18,7 @@
 #include <limits>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 #include <functional>
 
 #include <FGFDMExec.h>
@@ -1305,7 +1306,7 @@ public:
   // Test smooth step function
   void testSmoothStep() {
     auto smoothStep = [](double edge0, double edge1, double x) {
-      double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+      double t = std::max(0.0, std::min((x - edge0) / (edge1 - edge0), 1.0));
       return t * t * (3.0 - 2.0 * t);  // Hermite interpolation
     };
 
