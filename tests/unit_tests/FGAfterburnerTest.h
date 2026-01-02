@@ -3,6 +3,8 @@
 #include <cmath>
 
 #include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <initialization/FGInitialCondition.h>
 #include <models/propulsion/FGEngine.h>
 #include <models/propulsion/FGTurbine.h>
 #include "TestUtilities.h"

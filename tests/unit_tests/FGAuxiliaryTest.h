@@ -2,6 +2,8 @@
 #include <cxxtest/TestSuite.h>
 
 #include <FGFDMExec.h>
+#include <models/FGFCS.h>
+#include <initialization/FGInitialCondition.h>
 #include <models/FGAtmosphere.h>
 #include <models/FGAuxiliary.h>
 
