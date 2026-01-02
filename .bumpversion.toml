@@ -1,0 +1,35 @@
+[tool.bumpversion]
+current_version = "1.2.4.dev1"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)(\\.(?P<dev>dev\\d+))?"
+serialize = [
+    "{major}.{minor}.{patch}.{dev}",
+    "{major}.{minor}.{patch}"
+]
+commit = true
+tag = true
+tag_name = "v{new_version}"
+message = "Bump version: {current_version} → {new_version}"
+
+[tool.bumpversion.parts.dev]
+optional_value = ""
+first_value = "dev1"
+
+[[tool.bumpversion.files]]
+filename = "CMakeLists.txt"
+search = 'set(PROJECT_VERSION_MAJOR "{major}")'
+replace = 'set(PROJECT_VERSION_MAJOR "{major}")'
+
+[[tool.bumpversion.files]]
+filename = "CMakeLists.txt"
+search = 'set(PROJECT_VERSION_MINOR "{minor}")'
+replace = 'set(PROJECT_VERSION_MINOR "{minor}")'
+
+[[tool.bumpversion.files]]
+filename = "CMakeLists.txt"
+search = 'set(PROJECT_VERSION_PATCH "{patch}.{dev}")'
+replace = 'set(PROJECT_VERSION_PATCH "{patch}.{dev}")'
+
+[[tool.bumpversion.files]]
+filename = "CMakeLists.txt"
+search = 'set(PROJECT_VERSION_PATCH "{patch}")'
+replace = 'set(PROJECT_VERSION_PATCH "{patch}")'

@@ -1,19 +1,12 @@
 [build-system]
-# Exclude Cython version 0.29.26 as it fails building wheels for PyPy38
-#
-# Require setuptools >= 60.0.0 to be able to access its local copy of distutils
-# as distutils is deprecated for Python 3.10+ and will no longer be distributed
-# with Python 3.12+.
-requires = ["setuptools>=60.0.0,<72.0.0", "cython!=0.29.26"]
+# Require setuptools >= 68.0.0 for modern Python packaging
+# Require Cython >= 3.0 for Python 3.12+ compatibility
+requires = ["setuptools>=68.0.0", "cython>=3.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel]
 manylinux-x86_64-image = "manylinux2014"
 manylinux-i686-image = "manylinux2014"
 # Skip building against musl libc images as JSBSim is not compatible with them.
-skip = "cp*-musllinux_*"
-
-[[tool.cibuildwheel.overrides]]
-select = "pp38-* cp38*"
-manylinux-x86_64-image = "manylinux2010"
-manylinux-i686-image = "manylinux2010"
+# Skip Python 3.8 and 3.9 (EOL or approaching EOL)
+skip = "cp*-musllinux_* cp38-* cp39-* pp38-* pp39-*"

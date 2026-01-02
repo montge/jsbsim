@@ -22,6 +22,11 @@ The CI pipeline SHALL run SonarCloud static analysis on C++ source code to detec
 - **THEN** bundled third-party code (simgear, GeographicLib, MSIS) is excluded from analysis
 - **AND** only JSBSim-owned code is analyzed for quality metrics
 
+#### Scenario: CI uses Python 3.10 or later
+- **WHEN** CI workflows execute Python-based tasks
+- **THEN** Python version SHALL be 3.10 or later
+- **AND** Python 3.9 is no longer supported
+
 ### Requirement: Codecov Integration Preserved
 The existing Codecov integration SHALL continue to function alongside SonarCloud.
 
@@ -81,3 +86,17 @@ Pre-commit SHALL include standard code quality hooks for common issues.
 - **WHEN** staged YAML files contain syntax errors
 - **THEN** the YAML check hook fails
 - **AND** the developer sees the syntax error location
+
+### Requirement: Automated Version Management
+The project SHALL use bump-my-version for consistent version updates across all version-containing files.
+
+#### Scenario: Version bump updates all locations
+- **WHEN** `bump-my-version bump <part>` is executed
+- **THEN** version is updated in CMakeLists.txt
+- **AND** version is updated in python/setup.py.in
+- **AND** all version strings remain synchronized
+
+#### Scenario: Version format follows semver
+- **WHEN** a version is set
+- **THEN** it SHALL follow semantic versioning (MAJOR.MINOR.PATCH)
+- **AND** development versions use `.devN` suffix
