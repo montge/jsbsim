@@ -87,7 +87,7 @@ void test_gtd7(void) {
 		for (j=0;j<9;j++)
 			printf("%E ",output[i].d[j]);
 		printf("%E ",output[i].t[0]);
-		printf("%E \n",output[i].t[1]);
+		printf("%E\n",output[i].t[1]);
 		/* DL omitted */
   	}
 
