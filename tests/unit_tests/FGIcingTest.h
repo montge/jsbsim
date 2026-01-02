@@ -2012,7 +2012,7 @@ public:
     for (int i = 0; i < 100; i++) {
       fdmex.Run();
 
-      double aoa = propagate->GetAlphaDeg();
+      double aoa = fdmex.GetAuxiliary()->Getalpha(inDegrees);
       TS_ASSERT(std::isfinite(aoa));
     }
   }
