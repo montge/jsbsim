@@ -1919,7 +1919,7 @@ public:
       fdmex.Run();
 
       double alt = propagate->GetAltitudeASL();
-      double vcas = propagate->GetVcalibratedKts();
+      double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
 
       TS_ASSERT(std::isfinite(alt));
       TS_ASSERT(std::isfinite(vcas));
@@ -2041,7 +2041,7 @@ public:
 
       double alt = propagate->GetAltitudeASL();
       double temp = atm->GetTemperature();
-      double vcas = propagate->GetVcalibratedKts();
+      double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
 
       TS_ASSERT(std::isfinite(alt));
       TS_ASSERT(std::isfinite(temp));

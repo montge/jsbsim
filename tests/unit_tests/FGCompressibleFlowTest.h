@@ -1556,7 +1556,7 @@ public:
     auto aux = fdmex.GetAuxiliary();
     auto propagate = fdmex.GetPropagate();
 
-    double vcas = propagate->GetVcalibratedKts();
+    double vcas = aux->GetVcalibratedKTS();
     double vtas = aux->GetVtrueFPS() * 0.592484;  // fps to kts
 
     TS_ASSERT(std::isfinite(vcas));

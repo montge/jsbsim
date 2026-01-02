@@ -1351,7 +1351,7 @@ public:
     auto propagate = fdmex.GetPropagate();
 
     double alt = propagate->GetAltitudeASL();
-    double vcas = propagate->GetVcalibratedKts();
+    double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
 
     TS_ASSERT(std::isfinite(alt));
     TS_ASSERT(std::isfinite(vcas));
@@ -1412,7 +1412,7 @@ public:
     for (int i = 0; i < 100; i++) {
       fdmex.Run();
 
-      double vcas = propagate->GetVcalibratedKts();
+      double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
       TS_ASSERT(std::isfinite(vcas));
       TS_ASSERT(vcas > 40.0);  // Above stall
       TS_ASSERT(vcas < 150.0); // Reasonable speed
@@ -1516,7 +1516,7 @@ public:
       fdmex.Run();
 
       double alt = propagate->GetAltitudeASL();
-      double vcas = propagate->GetVcalibratedKts();
+      double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
       double gamma = propagate->GetGamma();
 
       TS_ASSERT(std::isfinite(alt));
@@ -1572,7 +1572,7 @@ public:
         fdmex.Run();
       }
 
-      double vcas = propagate->GetVcalibratedKts();
+      double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
       TS_ASSERT(std::isfinite(vcas));
     }
   }
@@ -1678,7 +1678,7 @@ public:
       fdmex.Run();
 
       double alt = propagate->GetAltitudeASL();
-      double vcas = propagate->GetVcalibratedKts();
+      double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
       double phi = propagate->GetEulerDeg(1);
       double theta = propagate->GetEulerDeg(2);
 
