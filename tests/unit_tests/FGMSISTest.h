@@ -2934,3 +2934,4 @@ public:
     TS_ASSERT(highRho > 0.0);
     TS_ASSERT(highRho < 1e-10);  // Very low density at 500 km
   }
+};
