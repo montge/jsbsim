@@ -1428,7 +1428,7 @@ public:
 
     for (int i = 0; i < 10; ++i) fdm.Run();
 
-    double aileronPos = fcs->GetDaPos();
+    double aileronPos = fcs->GetDaLPos();
     TS_ASSERT(std::isfinite(aileronPos));
   }
 
@@ -1583,7 +1583,7 @@ public:
     for (int i = 0; i < 50; ++i) fdm.Run();
 
     TS_ASSERT(std::isfinite(fcs->GetDePos()));
-    TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
     TS_ASSERT(std::isfinite(fcs->GetDrPos()));
     TS_ASSERT(std::isfinite(fcs->GetDfPos()));
   }
@@ -1606,7 +1606,7 @@ public:
     }
 
     TS_ASSERT(std::isfinite(fcs->GetDePos()));
-    TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
     TS_ASSERT(std::isfinite(fcs->GetDrPos()));
     TS_ASSERT(std::isfinite(fcs->GetThrottlePos(0)));
   }

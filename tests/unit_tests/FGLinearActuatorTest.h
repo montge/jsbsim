@@ -1732,11 +1732,11 @@ public:
 
     fcs->SetDaCmd(0.5);
     for (int i = 0; i < 20; ++i) fdm.Run();
-    double posRight = fcs->GetDaPos();
+    double posRight = fcs->GetDaLPos();
 
     fcs->SetDaCmd(-0.5);
     for (int i = 0; i < 20; ++i) fdm.Run();
-    double posLeft = fcs->GetDaPos();
+    double posLeft = fcs->GetDaLPos();
 
     TS_ASSERT(std::isfinite(posRight));
     TS_ASSERT(std::isfinite(posLeft));
@@ -1827,7 +1827,7 @@ public:
     for (int i = 0; i < 50; ++i) {
       fdm.Run();
       TS_ASSERT(std::isfinite(fcs->GetDePos()));
-      TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+      TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
       TS_ASSERT(std::isfinite(fcs->GetDrPos()));
     }
   }
@@ -1868,7 +1868,7 @@ public:
     for (int i = 0; i < 50; ++i) fdm.Run();
 
     TS_ASSERT(std::isfinite(fcs->GetDePos()));
-    TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
     TS_ASSERT(std::isfinite(fcs->GetDrPos()));
   }
 
@@ -1904,7 +1904,7 @@ public:
     }
 
     TS_ASSERT(std::isfinite(fcs->GetDePos()));
-    TS_ASSERT(std::isfinite(fcs->GetDaPos()));
+    TS_ASSERT(std::isfinite(fcs->GetDaLPos()));
     TS_ASSERT(std::isfinite(fcs->GetDrPos()));
   }
 };
