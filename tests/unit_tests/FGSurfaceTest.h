@@ -1672,7 +1672,7 @@ public:
     for (int i = 0; i < 10; i++) fdmex.Run();
 
     auto propagate = fdmex.GetPropagate();
-    auto accel = propagate->GetUVWdot();
+    auto accel = propagate->GetUVW();
 
     // Should have negative acceleration (drag) due to rolling resistance
     TS_ASSERT(std::isfinite(accel(1)));

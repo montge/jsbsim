@@ -1359,7 +1359,7 @@ public:
     fdmex.Run();
 
     auto propagate = fdmex.GetPropagate();
-    double alt = propagate->GetAltitudeAGL();
+    double alt = propagate->GetAltitudeASL();
 
     // Should be near ground during taxi
     TS_ASSERT(alt < 10.0);

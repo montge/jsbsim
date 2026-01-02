@@ -1398,7 +1398,7 @@ public:
     for (int i = 0; i < 10; i++) fdmex.Run();
 
     auto propagate = fdmex.GetPropagate();
-    double alt = propagate->GetAltitudeAGL();
+    double alt = propagate->GetAltitudeASL();
 
     // Aircraft should stay on ground while rolling
     TS_ASSERT(alt < 5.0);
