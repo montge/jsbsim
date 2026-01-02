@@ -921,8 +921,6 @@ private:
 
 public:
   void setUp() {
-    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
-    fdm.SetRootDir(SGPath(rootDir));
     fdm.SetAircraftPath(SGPath("aircraft"));
     fdm.SetEnginePath(SGPath("engine"));
     fdm.SetSystemsPath(SGPath("systems"));
@@ -939,7 +937,7 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double altitude = pm->GetDouble("position/h-sl-ft");
+    double altitude = pm->GetNode("position/h-sl-ft")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(altitude));
   }
@@ -950,8 +948,8 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double v1 = pm->GetDouble("velocities/vc-kts");
-    double v2 = pm->GetDouble("velocities/vc-kts");
+    double v1 = pm->GetNode("velocities/vc-kts")->getDoubleValue();
+    double v2 = pm->GetNode("velocities/vc-kts")->getDoubleValue();
 
     TS_ASSERT_EQUALS(v1, v2);
   }
@@ -961,9 +959,9 @@ public:
     fdm.RunIC();
 
     auto pm = fdm.GetPropertyManager();
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.75);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.75);
 
-    double val = pm->GetDouble("fcs/throttle-cmd-norm");
+    double val = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
     TS_ASSERT_DELTA(val, 0.75, 0.001);
   }
 
@@ -974,12 +972,12 @@ public:
 
     auto pm = fdm.GetPropertyManager();
 
-    double lat = pm->GetDouble("position/lat-gc-deg");
-    double lon = pm->GetDouble("position/long-gc-deg");
-    double alt = pm->GetDouble("position/h-sl-ft");
-    double phi = pm->GetDouble("attitude/phi-rad");
-    double theta = pm->GetDouble("attitude/theta-rad");
-    double psi = pm->GetDouble("attitude/psi-rad");
+    double lat = pm->GetNode("position/lat-gc-deg")->getDoubleValue();
+    double lon = pm->GetNode("position/long-gc-deg")->getDoubleValue();
+    double alt = pm->GetNode("position/h-sl-ft")->getDoubleValue();
+    double phi = pm->GetNode("attitude/phi-rad")->getDoubleValue();
+    double theta = pm->GetNode("attitude/theta-rad")->getDoubleValue();
+    double psi = pm->GetNode("attitude/psi-rad")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(lat));
     TS_ASSERT(!std::isnan(lon));
@@ -994,9 +992,9 @@ public:
     fdm.RunIC();
 
     auto pm = fdm.GetPropertyManager();
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.0);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.0);
 
-    double val = pm->GetDouble("fcs/throttle-cmd-norm");
+    double val = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
     TS_ASSERT_DELTA(val, 0.0, 1e-10);
   }
 
@@ -1005,9 +1003,9 @@ public:
     fdm.RunIC();
 
     auto pm = fdm.GetPropertyManager();
-    pm->SetDouble("fcs/elevator-cmd-norm", -0.5);
+    pm->GetNode("fcs/elevator-cmd-norm")->setDoubleValue(-0.5);
 
-    double val = pm->GetDouble("fcs/elevator-cmd-norm");
+    double val = pm->GetNode("fcs/elevator-cmd-norm")->getDoubleValue();
     TS_ASSERT_DELTA(val, -0.5, 0.001);
   }
 
