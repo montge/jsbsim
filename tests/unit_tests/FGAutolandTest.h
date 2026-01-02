@@ -1517,7 +1517,7 @@ public:
 
       double alt = propagate->GetAltitudeASL();
       double vcas = fdmex.GetAuxiliary()->GetVcalibratedKTS();
-      double gamma = propagate->GetGamma();
+      double gamma = fdmex.GetAuxiliary()->GetGamma();
 
       TS_ASSERT(std::isfinite(alt));
       TS_ASSERT(std::isfinite(vcas));

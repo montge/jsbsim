@@ -1546,7 +1546,7 @@ public:
     ic->SetAltitudeAGLFtIC(50.0);
     ic->SetVcalibratedKtsIC(65.0);  // Approach speed
     ic->SetClimbRateFpsIC(-3.0);
-    ic->SetGammaRadIC(-3.0 * M_PI / 180.0);  // 3 degree glideslope
+    ic->SetFlightPathAngleRadIC(-3.0 * M_PI / 180.0);  // 3 degree glideslope
     TS_ASSERT(fdmex.RunIC());
 
     auto propagate = fdmex.GetPropagate();
