@@ -1413,9 +1413,10 @@ public:
   void testInertiaTensor() {
     auto mass = fdm.GetMassBalance();
 
-    double Ixx = mass->GetIxx();
-    double Iyy = mass->GetIyy();
-    double Izz = mass->GetIzz();
+    const auto& J = mass->GetJ();
+    double Ixx = J(1,1);
+    double Iyy = J(2,2);
+    double Izz = J(3,3);
 
     TS_ASSERT(Ixx > 0.0);
     TS_ASSERT(Iyy > 0.0);
@@ -1503,13 +1504,14 @@ public:
   // Test 11: Moments of inertia are finite
   void testMomentsOfInertiaFinite() {
     auto mass = fdm.GetMassBalance();
+    const auto& J = mass->GetJ();
 
-    TS_ASSERT(std::isfinite(mass->GetIxx()));
-    TS_ASSERT(std::isfinite(mass->GetIyy()));
-    TS_ASSERT(std::isfinite(mass->GetIzz()));
-    TS_ASSERT(std::isfinite(mass->GetIxy()));
-    TS_ASSERT(std::isfinite(mass->GetIxz()));
-    TS_ASSERT(std::isfinite(mass->GetIyz()));
+    TS_ASSERT(std::isfinite(J(1,1)));  // Ixx
+    TS_ASSERT(std::isfinite(J(2,2)));  // Iyy
+    TS_ASSERT(std::isfinite(J(3,3)));  // Izz
+    TS_ASSERT(std::isfinite(J(1,2)));  // Ixy
+    TS_ASSERT(std::isfinite(J(1,3)));  // Ixz
+    TS_ASSERT(std::isfinite(J(2,3)));  // Iyz
   }
 
   // Test 12: Extended simulation mass stability
@@ -1528,7 +1530,7 @@ public:
 
     // All values should remain valid
     TS_ASSERT(std::isfinite(mass->GetWeight()));
-    TS_ASSERT(std::isfinite(mass->GetIxx()));
+    TS_ASSERT(std::isfinite(mass->GetJ()(1,1)));  // Ixx
     TS_ASSERT_DELTA(buoyant->GetForces()(1), 0.0, 0.01);
   }
 };
