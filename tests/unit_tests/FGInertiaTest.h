@@ -1757,3 +1757,4 @@ public:
     double cg_dot = (cg_final - cg_initial) / dt;
     TS_ASSERT_DELTA(cg_dot, -0.00833, 0.0001);
   }
+};
