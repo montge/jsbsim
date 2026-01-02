@@ -17,6 +17,7 @@
 
 #include <FGFDMExec.h>
 #include <models/FGInertial.h>
+#include <models/FGPropagate.h>
 #include <math/FGLocation.h>
 #include "TestUtilities.h"
 

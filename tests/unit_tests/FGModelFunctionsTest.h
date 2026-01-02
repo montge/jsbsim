@@ -25,6 +25,8 @@
 #include <math/FGFunction.h>
 #include <input_output/FGXMLElement.h>
 #include <models/FGFCS.h>
+#include <models/FGPropulsion.h>
+#include <models/FGAerodynamics.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
