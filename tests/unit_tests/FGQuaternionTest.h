@@ -2574,31 +2574,6 @@ public:
     TS_ASSERT(std::isfinite(qDot(4)));
   }
 
-  // Test quaternion QDot (quaternion derivative)
-  void testC172xQDot() {
-    TS_ASSERT(fdmex.LoadModel("c172x"));
-    auto ic = fdmex.GetIC();
-    ic->SetVcalibratedKtsIC(100.0);
-    ic->SetAltitudeASLFtIC(5000.0);
-    TS_ASSERT(fdmex.RunIC());
-    fdmex.Run();
-
-    auto propagate = fdmex.GetPropagate();
-    JSBSim::FGQuaternion quat = propagate->GetQuaternion();
-
-    // Get current angular rates
-    JSBSim::FGColumnVector3 pqr = propagate->GetPQR();
-
-    // Compute quaternion derivative
-    JSBSim::FGQuaternion qDot = quat.GetQDot(pqr);
-
-    // QDot should be finite
-    TS_ASSERT(std::isfinite(qDot(1)));
-    TS_ASSERT(std::isfinite(qDot(2)));
-    TS_ASSERT(std::isfinite(qDot(3)));
-    TS_ASSERT(std::isfinite(qDot(4)));
-  }
-
   // Test quaternion sine/cosine functions
   void testC172xQuaternionTrigFunctions() {
     TS_ASSERT(fdmex.LoadModel("c172x"));
