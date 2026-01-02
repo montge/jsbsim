@@ -1391,7 +1391,7 @@ public:
     auto aux = fdmex.GetAuxiliary();
     TS_ASSERT(aux != nullptr);
 
-    double densityAlt = aux->GetDensityAltitude();
+    double densityAlt = fdmex.GetAtmosphere()->GetDensityAltitude();
     TS_ASSERT(std::isfinite(densityAlt));
     // Density altitude should be reasonable
     TS_ASSERT(densityAlt > 0.0);
@@ -1640,8 +1640,8 @@ public:
 
     fdmex.RunIC();
 
-    auto aux = fdmex.GetAuxiliary();
-    double pressureAlt = aux->GetPressureAltitude();
+    auto atm = fdmex.GetAtmosphere();
+    double pressureAlt = atm->GetPressureAltitude();
 
     TS_ASSERT(std::isfinite(pressureAlt));
     // Pressure altitude should be close to geometric altitude in standard atmosphere
