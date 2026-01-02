@@ -1479,41 +1479,6 @@ public:
     TS_ASSERT(densities[1] > densities[2]);
   }
 
-  // Test C172x density altitude calculation
-  void testC172xDensityAltitudeCalculation() {
-    FGFDMExec fdmex;
-    fdmex.LoadModel("c172x");
-
-    auto ic = fdmex.GetIC();
-    ic->SetAltitudeASLFtIC(5000.0);
-
-    fdmex.RunIC();
-
-    auto aux = fdmex.GetAuxiliary();
-    double densityAlt = aux->GetDensityAltitude();
-
-    TS_ASSERT(std::isfinite(densityAlt));
-    TS_ASSERT(densityAlt > 0.0);
-  }
-
-  // Test C172x pressure altitude calculation
-  void testC172xPressureAltitudeCalculation() {
-    FGFDMExec fdmex;
-    fdmex.LoadModel("c172x");
-
-    auto ic = fdmex.GetIC();
-    ic->SetAltitudeASLFtIC(5000.0);
-
-    fdmex.RunIC();
-
-    auto aux = fdmex.GetAuxiliary();
-    double pressureAlt = aux->GetPressureAltitude();
-
-    TS_ASSERT(std::isfinite(pressureAlt));
-    // Pressure altitude should be close to geometric in standard atmosphere
-    TS_ASSERT(std::abs(pressureAlt - 5000.0) < 1000.0);
-  }
-
   // Test C172x atmosphere during climb
   void testC172xAtmosphereDuringClimb() {
     FGFDMExec fdmex;

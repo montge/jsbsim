@@ -1661,8 +1661,8 @@ private:
 
 public:
   void setUp() {
-    std::string rootDir = JSBSIM_TEST_ROOT_DIR;
-    fdm.SetRootDir(SGPath(rootDir));
+
+
     fdm.SetAircraftPath(SGPath("aircraft"));
     fdm.SetEnginePath(SGPath("engine"));
     fdm.SetSystemsPath(SGPath("systems"));
