@@ -1624,3 +1624,5 @@ public:
         TS_ASSERT_DELTA(speedbrake_cmd, 0.5, EPSILON);
     }
 };
+
+#endif
