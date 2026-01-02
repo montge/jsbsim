@@ -1380,10 +1380,10 @@ public:
   std::string aircraft_path;
 
   void setUp() {
-    aircraft_path = std::string(JSBSIM_TEST_PATH) + "/aircraft";
-    fdmex.SetAircraftPath(aircraft_path);
-    fdmex.SetEnginePath(std::string(JSBSIM_TEST_PATH) + "/engine");
-    fdmex.SetSystemsPath(std::string(JSBSIM_TEST_PATH) + "/systems");
+    aircraft_path = "aircraft";
+    fdmex.SetAircraftPath(SGPath("aircraft"));
+    fdmex.SetEnginePath(SGPath("engine"));
+    fdmex.SetSystemsPath(SGPath("systems"));
   }
 
   void tearDown() {
