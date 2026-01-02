@@ -2574,8 +2574,8 @@ public:
     TS_ASSERT(std::isfinite(qDot(4)));
   }
 
-  // Test quaternion EQDot (earth angular rate derivative)
-  void testC172xEQDot() {
+  // Test quaternion QDot (quaternion derivative)
+  void testC172xQDot() {
     TS_ASSERT(fdmex.LoadModel("c172x"));
     auto ic = fdmex.GetIC();
     ic->SetVcalibratedKtsIC(100.0);
@@ -2589,14 +2589,14 @@ public:
     // Get current angular rates
     JSBSim::FGColumnVector3 pqr = propagate->GetPQR();
 
-    // Compute earth-relative quaternion derivative
-    JSBSim::FGQuaternion eqDot = quat.GetEQDot(pqr);
+    // Compute quaternion derivative
+    JSBSim::FGQuaternion qDot = quat.GetQDot(pqr);
 
-    // EQDot should be finite
-    TS_ASSERT(std::isfinite(eqDot(1)));
-    TS_ASSERT(std::isfinite(eqDot(2)));
-    TS_ASSERT(std::isfinite(eqDot(3)));
-    TS_ASSERT(std::isfinite(eqDot(4)));
+    // QDot should be finite
+    TS_ASSERT(std::isfinite(qDot(1)));
+    TS_ASSERT(std::isfinite(qDot(2)));
+    TS_ASSERT(std::isfinite(qDot(3)));
+    TS_ASSERT(std::isfinite(qDot(4)));
   }
 
   // Test quaternion sine/cosine functions
