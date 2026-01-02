@@ -53,7 +53,7 @@ public:
                  double randomization=0.1,
                  bool showConvergeStatus=true,bool showSimplex=false,
                  bool pause=false,
-                 Callback * callback=NULL);
+                 Callback * callback=nullptr);
     std::vector<double> getSolution();
 
     void update();
