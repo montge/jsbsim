@@ -186,7 +186,7 @@ public:
   // 2. EQUIVALENT AIRSPEED (EAS) TESTS (~6 tests)
   //=============================================================================
 
-  void testEASEqualsТASAtSeaLevel() {
+  void testEASEqualsTASAtSeaLevel() {
     auto aux = FGAuxiliary(&fdmex);
     aux.in.vLocation = fdmex.GetAuxiliary()->in.vLocation;
 
