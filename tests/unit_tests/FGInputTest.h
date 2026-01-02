@@ -1866,10 +1866,10 @@ public:
     TS_ASSERT(pm != nullptr);
 
     // Set throttle via property manager
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.5);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.5);
     fdm.Run();
 
-    double throttle = pm->GetDouble("fcs/throttle-cmd-norm");
+    double throttle = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
     TS_ASSERT_DELTA(throttle, 0.5, 0.01);
   }
 
@@ -1879,7 +1879,7 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double altitude = pm->GetDouble("position/h-sl-ft");
+    double altitude = pm->GetNode("position/h-sl-ft")->getDoubleValue();
     TS_ASSERT(altitude >= 0.0);  // Altitude should be non-negative
   }
 
@@ -1889,14 +1889,14 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // Set multiple control values
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.8);
-    pm->SetDouble("fcs/mixture-cmd-norm", 0.9);
-    pm->SetDouble("fcs/elevator-cmd-norm", 0.1);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.8);
+    pm->GetNode("fcs/mixture-cmd-norm")->setDoubleValue(0.9);
+    pm->GetNode("fcs/elevator-cmd-norm")->setDoubleValue(0.1);
 
     fdm.Run();
 
-    double throttle = pm->GetDouble("fcs/throttle-cmd-norm");
-    double mixture = pm->GetDouble("fcs/mixture-cmd-norm");
+    double throttle = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
+    double mixture = pm->GetNode("fcs/mixture-cmd-norm")->getDoubleValue();
 
     TS_ASSERT_DELTA(throttle, 0.8, 0.01);
     TS_ASSERT_DELTA(mixture, 0.9, 0.01);
@@ -1907,10 +1907,10 @@ public:
     fdm.RunIC();
     auto pm = fdm.GetPropertyManager();
 
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.0);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.0);
     fdm.Run();
 
-    double throttle = pm->GetDouble("fcs/throttle-cmd-norm");
+    double throttle = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
     TS_ASSERT_DELTA(throttle, 0.0, 1e-6);
   }
 
@@ -1933,12 +1933,12 @@ public:
     fdm.RunIC();
     auto pm = fdm.GetPropertyManager();
 
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.6);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.6);
 
     // Run for several frames and verify value persists
     for (int i = 0; i < 50; i++) {
       fdm.Run();
-      double throttle = pm->GetDouble("fcs/throttle-cmd-norm");
+      double throttle = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
       TS_ASSERT_DELTA(throttle, 0.6, 0.01);
     }
   }

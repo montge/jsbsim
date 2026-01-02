@@ -1808,7 +1808,7 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // Check if pitch trim exists
-    double pitchTrim = pm->GetDouble("fcs/pitch-trim-cmd-norm");
+    double pitchTrim = pm->GetNode("fcs/pitch-trim-cmd-norm")->getDoubleValue();
     TS_ASSERT(std::isfinite(pitchTrim));
   }
 

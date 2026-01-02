@@ -1509,7 +1509,7 @@ public:
     for (int i = 0; i < 100; ++i) fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double rpm = pm->GetDouble("propulsion/engine/propeller-rpm");
+    double rpm = pm->GetNode("propulsion/engine/propeller-rpm")->getDoubleValue();
 
     TS_ASSERT(std::isfinite(rpm));
   }

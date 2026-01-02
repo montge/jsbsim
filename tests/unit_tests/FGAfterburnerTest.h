@@ -1550,8 +1550,8 @@ public:
     fcs->SetMixtureCmd(-1, 1.0);
     for (int i = 0; i < 100; ++i) fdm.Run();
 
-    double rpm = pm->GetDouble("propulsion/engine/propeller-rpm");
-    TS_ASSERT(rpm > 0.0 || pm->GetDouble("propulsion/engine/engine-rpm") > 0.0);
+    double rpm = pm->GetNode("propulsion/engine/propeller-rpm")->getDoubleValue();
+    TS_ASSERT(rpm > 0.0 || pm->GetNode("propulsion/engine/engine-rpm")->getDoubleValue() > 0.0);
   }
 
   // Test 5: Propeller efficiency varies

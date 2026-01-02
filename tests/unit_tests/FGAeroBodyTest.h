@@ -1658,13 +1658,13 @@ public:
     for (int i = 0; i < 10; ++i) fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double CL = pm->GetDouble("aero/coefficient/CLalpha") != 0.0 ||
-                pm->GetDouble("aero/CL") != 0.0;
-    double CD = pm->GetDouble("aero/CD") != 0.0 ||
-                pm->GetDouble("aero/coefficient/CDmach") != 0.0;
+    double CL = pm->GetNode("aero/coefficient/CLalpha")->getDoubleValue() != 0.0 ||
+                pm->GetNode("aero/CL")->getDoubleValue() != 0.0;
+    double CD = pm->GetNode("aero/CD")->getDoubleValue() != 0.0 ||
+                pm->GetNode("aero/coefficient/CDmach")->getDoubleValue() != 0.0;
 
     // At least some aero coefficients should be defined
-    TS_ASSERT(std::isfinite(pm->GetDouble("aero/qbar-psf")));
+    TS_ASSERT(std::isfinite(pm->GetNode("aero/qbar-psf")->getDoubleValue()));
   }
 
   // Test 12: Extended simulation maintains valid aero state

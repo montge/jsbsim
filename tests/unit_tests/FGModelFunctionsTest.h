@@ -24,6 +24,7 @@
 #include <math/FGModelFunctions.h>
 #include <math/FGFunction.h>
 #include <input_output/FGXMLElement.h>
+#include <models/FGFCS.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1832,7 +1833,7 @@ public:
     }
 
     // Verify simulation ran successfully
-    double simTime = fdm.GetPropertyManager()->GetDouble("simulation/sim-time-sec");
+    double simTime = fdm.GetPropertyManager()->GetNode("simulation/sim-time-sec")->getDoubleValue();
     TS_ASSERT(simTime > 0.0);
   }
 
@@ -1844,7 +1845,7 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // Access various computed values (results of internal functions)
-    double qbar = pm->GetDouble("aero/qbar-psf");
+    double qbar = pm->GetNode("aero/qbar-psf")->getDoubleValue();
     TS_ASSERT(!std::isnan(qbar));
     TS_ASSERT(qbar >= 0.0);
   }
@@ -1860,8 +1861,8 @@ public:
     }
 
     auto pm = fdm.GetPropertyManager();
-    double cl = pm->GetDouble("aero/coefficient/CLwbh");
-    double cd = pm->GetDouble("aero/coefficient/CDwbh");
+    double cl = pm->GetNode("aero/coefficient/CLwbh")->getDoubleValue();
+    double cd = pm->GetNode("aero/coefficient/CDwbh")->getDoubleValue();
 
     // Coefficients should be computed (may be zero on ground)
     TS_ASSERT(!std::isnan(cl));
@@ -1876,7 +1877,7 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // Trim tab position (if defined)
-    double elevatorTrim = pm->GetDouble("fcs/pitch-trim-cmd-norm");
+    double elevatorTrim = pm->GetNode("fcs/pitch-trim-cmd-norm")->getDoubleValue();
     TS_ASSERT(!std::isnan(elevatorTrim));
   }
 
@@ -1889,8 +1890,8 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double weight = pm->GetDouble("inertia/weight-lbs");
-    double cgX = pm->GetDouble("inertia/cg-x-in");
+    double weight = pm->GetNode("inertia/weight-lbs")->getDoubleValue();
+    double cgX = pm->GetNode("inertia/cg-x-in")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(weight));
     TS_ASSERT(!std::isnan(cgX));
@@ -1918,8 +1919,8 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double mach = pm->GetDouble("velocities/mach");
-    double vc = pm->GetDouble("velocities/vc-kts");
+    double mach = pm->GetNode("velocities/mach")->getDoubleValue();
+    double vc = pm->GetNode("velocities/vc-kts")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(mach));
     TS_ASSERT(!std::isnan(vc));
@@ -1950,7 +1951,7 @@ public:
 
     for (int i = 0; i < 100; i++) {
       fdm.Run();
-      double qbar = pm->GetDouble("aero/qbar-psf");
+      double qbar = pm->GetNode("aero/qbar-psf")->getDoubleValue();
       qbarValues.push_back(qbar);
       TS_ASSERT(!std::isnan(qbar));
       TS_ASSERT(!std::isinf(qbar));

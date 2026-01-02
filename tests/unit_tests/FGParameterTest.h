@@ -1,6 +1,7 @@
 #include <cxxtest/TestSuite.h>
 #include <math/FGParameter.h>
 #include <FGFDMExec.h>
+#include <models/FGFCS.h>
 #include "TestUtilities.h"
 
 using namespace JSBSim;
@@ -1017,11 +1018,11 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // Set throttle to max and min
-    pm->SetDouble("fcs/throttle-cmd-norm", 1.0);
-    TS_ASSERT_DELTA(pm->GetDouble("fcs/throttle-cmd-norm"), 1.0, 0.001);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(1.0);
+    TS_ASSERT_DELTA(pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue(), 1.0, 0.001);
 
-    pm->SetDouble("fcs/throttle-cmd-norm", 0.0);
-    TS_ASSERT_DELTA(pm->GetDouble("fcs/throttle-cmd-norm"), 0.0, 0.001);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(0.0);
+    TS_ASSERT_DELTA(pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue(), 0.0, 0.001);
   }
 
   // Test 8: C172x parameter after simulation steps
@@ -1034,7 +1035,7 @@ public:
     }
 
     auto pm = fdm.GetPropertyManager();
-    double simTime = pm->GetDouble("simulation/sim-time-sec");
+    double simTime = pm->GetNode("simulation/sim-time-sec")->getDoubleValue();
 
     TS_ASSERT(simTime > 0.0);
   }
@@ -1047,8 +1048,8 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // These are computed parameters, not directly set
-    double qbar = pm->GetDouble("aero/qbar-psf");
-    double mach = pm->GetDouble("velocities/mach");
+    double qbar = pm->GetNode("aero/qbar-psf")->getDoubleValue();
+    double mach = pm->GetNode("velocities/mach")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(qbar));
     TS_ASSERT(!std::isnan(mach));
@@ -1064,9 +1065,9 @@ public:
 
     // Set precise value
     double preciseValue = 0.123456789;
-    pm->SetDouble("fcs/throttle-cmd-norm", preciseValue);
+    pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(preciseValue);
 
-    double retrieved = pm->GetDouble("fcs/throttle-cmd-norm");
+    double retrieved = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
     TS_ASSERT_DELTA(retrieved, preciseValue, 1e-9);
   }
 
@@ -1078,10 +1079,10 @@ public:
 
     for (int i = 0; i < 100; i++) {
       double val = static_cast<double>(i) / 100.0;
-      pm->SetDouble("fcs/throttle-cmd-norm", val);
+      pm->GetNode("fcs/throttle-cmd-norm")->setDoubleValue(val);
       fdm.Run();
 
-      double retrieved = pm->GetDouble("fcs/throttle-cmd-norm");
+      double retrieved = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
       TS_ASSERT_DELTA(retrieved, val, 0.001);
     }
   }
@@ -1098,8 +1099,8 @@ public:
     for (int i = 0; i < 100; i++) {
       fdm.Run();
 
-      double altitude = pm->GetDouble("position/h-sl-ft");
-      double velocity = pm->GetDouble("velocities/vc-kts");
+      double altitude = pm->GetNode("position/h-sl-ft")->getDoubleValue();
+      double velocity = pm->GetNode("velocities/vc-kts")->getDoubleValue();
 
       TS_ASSERT(!std::isnan(altitude));
       TS_ASSERT(!std::isnan(velocity));

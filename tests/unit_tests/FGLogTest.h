@@ -2,6 +2,7 @@
 #include <input_output/FGLog.h>
 #include <input_output/FGXMLElement.h>
 #include <FGFDMExec.h>
+#include <models/FGFCS.h>
 #include "TestUtilities.h"
 
 class DummyLogger : public JSBSim::FGLogger
@@ -790,7 +791,7 @@ public:
     fdm.Run();
 
     // Get simulation time for potential logging
-    double simTime = fdm.GetPropertyManager()->GetDouble("simulation/sim-time-sec");
+    double simTime = fdm.GetPropertyManager()->GetNode("simulation/sim-time-sec")->getDoubleValue();
     TS_ASSERT(simTime >= 0.0);
   }
 
@@ -800,7 +801,7 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double vc = pm->GetDouble("velocities/vc-kts");
+    double vc = pm->GetNode("velocities/vc-kts")->getDoubleValue();
 
     // Value should be finite (not NaN or Inf)
     TS_ASSERT(!std::isnan(vc));
@@ -813,9 +814,9 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double lat = pm->GetDouble("position/lat-gc-deg");
-    double lon = pm->GetDouble("position/long-gc-deg");
-    double alt = pm->GetDouble("position/h-sl-ft");
+    double lat = pm->GetNode("position/lat-gc-deg")->getDoubleValue();
+    double lon = pm->GetNode("position/long-gc-deg")->getDoubleValue();
+    double alt = pm->GetNode("position/h-sl-ft")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(lat));
     TS_ASSERT(!std::isnan(lon));
@@ -828,9 +829,9 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double phi = pm->GetDouble("attitude/phi-rad");
-    double theta = pm->GetDouble("attitude/theta-rad");
-    double psi = pm->GetDouble("attitude/psi-rad");
+    double phi = pm->GetNode("attitude/phi-rad")->getDoubleValue();
+    double theta = pm->GetNode("attitude/theta-rad")->getDoubleValue();
+    double psi = pm->GetNode("attitude/psi-rad")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(phi));
     TS_ASSERT(!std::isnan(theta));
@@ -848,7 +849,7 @@ public:
     }
 
     auto pm = fdm.GetPropertyManager();
-    double rpm = pm->GetDouble("propulsion/engine[0]/engine-rpm");
+    double rpm = pm->GetNode("propulsion/engine[0]/engine-rpm")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(rpm));
     TS_ASSERT(rpm >= 0.0);
@@ -863,8 +864,8 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double elevator = pm->GetDouble("fcs/elevator-pos-rad");
-    double aileron = pm->GetDouble("fcs/left-aileron-pos-rad");
+    double elevator = pm->GetNode("fcs/elevator-pos-rad")->getDoubleValue();
+    double aileron = pm->GetNode("fcs/left-aileron-pos-rad")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(elevator));
     TS_ASSERT(!std::isnan(aileron));
@@ -877,7 +878,7 @@ public:
     std::vector<double> times;
     for (int i = 0; i < 100; i++) {
       fdm.Run();
-      double t = fdm.GetPropertyManager()->GetDouble("simulation/sim-time-sec");
+      double t = fdm.GetPropertyManager()->GetNode("simulation/sim-time-sec")->getDoubleValue();
       times.push_back(t);
     }
 
@@ -900,8 +901,8 @@ public:
     }
 
     auto pm = fdm.GetPropertyManager();
-    double throttle = pm->GetDouble("fcs/throttle-cmd-norm");
-    double vc = pm->GetDouble("velocities/vc-kts");
+    double throttle = pm->GetNode("fcs/throttle-cmd-norm")->getDoubleValue();
+    double vc = pm->GetNode("velocities/vc-kts")->getDoubleValue();
 
     TS_ASSERT_DELTA(throttle, 1.0, 0.01);
     TS_ASSERT(!std::isnan(vc));
@@ -913,8 +914,8 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double alpha = pm->GetDouble("aero/alpha-deg");
-    double qbar = pm->GetDouble("aero/qbar-psf");
+    double alpha = pm->GetNode("aero/alpha-deg")->getDoubleValue();
+    double qbar = pm->GetNode("aero/qbar-psf")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(alpha));
     TS_ASSERT(!std::isnan(qbar));
@@ -927,7 +928,7 @@ public:
     fdm.Run();
 
     auto pm = fdm.GetPropertyManager();
-    double weight = pm->GetDouble("forces/fbz-weight-lbs");
+    double weight = pm->GetNode("forces/fbz-weight-lbs")->getDoubleValue();
 
     TS_ASSERT(!std::isnan(weight));
   }
@@ -945,11 +946,11 @@ public:
     auto pm = fdm.GetPropertyManager();
 
     // Snapshot multiple categories of data
-    double simTime = pm->GetDouble("simulation/sim-time-sec");
-    double altitude = pm->GetDouble("position/h-sl-ft");
-    double vc = pm->GetDouble("velocities/vc-kts");
-    double phi = pm->GetDouble("attitude/phi-rad");
-    double alpha = pm->GetDouble("aero/alpha-deg");
+    double simTime = pm->GetNode("simulation/sim-time-sec")->getDoubleValue();
+    double altitude = pm->GetNode("position/h-sl-ft")->getDoubleValue();
+    double vc = pm->GetNode("velocities/vc-kts")->getDoubleValue();
+    double phi = pm->GetNode("attitude/phi-rad")->getDoubleValue();
+    double alpha = pm->GetNode("aero/alpha-deg")->getDoubleValue();
 
     // All values should be valid for logging
     TS_ASSERT(!std::isnan(simTime));
