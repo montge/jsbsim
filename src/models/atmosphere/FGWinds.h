@@ -164,7 +164,7 @@ CLASS DOCUMENTATION
 CLASS DECLARATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-class FGWinds : public FGModel {
+class JSBSIM_API FGWinds : public FGModel {
 public:
 
   /// Constructor
