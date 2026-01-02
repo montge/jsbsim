@@ -1660,5 +1660,3 @@ private:
     return phi;  // Simplified: cushion factor equals ground effect factor
   }
 };
-
-/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

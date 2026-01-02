@@ -1860,5 +1860,3 @@ public:
     TS_ASSERT_DELTA(func.GetValue(), expected, LOOSE_TOLERANCE);
   }
 };
-
-/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
