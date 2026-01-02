@@ -28,7 +28,9 @@
 #include <models/FGPropagate.h>
 #include <models/FGFCS.h>
 #include <models/propulsion/FGEngine.h>
+#include <models/propulsion/FGThruster.h>
 #include <models/propulsion/FGPiston.h>
+#include <models/FGAuxiliary.h>
 #include <initialization/FGInitialCondition.h>
 #include "TestUtilities.h"
 
@@ -1625,7 +1627,7 @@ public:
     for (int i = 0; i < 200; i++) {
       fdmex.Run();
       double alt = propagate->GetAltitudeASL();
-      double airspeed = propagate->GetVcalibratedKts();
+      double airspeed = fdmex.GetAuxiliary()->GetVcalibratedKTS();
       TS_ASSERT(std::isfinite(alt));
       TS_ASSERT(std::isfinite(airspeed));
     }
