@@ -22,6 +22,7 @@
 #include <vector>
 #include <limits>
 #include <cstddef>
+#include <random>
 
 namespace JSBSim
 {
@@ -78,6 +79,8 @@ private:
     bool showConvergeStatus, showSimplex, pause;
     double rtolI, minCostPrevResize, minCost, minCostPrev,
            maxCost, nextMaxCost;
+    mutable std::mt19937 m_rng;
+    mutable std::uniform_real_distribution<double> m_dist;
 
     // methods
     double getRandomFactor();

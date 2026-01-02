@@ -19,12 +19,10 @@
 #include "FGNelderMead.h"
 #include <limits>
 #include <cmath>
-#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
-#include <ctime>
 
 namespace JSBSim
 {
@@ -46,9 +44,10 @@ FGNelderMead::FGNelderMead(Function * f, const std::vector<double> & initialGues
         iterMax(iterMax), iter(), rtol(rtol), abstol(abstol),
         speed(speed), showConvergeStatus(showConvergeStatus), showSimplex(showSimplex),
         pause(pause), rtolI(), minCostPrevResize(1), minCost(), minCostPrev(), maxCost(),
-        nextMaxCost()
+        nextMaxCost(),
+        m_rng(std::random_device{}()),
+        m_dist(-1.0, 1.0)
 {
-    srand ( time(NULL) ); // seed random number generator
 }
 
 void FGNelderMead::update()
@@ -256,7 +255,7 @@ int FGNelderMead::status()
 
 double FGNelderMead::getRandomFactor()
 {
-    double randFact = 1+(float(rand() % 1000)/500-1)*m_randomization;
+    double randFact = 1 + m_dist(m_rng) * m_randomization;
     //std::cout << "random factor: " << randFact << std::endl;;
     return randFact;
 }
