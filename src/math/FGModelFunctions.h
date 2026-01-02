@@ -71,7 +71,7 @@ CLASS DOCUMENTATION
 DECLARATION: FGModelFunctions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 
-class FGModelFunctions : public FGJSBBase
+class JSBSIM_API FGModelFunctions : public FGJSBBase
 {
 public:
   void RunPreFunctions(void);
