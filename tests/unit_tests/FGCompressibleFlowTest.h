@@ -1494,3 +1494,4 @@ public:
         TS_ASSERT_DELTA(P0, 213854.0, 100.0);
         TS_ASSERT_DELTA(mu_deg, 27.04, 0.1);
     }
+};

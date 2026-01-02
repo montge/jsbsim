@@ -1330,3 +1330,4 @@ public:
     TS_ASSERT(touchdown_zone_ft >= 500.0 && touchdown_zone_ft <= 1500.0);
     TS_ASSERT(sink_rate_limit_fps <= 6.0);
   }
+};

@@ -1470,3 +1470,4 @@ public:
     TS_ASSERT_DELTA(margin1, 50.0, 0.1);
     TS_ASSERT_DELTA(margin2, 30.0, 0.1);
   }
+};

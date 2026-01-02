@@ -1426,3 +1426,4 @@ public:
         TS_ASSERT(eta_thermal > 0);
         TS_ASSERT(eta_thermal < 1);
     }
+};

@@ -1747,3 +1747,4 @@ public:
     TS_ASSERT_DELTA(K_error, 0.0, 0.05);
     TS_ASSERT_DELTA(Ac_error, 0.0, 0.05);
   }
+};

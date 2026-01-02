@@ -1379,3 +1379,4 @@ public:
     TS_ASSERT(v_z > v_ref);
     TS_ASSERT_DELTA(v_z, 13.8, 0.1);
   }
+};
