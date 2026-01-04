@@ -41,12 +41,9 @@ FGNelderMead::FGNelderMead(Function * f, const std::vector<double> & initialGues
         m_simplex(m_nVert), m_cost(m_nVert), m_elemSum(m_nDim),
         m_status(1),
         initialGuess(initialGuess), initialStepSize(initialStepSize),
-        iterMax(iterMax), iter(), rtol(rtol), abstol(abstol),
+        iterMax(iterMax), rtol(rtol), abstol(abstol),
         speed(speed), showConvergeStatus(showConvergeStatus), showSimplex(showSimplex),
-        pause(pause), rtolI(), minCostPrevResize(1), minCost(), minCostPrev(), maxCost(),
-        nextMaxCost(),
-        m_rng(std::random_device{}()),
-        m_dist(-1.0, 1.0)
+        pause(pause), minCostPrevResize(1)
 {
 }
 

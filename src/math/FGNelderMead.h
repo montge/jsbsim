@@ -35,13 +35,13 @@ public:
     {
     public:
         virtual double eval(const std::vector<double> & v)  = 0;
-        virtual ~Function() {};
+        virtual ~Function() = default;
     };
     class Callback
     {
     public:
         virtual void eval(const std::vector<double> & v)  = 0;
-        virtual ~Callback() {};
+        virtual ~Callback() = default;
     };
 
     FGNelderMead(Function * f, const std::vector<double> & initialGuess,
@@ -62,26 +62,26 @@ public:
 
 private:
     // attributes
-    Function * m_f;
-    Callback * m_callback;
-    double m_randomization;
+    Function * m_f = nullptr;
+    Callback * m_callback = nullptr;
+    double m_randomization = 0.0;
     const std::vector<double> & m_lowerBound;
     const std::vector<double> & m_upperBound;
-    size_t m_nDim, m_nVert;
-    int m_iMax, m_iNextMax, m_iMin;
+    size_t m_nDim = 0, m_nVert = 0;
+    int m_iMax = 0, m_iNextMax = 0, m_iMin = 0;
     std::vector< std::vector<double> > m_simplex;
     std::vector<double> m_cost;
     std::vector<double> m_elemSum;
-    int m_status;
+    int m_status = 0;
     const std::vector<double> & initialGuess;
     const std::vector<double> & initialStepSize;
-    int iterMax, iter;
-    double rtol,abstol,speed;
-    bool showConvergeStatus, showSimplex, pause;
-    double rtolI, minCostPrevResize, minCost, minCostPrev,
-           maxCost, nextMaxCost;
-    mutable std::mt19937 m_rng;
-    mutable std::uniform_real_distribution<double> m_dist;
+    int iterMax = 0, iter = 0;
+    double rtol = 0.0, abstol = 0.0, speed = 0.0;
+    bool showConvergeStatus = false, showSimplex = false, pause = false;
+    double rtolI = 0.0, minCostPrevResize = 0.0, minCost = 0.0, minCostPrev = 0.0,
+           maxCost = 0.0, nextMaxCost = 0.0;
+    mutable std::mt19937 m_rng{std::random_device{}()};
+    mutable std::uniform_real_distribution<double> m_dist{-1.0, 1.0};
 
     // methods
     double getRandomFactor();
