@@ -106,3 +106,13 @@ UnrealEngine/Intermediate
 UnrealEngine/Saved
 UnrealEngine/UEReferenceApp.xcworkspace
 UnrealEngine/UEReferenceApp.sln
+
+#################
+## Development tools
+#################
+# CxxTest (local clone for unit tests)
+cxxtest/
+cxxtestgen
+
+# CTest output
+Testing/
