@@ -1,0 +1,110 @@
+# Codecov Configuration for JSBSim
+# https://docs.codecov.com/docs/codecov-yaml
+
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+  status:
+    # Overall project coverage requirements
+    project:
+      default:
+        target: 85%        # Stepping stone to 90%
+        threshold: 2%      # Allow 2% drop before failing
+        if_ci_failed: error
+
+    # Coverage requirements for new code in PRs
+    patch:
+      default:
+        target: 80%        # New code must have 80%+ coverage
+        threshold: 5%
+        if_ci_failed: error
+
+  # Module-specific coverage flags
+  flags:
+    math:
+      paths:
+        - src/math/
+      carryforward: true
+
+    models:
+      paths:
+        - src/models/
+      carryforward: true
+
+    propulsion:
+      paths:
+        - src/models/propulsion/
+      carryforward: true
+
+    flight_control:
+      paths:
+        - src/models/flight_control/
+      carryforward: true
+
+    atmosphere:
+      paths:
+        - src/models/atmosphere/
+      carryforward: true
+
+    input_output:
+      paths:
+        - src/input_output/
+      carryforward: true
+
+    initialization:
+      paths:
+        - src/initialization/
+      carryforward: true
+
+    unittests:
+      carryforward: true
+
+# Ignore paths (third-party code)
+ignore:
+  - "src/simgear/**/*"
+  - "src/GeographicLib/**/*"
+  - "tests/**/*"
+  - "python/**/*"
+
+# Comment configuration for PRs
+comment:
+  layout: "header, diff, flags, components, tree, footer"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+  hide_project_coverage: false
+
+# Component coverage breakdown
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: math_library
+      name: Math Library
+      paths:
+        - src/math/**
+    - component_id: flight_models
+      name: Flight Models
+      paths:
+        - src/models/**
+    - component_id: propulsion_system
+      name: Propulsion
+      paths:
+        - src/models/propulsion/**
+    - component_id: flight_control_system
+      name: Flight Control
+      paths:
+        - src/models/flight_control/**
+    - component_id: io_system
+      name: Input/Output
+      paths:
+        - src/input_output/**
