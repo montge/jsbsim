@@ -5,7 +5,9 @@ Thank you for your interest in contributing to JSBSim! This document provides gu
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+- [Branching Model](#branching-model)
 - [Development Workflow](#development-workflow)
+- [Syncing with Upstream](#syncing-with-upstream)
 - [Testing Requirements](#testing-requirements)
 - [Code Style and Standards](#code-style-and-standards)
 - [Pull Request Process](#pull-request-process)
@@ -60,17 +62,95 @@ In rare cases where you need to bypass hooks (not recommended):
 git commit --no-verify -m "Your message"
 ```
 
+## Branching Model
+
+This fork follows a gitflow-inspired branching model to stay synchronized with upstream while maintaining fork-specific enhancements.
+
+### Branch Structure
+
+| Branch | Purpose |
+|--------|---------|
+| `master` | Mirrors `upstream/master` exactly. Only updated during releases or upstream syncs. |
+| `develop` | Integration branch containing fork enhancements. All feature work merges here. |
+| `feature/*` | New features and enhancements. Branch from and merge to `develop`. |
+| `fix/*` | Bug fixes. Branch from and merge to `develop`. |
+| `release/*` | Release preparation. Branch from `develop`, merge to both `master` and `develop`. |
+
+### Key Principles
+
+1. **Never commit directly to `master`** - it should always match upstream
+2. **All development happens on `develop`** or feature branches
+3. **Feature branches are short-lived** - merge back to develop promptly
+4. **Keep commits atomic** - one logical change per commit
+
 ## Development Workflow
 
-1. Create a new branch for your feature or bug fix:
+1. Ensure you're on the `develop` branch and it's up to date:
+   ```bash
+   git checkout develop
+   git pull origin develop
+   ```
+
+2. Create a new branch for your feature or bug fix:
    ```bash
    git checkout -b feature/your-feature-name
    ```
-2. Make your changes, following the [Code Style and Standards](#code-style-and-standards)
-3. Write tests for your changes (see [Testing Requirements](#testing-requirements))
-4. Ensure all tests pass before submitting
-5. Commit your changes with clear, descriptive commit messages
-6. Push to your fork and submit a pull request
+
+3. Make your changes, following the [Code Style and Standards](#code-style-and-standards)
+
+4. Write tests for your changes (see [Testing Requirements](#testing-requirements))
+
+5. Ensure all tests pass before submitting:
+   ```bash
+   cd build
+   ctest -j4
+   ```
+
+6. Commit your changes with clear, descriptive commit messages (see [Commit Message Format](#commit-message-format))
+
+7. Push to your fork and submit a pull request **against `develop`**:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+## Syncing with Upstream
+
+This fork periodically syncs with upstream JSBSim-Team/jsbsim to incorporate bug fixes and new features.
+
+### Checking for Upstream Changes
+
+```bash
+git fetch upstream
+git log develop..upstream/master --oneline
+```
+
+### Merging Upstream Changes
+
+```bash
+git checkout develop
+git fetch upstream
+git merge upstream/master
+# Resolve any conflicts, prioritizing upstream for core FDM code
+git push origin develop
+```
+
+### Updating Master (Maintainers Only)
+
+Master should only be updated to match upstream during release alignment:
+
+```bash
+git checkout master
+git reset --hard upstream/master
+git push origin master
+```
+
+### Conflict Resolution Guidelines
+
+When merging upstream changes:
+- **Core FDM code**: Prioritize upstream implementation
+- **Fork-specific features** (OpenSpec, CI/CD): Keep fork enhancements
+- **Tests**: Merge both, ensuring no duplicates
+- **Documentation**: Combine relevant content from both
 
 ## Testing Requirements
 
@@ -223,10 +303,12 @@ For more details, see [tests/README.md](tests/README.md).
 
 ### Before Submitting
 
-1. Ensure your branch is up-to-date with upstream master:
+1. Ensure your branch is up-to-date with `develop`:
    ```bash
-   git fetch upstream
-   git rebase upstream/master
+   git checkout develop
+   git pull origin develop
+   git checkout feature/your-feature-name
+   git rebase develop
    ```
 
 2. Verify all tests pass:
@@ -254,11 +336,20 @@ Your pull request must include:
 
 ### PR Review Process
 
-1. Submit your pull request against the `master` branch
+1. Submit your pull request against the **`develop`** branch (not master)
 2. Automated CI/CD checks will run (build + tests on multiple platforms)
 3. Maintainers will review your code
 4. Address any review comments
-5. Once approved, your PR will be merged
+5. Once approved, your PR will be merged into `develop`
+
+### Contributing to Upstream
+
+If your change is suitable for upstream JSBSim-Team/jsbsim:
+
+1. Create a clean branch from `upstream/master`
+2. Cherry-pick or recreate your changes
+3. Submit PR to the upstream repository
+4. Once merged upstream, it will flow back via sync
 
 ## Release Process
 
